@@ -183,6 +183,7 @@ export default function Brain() {
     panY: 0,
   })
   const [drag, setDrag] = useState(null)
+  const canvasRef = useRef(null)
   const frameRef = useRef(null)
   const zoomFrameRef = useRef(null)
   const targetZoomRef = useRef(0)
@@ -256,6 +257,21 @@ export default function Brain() {
     frameRef.current = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frameRef.current)
   }, [drag, activeId])
+
+  useEffect(() => {
+    const node = canvasRef.current
+    if (!node) return undefined
+
+    function handleWheelEvent(e) {
+      e.preventDefault()
+      const cappedDelta = Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY), 80)
+      const nextZoom = targetZoomRef.current + cappedDelta * 0.00072
+      setTargetZoom(nextZoom)
+    }
+
+    node.addEventListener('wheel', handleWheelEvent, { passive: false })
+    return () => node.removeEventListener('wheel', handleWheelEvent)
+  }, [])
 
   function animateZoom() {
     cancelAnimationFrame(zoomFrameRef.current)
@@ -346,13 +362,6 @@ export default function Brain() {
     const text = input.trim()
     if (!text) return
     enterChat({ initialInput: text })
-  }
-
-  function handleWheel(e) {
-    e.preventDefault()
-    const cappedDelta = Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY), 80)
-    const nextZoom = targetZoomRef.current + cappedDelta * 0.00072
-    setTargetZoom(nextZoom)
   }
 
   function handlePointerDown(e) {
@@ -492,8 +501,8 @@ export default function Brain() {
       </div>
 
       <main
+        ref={canvasRef}
         className="brain__canvas"
-        onWheel={handleWheel}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
