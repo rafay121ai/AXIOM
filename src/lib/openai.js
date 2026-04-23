@@ -1,17 +1,95 @@
-import OpenAI from 'openai'
-
-// NOTE: The API key is exposed client-side via VITE_OPENAI_API_KEY.
-// For production, route through a backend proxy to protect the key.
-const openai = new OpenAI({
-  apiKey: import.meta.env.VITE_OPENAI_API_KEY || 'placeholder',
-  dangerouslyAllowBrowser: true,
-})
-
-export { openai }
-
 export const PROFILE_MODEL = 'gpt-5.2-2025-12-11'
 export const CHAT_MODEL    = 'gpt-5.4-mini-2026-03-17'
 export const EMBED_MODEL   = 'text-embedding-3-small'
+
+const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
+
+function apiUrl(path) {
+  return `${API_BASE}${path}`
+}
+
+async function readError(response) {
+  try {
+    const data = await response.json()
+    return data?.error || response.statusText
+  } catch {
+    return response.statusText
+  }
+}
+
+async function postJson(path, body, options = {}) {
+  const response = await fetch(apiUrl(path), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: options.signal,
+  })
+
+  if (!response.ok) {
+    throw new Error(await readError(response))
+  }
+
+  return response.json()
+}
+
+async function createChatStream(payload, options = {}) {
+  const response = await fetch(apiUrl('/api/openai/chat'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal: options.signal,
+  })
+
+  if (!response.ok) {
+    throw new Error(await readError(response))
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  return {
+    async *[Symbol.asyncIterator]() {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (!line.trim()) continue
+          const event = JSON.parse(line)
+          if (event.type === 'chunk') yield event.data
+          if (event.type === 'error') throw new Error(event.error)
+        }
+      }
+
+      if (buffer.trim()) {
+        const event = JSON.parse(buffer)
+        if (event.type === 'chunk') yield event.data
+        if (event.type === 'error') throw new Error(event.error)
+      }
+    },
+  }
+}
+
+export const openai = {
+  chat: {
+    completions: {
+      create(payload, options = {}) {
+        if (payload?.stream) return createChatStream(payload, options)
+        return postJson('/api/openai/chat', payload, options)
+      },
+    },
+  },
+  embeddings: {
+    create(payload, options = {}) {
+      return postJson('/api/openai/embeddings', payload, options)
+    },
+  },
+}
 
 // ─── Embeddings ─────────────────────────────────────────────────────────────
 export async function generateEmbedding(text) {
