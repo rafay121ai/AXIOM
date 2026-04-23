@@ -1,0 +1,29 @@
+{
+  "name": "axiom",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "seed": "node seed.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "axios": "^1.15.1",
+    "cheerio": "^1.2.0",
+    "openai": "^4.67.0",
+    "pdf-parse": "^1.1.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.27.0",
+    "youtube-captions-scraper": "^2.0.3",
+    "youtube-transcript": "^1.3.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.2",
+    "dotenv": "^16.6.1",
+    "vite": "^5.4.10"
+  }
+}
