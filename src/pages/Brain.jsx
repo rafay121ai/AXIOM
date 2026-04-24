@@ -22,7 +22,7 @@ const RELATION_COLORS = {
 
 const VIEWPORT = { width: 1400, height: 880 }
 const MIN_ZOOM = -0.52
-const MAX_ZOOM = 4.0
+const MAX_ZOOM = 6.0
 const INSIDE_ZOOM = 1.35
 
 function isTouchDevice() {
@@ -269,34 +269,43 @@ export default function Brain() {
     function handleWheelEvent(e) {
       e.preventDefault()
 
-      const currentZoom = targetZoomRef.current
-      const { panX, panY } = cameraRef.current
+      // Use actual rendered zoom (not target) for scale ratio — keeps pan in sync
+      const { zoom: renderedZoom, panX, panY } = cameraRef.current
 
-      const cappedDelta = Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY), 80)
-      const nextZoom = clampZoom(currentZoom + cappedDelta * 0.004)
-      if (nextZoom === currentZoom) return
+      // Normalize delta across deltaMode (pixel / line / page)
+      let raw = e.deltaY
+      if (e.deltaMode === 1) raw *= 16
+      if (e.deltaMode === 2) raw *= 400
 
-      // Compute effective 2D scale before and after zoom (at z=0, perspective = 1/distance)
-      const pBefore = smoothstep(MIN_ZOOM, MAX_ZOOM, currentZoom)
-      const pAfter  = smoothstep(MIN_ZOOM, MAX_ZOOM, nextZoom)
-      const sBefore = (430 + pBefore * 120) / Math.max(0.28, 2.86 - pBefore * 1.96)
-      const sAfter  = (430 + pAfter  * 120) / Math.max(0.28, 2.86 - pAfter  * 1.96)
-      const ratio = sAfter / sBefore
+      // macOS pinch sends ctrlKey=true with tiny delta (~3); scroll sends larger values
+      const sensitivity = e.ctrlKey ? 0.018 : 0.005
+      const cappedDelta = Math.sign(raw) * Math.min(Math.abs(raw), 100)
 
-      // Convert cursor from screen pixels → SVG viewport coords
-      const svgX = e.clientX * (VIEWPORT.width  / window.innerWidth)
-      const svgY = e.clientY * (VIEWPORT.height / window.innerHeight)
+      const nextTargetZoom = clampZoom(targetZoomRef.current + cappedDelta * sensitivity)
+      if (nextTargetZoom === targetZoomRef.current) return
 
-      // Cursor offset from graph origin (accounting for current pan)
+      // Scale ratio: current rendered → next target (what the view is moving toward)
+      const pRendered = smoothstep(MIN_ZOOM, MAX_ZOOM, renderedZoom)
+      const pNext     = smoothstep(MIN_ZOOM, MAX_ZOOM, nextTargetZoom)
+      const sRendered = (430 + pRendered * 120) / Math.max(0.28, 2.86 - pRendered * 1.96)
+      const sNext     = (430 + pNext     * 120) / Math.max(0.28, 2.86 - pNext     * 1.96)
+      const ratio = sNext / sRendered
+
+      // Cursor in SVG viewport coords via getBoundingClientRect for accuracy
+      const rect = canvasRef.current.getBoundingClientRect()
+      const svgX = (e.clientX - rect.left)  * (VIEWPORT.width  / rect.width)
+      const svgY = (e.clientY - rect.top)   * (VIEWPORT.height / rect.height)
+
+      // Cursor relative to graph centre (accounting for current pan)
       const relX = svgX - VIEWPORT.width  / 2 - panX
       const relY = svgY - VIEWPORT.height / 2 - panY
 
-      // Shift pan so the point under the cursor stays fixed — Obsidian-style
+      // Shift pan so the point under the cursor stays fixed
       const newPanX = panX + relX * (1 - ratio)
       const newPanY = panY + relY * (1 - ratio)
 
-      targetZoomRef.current = nextZoom
-      setViewMode(nextZoom > INSIDE_ZOOM ? 'inside' : 'wide')
+      targetZoomRef.current = nextTargetZoom
+      setViewMode(nextTargetZoom > INSIDE_ZOOM ? 'inside' : 'wide')
       setCamera((prev) => ({ ...prev, panX: newPanX, panY: newPanY }))
       animateZoom()
     }
