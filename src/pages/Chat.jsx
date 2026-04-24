@@ -4,7 +4,7 @@ import MessageBubble from '../components/MessageBubble'
 import ExperimentCard from '../components/ExperimentCard'
 import WarningCard from '../components/WarningCard'
 import ArtifactRenderer from '../components/ArtifactRenderer'
-import { supabase } from '../lib/supabase'
+import { clearStoredSessionToken, getStoredSessionToken, supabase } from '../lib/supabase'
 import { openai, CHAT_MODEL, generateOpeningMessage, generateNodeOpeningMessage, buildSystemPrompt } from '../lib/openai'
 import { searchWiki, formatWikiContext } from '../lib/rag'
 import { searchPersonalMemory, formatPersonalMemoryContext, updatePersonalMemory } from '../lib/personalMemory'
@@ -208,8 +208,16 @@ export default function Chat() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function initChat() {
-    const sessionToken = localStorage.getItem('axiom_session_token')
+    const sessionToken = getStoredSessionToken()
     if (!sessionToken) { navigate('/'); return }
+
+    const { data: userData, error: userError } = await supabase.auth.getUser()
+    const user = userData.user
+    if (userError || !user) {
+      clearStoredSessionToken()
+      navigate('/')
+      return
+    }
 
     const { data: sessionData, error: sessionError } = await supabase
       .from('sessions')
@@ -218,6 +226,11 @@ export default function Chat() {
       .single()
 
     if (sessionError || !sessionData) { navigate('/'); return }
+    if (sessionData.user_id && sessionData.user_id !== user.id) {
+      clearStoredSessionToken()
+      navigate('/', { replace: true })
+      return
+    }
 
     // Check and update ghosting state
     const updatedSession = await checkAndUpdateGhosting(sessionData)

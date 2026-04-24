@@ -109,6 +109,67 @@ h1, h2, h3 {
   font-weight: 400;
 }
 
+.onboarding__auth {
+  width: min(520px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  text-align: center;
+}
+
+.onboarding__auth-eyebrow {
+  color: var(--gold);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.onboarding__auth-title {
+  font-family: var(--font-serif);
+  font-size: clamp(32px, 5vw, 54px);
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+  font-weight: 400;
+}
+
+.onboarding__auth-copy {
+  max-width: 460px;
+  color: #A7A39A;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.onboarding__google {
+  min-width: 240px;
+  height: 52px;
+  margin-top: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.onboarding__google:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(201, 168, 76, 0.45);
+  background: linear-gradient(180deg, rgba(255,255,255,0.11), rgba(255,255,255,0.05));
+}
+
+.onboarding__google:disabled {
+  opacity: 0.72;
+  cursor: default;
+}
+
+.onboarding__auth-error {
+  color: var(--red);
+  font-size: 13px;
+}
+
 .onboarding__answers {
   display: flex;
   flex-direction: column;

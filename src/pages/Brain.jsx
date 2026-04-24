@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { clearStoredSessionToken, getStoredSessionToken, supabase } from '../lib/supabase'
 import { fallbackGraph, getPersonalWikiGraph, markWikiNodeAccessed, syncPersonalWiki } from '../lib/personalWiki'
 
 const NODE_COLORS = {
@@ -199,8 +199,12 @@ export default function Brain() {
     let cancelled = false
 
     async function loadBrain() {
-      const sessionToken = localStorage.getItem('axiom_session_token')
+      const sessionToken = getStoredSessionToken()
       if (!sessionToken) { navigate('/'); return }
+
+      const { data: userData, error: userError } = await supabase.auth.getUser()
+      const user = userData.user
+      if (userError || !user) { clearStoredSessionToken(); navigate('/'); return }
 
       const cachedGraph = readBrainCache(sessionToken)
       if (cachedGraph && !cancelled) {
@@ -215,6 +219,11 @@ export default function Brain() {
         .single()
 
       if (error || !sessionData) { navigate('/'); return }
+      if (sessionData.user_id && sessionData.user_id !== user.id) {
+        clearStoredSessionToken()
+        navigate('/', { replace: true })
+        return
+      }
 
       const fallback = fallbackGraph(sessionData)
 
@@ -502,6 +511,15 @@ export default function Brain() {
         <div className="brain__controls">
           <button onClick={toggleViewMode}>{viewMode === 'wide' ? 'Enter mind' : 'Wide view'}</button>
           <button onClick={resetView}>Reset</button>
+          <button
+            onClick={async () => {
+              await supabase.auth.signOut()
+              clearStoredSessionToken()
+              navigate('/', { replace: true })
+            }}
+          >
+            Sign out
+          </button>
           <button onClick={() => enterChat()}>Continue</button>
         </div>
       </header>

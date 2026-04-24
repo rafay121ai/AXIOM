@@ -1,7 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import OnboardingQuestion from '../components/OnboardingQuestion'
-import { supabase } from '../lib/supabase'
+import { getStoredSessionToken, setStoredSessionToken, supabase } from '../lib/supabase'
 import { generateAxiomProfile } from '../lib/openai'
 
 // ─── Question Pool ───────────────────────────────────────────────────────────
@@ -288,6 +287,9 @@ function selectNextQuestion(answeredCount, pillarUsed, signalWeights, usedIds) {
 export default function Onboarding() {
   const navigate = useNavigate()
 
+  const [authLoading, setAuthLoading] = useState(true)
+  const [user, setUser] = useState(null)
+  const [signingIn, setSigningIn] = useState(false)
   const [questions, setQuestions] = useState([])          // built incrementally
   const [currentIndex, setCurrentIndex] = useState(0)
   const [answered, setAnswered] = useState([])            // { question, answer, pillar }
@@ -308,6 +310,89 @@ export default function Onboarding() {
     setQuestions([first])
     setUsedIds(new Set([first.id]))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    let mounted = true
+
+    async function loadUser() {
+      const { data, error } = await supabase.auth.getUser()
+      if (!mounted) return
+      setUser(error ? null : data.user)
+      setAuthLoading(false)
+    }
+
+    loadUser()
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return
+      setUser(session?.user || null)
+      setAuthLoading(false)
+    })
+
+    return () => {
+      mounted = false
+      listener.subscription.unsubscribe()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (authLoading || !user) return
+
+    const currentToken = getStoredSessionToken()
+    if (currentToken) {
+      navigate('/brain', { replace: true })
+      return
+    }
+
+    let cancelled = false
+
+    async function restoreLatestSession() {
+      const { data, error } = await supabase
+        .from('sessions')
+        .select('session_token')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (cancelled) return
+
+      if (error) {
+        const message = error.message || ''
+        if (!message.toLowerCase().includes('user_id')) {
+          console.error('Session restore failed:', error)
+        }
+        return
+      }
+
+      if (data?.session_token) {
+        setStoredSessionToken(data.session_token)
+        navigate('/brain', { replace: true })
+      }
+    }
+
+    restoreLatestSession()
+    return () => {
+      cancelled = true
+    }
+  }, [authLoading, navigate, user])
+
+  async function handleGoogleSignIn() {
+    setError(null)
+    setSigningIn(true)
+
+    const { error: signInError } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    })
+
+    if (signInError) {
+      setSigningIn(false)
+      setError(signInError.message || 'Google sign-in failed.')
+    }
+  }
 
   async function handleAnswer(answerText) {
     const currentQ = questions[currentIndex]
@@ -347,24 +432,41 @@ export default function Onboarding() {
     setIsProcessing(true)
     setError(null)
     try {
+      const { data: userData, error: userError } = await supabase.auth.getUser()
+      const activeUser = userData.user
+      if (userError || !activeUser) throw new Error('Sign in with Google before starting onboarding.')
+
       const pillarWeights = derivePillarWeights(finalAnswered)
       const qaPairs = finalAnswered.map(({ question, answer }) => ({ question, answer }))
       const axiomProfile = await generateAxiomProfile(qaPairs)
 
       const sessionToken = crypto.randomUUID()
-      const { error: insertError } = await supabase.from('sessions').insert({
+      const sessionPayload = {
         session_token: sessionToken,
+        user_id: activeUser.id,
         onboarding_answers: qaPairs,
         pillar_weights: pillarWeights,
         axiom_profile: axiomProfile,
         active_experiments: [],
         ghost_count: 0,
         warning_level: 0,
-      })
+      }
+
+      let insertError = null
+      let insertResult = await supabase.from('sessions').insert(sessionPayload)
+      insertError = insertResult.error
+
+      if (insertError?.message?.toLowerCase().includes('user_id')) {
+        const fallbackResult = await supabase.from('sessions').insert({
+          ...sessionPayload,
+          user_id: undefined,
+        })
+        insertError = fallbackResult.error
+      }
 
       if (insertError) throw insertError
 
-      localStorage.setItem('axiom_session_token', sessionToken)
+      setStoredSessionToken(sessionToken)
       navigate('/brain')
     } catch (err) {
       console.error('Onboarding error:', err)
@@ -373,10 +475,43 @@ export default function Onboarding() {
     }
   }
 
-  if (!questions.length) return null
+  if (!questions.length || authLoading) {
+    return (
+      <div className="onboarding">
+        <div className="onboarding__processing">
+          <div className="pulse-dot" />
+          <span className="onboarding__processing-text">Checking account</span>
+        </div>
+      </div>
+    )
+  }
 
   const currentQ = questions[currentIndex]
   const progress = Array.from({ length: 10 }, (_, i) => i < currentIndex)
+
+  if (!user) {
+    return (
+      <div className="onboarding">
+        <div className="onboarding__auth">
+          <div className="onboarding__auth-eyebrow">Axiom</div>
+          <h1 className="onboarding__auth-title">Sign in to start your private founder session.</h1>
+          <p className="onboarding__auth-copy">
+            Google sign-in is now required so every account owns its own sessions, memory, and brain graph.
+          </p>
+          <button
+            className="onboarding__google"
+            onClick={handleGoogleSignIn}
+            disabled={signingIn}
+          >
+            {signingIn ? 'Redirecting…' : 'Continue with Google'}
+          </button>
+          {error && (
+            <p className="onboarding__auth-error">{error}</p>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   if (isProcessing) {
     return (
