@@ -202,12 +202,6 @@ function labelForThread(threadId) {
   return threadId ? 'Branch thread' : 'Main thread'
 }
 
-function weekLabel(weekStart) {
-  if (!weekStart) return 'Current read'
-  const date = new Date(`${weekStart}T00:00:00`)
-  return `Week of ${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
-}
-
 export default function Brain() {
   const navigate = useNavigate()
   const [session, setSession] = useState(null)
@@ -219,7 +213,7 @@ export default function Brain() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState('wide')
-  const [showGestureHint, setShowGestureHint] = useState(true)
+  const [showGestureHint, setShowGestureHint] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
   const [threadsOpen, setThreadsOpen] = useState(false)
   const [weeklyRead, setWeeklyRead] = useState(null)
@@ -327,7 +321,13 @@ export default function Brain() {
         }
       }
 
-      if (!hasSeenBrainOverlay(sessionToken) && !cancelled) {
+      const firstBrainOpen = !hasSeenBrainOverlay(sessionToken)
+
+      if (firstBrainOpen && !cancelled) {
+        setShowGestureHint(true)
+      }
+
+      if (firstBrainOpen && !cancelled) {
         const content = storedRead?.content
         if (content) {
           setShowOverlayMessage(true)
@@ -354,12 +354,14 @@ export default function Brain() {
   }, [navigate])
 
   useEffect(() => {
+    if (!showGestureHint) return undefined
+
     const timeoutId = window.setTimeout(() => {
       setShowGestureHint(false)
     }, 3800)
 
     return () => window.clearTimeout(timeoutId)
-  }, [])
+  }, [showGestureHint])
 
   useEffect(() => {
     if (!showOverlayMessage) return undefined
@@ -719,16 +721,15 @@ export default function Brain() {
 
             {accountOpen && (
               <div className="brain__account-panel">
-                <div className="brain__account-kicker">Session holder</div>
                 <div className="brain__account-email">{authUser?.email || 'Signed in'}</div>
-                <div className="brain__account-note">Your graph, memory, and thread history stay attached to this account.</div>
+                <div className="brain__account-note">Graph, memory, and threads stay here.</div>
                 {weeklyRead?.content && (
                   <button
                     type="button"
                     className="brain__account-read"
                     onClick={openOverlayMessage}
                   >
-                    <span className="brain__account-read-kicker">{weekLabel(weeklyRead.week_start)}</span>
+                    <span className="brain__account-read-kicker">Axiom read</span>
                     <span className="brain__account-read-text">{weeklyRead.content}</span>
                   </button>
                 )}
