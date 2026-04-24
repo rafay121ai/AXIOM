@@ -187,7 +187,11 @@ export default function Brain() {
   const frameRef = useRef(null)
   const zoomFrameRef = useRef(null)
   const targetZoomRef = useRef(0)
+  const cameraRef = useRef({ panX: 0, panY: 0, zoom: 0 })
   const touch = useMemo(() => isTouchDevice(), [])
+
+  // Keep cameraRef current every render so wheel handler always reads fresh pan/zoom
+  cameraRef.current = camera
 
   useEffect(() => {
     targetZoomRef.current = camera.zoom
@@ -264,9 +268,37 @@ export default function Brain() {
 
     function handleWheelEvent(e) {
       e.preventDefault()
+
+      const currentZoom = targetZoomRef.current
+      const { panX, panY } = cameraRef.current
+
       const cappedDelta = Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY), 80)
-      const nextZoom = targetZoomRef.current + cappedDelta * 0.004
-      setTargetZoom(nextZoom)
+      const nextZoom = clampZoom(currentZoom + cappedDelta * 0.004)
+      if (nextZoom === currentZoom) return
+
+      // Compute effective 2D scale before and after zoom (at z=0, perspective = 1/distance)
+      const pBefore = smoothstep(MIN_ZOOM, MAX_ZOOM, currentZoom)
+      const pAfter  = smoothstep(MIN_ZOOM, MAX_ZOOM, nextZoom)
+      const sBefore = (430 + pBefore * 120) / Math.max(0.28, 2.86 - pBefore * 1.96)
+      const sAfter  = (430 + pAfter  * 120) / Math.max(0.28, 2.86 - pAfter  * 1.96)
+      const ratio = sAfter / sBefore
+
+      // Convert cursor from screen pixels → SVG viewport coords
+      const svgX = e.clientX * (VIEWPORT.width  / window.innerWidth)
+      const svgY = e.clientY * (VIEWPORT.height / window.innerHeight)
+
+      // Cursor offset from graph origin (accounting for current pan)
+      const relX = svgX - VIEWPORT.width  / 2 - panX
+      const relY = svgY - VIEWPORT.height / 2 - panY
+
+      // Shift pan so the point under the cursor stays fixed — Obsidian-style
+      const newPanX = panX + relX * (1 - ratio)
+      const newPanY = panY + relY * (1 - ratio)
+
+      targetZoomRef.current = nextZoom
+      setViewMode(nextZoom > INSIDE_ZOOM ? 'inside' : 'wide')
+      setCamera((prev) => ({ ...prev, panX: newPanX, panY: newPanY }))
+      animateZoom()
     }
 
     node.addEventListener('wheel', handleWheelEvent, { passive: false })
