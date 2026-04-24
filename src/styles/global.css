@@ -498,8 +498,8 @@ h1, h2, h3 {
   position: fixed;
   inset: 0;
   z-index: 6;
-  background: rgba(0,0,0,0.36);
-  backdrop-filter: blur(4px);
+  background:
+    linear-gradient(180deg, rgba(0,0,0,0.12), rgba(0,0,0,0.2));
   animation: brainThreadsBackdropIn 220ms var(--ease-out) forwards;
   pointer-events: none;
 }
@@ -795,10 +795,10 @@ h1, h2, h3 {
 }
 
 @keyframes brainOverlayFade {
-  0% { opacity: 0; transform: translateX(-50%) translateY(calc(-50% - 12px)) scale(0.985); }
-  10% { opacity: 1; transform: translateX(-50%) translateY(-50%) scale(1); }
-  80% { opacity: 1; transform: translateX(-50%) translateY(-50%) scale(1); }
-  100% { opacity: 0; transform: translateX(-50%) translateY(calc(-50% - 8px)) scale(0.992); }
+  0% { opacity: 0; transform: translateX(-50%) translateY(calc(-50% + 10px)) scale(0.97); }
+  18% { opacity: 1; transform: translateX(-50%) translateY(-50%) scale(1); }
+  82% { opacity: 1; transform: translateX(-50%) translateY(-50%) scale(1); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(calc(-50% - 6px)) scale(0.992); }
 }
 
 @keyframes brainOverlayBackdropFade {
