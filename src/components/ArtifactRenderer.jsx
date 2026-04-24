@@ -730,6 +730,38 @@ function RadarChart({ data }) {
   )
 }
 
+// ─── 16. Key Takeaway ────────────────────────────────────────────────────────
+function KeyTakeaway({ data }) {
+  const { title, points = [] } = data
+  const on = useMounted()
+  return (
+    <div style={{ ...BASE, borderLeft: `2px solid ${ACCENT}`, paddingLeft: 18 }}>
+      {title && <Title>{title}</Title>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {points.map((p, i) => {
+          const label = typeof p === 'string' ? p : (p.label || '')
+          const detail = typeof p === 'string' ? null : (p.detail || null)
+          return (
+            <div
+              key={i}
+              style={{
+                opacity: on ? 1 : 0,
+                transform: on ? 'none' : 'translateX(-6px)',
+                transition: `opacity 350ms ${i * 90}ms, transform 350ms ${i * 90}ms`,
+              }}
+            >
+              <div style={{ color: '#EDEDEC', fontWeight: 600, fontSize: 13, lineHeight: 1.4 }}>{label}</div>
+              {detail && (
+                <div style={{ color: MUTED, fontSize: 12, lineHeight: 1.55, marginTop: 3 }}>{detail}</div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Export ─────────────────────────────────────────────────────────────
 export default function ArtifactRenderer({ type, data }) {
   if (!type || !data) return null
@@ -749,6 +781,7 @@ export default function ArtifactRenderer({ type, data }) {
     case 'stat_cards':       return <StatCards data={data} />
     case 'scatter_plot':     return <ScatterPlot data={data} />
     case 'radar_chart':      return <RadarChart data={data} />
+    case 'key_takeaway':     return <KeyTakeaway data={data} />
     default:                 return null
   }
 }

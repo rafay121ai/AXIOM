@@ -22,7 +22,7 @@ const RELATION_COLORS = {
 
 const VIEWPORT = { width: 1400, height: 880 }
 const MIN_ZOOM = -0.52
-const MAX_ZOOM = 1.95
+const MAX_ZOOM = 4.0
 const INSIDE_ZOOM = 1.35
 
 function isTouchDevice() {
@@ -265,7 +265,7 @@ export default function Brain() {
     function handleWheelEvent(e) {
       e.preventDefault()
       const cappedDelta = Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY), 80)
-      const nextZoom = targetZoomRef.current + cappedDelta * 0.00072
+      const nextZoom = targetZoomRef.current + cappedDelta * 0.004
       setTargetZoom(nextZoom)
     }
 
@@ -535,16 +535,6 @@ export default function Brain() {
           </defs>
 
           <ellipse cx="700" cy="440" rx="432" ry="318" fill="url(#brainAtmosphere)" opacity={0.74 - currentZoomProgress * 0.52} />
-          <path
-            className="brain__outline"
-            d="M370 427C343 340 388 255 479 231C548 156 666 165 716 226C795 171 917 201 952 288C1045 310 1089 420 1030 504C1046 612 933 684 837 647C752 714 631 690 586 608C492 635 392 570 402 470C386 462 376 447 370 427Z"
-            fill="none"
-          />
-          <path
-            className="brain__outline brain__outline--inner"
-            d="M468 403C521 363 576 363 628 417C671 351 742 342 792 397C838 358 910 389 921 457C868 442 821 455 784 499C724 464 672 477 629 532C588 470 536 449 468 477C445 452 445 425 468 403Z"
-            fill="none"
-          />
 
           {edges.map((edge) => {
             const source = scene.get(edge.source_node_id)?.projected
