@@ -169,12 +169,15 @@ function nodePrompt(node) {
 export default function Brain() {
   const navigate = useNavigate()
   const [session, setSession] = useState(null)
+  const [authUser, setAuthUser] = useState(null)
   const [graph, setGraph] = useState({ nodes: [], edges: [] })
   const [activeId, setActiveId] = useState(null)
   const [hoveredId, setHoveredId] = useState(null)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState('wide')
+  const [showGestureHint, setShowGestureHint] = useState(true)
+  const [accountOpen, setAccountOpen] = useState(false)
   const [camera, setCamera] = useState({
     yaw: -0.18,
     pitch: 0.08,
@@ -184,6 +187,7 @@ export default function Brain() {
   })
   const [drag, setDrag] = useState(null)
   const canvasRef = useRef(null)
+  const inputRef = useRef(null)
   const frameRef = useRef(null)
   const zoomFrameRef = useRef(null)
   const targetZoomRef = useRef(0)
@@ -205,6 +209,7 @@ export default function Brain() {
       const { data: userData, error: userError } = await supabase.auth.getUser()
       const user = userData.user
       if (userError || !user) { clearStoredSessionToken(); navigate('/'); return }
+      if (!cancelled) setAuthUser(user)
 
       const cachedGraph = readBrainCache(sessionToken)
       if (cachedGraph && !cancelled) {
@@ -252,6 +257,26 @@ export default function Brain() {
     loadBrain()
     return () => { cancelled = true }
   }, [navigate])
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setShowGestureHint(false)
+    }, 2000)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [])
+
+  useEffect(() => {
+    if (!accountOpen) return undefined
+
+    function handlePointerDown(event) {
+      if (event.target.closest('.brain__account')) return
+      setAccountOpen(false)
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    return () => window.removeEventListener('pointerdown', handlePointerDown)
+  }, [accountOpen])
 
   useEffect(() => {
     if (drag || activeId) return undefined
@@ -460,27 +485,6 @@ export default function Brain() {
     setDrag(null)
   }
 
-  function resetView() {
-    setViewMode('wide')
-    targetZoomRef.current = 0
-    cancelAnimationFrame(zoomFrameRef.current)
-    setCamera({ yaw: -0.18, pitch: 0.08, zoom: 0, panX: 0, panY: 0 })
-  }
-
-  function toggleViewMode() {
-    const next = viewMode === 'wide' ? 'inside' : 'wide'
-    setViewMode(next)
-    const nextZoom = next === 'inside' ? 1.32 : 0
-    targetZoomRef.current = nextZoom
-    cancelAnimationFrame(zoomFrameRef.current)
-    setCamera((prev) => ({
-      ...prev,
-      zoom: nextZoom,
-      panX: 0,
-      panY: 0,
-    }))
-  }
-
   async function selectNode(node) {
     setActiveId(node.id)
     if (!statusLit(node)) {
@@ -508,19 +512,53 @@ export default function Brain() {
     <div className="brain brain--immersive brain--three">
       <header className="brain__chrome">
         <span className="brain__wordmark">Axiom</span>
-        <div className="brain__controls">
-          <button onClick={toggleViewMode}>{viewMode === 'wide' ? 'Enter mind' : 'Wide view'}</button>
-          <button onClick={resetView}>Reset</button>
-          <button
-            onClick={async () => {
-              await supabase.auth.signOut()
-              clearStoredSessionToken()
-              navigate('/', { replace: true })
-            }}
-          >
-            Sign out
-          </button>
-          <button onClick={() => enterChat()}>Continue</button>
+        <div className="brain__chrome-right">
+          <div className={`brain__gesture-hint${showGestureHint ? ' brain__gesture-hint--visible' : ''}`}>
+            <div className="brain__gesture-visual" aria-hidden="true">
+              <span className="brain__gesture-dot brain__gesture-dot--left" />
+              <span className="brain__gesture-dot brain__gesture-dot--right" />
+              <span className="brain__gesture-line" />
+            </div>
+            <div className="brain__gesture-copy">
+              {touch ? 'Pinch open. Pinch closed.' : 'Scroll in. Pull back.'}
+            </div>
+          </div>
+
+          <div className={`brain__account${accountOpen ? ' brain__account--open' : ''}`}>
+            <button
+              type="button"
+              className="brain__account-trigger"
+              aria-label="Open account"
+              onClick={() => setAccountOpen((prev) => !prev)}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M8.9 7.4C8.9 5.1 10.3 3.5 12 3.5C13.7 3.5 15.1 5.1 15.1 7.4C15.1 9.9 13.7 11.8 12 11.8C10.3 11.8 8.9 9.9 8.9 7.4Z" stroke="currentColor" strokeWidth="1.4"/>
+                <path d="M7.1 14.3C8.4 13.4 10 12.9 12 12.9C14 12.9 15.6 13.4 16.9 14.3C18.2 15.2 18.9 16.5 18.9 18V19.5H5.1V18C5.1 16.5 5.8 15.2 7.1 14.3Z" stroke="currentColor" strokeWidth="1.4"/>
+                <circle cx="9" cy="8.1" r="0.9" fill="currentColor"/>
+                <circle cx="15" cy="8.1" r="0.9" fill="currentColor"/>
+                <path d="M9.8 10.1C10.4 10.5 11.1 10.7 12 10.7C12.9 10.7 13.6 10.5 14.2 10.1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+              </svg>
+            </button>
+
+            {accountOpen && (
+              <div className="brain__account-panel">
+                <div className="brain__account-kicker">Session holder</div>
+                <div className="brain__account-email">{authUser?.email || 'Signed in'}</div>
+                <div className="brain__account-note">Your graph, memory, and thread history stay attached to this account.</div>
+                <button
+                  type="button"
+                  className="brain__account-signout"
+                  onClick={async () => {
+                    await supabase.auth.signOut()
+                    clearStoredSessionToken()
+                    navigate('/', { replace: true })
+                  }}
+                >
+                  Leave this account
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -673,9 +711,28 @@ export default function Brain() {
         </div>
       )}
 
+      {!activeNode && (
+        <button
+          type="button"
+          className="brain__start-here"
+          onClick={() => inputRef.current?.focus()}
+        >
+          <span className="brain__start-arrow" aria-hidden="true">
+            <svg width="38" height="14" viewBox="0 0 38 14" fill="none">
+              <path d="M1 7H35M35 7L29 1M35 7L29 13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </span>
+          <span className="brain__start-copy">
+            <span className="brain__start-kicker">Start here</span>
+            <span className="brain__start-line">Say the thing you keep circling.</span>
+          </span>
+        </button>
+      )}
+
       <form className="brain__input-wrap" onSubmit={handleSubmit}>
         <div className="brain__input-inner brain__input-inner--glass">
           <input
+            ref={inputRef}
             className="brain__input"
             value={input}
             onChange={(e) => setInput(e.target.value)}

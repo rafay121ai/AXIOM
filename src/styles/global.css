@@ -357,32 +357,164 @@ h1, h2, h3 {
   color: var(--text-primary);
 }
 
-.brain__controls {
+.brain__chrome-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 14px;
 }
 
-.brain__controls button {
-  min-width: 0;
-  height: 34px;
-  background: rgba(255,255,255,0.045);
-  border: 1px solid rgba(255,255,255,0.09);
-  border-radius: var(--radius-sm);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
-  color: rgba(244,241,232,0.76);
+.brain__gesture-hint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: rgba(244,241,232,0.68);
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
+}
+
+.brain__gesture-hint--visible {
+  animation: brainGestureHint 2s var(--ease-out) forwards;
+}
+
+@keyframes brainGestureHint {
+  0% { opacity: 0; transform: translateY(-8px) scale(0.98); }
+  12% { opacity: 1; transform: translateY(0) scale(1); }
+  78% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-10px) scale(0.98); }
+}
+
+.brain__gesture-visual {
+  position: relative;
+  width: 40px;
+  height: 18px;
+}
+
+.brain__gesture-dot {
+  position: absolute;
+  top: 4px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(255,231,163,0.9);
+  box-shadow: 0 0 12px rgba(255,231,163,0.3);
+}
+
+.brain__gesture-dot--left {
+  left: 6px;
+  animation: brainGestureLeft 1s ease-in-out infinite alternate;
+}
+
+.brain__gesture-dot--right {
+  right: 6px;
+  animation: brainGestureRight 1s ease-in-out infinite alternate;
+}
+
+@keyframes brainGestureLeft {
+  from { transform: translateX(0); }
+  to { transform: translateX(-3px); }
+}
+
+@keyframes brainGestureRight {
+  from { transform: translateX(0); }
+  to { transform: translateX(3px); }
+}
+
+.brain__gesture-line {
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  right: 12px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.34), transparent);
+}
+
+.brain__gesture-copy {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.brain__account {
+  position: relative;
+}
+
+.brain__account-trigger {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: rgba(244,241,232,0.8);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+
+.brain__account-trigger:hover {
+  border-color: rgba(255,231,163,0.24);
+  background: rgba(255,255,255,0.08);
+  transform: translateY(-1px);
+}
+
+.brain__account-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(280px, calc(100vw - 32px));
+  padding: 16px;
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.035)),
+    rgba(4,4,4,0.92);
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 22px 70px rgba(0,0,0,0.56);
+  backdrop-filter: blur(18px);
+}
+
+.brain__account-kicker {
+  color: var(--gold);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.brain__account-email {
+  margin-top: 8px;
+  color: var(--text-primary);
+  font-size: 15px;
+}
+
+.brain__account-note {
+  margin-top: 10px;
+  color: #9A9588;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.brain__account-signout {
+  width: 100%;
+  height: 38px;
+  margin-top: 14px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  background: rgba(255,255,255,0.04);
+  color: var(--text-primary);
   cursor: pointer;
   font-family: var(--font-sans);
-  font-size: 12px;
-  padding: 0 12px;
-  transition: color 0.15s, border-color 0.15s, background 0.15s, transform 0.15s;
+  font-size: 13px;
+  transition: border-color 0.15s, background 0.15s;
 }
 
-.brain__controls button:hover {
-  color: var(--text-primary);
-  border-color: rgba(255,231,163,0.2);
-  background: rgba(255,255,255,0.075);
-  transform: translateY(-1px);
+.brain__account-signout:hover {
+  border-color: rgba(255,231,163,0.24);
+  background: rgba(255,255,255,0.08);
 }
 
 .brain__read {
@@ -520,6 +652,57 @@ h1, h2, h3 {
   padding: 0 16px;
 }
 
+.brain__start-here {
+  position: fixed;
+  right: 24px;
+  top: 50%;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(240px, calc(100vw - 32px));
+  padding: 14px 16px;
+  transform: translateY(-50%);
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.brain__start-arrow {
+  display: inline-flex;
+  align-items: center;
+  color: rgba(255,231,163,0.95);
+  animation: brainStartArrow 1.25s ease-in-out infinite;
+}
+
+@keyframes brainStartArrow {
+  0%, 100% { transform: translateX(0); opacity: 0.65; }
+  50% { transform: translateX(6px); opacity: 1; }
+}
+
+.brain__start-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.brain__start-kicker {
+  color: var(--gold);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.brain__start-line {
+  color: rgba(244,241,232,0.9);
+  font-family: var(--font-serif);
+  font-size: 24px;
+  line-height: 1;
+}
+
 .brain__input-wrap {
   position: fixed;
   bottom: 0;
@@ -591,14 +774,12 @@ h1, h2, h3 {
     padding: 0 16px;
   }
 
-  .brain__controls {
-    gap: 6px;
+  .brain__chrome-right {
+    gap: 8px;
   }
 
-  .brain__controls button {
-    height: 32px;
-    font-size: 11px;
-    padding: 0 9px;
+  .brain__gesture-hint {
+    padding: 8px 10px;
   }
 
   .brain__read--floating {
@@ -614,6 +795,20 @@ h1, h2, h3 {
 
   .brain__node-title {
     font-size: 21px;
+  }
+
+  .brain__start-here {
+    right: 12px;
+    top: auto;
+    bottom: 112px;
+    transform: none;
+    width: min(220px, calc(100vw - 24px));
+    padding: 12px 10px 12px 14px;
+    justify-content: flex-end;
+  }
+
+  .brain__start-line {
+    font-size: 18px;
   }
 
   .brain__input-wrap {
