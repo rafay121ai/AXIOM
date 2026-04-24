@@ -611,6 +611,43 @@ h1, h2, h3 {
   line-height: 1.55;
 }
 
+.brain__account-read {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 14px;
+  padding: 11px 12px;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  background: rgba(10,10,10,0.44);
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+
+.brain__account-read:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255,231,163,0.14);
+  background: rgba(14,14,14,0.6);
+}
+
+.brain__account-read-kicker {
+  color: rgba(201,168,76,0.78);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.brain__account-read-text {
+  color: rgba(244,241,232,0.82);
+  font-family: var(--font-serif);
+  font-size: 16px;
+  line-height: 1.08;
+}
+
 .brain__account-signout {
   width: 100%;
   height: 38px;

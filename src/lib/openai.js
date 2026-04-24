@@ -216,6 +216,52 @@ Warning level: ${session.warning_level || 0}`,
   return response.choices[0].message.content.trim()
 }
 
+export async function generateWeeklyRead(session, recentMessages = []) {
+  const history = recentMessages
+    .filter((message) => message?.content)
+    .slice(-24)
+    .map((message) => `${message.role === 'user' ? 'User' : 'Axiom'}: ${message.content}`)
+    .join('\n\n')
+
+  const response = await openai.chat.completions.create({
+    model: CHAT_MODEL,
+    messages: [
+      {
+        role: 'system',
+        content: `You write Axiom's weekly read for a user.
+
+Rules:
+- 1-2 sentences maximum
+- Maximum 26 words per sentence
+- Direct, concise, plainspoken
+- No greeting
+- No metaphor
+- No artifact
+- No citation
+- No experiment
+- This is a weekly snapshot of the user's real pattern, movement, or stuckness
+- Base it on what changed in their conversations, not just a static profile
+- If there is active progress, name it
+- If there is avoidance or drift, name that instead
+- End with a live tension, not a summary line`,
+      },
+      {
+        role: 'user',
+        content: `Private theory: ${session.axiom_profile || 'None'}
+Session notes: ${session.session_notes || 'None'}
+Active experiments: ${JSON.stringify(session.active_experiments || [])}
+Warning level: ${session.warning_level || 0}
+
+Recent conversation history:
+${history || 'No recent messages.'}`,
+      },
+    ],
+    max_completion_tokens: 120,
+  })
+
+  return response.choices[0].message.content.trim()
+}
+
 export async function generateNodeOpeningMessage(session, nodeContext, contextLevel) {
   const level = Number.isFinite(contextLevel) ? Math.max(0, Math.min(1, contextLevel)) : 0
   const percent = Math.round(level * 100)
