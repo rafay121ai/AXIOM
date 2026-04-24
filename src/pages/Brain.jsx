@@ -324,7 +324,7 @@ export default function Brain() {
 
     const timeoutId = window.setTimeout(() => {
       setShowOverlayMessage(false)
-    }, 8000)
+    }, 3500)
 
     return () => window.clearTimeout(timeoutId)
   }, [showOverlayMessage])
@@ -597,15 +597,17 @@ export default function Brain() {
       <header className="brain__chrome">
         <span className="brain__wordmark">Axiom</span>
         <div className="brain__chrome-right">
-          <div className={`brain__gesture-hint${showGestureHint ? ' brain__gesture-hint--visible' : ''}`}>
+          <div className={`brain__gesture-hint${showGestureHint ? ' brain__gesture-hint--visible' : ''}${touch ? ' brain__gesture-hint--touch' : ''}`}>
             <div className="brain__gesture-visual" aria-hidden="true">
               <span className="brain__gesture-dot brain__gesture-dot--left" />
               <span className="brain__gesture-dot brain__gesture-dot--right" />
               <span className="brain__gesture-line" />
             </div>
-            <div className="brain__gesture-copy">
-              {touch ? 'Pinch open. Pinch closed.' : 'Scroll in. Pull back.'}
-            </div>
+            {!touch && (
+              <div className="brain__gesture-copy">
+                Scroll in. Pull back.
+              </div>
+            )}
           </div>
 
           <div className={`brain__threads${threadsOpen ? ' brain__threads--open' : ''}`}>
@@ -697,6 +699,8 @@ export default function Brain() {
           </div>
         </>
       )}
+
+      {threadsOpen && <div className="brain__threads-backdrop" />}
 
       <main
         ref={canvasRef}

@@ -394,6 +394,11 @@ h1, h2, h3 {
   height: 18px;
 }
 
+.brain__gesture-hint--touch .brain__gesture-visual {
+  width: 44px;
+  height: 20px;
+}
+
 .brain__gesture-dot {
   position: absolute;
   top: 4px;
@@ -433,6 +438,13 @@ h1, h2, h3 {
   background: linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent);
 }
 
+.brain__gesture-hint--touch .brain__gesture-line {
+  top: 9px;
+  left: 14px;
+  right: 14px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+}
+
 .brain__gesture-copy {
   font-size: 11px;
   letter-spacing: 0.08em;
@@ -470,6 +482,7 @@ h1, h2, h3 {
   position: absolute;
   top: calc(100% + 10px);
   right: 0;
+  z-index: 8;
   width: min(280px, calc(100vw - 32px));
   padding: 14px;
   border-radius: 14px;
@@ -479,6 +492,21 @@ h1, h2, h3 {
   border: 1px solid rgba(255,255,255,0.1);
   box-shadow: 0 22px 70px rgba(0,0,0,0.56);
   backdrop-filter: blur(18px);
+}
+
+.brain__threads-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  background: rgba(0,0,0,0.36);
+  backdrop-filter: blur(4px);
+  animation: brainThreadsBackdropIn 220ms var(--ease-out) forwards;
+  pointer-events: none;
+}
+
+@keyframes brainThreadsBackdropIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .brain__threads-kicker {
@@ -550,6 +578,7 @@ h1, h2, h3 {
   position: absolute;
   top: calc(100% + 10px);
   right: 0;
+  z-index: 8;
   width: min(280px, calc(100vw - 32px));
   padding: 16px;
   border-radius: 14px;
@@ -751,7 +780,7 @@ h1, h2, h3 {
   border: 1px solid rgba(255,255,255,0.08);
   box-shadow: 0 30px 100px rgba(0,0,0,0.56);
   backdrop-filter: blur(22px);
-  animation: brainOverlayFade 8s var(--ease-out) forwards;
+  animation: brainOverlayFade 3.5s var(--ease-out) forwards;
   pointer-events: none;
 }
 
@@ -761,7 +790,7 @@ h1, h2, h3 {
   z-index: 6;
   background: rgba(0,0,0,0.46);
   backdrop-filter: blur(5px);
-  animation: brainOverlayBackdropFade 8s var(--ease-out) forwards;
+  animation: brainOverlayBackdropFade 3.5s var(--ease-out) forwards;
   pointer-events: none;
 }
 
@@ -872,6 +901,21 @@ h1, h2, h3 {
 
   .brain__gesture-hint {
     padding: 8px 10px;
+  }
+
+  .brain__gesture-hint--touch {
+    padding: 8px 9px;
+  }
+
+  .brain__gesture-hint--touch .brain__gesture-visual {
+    width: 38px;
+    height: 18px;
+  }
+
+  .brain__gesture-hint--touch .brain__gesture-dot {
+    width: 8px;
+    height: 8px;
+    top: 5px;
   }
 
   .brain__threads-trigger {
