@@ -65,6 +65,17 @@ h1, h2, h3 {
   padding: 40px 24px;
 }
 
+.onboarding__wordmark {
+  position: fixed;
+  top: 40px;
+  left: 40px;
+  z-index: 2;
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--text-primary);
+}
+
 .onboarding__progress {
   position: fixed;
   top: 40px;
@@ -118,13 +129,6 @@ h1, h2, h3 {
   text-align: center;
 }
 
-.onboarding__auth-eyebrow {
-  color: var(--gold);
-  font-size: 12px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-}
-
 .onboarding__auth-title {
   font-family: var(--font-serif);
   font-size: clamp(32px, 5vw, 54px);
@@ -168,6 +172,14 @@ h1, h2, h3 {
 .onboarding__auth-error {
   color: var(--red);
   font-size: 13px;
+}
+
+@media (max-width: 640px) {
+  .onboarding__wordmark {
+    top: 24px;
+    left: 24px;
+    font-size: 20px;
+  }
 }
 
 .onboarding__answers {

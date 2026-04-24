@@ -492,8 +492,8 @@ export default function Onboarding() {
   if (!user) {
     return (
       <div className="onboarding">
+        <span className="onboarding__wordmark">Axiom</span>
         <div className="onboarding__auth">
-          <div className="onboarding__auth-eyebrow">Axiom</div>
           <h1 className="onboarding__auth-title">Sign in to start your private founder session.</h1>
           <p className="onboarding__auth-copy">
             Google sign-in is now required so every account owns its own sessions, memory, and brain graph.
