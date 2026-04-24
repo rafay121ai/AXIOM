@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { clearStoredSessionToken, getStoredSessionToken, supabase } from '../lib/supabase'
-import { generateBrainOverlayMessage } from '../lib/openai'
+import { ensureCurrentWeeklyRead, fetchLatestWeeklyRead } from '../lib/sessionReads'
 import { fallbackGraph, getPersonalWikiGraph, markWikiNodeAccessed, syncPersonalWiki } from '../lib/personalWiki'
 
 const NODE_COLORS = {
@@ -32,6 +32,26 @@ function isTouchDevice() {
 
 function brainCacheKey(sessionToken) {
   return `axiom_brain_graph:${sessionToken}`
+}
+
+function brainOverlaySeenKey(sessionToken) {
+  return `axiom_brain_overlay_seen:${sessionToken}`
+}
+
+function hasSeenBrainOverlay(sessionToken) {
+  try {
+    return localStorage.getItem(brainOverlaySeenKey(sessionToken)) === '1'
+  } catch {
+    return false
+  }
+}
+
+function markBrainOverlaySeen(sessionToken) {
+  try {
+    localStorage.setItem(brainOverlaySeenKey(sessionToken), '1')
+  } catch {
+    // Ignore storage failures; this is only a UX hint flag.
+  }
 }
 
 function readBrainCache(sessionToken) {
@@ -182,6 +202,12 @@ function labelForThread(threadId) {
   return threadId ? 'Branch thread' : 'Main thread'
 }
 
+function weekLabel(weekStart) {
+  if (!weekStart) return 'Current read'
+  const date = new Date(`${weekStart}T00:00:00`)
+  return `Week of ${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+}
+
 export default function Brain() {
   const navigate = useNavigate()
   const [session, setSession] = useState(null)
@@ -196,6 +222,7 @@ export default function Brain() {
   const [showGestureHint, setShowGestureHint] = useState(true)
   const [accountOpen, setAccountOpen] = useState(false)
   const [threadsOpen, setThreadsOpen] = useState(false)
+  const [weeklyRead, setWeeklyRead] = useState(null)
   const [overlayMessage, setOverlayMessage] = useState('')
   const [showOverlayMessage, setShowOverlayMessage] = useState(false)
   const [camera, setCamera] = useState({
@@ -283,14 +310,29 @@ export default function Brain() {
         setConversationItems(Array.from(byThread.values()).slice(0, 6))
       }
 
-      try {
-        const opener = await generateBrainOverlayMessage(sessionData)
-        if (!cancelled && opener) {
-          setOverlayMessage(opener)
-          setShowOverlayMessage(true)
+      const recentForRead = (rawMessages || [])
+        .slice()
+        .reverse()
+        .slice(-24)
+
+      const storedRead = await ensureCurrentWeeklyRead(sessionData, recentForRead)
+      if (!cancelled && storedRead) {
+        setWeeklyRead(storedRead)
+        setOverlayMessage(storedRead.content)
+      } else {
+        const latestRead = await fetchLatestWeeklyRead(sessionData.id)
+        if (!cancelled && latestRead) {
+          setWeeklyRead(latestRead)
+          setOverlayMessage(latestRead.content)
         }
-      } catch (overlayError) {
-        console.warn('Brain overlay message skipped:', overlayError?.message || overlayError)
+      }
+
+      if (!hasSeenBrainOverlay(sessionToken) && !cancelled) {
+        const content = storedRead?.content
+        if (content) {
+          setShowOverlayMessage(true)
+          markBrainOverlaySeen(sessionToken)
+        }
       }
 
       const existingGraph = await getPersonalWikiGraph(sessionData.id)
@@ -455,11 +497,19 @@ export default function Brain() {
     navigate('/chat', { state: { fromBrain: true, ...extra } })
   }
 
+  function openOverlayMessage() {
+    if (!overlayMessage) return
+    setThreadsOpen(false)
+    setAccountOpen(false)
+    setShowOverlayMessage(true)
+  }
+
   function startFreshThread(initialInput = '') {
     enterChat({
       freshThread: true,
       threadId: crypto.randomUUID(),
       initialInput,
+      autoSend: Boolean(initialInput),
       skipOpening: Boolean(initialInput),
     })
   }
@@ -653,7 +703,10 @@ export default function Brain() {
               type="button"
               className="brain__account-trigger"
               aria-label="Open account"
-              onClick={() => setAccountOpen((prev) => !prev)}
+              onClick={() => {
+                setThreadsOpen(false)
+                setAccountOpen((prev) => !prev)
+              }}
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M8.9 7.4C8.9 5.1 10.3 3.5 12 3.5C13.7 3.5 15.1 5.1 15.1 7.4C15.1 9.9 13.7 11.8 12 11.8C10.3 11.8 8.9 9.9 8.9 7.4Z" stroke="currentColor" strokeWidth="1.4"/>
@@ -669,6 +722,16 @@ export default function Brain() {
                 <div className="brain__account-kicker">Session holder</div>
                 <div className="brain__account-email">{authUser?.email || 'Signed in'}</div>
                 <div className="brain__account-note">Your graph, memory, and thread history stay attached to this account.</div>
+                {weeklyRead?.content && (
+                  <button
+                    type="button"
+                    className="brain__account-read"
+                    onClick={openOverlayMessage}
+                  >
+                    <span className="brain__account-read-kicker">{weekLabel(weeklyRead.week_start)}</span>
+                    <span className="brain__account-read-text">{weeklyRead.content}</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   className="brain__account-signout"
@@ -700,7 +763,7 @@ export default function Brain() {
         </>
       )}
 
-      {threadsOpen && <div className="brain__threads-backdrop" />}
+      {(threadsOpen || accountOpen) && <div className="brain__threads-backdrop" />}
 
       <main
         ref={canvasRef}

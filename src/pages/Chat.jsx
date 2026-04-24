@@ -157,6 +157,7 @@ export default function Chat() {
   const initialInput = location.state?.initialInput || ''
   const threadId = location.state?.threadId || null
   const freshThread = Boolean(location.state?.freshThread)
+  const autoSend = Boolean(location.state?.autoSend)
   const skipOpening = Boolean(location.state?.skipOpening)
 
   const [session, setSession] = useState(null)
@@ -172,6 +173,7 @@ export default function Chat() {
   const initCalledRef = useRef(false)     // guard against StrictMode double-invoke
   const abortControllerRef = useRef(null) // current active stream abort handle
   const initialInputAppliedRef = useRef(false)
+  const initialInputSentRef = useRef(false)
 
   // ── Init ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -290,6 +292,21 @@ export default function Chat() {
     setInput(initialInput)
   }, [loading, initialInput])
 
+  useEffect(() => {
+    if (
+      loading ||
+      !session ||
+      !autoSend ||
+      !initialInput ||
+      initialInputSentRef.current
+    ) {
+      return
+    }
+
+    initialInputSentRef.current = true
+    sendMessage(initialInput)
+  }, [autoSend, initialInput, loading, session])
+
   function normalizeMsg(m) {
     const { cleanText, artifact, experiment } = parseMessage(m.content || '')
     return { ...m, content: cleanText, artifact: artifact || null, experiment: experiment || null }
@@ -362,8 +379,8 @@ export default function Chat() {
   }, [messages])
 
   // ── Send Message ──────────────────────────────────────────────────────────
-  async function sendMessage() {
-    const text = input.trim()
+  async function sendMessage(overrideText = null) {
+    const text = (overrideText ?? input).trim()
     if (!text || sendingRef.current || !session) return
 
     sendingRef.current = true
