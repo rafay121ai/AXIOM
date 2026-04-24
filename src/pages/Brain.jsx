@@ -22,7 +22,7 @@ const RELATION_COLORS = {
 
 const VIEWPORT = { width: 1400, height: 880 }
 const MIN_ZOOM = -0.52
-const MAX_ZOOM = 6.0
+const MAX_ZOOM = 12.0
 const INSIDE_ZOOM = 1.35
 
 function isTouchDevice() {
@@ -187,11 +187,7 @@ export default function Brain() {
   const frameRef = useRef(null)
   const zoomFrameRef = useRef(null)
   const targetZoomRef = useRef(0)
-  const cameraRef = useRef({ panX: 0, panY: 0, zoom: 0 })
   const touch = useMemo(() => isTouchDevice(), [])
-
-  // Keep cameraRef current every render so wheel handler always reads fresh pan/zoom
-  cameraRef.current = camera
 
   useEffect(() => {
     targetZoomRef.current = camera.zoom
@@ -263,14 +259,10 @@ export default function Brain() {
   }, [drag, activeId])
 
   useEffect(() => {
-    const node = canvasRef.current
-    if (!node) return undefined
-
     function handleWheelEvent(e) {
+      // Only handle when the brain canvas is in the DOM and cursor is over it
+      if (!canvasRef.current?.contains(e.target)) return
       e.preventDefault()
-
-      // Use actual rendered zoom (not target) for scale ratio — keeps pan in sync
-      const { zoom: renderedZoom, panX, panY } = cameraRef.current
 
       // Normalize delta across deltaMode (pixel / line / page)
       let raw = e.deltaY
@@ -281,37 +273,12 @@ export default function Brain() {
       const sensitivity = e.ctrlKey ? 0.018 : 0.005
       const cappedDelta = Math.sign(raw) * Math.min(Math.abs(raw), 100)
 
-      const nextTargetZoom = clampZoom(targetZoomRef.current + cappedDelta * sensitivity)
-      if (nextTargetZoom === targetZoomRef.current) return
-
-      // Scale ratio: current rendered → next target (what the view is moving toward)
-      const pRendered = smoothstep(MIN_ZOOM, MAX_ZOOM, renderedZoom)
-      const pNext     = smoothstep(MIN_ZOOM, MAX_ZOOM, nextTargetZoom)
-      const sRendered = (430 + pRendered * 120) / Math.max(0.28, 2.86 - pRendered * 1.96)
-      const sNext     = (430 + pNext     * 120) / Math.max(0.28, 2.86 - pNext     * 1.96)
-      const ratio = sNext / sRendered
-
-      // Cursor in SVG viewport coords via getBoundingClientRect for accuracy
-      const rect = canvasRef.current.getBoundingClientRect()
-      const svgX = (e.clientX - rect.left)  * (VIEWPORT.width  / rect.width)
-      const svgY = (e.clientY - rect.top)   * (VIEWPORT.height / rect.height)
-
-      // Cursor relative to graph centre (accounting for current pan)
-      const relX = svgX - VIEWPORT.width  / 2 - panX
-      const relY = svgY - VIEWPORT.height / 2 - panY
-
-      // Shift pan so the point under the cursor stays fixed
-      const newPanX = panX + relX * (1 - ratio)
-      const newPanY = panY + relY * (1 - ratio)
-
-      targetZoomRef.current = nextTargetZoom
-      setViewMode(nextTargetZoom > INSIDE_ZOOM ? 'inside' : 'wide')
-      setCamera((prev) => ({ ...prev, panX: newPanX, panY: newPanY }))
-      animateZoom()
+      setTargetZoom(targetZoomRef.current + cappedDelta * sensitivity)
     }
 
-    node.addEventListener('wheel', handleWheelEvent, { passive: false })
-    return () => node.removeEventListener('wheel', handleWheelEvent)
+    // Window-level so cursor style / touch-action on child elements can't block it
+    window.addEventListener('wheel', handleWheelEvent, { passive: false })
+    return () => window.removeEventListener('wheel', handleWheelEvent)
   }, [])
 
   function animateZoom() {

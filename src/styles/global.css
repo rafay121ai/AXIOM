@@ -337,8 +337,12 @@ h1, h2, h3 {
   position: absolute;
   inset: 0;
   z-index: 1;
-  cursor: grab;
+  cursor: default;
   touch-action: none;
+}
+
+.brain__canvas:hover {
+  cursor: grab;
 }
 
 .brain__canvas:active {
