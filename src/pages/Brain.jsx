@@ -187,6 +187,7 @@ export default function Brain() {
   const frameRef = useRef(null)
   const zoomFrameRef = useRef(null)
   const targetZoomRef = useRef(0)
+  const pointerDownRef = useRef(null)
   const touch = useMemo(() => isTouchDevice(), [])
 
   useEffect(() => {
@@ -374,6 +375,7 @@ export default function Brain() {
 
   function handlePointerDown(e) {
     if (e.target.closest?.('.brain-node')) return
+    pointerDownRef.current = { x: e.clientX, y: e.clientY }
     e.currentTarget.setPointerCapture?.(e.pointerId)
     const touches = e.currentTarget._brainTouches || new Map()
     touches.set(e.pointerId, e)
@@ -416,7 +418,7 @@ export default function Brain() {
       const nextDistance = touchDistance(first, second)
       const center = touchCenter(first, second)
       const distanceDelta = nextDistance - drag.distance
-      setTargetZoom(drag.startZoom + distanceDelta * 0.006)
+      setTargetZoom(drag.startZoom + distanceDelta * 0.02)
       setCamera((prev) => ({
         ...prev,
         panX: drag.startPanX + (center.x - drag.center.x) * 0.82,
@@ -515,6 +517,13 @@ export default function Brain() {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
+        onClick={(e) => {
+          if (e.target.closest?.('.brain-node')) return
+          const down = pointerDownRef.current
+          if (!down) return
+          const dist = Math.hypot(e.clientX - down.x, e.clientY - down.y)
+          if (dist < 8) setActiveId(null)
+        }}
       >
         <svg className="brain__graph" viewBox={`0 0 ${VIEWPORT.width} ${VIEWPORT.height}`} role="img">
           <defs>
