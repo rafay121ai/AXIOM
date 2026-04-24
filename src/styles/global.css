@@ -659,21 +659,22 @@ h1, h2, h3 {
   z-index: 5;
   display: flex;
   align-items: center;
-  gap: 12px;
-  width: min(240px, calc(100vw - 32px));
-  padding: 14px 16px;
+  gap: 9px;
+  width: min(165px, calc(100vw - 40px));
+  padding: 6px 8px;
   transform: translateY(-50%);
   border: 0;
   background: transparent;
-  color: var(--text-primary);
+  color: rgba(244,241,232,0.58);
   cursor: pointer;
   text-align: left;
+  opacity: 0.72;
 }
 
 .brain__start-arrow {
   display: inline-flex;
   align-items: center;
-  color: rgba(255,231,163,0.95);
+  color: rgba(255,231,163,0.58);
   animation: brainStartArrow 1.25s ease-in-out infinite;
 }
 
@@ -685,22 +686,22 @@ h1, h2, h3 {
 .brain__start-copy {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .brain__start-kicker {
-  color: var(--gold);
-  font-size: 10px;
+  color: rgba(201,168,76,0.7);
+  font-size: 8px;
   font-weight: 700;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 .brain__start-line {
-  color: rgba(244,241,232,0.9);
+  color: rgba(244,241,232,0.56);
   font-family: var(--font-serif);
-  font-size: 24px;
-  line-height: 1;
+  font-size: 16px;
+  line-height: 0.96;
 }
 
 .brain__input-wrap {
@@ -802,13 +803,13 @@ h1, h2, h3 {
     top: auto;
     bottom: 112px;
     transform: none;
-    width: min(220px, calc(100vw - 24px));
-    padding: 12px 10px 12px 14px;
+    width: min(152px, calc(100vw - 24px));
+    padding: 4px 6px 4px 10px;
     justify-content: flex-end;
   }
 
   .brain__start-line {
-    font-size: 18px;
+    font-size: 14px;
   }
 
   .brain__input-wrap {
