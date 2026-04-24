@@ -250,7 +250,7 @@ export default function Brain() {
     function tick() {
       setCamera((prev) => {
         if (Math.abs(prev.zoom - targetZoomRef.current) > 0.004) return prev
-        return { ...prev, yaw: prev.yaw + 0.0025 }
+        return { ...prev, yaw: prev.yaw + 0.0007 }
       })
       frameRef.current = requestAnimationFrame(tick)
     }
@@ -418,7 +418,7 @@ export default function Brain() {
       const nextDistance = touchDistance(first, second)
       const center = touchCenter(first, second)
       const distanceDelta = nextDistance - drag.distance
-      setTargetZoom(drag.startZoom + distanceDelta * 0.02)
+      setTargetZoom(drag.startZoom + distanceDelta * 0.05)
       setCamera((prev) => ({
         ...prev,
         panX: drag.startPanX + (center.x - drag.center.x) * 0.82,
