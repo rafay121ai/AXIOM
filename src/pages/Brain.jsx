@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { clearStoredSessionToken, getStoredSessionToken, supabase } from '../lib/supabase'
-import { generateOpeningMessage } from '../lib/openai'
+import { generateBrainOverlayMessage } from '../lib/openai'
 import { fallbackGraph, getPersonalWikiGraph, markWikiNodeAccessed, syncPersonalWiki } from '../lib/personalWiki'
 
 const NODE_COLORS = {
@@ -195,6 +195,7 @@ export default function Brain() {
   const [viewMode, setViewMode] = useState('wide')
   const [showGestureHint, setShowGestureHint] = useState(true)
   const [accountOpen, setAccountOpen] = useState(false)
+  const [threadsOpen, setThreadsOpen] = useState(false)
   const [overlayMessage, setOverlayMessage] = useState('')
   const [showOverlayMessage, setShowOverlayMessage] = useState(false)
   const [camera, setCamera] = useState({
@@ -275,7 +276,6 @@ export default function Brain() {
               threadId: message.thread_id,
               label: labelForThread(message.thread_id),
               preview: previewText(message.content),
-              role: message.role,
               updatedAt: message.created_at,
             })
           }
@@ -284,7 +284,7 @@ export default function Brain() {
       }
 
       try {
-        const opener = await generateOpeningMessage(sessionData, false)
+        const opener = await generateBrainOverlayMessage(sessionData)
         if (!cancelled && opener) {
           setOverlayMessage(opener)
           setShowOverlayMessage(true)
@@ -340,6 +340,18 @@ export default function Brain() {
     window.addEventListener('pointerdown', handlePointerDown)
     return () => window.removeEventListener('pointerdown', handlePointerDown)
   }, [accountOpen])
+
+  useEffect(() => {
+    if (!threadsOpen) return undefined
+
+    function handlePointerDown(event) {
+      if (event.target.closest('.brain__threads')) return
+      setThreadsOpen(false)
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    return () => window.removeEventListener('pointerdown', handlePointerDown)
+  }, [threadsOpen])
 
   useEffect(() => {
     if (drag || activeId) return undefined
@@ -596,6 +608,44 @@ export default function Brain() {
             </div>
           </div>
 
+          <div className={`brain__threads${threadsOpen ? ' brain__threads--open' : ''}`}>
+            <button
+              type="button"
+              className="brain__threads-trigger"
+              aria-label="Open recent threads"
+              onClick={() => setThreadsOpen((prev) => !prev)}
+            >
+              Threads
+            </button>
+
+            {threadsOpen && (
+              <div className="brain__threads-panel">
+                <div className="brain__threads-kicker">Recent threads</div>
+                {conversationItems.length > 0 ? (
+                  conversationItems.map((item) => (
+                    <button
+                      key={item.threadId || 'main'}
+                      type="button"
+                      className="brain__threads-item"
+                      onClick={() => {
+                        setThreadsOpen(false)
+                        enterChat({
+                          threadId: item.threadId,
+                          freshThread: false,
+                        })
+                      }}
+                    >
+                      <span className="brain__threads-label">{item.label}</span>
+                      <span className="brain__threads-preview">{item.preview}</span>
+                    </button>
+                  ))
+                ) : (
+                  <div className="brain__threads-empty">No saved threads yet.</div>
+                )}
+              </div>
+            )}
+          </div>
+
           <div className={`brain__account${accountOpen ? ' brain__account--open' : ''}`}>
             <button
               type="button"
@@ -639,10 +689,13 @@ export default function Brain() {
       </div>
 
       {showOverlayMessage && overlayMessage && !activeNode && (
-        <div className="brain__overlay-message">
-          <div className="brain__overlay-kicker">Axiom read</div>
-          <div className="brain__overlay-text">{overlayMessage}</div>
-        </div>
+        <>
+          <div className="brain__overlay-backdrop" />
+          <div className="brain__overlay-message">
+            <div className="brain__overlay-kicker">Axiom read</div>
+            <div className="brain__overlay-text">{overlayMessage}</div>
+          </div>
+        </>
       )}
 
       <main
@@ -788,46 +841,6 @@ export default function Brain() {
           <div className="brain__node-title">{activeNode.label}</div>
           <button onClick={() => startFromNode(activeNode)}>Move with this</button>
         </div>
-      )}
-
-      {!activeNode && (
-        <button
-          type="button"
-          className="brain__start-here"
-          onClick={() => inputRef.current?.focus()}
-        >
-          <span className="brain__start-arrow" aria-hidden="true">
-            <svg width="38" height="14" viewBox="0 0 38 14" fill="none">
-              <path d="M1 7H35M35 7L29 1M35 7L29 13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </span>
-          <span className="brain__start-copy">
-            <span className="brain__start-kicker">Start here</span>
-            <span className="brain__start-line">Say the thing you keep circling.</span>
-          </span>
-        </button>
-      )}
-
-      {conversationItems.length > 0 && (
-        <aside className="brain__conversation-rail">
-          <div className="brain__conversation-kicker">Recent threads</div>
-          {conversationItems.map((item) => (
-            <button
-              key={item.threadId || 'main'}
-              type="button"
-              className="brain__conversation-item"
-              onClick={() =>
-                enterChat({
-                  threadId: item.threadId,
-                  freshThread: false,
-                })
-              }
-            >
-              <span className="brain__conversation-label">{item.label}</span>
-              <span className="brain__conversation-preview">{item.preview}</span>
-            </button>
-          ))}
-        </aside>
       )}
 
       <form className="brain__input-wrap" onSubmit={handleSubmit}>
