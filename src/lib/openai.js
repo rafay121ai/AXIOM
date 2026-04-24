@@ -185,14 +185,37 @@ Never use emoji.`,
 export async function generateNodeOpeningMessage(session, nodeContext, contextLevel) {
   const level = Number.isFinite(contextLevel) ? Math.max(0, Math.min(1, contextLevel)) : 0
   const percent = Math.round(level * 100)
+  const nodeType = nodeContext.type || 'concept'
 
   let directive
-  if (level < 0.25) {
-    directive = `Axiom has less than 25% context on this node. Start a fresh node session with 1 direct sentence that connects this user's private pattern to "${nodeContext.label}", then ask exactly 1 specific question to learn what angle they want. Do not teach yet.`
-  } else if (level < 0.5) {
-    directive = `Axiom has partial context on this node. Start a fresh node session with 2 sentences: first personalize the topic to this user, second state why this topic matters now. End with a concrete next question.`
+
+  if (nodeType === 'experiment') {
+    // User tapped an experiment node — they're probably reporting back
+    directive = `This is an experiment node. The user tapped it. Open with 1 direct sentence asking where they are with this experiment — what happened, what they tried, or why they haven't started. Do not diagnose yet. Let them speak first.`
+
+  } else if (nodeType === 'pattern') {
+    // User tapped their own pattern to explore it — this is exploratory, not accountability
+    if (level < 0.4) {
+      directive = `The user tapped their own pattern node. This is an exploratory moment — not accountability. Open with 1 sentence that names what this pattern looks like in practice for this specific person (use their axiom_profile and session notes to make it concrete). Then ask 1 specific question: where do they most see this pattern showing up right now? Do not prescribe a first move. Do not confront. Let them drive the direction.`
+    } else {
+      directive = `The user is returning to a pattern they've engaged with before. Open with 1 sentence referencing something specific Axiom has observed about how this pattern has shown up for them. Then offer 2 directions: go deeper into understanding it, or apply it to a specific situation they have right now. Ask which one they want.`
+    }
+
+  } else if (nodeType === 'concept' || nodeType === 'belief' || nodeType === 'goal') {
+    // Exploratory / learning mode
+    if (level < 0.25) {
+      directive = `The user is exploring this node for the first time. Use LEARNING MODE. Open with 1 sentence connecting why "${nodeContext.label}" is specifically relevant to this person right now — tie it to what you know about them. Then ask 1 question to find the angle: are they trying to understand it theoretically, or do they have a specific situation where this applies? Do not teach yet. Do not prescribe.`
+    } else {
+      directive = `The user has prior engagement with this concept. Use LEARNING MODE. Open with 1-2 sentences: name what they've covered and what's still open. Then ask: do they want to go deeper into the concept, or apply it to something specific they're dealing with right now?`
+    }
+
   } else {
-    directive = `Axiom has enough context on this node. Start a fresh node session with 2-3 sentences that name the user's likely pattern around this topic, why it matters, and the first move you want them to make. Do not ask a broad question.`
+    // blind_spot, decision, fact, or unknown — invite before confronting
+    if (level < 0.25) {
+      directive = `Fresh node. Open with 1 sentence connecting "${nodeContext.label}" to what Axiom knows about this person. Then ask 1 specific question to understand what brought them here. Do not assign a first move before they've said anything.`
+    } else {
+      directive = `The user has some history here. Open with 1 sentence naming what's unresolved in this area for them specifically. Then ask what they want to do with it today — understand it better, or work on a specific instance of it.`
+    }
   }
 
   const response = await openai.chat.completions.create({
@@ -204,7 +227,7 @@ export async function generateNodeOpeningMessage(session, nodeContext, contextLe
 
 Your voice: direct, specific, concise, plainspoken.
 No greetings. No filler. No theatrical metaphors. Never say "welcome", "great question", "I understand", "of course", or "let's explore".
-This is a brand-new thread opened from a private Founder Brain node. Do not refer to previous chat messages.`,
+This is a brand-new thread opened from a private Founder Brain node. The user tapped a node — they have not said anything yet. Do not confront them before they speak. Do not prescribe a first move before you know what they want from this session.`,
       },
       {
         role: 'user',
