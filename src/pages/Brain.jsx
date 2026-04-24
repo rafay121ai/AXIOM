@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { clearStoredSessionToken, getStoredSessionToken, supabase } from '../lib/supabase'
+import { generateOpeningMessage } from '../lib/openai'
 import { fallbackGraph, getPersonalWikiGraph, markWikiNodeAccessed, syncPersonalWiki } from '../lib/personalWiki'
 
 const NODE_COLORS = {
@@ -166,11 +167,27 @@ function nodePrompt(node) {
   return 'Move through this node.'
 }
 
+function previewText(content = '') {
+  const text = content
+    .replace(/<artifact[^>]*>[\s\S]*?<\/artifact>/g, '')
+    .replace(/<experiment>[\s\S]*?<\/experiment>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (!text) return 'No saved text yet.'
+  return text.length > 88 ? `${text.slice(0, 85)}...` : text
+}
+
+function labelForThread(threadId) {
+  return threadId ? 'Branch thread' : 'Main thread'
+}
+
 export default function Brain() {
   const navigate = useNavigate()
   const [session, setSession] = useState(null)
   const [authUser, setAuthUser] = useState(null)
   const [graph, setGraph] = useState({ nodes: [], edges: [] })
+  const [conversationItems, setConversationItems] = useState([])
   const [activeId, setActiveId] = useState(null)
   const [hoveredId, setHoveredId] = useState(null)
   const [input, setInput] = useState('')
@@ -178,6 +195,8 @@ export default function Brain() {
   const [viewMode, setViewMode] = useState('wide')
   const [showGestureHint, setShowGestureHint] = useState(true)
   const [accountOpen, setAccountOpen] = useState(false)
+  const [overlayMessage, setOverlayMessage] = useState('')
+  const [showOverlayMessage, setShowOverlayMessage] = useState(false)
   const [camera, setCamera] = useState({
     yaw: -0.18,
     pitch: 0.08,
@@ -240,6 +259,40 @@ export default function Brain() {
         writeBrainCache(sessionToken, fallback)
       }
 
+      const { data: rawMessages, error: messagesError } = await supabase
+        .from('messages')
+        .select('id, thread_id, role, content, created_at')
+        .eq('session_id', sessionData.id)
+        .order('created_at', { ascending: false })
+
+      if (!cancelled && !messagesError) {
+        const byThread = new Map()
+        for (const message of rawMessages || []) {
+          const key = message.thread_id || '__main__'
+          const existing = byThread.get(key)
+          if (!existing) {
+            byThread.set(key, {
+              threadId: message.thread_id,
+              label: labelForThread(message.thread_id),
+              preview: previewText(message.content),
+              role: message.role,
+              updatedAt: message.created_at,
+            })
+          }
+        }
+        setConversationItems(Array.from(byThread.values()).slice(0, 6))
+      }
+
+      try {
+        const opener = await generateOpeningMessage(sessionData, false)
+        if (!cancelled && opener) {
+          setOverlayMessage(opener)
+          setShowOverlayMessage(true)
+        }
+      } catch (overlayError) {
+        console.warn('Brain overlay message skipped:', overlayError?.message || overlayError)
+      }
+
       const existingGraph = await getPersonalWikiGraph(sessionData.id)
       if (!cancelled && existingGraph.nodes.length > 0) {
         setGraph(existingGraph)
@@ -261,10 +314,20 @@ export default function Brain() {
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       setShowGestureHint(false)
-    }, 2000)
+    }, 3800)
 
     return () => window.clearTimeout(timeoutId)
   }, [])
+
+  useEffect(() => {
+    if (!showOverlayMessage) return undefined
+
+    const timeoutId = window.setTimeout(() => {
+      setShowOverlayMessage(false)
+    }, 8000)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [showOverlayMessage])
 
   useEffect(() => {
     if (!accountOpen) return undefined
@@ -380,6 +443,15 @@ export default function Brain() {
     navigate('/chat', { state: { fromBrain: true, ...extra } })
   }
 
+  function startFreshThread(initialInput = '') {
+    enterChat({
+      freshThread: true,
+      threadId: crypto.randomUUID(),
+      initialInput,
+      skipOpening: Boolean(initialInput),
+    })
+  }
+
   function startFromNode(node) {
     enterChat({
       freshThread: true,
@@ -404,7 +476,7 @@ export default function Brain() {
     e.preventDefault()
     const text = input.trim()
     if (!text) return
-    enterChat({ initialInput: text })
+    startFreshThread(text)
   }
 
   function handlePointerDown(e) {
@@ -565,6 +637,13 @@ export default function Brain() {
       <div className="brain__read brain__read--floating">
         {activeNode ? nodePrompt(activeNode) : viewMode === 'inside' ? 'Move through the lit nodes.' : 'The dim map is potential. The lit map is behavior.'}
       </div>
+
+      {showOverlayMessage && overlayMessage && !activeNode && (
+        <div className="brain__overlay-message">
+          <div className="brain__overlay-kicker">Axiom read</div>
+          <div className="brain__overlay-text">{overlayMessage}</div>
+        </div>
+      )}
 
       <main
         ref={canvasRef}
@@ -727,6 +806,28 @@ export default function Brain() {
             <span className="brain__start-line">Say the thing you keep circling.</span>
           </span>
         </button>
+      )}
+
+      {conversationItems.length > 0 && (
+        <aside className="brain__conversation-rail">
+          <div className="brain__conversation-kicker">Recent threads</div>
+          {conversationItems.map((item) => (
+            <button
+              key={item.threadId || 'main'}
+              type="button"
+              className="brain__conversation-item"
+              onClick={() =>
+                enterChat({
+                  threadId: item.threadId,
+                  freshThread: false,
+                })
+              }
+            >
+              <span className="brain__conversation-label">{item.label}</span>
+              <span className="brain__conversation-preview">{item.preview}</span>
+            </button>
+          ))}
+        </aside>
       )}
 
       <form className="brain__input-wrap" onSubmit={handleSubmit}>

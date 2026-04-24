@@ -369,16 +369,16 @@ h1, h2, h3 {
   gap: 10px;
   padding: 10px 14px;
   border-radius: 999px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
-  color: rgba(244,241,232,0.68);
+  background: rgba(255,255,255,0.028);
+  border: 1px solid rgba(255,255,255,0.055);
+  color: rgba(244,241,232,0.48);
   opacity: 0;
   transform: translateY(-8px);
   pointer-events: none;
 }
 
 .brain__gesture-hint--visible {
-  animation: brainGestureHint 2s var(--ease-out) forwards;
+  animation: brainGestureHint 3.8s var(--ease-out) forwards;
 }
 
 @keyframes brainGestureHint {
@@ -400,8 +400,8 @@ h1, h2, h3 {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: rgba(255,231,163,0.9);
-  box-shadow: 0 0 12px rgba(255,231,163,0.3);
+  background: rgba(255,231,163,0.62);
+  box-shadow: 0 0 10px rgba(255,231,163,0.16);
 }
 
 .brain__gesture-dot--left {
@@ -430,7 +430,7 @@ h1, h2, h3 {
   left: 12px;
   right: 12px;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.34), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent);
 }
 
 .brain__gesture-copy {
@@ -652,6 +652,47 @@ h1, h2, h3 {
   padding: 0 16px;
 }
 
+.brain__overlay-message {
+  position: fixed;
+  left: 50%;
+  top: 112px;
+  z-index: 5;
+  width: min(420px, calc(100vw - 32px));
+  transform: translateX(-50%);
+  padding: 16px 18px;
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.085), rgba(255,255,255,0.03)),
+    rgba(4,4,4,0.76);
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 24px 80px rgba(0,0,0,0.48);
+  backdrop-filter: blur(22px);
+  animation: brainOverlayFade 8s var(--ease-out) forwards;
+}
+
+@keyframes brainOverlayFade {
+  0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+  10% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  80% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+}
+
+.brain__overlay-kicker {
+  color: rgba(201,168,76,0.78);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.brain__overlay-text {
+  margin-top: 8px;
+  color: rgba(244,241,232,0.92);
+  font-family: var(--font-serif);
+  font-size: 26px;
+  line-height: 1.06;
+}
+
 .brain__start-here {
   position: fixed;
   right: 24px;
@@ -702,6 +743,57 @@ h1, h2, h3 {
   font-family: var(--font-serif);
   font-size: 16px;
   line-height: 0.96;
+}
+
+.brain__conversation-rail {
+  position: fixed;
+  left: 24px;
+  top: 112px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(248px, calc(100vw - 40px));
+}
+
+.brain__conversation-kicker {
+  color: rgba(201,168,76,0.74);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.brain__conversation-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 11px 12px;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  background: rgba(10,10,10,0.44);
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  backdrop-filter: blur(16px);
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+
+.brain__conversation-item:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255,231,163,0.14);
+  background: rgba(14,14,14,0.6);
+}
+
+.brain__conversation-label {
+  color: rgba(244,241,232,0.86);
+  font-size: 12px;
+}
+
+.brain__conversation-preview {
+  color: rgba(154,149,136,0.78);
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 .brain__input-wrap {
@@ -789,6 +881,16 @@ h1, h2, h3 {
     font-size: 23px;
   }
 
+  .brain__overlay-message {
+    top: 82px;
+    width: min(320px, calc(100vw - 24px));
+    padding: 13px 14px;
+  }
+
+  .brain__overlay-text {
+    font-size: 18px;
+  }
+
   .brain__node-nudge {
     bottom: 104px;
     padding: 14px 14px 13px;
@@ -810,6 +912,21 @@ h1, h2, h3 {
 
   .brain__start-line {
     font-size: 14px;
+  }
+
+  .brain__conversation-rail {
+    left: 12px;
+    top: auto;
+    bottom: 112px;
+    width: min(180px, calc(100vw - 160px));
+  }
+
+  .brain__conversation-item {
+    padding: 9px 10px;
+  }
+
+  .brain__conversation-preview {
+    font-size: 10px;
   }
 
   .brain__input-wrap {

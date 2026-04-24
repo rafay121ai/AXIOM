@@ -157,6 +157,7 @@ export default function Chat() {
   const initialInput = location.state?.initialInput || ''
   const threadId = location.state?.threadId || null
   const freshThread = Boolean(location.state?.freshThread)
+  const skipOpening = Boolean(location.state?.skipOpening)
 
   const [session, setSession] = useState(null)
   const [messages, setMessages] = useState([])  // { id, role, content, streaming, experiment }
@@ -274,7 +275,9 @@ export default function Chat() {
     // Axiom speaks first only for brand-new sessions. Reloads should be passive:
     // load the saved conversation from the first personalized message without
     // generating another assistant response.
-    if (isNew && nodeContext) {
+    if (isNew && skipOpening) {
+      // Brain input is a fresh intent. Let the user's first message lead.
+    } else if (isNew && nodeContext) {
       await streamNodeOpeningMessage(updatedSession, nodeContext)
     } else if (isNew) {
       await streamOpeningMessage(updatedSession)
