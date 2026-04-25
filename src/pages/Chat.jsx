@@ -156,6 +156,7 @@ export default function Chat() {
   const nodeContext = location.state?.nodeContext || null
   const initialInput = location.state?.initialInput || ''
   const threadId = location.state?.threadId || null
+  const isTouchDevice = window.matchMedia('(pointer: coarse)').matches
   const freshThread = Boolean(location.state?.freshThread)
   const autoSend = Boolean(location.state?.autoSend)
   const skipOpening = Boolean(location.state?.skipOpening)
@@ -549,7 +550,7 @@ export default function Chat() {
   }
 
   function handleKeyDown(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !isTouchDevice) {
       e.preventDefault()
       sendMessage()
     }
