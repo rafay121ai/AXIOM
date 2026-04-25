@@ -84,8 +84,26 @@ app.post('/api/delete-account', async (req, res) => {
     const { data: { user }, error: verifyError } = await admin.auth.getUser(token)
     if (verifyError || !user) return res.status(401).json({ error: 'Invalid token' })
 
-    // Deleting from auth.users cascades to sessions → messages, memories, wiki, reads
-    const { error: deleteError } = await admin.auth.admin.deleteUser(user.id)
+    const uid = user.id
+
+    // Get all session IDs for this user
+    const { data: userSessions } = await admin.from('sessions').select('id').eq('user_id', uid)
+    const sessionIds = (userSessions || []).map((s) => s.id)
+
+    if (sessionIds.length > 0) {
+      // Delete in FK order — edges before nodes, all before sessions
+      await admin.from('personal_wiki_edges').delete().in('session_id', sessionIds)
+      await admin.from('personal_wiki_nodes').delete().in('session_id', sessionIds)
+      await admin.from('personal_memories').delete().in('session_id', sessionIds)
+      await admin.from('weekly_reads').delete().in('session_id', sessionIds)
+      await admin.from('messages').delete().in('session_id', sessionIds)
+    }
+
+    await admin.from('sessions').delete().eq('user_id', uid)
+    await admin.from('users').delete().eq('id', uid)
+
+    // Finally remove the auth user
+    const { error: deleteError } = await admin.auth.admin.deleteUser(uid)
     if (deleteError) throw deleteError
 
     res.json({ ok: true })

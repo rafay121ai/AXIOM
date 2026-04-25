@@ -219,6 +219,7 @@ export default function Brain() {
   const [showDeleteMenu, setShowDeleteMenu] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const [weeklyRead, setWeeklyRead] = useState(null)
   const [overlayMessage, setOverlayMessage] = useState('')
   const [showOverlayMessage, setShowOverlayMessage] = useState(false)
@@ -513,6 +514,7 @@ export default function Brain() {
 
   async function handleDeleteAccount() {
     setDeleting(true)
+    setDeleteError('')
     try {
       const { data: { session } } = await supabase.auth.getSession()
       const token = session?.access_token
@@ -533,8 +535,8 @@ export default function Brain() {
       navigate('/', { replace: true })
     } catch (err) {
       console.error('Delete account failed:', err)
+      setDeleteError(err.message || 'Something went wrong.')
       setDeleting(false)
-      setDeleteConfirm(false)
     }
   }
 
@@ -719,6 +721,9 @@ export default function Brain() {
               ) : (
                 <>
                   <div className="brain__delete-warning">This deletes everything permanently.</div>
+                  {deleteError && (
+                    <div className="brain__delete-error">{deleteError}</div>
+                  )}
                   <div className="brain__delete-actions">
                     <button
                       type="button"
@@ -731,7 +736,7 @@ export default function Brain() {
                     <button
                       type="button"
                       className="brain__delete-cancel"
-                      onClick={() => { setDeleteConfirm(false); setShowDeleteMenu(false) }}
+                      onClick={() => { setDeleteConfirm(false); setShowDeleteMenu(false); setDeleteError('') }}
                     >
                       Cancel
                     </button>
