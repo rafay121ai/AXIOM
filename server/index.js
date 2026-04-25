@@ -80,12 +80,15 @@ app.post('/api/delete-account', async (req, res) => {
   const token = (req.headers.authorization || '').replace('Bearer ', '')
   if (!token) return res.status(401).json({ error: 'Unauthorized' })
 
-  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!supabaseUrl || !supabaseServiceKey) {
     return res.status(500).json({ error: 'Server not configured for account deletion' })
   }
 
   try {
-    const admin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+    const admin = createClient(supabaseUrl, supabaseServiceKey)
 
     // Verify the JWT to get the user ID
     const { data: { user }, error: verifyError } = await admin.auth.getUser(token)
