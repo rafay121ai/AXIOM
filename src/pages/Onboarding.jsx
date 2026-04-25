@@ -323,8 +323,12 @@ export default function Onboarding() {
 
     loadUser()
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return
+      // INITIAL_SESSION fires from the cached JWT before server validation completes.
+      // Letting it set user here causes a race where a deleted account's stale token
+      // skips the sign-in modal. Let getUser() above handle the initial state instead.
+      if (event === 'INITIAL_SESSION') return
       setUser(session?.user || null)
       setAuthLoading(false)
     })
