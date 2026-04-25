@@ -678,27 +678,29 @@ export default function Brain() {
             {threadsOpen && (
               <div className="brain__threads-panel">
                 <div className="brain__threads-kicker">Recent threads</div>
-                {conversationItems.length > 0 ? (
-                  conversationItems.map((item) => (
-                    <button
-                      key={item.threadId || 'main'}
-                      type="button"
-                      className="brain__threads-item"
-                      onClick={() => {
-                        setThreadsOpen(false)
-                        enterChat({
-                          threadId: item.threadId,
-                          freshThread: false,
-                        })
-                      }}
-                    >
-                      <span className="brain__threads-label">{item.label}</span>
-                      <span className="brain__threads-preview">{item.preview}</span>
-                    </button>
-                  ))
-                ) : (
-                  <div className="brain__threads-empty">No saved threads yet.</div>
-                )}
+                <div className="brain__threads-list">
+                  {conversationItems.length > 0 ? (
+                    conversationItems.map((item) => (
+                      <button
+                        key={item.threadId || 'main'}
+                        type="button"
+                        className="brain__threads-item"
+                        onClick={() => {
+                          setThreadsOpen(false)
+                          enterChat({
+                            threadId: item.threadId,
+                            freshThread: false,
+                          })
+                        }}
+                      >
+                        <span className="brain__threads-label">{item.label}</span>
+                        <span className="brain__threads-preview">{item.preview}</span>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="brain__threads-empty">No saved threads yet.</div>
+                  )}
+                </div>
               </div>
             )}
           </div>

@@ -484,15 +484,26 @@ h1, h2, h3 {
   top: calc(100% + 10px);
   right: 0;
   z-index: 8;
-  width: min(280px, calc(100vw - 32px));
-  padding: 14px;
-  border-radius: 14px;
+  width: min(248px, calc(100vw - 32px));
+  padding: 12px;
+  border-radius: 12px;
   background:
     linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03)),
     rgba(4,4,4,0.92);
   border: 1px solid rgba(255,255,255,0.1);
   box-shadow: 0 22px 70px rgba(0,0,0,0.56);
   backdrop-filter: blur(18px);
+}
+
+.brain__threads-list {
+  max-height: 168px;
+  overflow-y: auto;
+  margin-top: 8px;
+  scrollbar-width: none;
+}
+
+.brain__threads-list::-webkit-scrollbar {
+  display: none;
 }
 
 .brain__threads-backdrop {
@@ -522,34 +533,41 @@ h1, h2, h3 {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-top: 10px;
-  padding: 11px 12px;
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 12px;
-  background: rgba(10,10,10,0.44);
+  gap: 2px;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 8px;
+  background: rgba(10,10,10,0.36);
   color: inherit;
   cursor: pointer;
   text-align: left;
-  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.brain__threads-item:first-child {
+  margin-top: 0;
 }
 
 .brain__threads-item:hover {
-  transform: translateY(-1px);
-  border-color: rgba(255,231,163,0.14);
-  background: rgba(14,14,14,0.6);
+  border-color: rgba(255,231,163,0.12);
+  background: rgba(18,18,18,0.6);
 }
 
 .brain__threads-label {
-  color: rgba(244,241,232,0.86);
-  font-size: 12px;
+  color: rgba(244,241,232,0.82);
+  font-size: 11px;
+  font-weight: 500;
 }
 
 .brain__threads-preview,
 .brain__threads-empty {
-  color: rgba(154,149,136,0.78);
-  font-size: 11px;
-  line-height: 1.45;
+  color: rgba(154,149,136,0.65);
+  font-size: 10px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .brain__threads-empty {
