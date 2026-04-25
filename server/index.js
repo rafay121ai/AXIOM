@@ -15,12 +15,14 @@ const app = express()
 const port = process.env.PORT || 3001
 const frontendUrl = process.env.FRONTEND_URL || '*'
 
-if (!process.env.OPENAI_API_KEY) {
+const openaiApiKey = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY
+
+if (!openaiApiKey) {
   console.warn('[Axiom API] Missing OPENAI_API_KEY')
 }
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: openaiApiKey,
 })
 
 app.use(cors({
