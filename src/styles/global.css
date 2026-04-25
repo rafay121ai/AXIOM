@@ -902,7 +902,7 @@ h1, h2, h3 {
   outline: none;
   color: var(--text-primary);
   font-family: var(--font-sans);
-  font-size: 15px;
+  font-size: 16px;
 }
 
 .brain__input::placeholder {
@@ -1056,7 +1056,7 @@ h1, h2, h3 {
   outline: none;
   color: var(--text-primary);
   font-family: var(--font-sans);
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.5;
   resize: none;
   min-height: 24px;

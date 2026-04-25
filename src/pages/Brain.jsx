@@ -23,7 +23,7 @@ const RELATION_COLORS = {
 
 const VIEWPORT = { width: 1400, height: 880 }
 const MIN_ZOOM = -0.52
-const MAX_ZOOM = 12.0
+const MAX_ZOOM = 22.0
 const INSIDE_ZOOM = 1.35
 
 function isTouchDevice() {
