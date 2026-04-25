@@ -436,6 +436,17 @@ export default function Onboarding() {
       const activeUser = userData.user
       if (userError || !activeUser) throw new Error('Sign in with Google before starting onboarding.')
 
+      // Upsert user record so sessions can be queried by email
+      const firstName =
+        activeUser.user_metadata?.given_name ||
+        activeUser.user_metadata?.name?.split(' ')[0] ||
+        null
+
+      await supabase.from('users').upsert(
+        { id: activeUser.id, email: activeUser.email, first_name: firstName },
+        { onConflict: 'id' }
+      )
+
       const pillarWeights = derivePillarWeights(finalAnswered)
       const qaPairs = finalAnswered.map(({ question, answer }) => ({ question, answer }))
       const axiomProfile = await generateAxiomProfile(qaPairs)

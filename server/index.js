@@ -2,6 +2,7 @@ import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
 import OpenAI from 'openai'
+import { createClient } from '@supabase/supabase-js'
 
 const app = express()
 const port = process.env.PORT || 3001
@@ -65,6 +66,32 @@ app.post('/api/openai/chat', async (req, res) => {
     }
 
     res.status(err.status || 500).json({ error: err.message || 'Chat request failed' })
+  }
+})
+
+app.post('/api/delete-account', async (req, res) => {
+  const token = (req.headers.authorization || '').replace('Bearer ', '')
+  if (!token) return res.status(401).json({ error: 'Unauthorized' })
+
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return res.status(500).json({ error: 'Server not configured for account deletion' })
+  }
+
+  try {
+    const admin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+
+    // Verify the JWT to get the user ID
+    const { data: { user }, error: verifyError } = await admin.auth.getUser(token)
+    if (verifyError || !user) return res.status(401).json({ error: 'Invalid token' })
+
+    // Deleting from auth.users cascades to sessions → messages, memories, wiki, reads
+    const { error: deleteError } = await admin.auth.admin.deleteUser(user.id)
+    if (deleteError) throw deleteError
+
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[delete-account]', err)
+    res.status(500).json({ error: err.message || 'Delete failed' })
   }
 })
 

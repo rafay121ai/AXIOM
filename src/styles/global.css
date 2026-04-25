@@ -357,6 +357,114 @@ h1, h2, h3 {
   color: var(--text-primary);
 }
 
+.brain__wordmark-wrap {
+  position: relative;
+}
+
+.brain__wordmark-btn {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--text-primary);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.brain__delete-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  z-index: 8;
+  width: 210px;
+  padding: 14px;
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.035)),
+    rgba(4,4,4,0.92);
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 22px 70px rgba(0,0,0,0.56);
+  backdrop-filter: blur(18px);
+}
+
+.brain__delete-hint {
+  color: rgba(154,149,136,0.72);
+  font-size: 11px;
+  margin-bottom: 10px;
+}
+
+.brain__delete-trigger {
+  width: 100%;
+  height: 34px;
+  border: 1px solid rgba(180,60,60,0.3);
+  border-radius: 10px;
+  background: rgba(180,60,60,0.08);
+  color: rgba(220,100,100,0.9);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.brain__delete-trigger:hover {
+  border-color: rgba(180,60,60,0.5);
+  background: rgba(180,60,60,0.14);
+}
+
+.brain__delete-warning {
+  color: rgba(244,241,232,0.72);
+  font-size: 12px;
+  line-height: 1.45;
+  margin-bottom: 12px;
+}
+
+.brain__delete-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.brain__delete-confirm {
+  flex: 1;
+  height: 34px;
+  border: 1px solid rgba(180,60,60,0.4);
+  border-radius: 10px;
+  background: rgba(180,60,60,0.14);
+  color: rgba(220,100,100,0.95);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.brain__delete-confirm:hover:not(:disabled) {
+  border-color: rgba(180,60,60,0.6);
+  background: rgba(180,60,60,0.22);
+}
+
+.brain__delete-confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.brain__delete-cancel {
+  flex: 1;
+  height: 34px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  background: rgba(255,255,255,0.04);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.brain__delete-cancel:hover {
+  border-color: rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.08);
+}
+
 .brain__chrome-right {
   display: flex;
   align-items: center;

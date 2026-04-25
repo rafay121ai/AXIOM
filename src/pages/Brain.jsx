@@ -216,6 +216,9 @@ export default function Brain() {
   const [showGestureHint, setShowGestureHint] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
   const [threadsOpen, setThreadsOpen] = useState(false)
+  const [showDeleteMenu, setShowDeleteMenu] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [weeklyRead, setWeeklyRead] = useState(null)
   const [overlayMessage, setOverlayMessage] = useState('')
   const [showOverlayMessage, setShowOverlayMessage] = useState(false)
@@ -398,6 +401,19 @@ export default function Brain() {
   }, [threadsOpen])
 
   useEffect(() => {
+    if (!showDeleteMenu) return undefined
+
+    function handlePointerDown(event) {
+      if (event.target.closest('.brain__wordmark-wrap')) return
+      setShowDeleteMenu(false)
+      setDeleteConfirm(false)
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    return () => window.removeEventListener('pointerdown', handlePointerDown)
+  }, [showDeleteMenu])
+
+  useEffect(() => {
     if (drag || activeId) return undefined
 
     function tick() {
@@ -494,6 +510,33 @@ export default function Brain() {
       .filter((node) => statusLit(node) || nodeScore(node, session) >= 10)
       .map((node) => node.id)
   }, [nodes, session])
+
+  async function handleDeleteAccount() {
+    setDeleting(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error('Not authenticated')
+
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+      const res = await fetch(`${apiUrl}/api/delete-account`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error || 'Delete failed')
+      }
+
+      localStorage.clear()
+      navigate('/', { replace: true })
+    } catch (err) {
+      console.error('Delete account failed:', err)
+      setDeleting(false)
+      setDeleteConfirm(false)
+    }
+  }
 
   function enterChat(extra = {}) {
     navigate('/chat', { state: { fromBrain: true, ...extra } })
@@ -647,7 +690,57 @@ export default function Brain() {
   return (
     <div className="brain brain--immersive brain--three">
       <header className="brain__chrome">
-        <span className="brain__wordmark">Axiom</span>
+        <div className="brain__wordmark-wrap">
+          <button
+            type="button"
+            className="brain__wordmark-btn"
+            onClick={() => {
+              setShowDeleteMenu((prev) => !prev)
+              setDeleteConfirm(false)
+              setAccountOpen(false)
+              setThreadsOpen(false)
+            }}
+          >
+            Axiom
+          </button>
+          {showDeleteMenu && (
+            <div className="brain__delete-menu">
+              {!deleteConfirm ? (
+                <>
+                  <div className="brain__delete-hint">Your account data</div>
+                  <button
+                    type="button"
+                    className="brain__delete-trigger"
+                    onClick={() => setDeleteConfirm(true)}
+                  >
+                    Delete all data
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="brain__delete-warning">This deletes everything permanently.</div>
+                  <div className="brain__delete-actions">
+                    <button
+                      type="button"
+                      className="brain__delete-confirm"
+                      disabled={deleting}
+                      onClick={handleDeleteAccount}
+                    >
+                      {deleting ? 'Deleting…' : 'Yes, delete'}
+                    </button>
+                    <button
+                      type="button"
+                      className="brain__delete-cancel"
+                      onClick={() => { setDeleteConfirm(false); setShowDeleteMenu(false) }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
         <div className="brain__chrome-right">
           <div className={`brain__gesture-hint${showGestureHint ? ' brain__gesture-hint--visible' : ''}${touch ? ' brain__gesture-hint--touch' : ''}`}>
             <div className="brain__gesture-visual" aria-hidden="true">
