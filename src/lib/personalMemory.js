@@ -151,21 +151,30 @@ export async function updatePersonalMemory(session, recentMessages, userMessage,
   try {
     const update = await generateMemoryUpdate(session, recentMessages, userMessage, assistantMessage)
     const sessionNotes = update.session_notes || session.session_notes || ''
+    const conceptProgress = update.concept_progress || []
 
+    const sessionUpdates = {}
     if (sessionNotes && sessionNotes !== session.session_notes) {
+      sessionUpdates.session_notes = sessionNotes
+    }
+    if (conceptProgress.length > 0) {
+      sessionUpdates.concept_progress = conceptProgress
+    }
+
+    if (Object.keys(sessionUpdates).length > 0) {
       const { error } = await supabase
         .from('sessions')
-        .update({ session_notes: sessionNotes })
+        .update(sessionUpdates)
         .eq('id', session.id)
 
       if (error) {
-        console.warn('[Memory] Session notes update skipped:', error.message)
+        console.warn('[Memory] Session update skipped:', error.message)
       }
     }
 
     await savePersonalMemories(session.id, update.memories || [])
 
-    return { ...session, session_notes: sessionNotes }
+    return { ...session, session_notes: sessionNotes, concept_progress: conceptProgress.length > 0 ? conceptProgress : session.concept_progress }
   } catch (err) {
     console.warn('[Memory] Update failed:', err?.message || err)
     return session
