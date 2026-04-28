@@ -111,9 +111,10 @@ export async function searchWiki(query, matchCount = 3, filterPillar = null) {
 export async function formatWikiContext(chunks) {
   if (!chunks || chunks.length === 0) return ''
 
-  // Group by (author, title) — merge key_frameworks from same source
+  // Group by (author, title) — merge key_frameworks from same source, skip null values
   const bySource = new Map()
   for (const chunk of chunks) {
+    if (!chunk.key_frameworks) continue
     const key = `${chunk.author}|||${chunk.title}`
     if (!bySource.has(key)) {
       bySource.set(key, { author: chunk.author, title: chunk.title, texts: [] })
@@ -121,14 +122,18 @@ export async function formatWikiContext(chunks) {
     bySource.get(key).texts.push(chunk.key_frameworks)
   }
 
+  if (bySource.size === 0) return ''
+
   // Synthesize each source into an internalized prior in parallel
   const priors = await Promise.all(
-    [...bySource.values()].map(({ author, title, texts }) =>
-      synthesizePrior(author, title, texts.join('\n\n'))
-    )
+    [...bySource.values()].map(({ author, title, texts }) => {
+      // Cap combined text at 1200 chars to stay well inside token limits
+      const combinedText = texts.join('\n\n').slice(0, 1200)
+      return synthesizePrior(author, title, combinedText)
+    })
   )
 
-  return priors.join('\n\n')
+  return priors.filter(Boolean).join('\n\n')
 }
 
 async function synthesizePrior(author, title, combinedText) {
@@ -158,8 +163,8 @@ Source: ${title}`,
     return response.choices[0].message.content.trim()
   } catch (err) {
     console.warn(`[RAG] Prior synthesis failed for "${title}":`, err?.message || err)
-    // Fallback: reformat raw text without LLM
-    const excerpt = combinedText.slice(0, 220).replace(/\n+/g, ' ').trim()
-    return `Axiom knows from ${author}, ${title}: ${excerpt}`
+    // Fallback: reformat raw text without LLM — take first sentence only
+    const firstSentence = combinedText.split(/[.!?]/)[0].trim()
+    return `Axiom knows from ${author}, ${title}: ${firstSentence}.`
   }
 }
