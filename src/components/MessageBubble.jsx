@@ -2,8 +2,14 @@
 // Does NOT render experiment/warning cards — those are handled by the parent.
 
 // Final defense: strip any artifact/experiment tags that weren't caught upstream.
-function safeContent(text) {
+function normalizeResponseText(text) {
   return (text || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\n{2,}/g, '\n')
+}
+
+function safeContent(text) {
+  return normalizeResponseText(text)
     .replace(/<artifact[^>]*>[\s\S]*?<\/artifact>/g, '')
     .replace(/<artifact[^>]*>/g, '')
     .replace(/<\/artifact>/g, '')
