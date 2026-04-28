@@ -30,7 +30,7 @@ const PILLAR_COLORS = {
 }
 
 const NODE_TYPE_BASE_RADIUS = {
-  pillar:     0.010,
+  pillar:     0.012,
   goal:       0.016,
   experiment: 0.015,
   pattern:    0.013,
@@ -260,10 +260,10 @@ function createNodeMesh(node) {
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
-    opacity: pillar ? 0.08 : lit ? 0.18 : 0.045,
+    opacity: pillar ? 0.11 : lit ? 0.20 : 0.075,
   })
   const sprite = new THREE.Sprite(spriteMat)
-  const spriteScale = radius * (pillar ? 2.6 : lit ? 2.2 : 1.35)
+  const spriteScale = radius * (pillar ? 2.8 : lit ? 2.35 : 1.65)
   sprite.scale.set(spriteScale, spriteScale, 1)
   mesh.add(sprite)
 
@@ -345,8 +345,9 @@ function igniteNode(mesh) {
   const lit = isNodeLit(node)
   const radius = getNodeRadius(node)
   const targetOpacity = lit ? 0.92 : 0.42
-  const targetSpriteScale = radius * (lit ? 2.2 : 1.35)
-  const targetSpriteOpacity = lit ? 0.22 : 0.06
+  const pillar = node.type === 'pillar'
+  const targetSpriteScale = radius * (pillar ? 2.8 : lit ? 2.35 : 1.65)
+  const targetSpriteOpacity = pillar ? 0.13 : lit ? 0.22 : 0.08
   const sprite = mesh.userData.sprite
 
   animateTween(0.01, 1.0, 500, v => { mesh.scale.set(v, v, v) }, 'easeOut')
@@ -845,8 +846,9 @@ export default function Brain() {
       } else {
         mesh.material.opacity = lit ? 0.92 : 0.42
         if (sprite) {
-          sprite.scale.setScalar(radius * (lit ? 2.2 : 1.35))
-          sprite.material.opacity = lit ? 0.18 : 0.045
+          const pillar = node.type === 'pillar'
+          sprite.scale.setScalar(radius * (pillar ? 2.8 : lit ? 2.35 : 1.65))
+          sprite.material.opacity = pillar ? 0.11 : lit ? 0.20 : 0.075
         }
       }
     })
