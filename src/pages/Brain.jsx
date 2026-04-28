@@ -540,9 +540,10 @@ export default function Brain() {
     return () => { cancelled = true }
   }, [navigate])
 
-  // ─── Three.js init (mount once) ─────────────────────────────────────────────
+  // ─── Three.js init — runs once loading is done and canvas is in the DOM ──────
 
   useEffect(() => {
+    if (loading) return
     const canvas = canvasRef.current
     if (!canvas) return
 
@@ -723,7 +724,7 @@ export default function Brain() {
       renderer.dispose()
       threeRef.current = null
     }
-  }, [])
+  }, [loading])
 
   // ─── Graph rebuild ──────────────────────────────────────────────────────────
 
