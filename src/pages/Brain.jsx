@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as THREE from 'three'
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js'
-import { EffectComposer, RenderPass, EffectPass, BloomEffect } from 'postprocessing'
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { clearStoredSessionToken, getStoredSessionToken, supabase } from '../lib/supabase'
 import { ensureCurrentWeeklyRead, fetchLatestWeeklyRead } from '../lib/sessionReads'
 import { fallbackGraph, getPersonalWikiGraph, markWikiNodeAccessed, syncPersonalWiki } from '../lib/personalWiki'
@@ -160,11 +163,27 @@ function getNodeRadius(node) {
   return base * scale
 }
 
-function getEmissiveIntensity(node) {
-  const importance = node.importance || 3
-  const lit = ['active', 'bright', 'ghosted'].includes(node.status)
-  const base = importance === 5 ? 0.55 : importance === 4 ? 0.40 : 0.25
-  return lit ? base : base * 0.18
+function isNodeLit(node) {
+  return ['active', 'bright', 'ghosted'].includes(node.status)
+}
+
+let _glowTexture = null
+function getGlowTexture() {
+  if (_glowTexture) return _glowTexture
+  const size = 128
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2)
+  grad.addColorStop(0.0, 'rgba(255,255,255,1.0)')
+  grad.addColorStop(0.2, 'rgba(255,255,255,0.8)')
+  grad.addColorStop(0.5, 'rgba(255,255,255,0.2)')
+  grad.addColorStop(1.0, 'rgba(255,255,255,0.0)')
+  ctx.fillStyle = grad
+  ctx.fillRect(0, 0, size, size)
+  _glowTexture = new THREE.CanvasTexture(canvas)
+  return _glowTexture
 }
 
 function extractLabel(content) {
@@ -184,43 +203,49 @@ function colorToHex(colorInt) {
 function createNodeMesh(node) {
   const radius = getNodeRadius(node)
   const color = getNodeColor(node)
-  const emissiveIntensity = getEmissiveIntensity(node)
+  const lit = isNodeLit(node)
 
-  const geometry = new THREE.SphereGeometry(radius, 24, 24)
-  const material = new THREE.MeshStandardMaterial({
+  const geometry = new THREE.SphereGeometry(radius, 16, 16)
+  const material = new THREE.MeshBasicMaterial({
     color,
-    emissive: color,
-    emissiveIntensity,
-    roughness: 0.88,
-    metalness: 0.0,
     transparent: true,
-    opacity: ['active', 'bright', 'ghosted'].includes(node.status) ? 0.92 : 0.28,
+    opacity: lit ? 0.95 : 0.22,
   })
-
   const mesh = new THREE.Mesh(geometry, material)
-  mesh.userData = { node }
+
+  const spriteMat = new THREE.SpriteMaterial({
+    map: getGlowTexture(),
+    color,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    opacity: lit ? 0.55 : 0.18,
+  })
+  const sprite = new THREE.Sprite(spriteMat)
+  const spriteScale = radius * (lit ? 11 : 4.5)
+  sprite.scale.set(spriteScale, spriteScale, 1)
+  mesh.add(sprite)
+
+  mesh.userData = { node, sprite }
   return mesh
 }
 
 function createEdge(sourcePos, targetPos, sourceNode, targetNode, relationship) {
-  const mid = new THREE.Vector3(
-    (sourcePos.x + targetPos.x) / 2,
-    (sourcePos.y + targetPos.y) / 2,
-    (sourcePos.z + targetPos.z) / 2 - 0.3,
-  )
-  const curve = new THREE.QuadraticBezierCurve3(
-    sourcePos.clone(), mid, targetPos.clone(),
-  )
-  const tube = new THREE.TubeGeometry(curve, 20, 0.0008, 6, false)
   const sourceColor = new THREE.Color(getNodeColor(sourceNode))
   const targetColor = new THREE.Color(getNodeColor(targetNode))
   const blended = sourceColor.clone().lerp(targetColor, 0.5)
-  const material = new THREE.MeshBasicMaterial({
+  const geometry = new THREE.BufferGeometry().setFromPoints([
+    sourcePos.clone(),
+    targetPos.clone(),
+  ])
+  const material = new THREE.LineBasicMaterial({
     color: blended,
     transparent: true,
-    opacity: relationship === 'tested_by' ? 0.35 : 0.20,
+    opacity: relationship === 'tested_by' ? 0.25 : 0.10,
   })
-  return new THREE.Mesh(tube, material)
+  const line = new THREE.Line(geometry, material)
+  line.userData.targetOpacity = relationship === 'tested_by' ? 0.25 : 0.10
+  return line
 }
 
 function createLabel(node) {
@@ -271,20 +296,37 @@ function animateTween(from, to, duration, onUpdate, easing = 'easeOut') {
 
 function igniteNode(mesh) {
   const node = mesh.userData.node
-  const targetOpacity = ['active', 'bright', 'ghosted'].includes(node.status) ? 1.0 : 0.4
-  const targetEmissive = getEmissiveIntensity(node)
-  mesh.material.emissiveIntensity = 2.0
-  animateTween(0.01, 1.0, 600, v => { mesh.scale.set(v, v, v) }, 'easeOut')
-  setTimeout(() => {
-    animateTween(2.0, targetEmissive, 200, v => { mesh.material.emissiveIntensity = v })
-    animateTween(0, targetOpacity, 300, v => { mesh.material.opacity = v })
-  }, 200)
+  const lit = isNodeLit(node)
+  const radius = getNodeRadius(node)
+  const targetOpacity = lit ? 0.95 : 0.22
+  const targetSpriteScale = radius * (lit ? 11 : 4.5)
+  const targetSpriteOpacity = lit ? 0.55 : 0.18
+  const sprite = mesh.userData.sprite
+
+  animateTween(0.01, 1.0, 500, v => { mesh.scale.set(v, v, v) }, 'easeOut')
+  animateTween(0, targetOpacity, 400, v => { mesh.material.opacity = v }, 'easeOut')
+
+  if (sprite) {
+    sprite.material.opacity = 0
+    sprite.scale.set(0, 0, 1)
+    // flash wide then settle
+    animateTween(0, targetSpriteScale * 1.9, 220, v => { sprite.scale.set(v, v, 1) }, 'easeOut')
+    animateTween(0, Math.min(1, targetSpriteOpacity * 1.6), 220, v => { sprite.material.opacity = v }, 'easeOut')
+    setTimeout(() => {
+      animateTween(targetSpriteScale * 1.9, targetSpriteScale, 350, v => { sprite.scale.set(v, v, 1) })
+      animateTween(sprite.material.opacity, targetSpriteOpacity, 350, v => { sprite.material.opacity = v })
+    }, 220)
+  }
 }
 
 function playOpenAnimation(nodeMeshes, edgeMeshes, scene) {
   nodeMeshes.forEach(m => {
     m.material.opacity = 0
     m.scale.set(0.01, 0.01, 0.01)
+    if (m.userData.sprite) {
+      m.userData.sprite.material.opacity = 0
+      m.userData.sprite.scale.set(0, 0, 1)
+    }
   })
   edgeMeshes.forEach(m => { m.material.opacity = 0 })
 
@@ -336,8 +378,14 @@ function buildScene(th, graph) {
       if (!latest) return
       mesh.userData.node = latest
       if (mesh.userData.node.id !== th.activeIdRef?.current) {
-        mesh.material.opacity = ['active', 'bright', 'ghosted'].includes(latest.status) ? 1.0 : 0.4
-        mesh.material.emissiveIntensity = getEmissiveIntensity(latest)
+        const lit = isNodeLit(latest)
+        const radius = getNodeRadius(latest)
+        mesh.material.opacity = lit ? 0.95 : 0.22
+        const sprite = mesh.userData.sprite
+        if (sprite) {
+          sprite.scale.setScalar(radius * (lit ? 11 : 4.5))
+          sprite.material.opacity = lit ? 0.55 : 0.18
+        }
       }
     })
     return
@@ -543,27 +591,26 @@ export default function Brain() {
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     renderer.setSize(window.innerWidth, window.innerHeight)
-    renderer.toneMapping = THREE.ACESFilmicToneMapping
+    renderer.setClearColor(0x0a0806)
 
     const scene = new THREE.Scene()
 
     const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 100)
     camera.position.set(0, 0, 3.2)
 
-    const ambient = new THREE.AmbientLight(0xffffff, 0.08)
-    const keyLight = new THREE.DirectionalLight(0xfff5e0, 0.6)
-    keyLight.position.set(2, 4, 2)
-    const rimLight = new THREE.DirectionalLight(0xc0d8ff, 0.3)
-    rimLight.position.set(-3, -2, -3)
-    scene.add(ambient, keyLight, rimLight)
-
     const composer = new EffectComposer(renderer)
     composer.addPass(new RenderPass(scene, camera))
-    const bloom = new BloomEffect({ intensity: 0.06, radius: 0.5, luminanceThreshold: 0.94 })
-    composer.addPass(new EffectPass(camera, bloom))
+    const bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(window.innerWidth, window.innerHeight),
+      0.35,   // strength
+      0.5,    // radius
+      0.88,   // threshold
+    )
+    composer.addPass(bloomPass)
+    composer.addPass(new OutputPass())
 
     const labelRenderer = new CSS2DRenderer()
     labelRenderer.setSize(window.innerWidth, window.innerHeight)
@@ -589,6 +636,7 @@ export default function Brain() {
       camera.updateProjectionMatrix()
       renderer.setSize(window.innerWidth, window.innerHeight)
       composer.setSize(window.innerWidth, window.innerHeight)
+      bloomPass.resolution.set(window.innerWidth, window.innerHeight)
       labelRenderer.setSize(window.innerWidth, window.innerHeight)
     }
     window.addEventListener('resize', onResize)
@@ -664,15 +712,10 @@ export default function Brain() {
     canvas.addEventListener('click', onClick)
 
     let animFrameId
-    let time = 0
     let lastViewMode = 'wide'
 
     function animate() {
       animFrameId = requestAnimationFrame(animate)
-      time += 0.016
-      const pulse = Math.sin(time * 0.25) * 0.015
-      keyLight.intensity = 0.6 + pulse
-      ambient.intensity = 0.08 + pulse * 0.3
 
       const th = threeRef.current
       if (!isDragging && !activeIdRef.current && th?.nodeMeshes?.length > 0) {
@@ -746,12 +789,21 @@ export default function Brain() {
     th.nodeMeshes.forEach(mesh => {
       const node = mesh.userData.node
       const isActive = node.id === activeId
+      const lit = isNodeLit(node)
+      const radius = getNodeRadius(node)
+      const sprite = mesh.userData.sprite
       if (isActive) {
-        mesh.material.emissiveIntensity = getEmissiveIntensity(node) * 3
         mesh.material.opacity = 1.0
+        if (sprite) {
+          sprite.scale.setScalar(radius * 20)
+          sprite.material.opacity = 0.75
+        }
       } else {
-        mesh.material.emissiveIntensity = getEmissiveIntensity(node)
-        mesh.material.opacity = ['active', 'bright', 'ghosted'].includes(node.status) ? 1.0 : 0.4
+        mesh.material.opacity = lit ? 0.95 : 0.22
+        if (sprite) {
+          sprite.scale.setScalar(radius * (lit ? 11 : 4.5))
+          sprite.material.opacity = lit ? 0.55 : 0.18
+        }
       }
     })
   }, [activeId])
