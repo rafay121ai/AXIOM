@@ -111,6 +111,104 @@ h1, h2, h3 {
   to   { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes axiom-draw-up {
+  from { transform: scaleY(0); transform-origin: bottom; opacity: 0; }
+  to { transform: scaleY(1); transform-origin: bottom; opacity: 1; }
+}
+
+@keyframes axiom-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes axiom-draw-line {
+  from { stroke-dashoffset: 1000; }
+  to { stroke-dashoffset: 0; }
+}
+
+.axiom-animate-bar {
+  animation: axiom-draw-up 0.6s ease forwards;
+}
+
+.axiom-animate-fade {
+  animation: axiom-fade-in 0.4s ease forwards;
+}
+
+.axiom-animate-line {
+  stroke-dasharray: 1000;
+  animation: axiom-draw-line 1.2s ease forwards;
+}
+
+.axiom-stagger-1 { animation-delay: 0.1s; }
+.axiom-stagger-2 { animation-delay: 0.2s; }
+.axiom-stagger-3 { animation-delay: 0.3s; }
+.axiom-stagger-4 { animation-delay: 0.4s; }
+.axiom-stagger-5 { animation-delay: 0.5s; }
+.axiom-stagger-6 { animation-delay: 0.6s; }
+
+@keyframes axiom-node-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(201, 168, 76, 0.45); }
+  100% { box-shadow: 0 0 0 10px rgba(201, 168, 76, 0); }
+}
+
+.axiom-node-pulse {
+  animation: axiom-node-pulse 0.45s ease;
+}
+
+.axiom-spectrum-marker {
+  animation: axiom-slide-marker 0.75s ease forwards;
+}
+
+@keyframes axiom-slide-marker {
+  from { left: 0%; }
+  to { left: var(--axiom-marker-left); }
+}
+
+.axiom-choice {
+  width: 100%;
+  min-height: 76px;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  perspective: 900px;
+  text-align: left;
+  transition: opacity 0.2s ease;
+}
+
+.axiom-choice__inner {
+  position: relative;
+  display: block;
+  min-height: 76px;
+  transform-style: preserve-3d;
+  transition: transform 0.45s var(--ease-out);
+}
+
+.axiom-choice--flipped .axiom-choice__inner {
+  transform: rotateY(180deg);
+}
+
+.axiom-choice__face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #111111;
+  backface-visibility: hidden;
+  line-height: 1.45;
+}
+
+.axiom-choice__back {
+  transform: rotateY(180deg);
+  border-left: 3px solid var(--gold);
+  color: var(--text-muted);
+}
+
 .onboarding__question {
   font-family: var(--font-serif);
   font-size: 30px;

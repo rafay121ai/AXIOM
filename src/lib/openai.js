@@ -422,7 +422,7 @@ Update memory now.`,
 }
 
 // ─── System Prompt Builder ───────────────────────────────────────────────────
-export function buildSystemPrompt(session, wikiContext, personalMemoryContext = '', assistantMessageNumber = 0, retrievalConfidence = null) {
+export function buildSystemPrompt(session, wikiContext, personalMemoryContext = '', assistantMessageNumber = 0, retrievalConfidence = null, namedPatternsContext = '') {
   const activeExps = session.active_experiments || []
   const expsText =
     activeExps.length > 0
@@ -450,6 +450,20 @@ export function buildSystemPrompt(session, wikiContext, personalMemoryContext = 
       .join('\n')
     : 'None'
 
+  const completedConcepts = Array.isArray(session.concept_progress)
+    ? session.concept_progress.flatMap((entry) =>
+      (entry.concepts_completed || []).map((concept) => `${entry.topic}: ${concept}`)
+    )
+    : []
+
+  const completedConceptsBlock = completedConcepts.length > 0
+    ? `\nConcepts this user has already confirmed understood — do not re-teach these:\n${completedConcepts.map((concept) => `- ${concept}`).join('\n')}\n\nIf the user asks about one of these topics, Axiom acknowledges they've covered it and either:\n- Goes deeper into an aspect they haven't explored yet\n- Connects it to something new\n- Asks what specifically they want to revisit and why\nNever start from zero on a confirmed concept.`
+    : ''
+
+  const namedPatternsBlock = namedPatternsContext
+    ? `\nPatterns already named with this user — do not re-diagnose from scratch:\n${namedPatternsContext}\n\nIf these patterns come up again, reference them by name and track whether they've shifted, deepened, or resolved. Don't treat them as new observations.`
+    : ''
+
   const confidenceNote = retrievalConfidence !== null
     ? `Wiki retrieval confidence: ${retrievalConfidence.toFixed(2)} (0.0–1.0)${retrievalConfidence < 0.6 ? ' — LOW. Do not inject retrieved context. Flag if working from first principles.' : ''}`
     : 'Wiki retrieval confidence: not scored.'
@@ -460,6 +474,7 @@ Your private theory of this user: ${session.axiom_profile}
 Session notes (Axiom's running observations across past sessions): ${session.session_notes || 'First session — no prior observations yet.'}
 Learning roadmap progress (pick up here if the user returns to a topic mid-roadmap):
 ${conceptProgressText}
+${completedConceptsBlock}
 Their pillar weights: ${weightsText}
 Their active experiments:
 ${expsText}
@@ -467,6 +482,7 @@ Their warning level: ${session.warning_level}
  
 Personal memory retrieved for this message:
 ${personalMemoryContext || 'No personal memory retrieved for this query.'}
+${namedPatternsBlock}
  
  
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

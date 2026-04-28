@@ -64,6 +64,15 @@ export function formatPersonalMemoryContext(memories) {
     .join('\n')
 }
 
+export function formatNamedPatternsContext(memories) {
+  if (!memories || memories.length === 0) return ''
+
+  return memories
+    .filter((memory) => memory.type === 'pattern' || memory.type === 'belief')
+    .map((memory) => `- [${memory.type}] ${memory.content}`)
+    .join('\n')
+}
+
 async function markMemoriesUsed(memoryIds) {
   if (!memoryIds.length) return
 

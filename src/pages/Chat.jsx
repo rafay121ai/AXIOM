@@ -7,7 +7,7 @@ import ArtifactRenderer from '../components/ArtifactRenderer'
 import { clearStoredSessionToken, getStoredSessionToken, supabase } from '../lib/supabase'
 import { openai, CHAT_MODEL, generateOpeningMessage, generateNodeOpeningMessage, buildSystemPrompt } from '../lib/openai'
 import { searchWiki, formatWikiContext } from '../lib/rag'
-import { searchPersonalMemory, formatPersonalMemoryContext, updatePersonalMemory } from '../lib/personalMemory'
+import { searchPersonalMemory, formatNamedPatternsContext, formatPersonalMemoryContext, updatePersonalMemory } from '../lib/personalMemory'
 
 // ─── Message Tag Parsing ─────────────────────────────────────────────────────
 function parseArtifact(text) {
@@ -422,6 +422,7 @@ export default function Chat() {
       const personalMemoryContext = [graphContext, formatPersonalMemoryContext(personalMemories)]
         .filter(Boolean)
         .join('\n')
+      const namedPatternsContext = formatNamedPatternsContext(personalMemories)
 
       // Build conversation history for OpenAI (last 20 msgs, exclude the placeholder)
       const history = messages
@@ -431,7 +432,7 @@ export default function Chat() {
 
       history.push({ role: 'user', content: text })
 
-      const systemPrompt = buildSystemPrompt(session, wikiContext, personalMemoryContext, aiMessageCount + 1, retrievalConfidence)
+      const systemPrompt = buildSystemPrompt(session, wikiContext, personalMemoryContext, aiMessageCount + 1, retrievalConfidence, namedPatternsContext)
 
       // Stream response
       const abort = new AbortController()
@@ -556,6 +557,16 @@ export default function Chat() {
     }
   }
 
+  function handleUserPlot(artifactType, value) {
+    const message = `[I placed myself at ${JSON.stringify(value)} on the ${artifactType}]`
+    sendMessage(message)
+  }
+
+  function handleAnswer(selectedLabel, isCorrect) {
+    const message = `[I selected: "${selectedLabel}"]`
+    sendMessage(message)
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -579,7 +590,12 @@ export default function Chat() {
       <div className="chat__messages">
         <div className="chat__messages-inner">
           {messages.map((msg) => (
-            <MessageGroup key={msg.id} msg={msg} />
+            <MessageGroup
+              key={msg.id}
+              msg={msg}
+              onAnswer={handleAnswer}
+              onUserPlot={handleUserPlot}
+            />
           ))}
           <div ref={bottomRef} />
         </div>
@@ -617,7 +633,7 @@ export default function Chat() {
 
 // ── Message Group ─────────────────────────────────────────────────────────────
 // Renders a message + optional experiment/warning card below it
-function MessageGroup({ msg }) {
+function MessageGroup({ msg, onAnswer, onUserPlot }) {
   const showArtifact  = msg.role === 'assistant' && msg.artifact && !msg.streaming
   const showExperiment = msg.role === 'assistant' && msg.experiment && !msg.streaming
 
@@ -629,7 +645,12 @@ function MessageGroup({ msg }) {
         streaming={msg.streaming}
       />
       {showArtifact && (
-        <ArtifactRenderer type={msg.artifact.type} data={msg.artifact.data} />
+        <ArtifactRenderer
+          type={msg.artifact.type}
+          data={msg.artifact.data}
+          onAnswer={onAnswer}
+          onUserPlot={onUserPlot}
+        />
       )}
       {showExperiment && (
         <ExperimentCard
