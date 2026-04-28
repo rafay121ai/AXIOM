@@ -2,11 +2,33 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { clearStoredSessionToken, getStoredSessionToken, supabase } from '../lib/supabase'
 import { ensureCurrentWeeklyRead, fetchLatestWeeklyRead } from '../lib/sessionReads'
-import { fallbackGraph, getPersonalWikiGraph, markWikiNodeAccessed, syncPersonalWiki } from '../lib/personalWiki'
+import { extractLabel, fallbackGraph, getPersonalWikiGraph, markWikiNodeAccessed, syncPersonalWiki } from '../lib/personalWiki'
 
-const NODE_COLORS = {
-  psychology: ['#6E91B8', '#E7F4FF'],
-  economics: ['#B99435', '#FFE7A3'],
+const NODE_TYPE_COLORS = {
+  goal:       0xFF4800,  // Vermillion
+  concept:    0x00FFD1,  // Neon Teal
+  experiment: 0xF72585,  // Electric Pink
+  pattern:    0x3A0CA3,  // Indigo
+}
+
+const NODE_TYPE_BASE_RADIUS = {
+  goal:       0.16,
+  experiment: 0.15,
+  pattern:    0.14,
+  concept:    0.12,
+}
+
+const VALID_NODE_TYPES = new Set(Object.keys(NODE_TYPE_COLORS))
+
+const PILLAR_TAG_COLORS = {
+  psychology: 'var(--pillar-mind-core)',
+  economics: 'var(--pillar-money-core)',
+  human_mind: 'var(--pillar-mind-core)',
+  money_game: 'var(--pillar-money-core)',
+  how_companies_win: 'var(--pillar-companies-core)',
+  whats_coming: 'var(--pillar-future-core)',
+  think_sharper: 'var(--pillar-think-core)',
+  move_people: 'var(--pillar-move-core)',
 }
 
 const RELATION_COLORS = {
@@ -98,8 +120,53 @@ function touchCenter(a, b) {
   }
 }
 
-function nodeColors(node) {
-  return NODE_COLORS[node.pillar] || ['#B8B4A8', '#FFFFFF']
+function colorToHex(color) {
+  return `#${color.toString(16).padStart(6, '0').toUpperCase()}`
+}
+
+function hexToRgb(hex) {
+  const value = parseInt(hex.replace('#', ''), 16)
+  return {
+    r: (value >> 16) & 255,
+    g: (value >> 8) & 255,
+    b: value & 255,
+  }
+}
+
+function hexToRgba(hex, alpha) {
+  const { r, g, b } = hexToRgb(hex)
+  return `rgba(${r},${g},${b},${alpha})`
+}
+
+function nodeTypeColor(node) {
+  return colorToHex(NODE_TYPE_COLORS[node?.type] || NODE_TYPE_COLORS.concept)
+}
+
+function pillarTagColor(pillar) {
+  return PILLAR_TAG_COLORS[pillar] || 'var(--gold)'
+}
+
+function tagLabel(value) {
+  return String(value || 'unknown').replace(/_/g, ' ').toUpperCase()
+}
+
+function sphereNodeLabel(node) {
+  return extractLabel(node?.summary || node?.label) || node?.label || 'Node'
+}
+
+function shouldRenderSphereNode(node) {
+  return VALID_NODE_TYPES.has(node?.type) && (node?.importance || 0) >= 3
+}
+
+function getNodeScale(importance) {
+  // importance is 1-5
+  const scales = { 5: 1.0, 4: 0.85, 3: 0.70 }
+  return scales[importance] || 0.70
+}
+
+function getEmissiveIntensity(importance) {
+  const intensities = { 5: 0.15, 4: 0.10, 3: 0.06 }
+  return intensities[importance] || 0.06
 }
 
 function hashString(value = '') {
@@ -178,6 +245,24 @@ function projectPoint(point, camera) {
   }
 }
 
+function distanceFromCamera(point, camera) {
+  const yaw = camera.yaw
+  const pitch = camera.pitch
+  const progress = zoomProgress(camera.zoom)
+  const cosY = Math.cos(yaw)
+  const sinY = Math.sin(yaw)
+  const cosP = Math.cos(pitch)
+  const sinP = Math.sin(pitch)
+  const z1 = point.x * sinY + point.z * cosY
+  const z2 = point.y * sinP + z1 * cosP
+  const distance = 2.86 - progress * 1.96
+  return distance - z2
+}
+
+function nodeLabelVisible(point, camera, highlighted) {
+  return highlighted || distanceFromCamera(point, camera) <= 3
+}
+
 function nodePrompt(node) {
   if (!node) return ''
   if (node.type === 'experiment') return 'This is the live test.'
@@ -185,6 +270,32 @@ function nodePrompt(node) {
   if (node.type === 'goal') return 'Make this goal operational.'
   if (node.type === 'concept') return 'Use this concept on the next decision.'
   return 'Move through this node.'
+}
+
+function NodeTapPanel({ node, onMove }) {
+  if (!node) return null
+
+  const label = sphereNodeLabel(node)
+  const typeColor = nodeTypeColor(node)
+  const pillar = tagLabel(node.pillar)
+  const type = tagLabel(node.type)
+  const insight = node.summary || node.label
+
+  return (
+    <div className="brain__node-panel node-panel">
+      <div className="brain__node-panel-tags">
+        <span className="brain__node-panel-tag" style={{ color: pillarTagColor(node.pillar) }}>
+          {pillar}
+        </span>
+        <span className="brain__node-panel-tag" style={{ color: typeColor }}>
+          {type}
+        </span>
+      </div>
+      <div className="brain__node-panel-title">{label}</div>
+      <div className="brain__node-panel-insight">{insight}</div>
+      <button onClick={onMove}>Move with this</button>
+    </div>
+  )
 }
 
 function previewText(content = '') {
@@ -468,31 +579,30 @@ export default function Brain() {
     animateZoom()
   }
 
-  const nodes = graph.nodes || []
+  const allNodes = graph.nodes || []
+  const nodes = useMemo(() => allNodes.filter(shouldRenderSphereNode), [allNodes])
   const edges = graph.edges || []
-  const nonPillarCount = nodes.filter((node) => node.type !== 'pillar').length
+  const visibleNodeIds = useMemo(() => new Set(nodes.map((node) => node.id)), [nodes])
   const activeNode = nodes.find((node) => node.id === activeId)
   const visibleLabelId = touch ? activeId : hoveredId
 
   const scene = useMemo(() => {
     const points = new Map()
-    let index = 0
-    for (const node of nodes) {
-      const point = brainPoint(node, index, nonPillarCount)
+    for (let index = 0; index < nodes.length; index++) {
+      const node = nodes[index]
+      const point = brainPoint(node, index, nodes.length)
       points.set(node.id, {
         point,
         projected: projectPoint(point, camera),
       })
-      if (node.type !== 'pillar') index += 1
     }
     return points
-  }, [nodes, nonPillarCount, camera])
+  }, [nodes, camera])
 
   const currentZoomProgress = zoomProgress(camera.zoom)
 
   const litIds = useMemo(() => {
     return nodes
-      .filter((node) => node.type !== 'pillar')
       .filter((node) => statusLit(node) || nodeScore(node, session) >= 10)
       .map((node) => node.id)
   }, [nodes, session])
@@ -801,12 +911,12 @@ export default function Brain() {
               </feMerge>
             </filter>
             {nodes.map((node) => {
-              const [a, b] = nodeColors(node)
+              const color = nodeTypeColor(node)
               return (
                 <radialGradient key={node.id} id={`nodeGradient-${node.id}`} cx="32%" cy="26%" r="74%">
                   <stop offset="0%" stopColor="#FFFFFF" stopOpacity="1" />
-                  <stop offset="34%" stopColor={b} stopOpacity="0.94" />
-                  <stop offset="100%" stopColor={a} stopOpacity="0.78" />
+                  <stop offset="38%" stopColor={color} stopOpacity="0.94" />
+                  <stop offset="100%" stopColor={color} stopOpacity="0.72" />
                 </radialGradient>
               )
             })}
@@ -815,6 +925,7 @@ export default function Brain() {
           <ellipse cx="700" cy="440" rx="432" ry="318" fill="url(#brainAtmosphere)" opacity={0.74 - currentZoomProgress * 0.52} />
 
           {edges.map((edge) => {
+            if (!visibleNodeIds.has(edge.source_node_id) || !visibleNodeIds.has(edge.target_node_id)) return null
             const source = scene.get(edge.source_node_id)?.projected
             const target = scene.get(edge.target_node_id)?.projected
             if (!source || !target) return null
@@ -839,15 +950,26 @@ export default function Brain() {
             .slice()
             .sort((a, b) => (scene.get(a.id)?.projected.z || 0) - (scene.get(b.id)?.projected.z || 0))
             .map((node) => {
-              const projected = scene.get(node.id)?.projected
+              const sceneNode = scene.get(node.id)
+              const projected = sceneNode?.projected
               if (!projected) return null
-              const lit = litIds.includes(node.id) || activeId === node.id || node.type === 'pillar'
+              const lit = litIds.includes(node.id) || activeId === node.id
               const active = activeId === node.id
-              const labelVisible = visibleLabelId === node.id || active
+              const highlighted = visibleLabelId === node.id || active
+              const labelVisible = nodeLabelVisible(sceneNode.point, camera, highlighted)
               const internalBoost = 1 + currentZoomProgress * 0.18
-              const radius = Math.max(2.6, Math.min(9.5, (node.type === 'pillar' ? 5.2 : 3.2) * projected.depth * internalBoost))
+              const nodeColor = nodeTypeColor(node)
+              const emissiveIntensity = getEmissiveIntensity(node.importance)
+              const radius = Math.max(
+                2.6,
+                Math.min(
+                  10.5,
+                  NODE_TYPE_BASE_RADIUS[node.type] * getNodeScale(node.importance) * 34 * projected.depth * internalBoost
+                )
+              )
               const opacity = lit ? Math.min(1, 0.68 + projected.depth * 0.22) : Math.max(0.12, 0.26 * projected.depth)
-              const halo = active ? 22 : lit ? 12 : 0
+              const halo = active ? 22 : lit ? 10 + emissiveIntensity * 40 : 0
+              const label = sphereNodeLabel(node).toUpperCase()
 
               return (
                 <g
@@ -866,7 +988,7 @@ export default function Brain() {
                       cy={projected.y}
                       r={radius + halo}
                       fill={`url(#nodeGradient-${node.id})`}
-                      opacity={active ? 0.17 : 0.075}
+                      opacity={active ? 0.17 + emissiveIntensity : 0.055 + emissiveIntensity}
                       filter="url(#nodeGlow)"
                     />
                   )}
@@ -878,27 +1000,21 @@ export default function Brain() {
                     opacity={opacity}
                     stroke={active ? '#FFFFFF' : lit ? 'rgba(255,255,255,0.34)' : 'rgba(255,255,255,0.08)'}
                     strokeWidth={active ? 1.4 : 0.55}
+                    style={{ filter: `drop-shadow(0 0 ${active ? 22 : 10}px ${hexToRgba(nodeColor, active ? 0.48 : emissiveIntensity + 0.12)})` }}
                   />
                   {labelVisible && (
                     <g>
-                      <rect
-                        x={projected.x - 86}
-                        y={projected.y - radius - 38}
-                        width="172"
-                        height="26"
-                        rx="13"
-                        fill="rgba(5,5,5,0.74)"
-                        stroke="rgba(255,255,255,0.12)"
-                      />
                       <text
                         x={projected.x}
-                        y={projected.y - radius - 21}
+                        y={projected.y - radius - 18}
                         textAnchor="middle"
-                        fill="#F4F1E8"
-                        fontSize="10.5"
-                        fontFamily="inherit"
+                        fill={nodeColor}
+                        fontSize="11"
+                        fontFamily="var(--font-sans)"
+                        fontWeight="500"
+                        letterSpacing="0.08em"
                       >
-                        {node.label.length > 24 ? `${node.label.slice(0, 21)}...` : node.label}
+                        {label}
                       </text>
                     </g>
                   )}
@@ -909,11 +1025,10 @@ export default function Brain() {
       </main>
 
       {activeNode && (
-        <div className="brain__node-nudge">
-          <div className="brain__node-kicker">{activeNode.type.replace(/_/g, ' ')}</div>
-          <div className="brain__node-title">{activeNode.label}</div>
-          <button onClick={() => startFromNode(activeNode)}>Move with this</button>
-        </div>
+        <NodeTapPanel
+          node={activeNode}
+          onMove={() => startFromNode(activeNode)}
+        />
       )}
 
       <form className="brain__input-wrap" onSubmit={handleSubmit}>
