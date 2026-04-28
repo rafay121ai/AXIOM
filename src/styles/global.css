@@ -1177,6 +1177,73 @@ h1, h2, h3 {
   color: var(--text-muted);
 }
 
+.experiment-card__sections {
+  display: flex;
+  flex-direction: column;
+  margin-top: 4px;
+  border-top: 1px solid rgba(201, 168, 76, 0.12);
+  padding-top: 4px;
+}
+
+.experiment-card__section {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.experiment-card__section:last-child {
+  border-bottom: none;
+}
+
+.experiment-card__section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 9px 0;
+  cursor: pointer;
+  text-align: left;
+  gap: 8px;
+}
+
+.experiment-card__section-label {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  transition: color 0.15s;
+}
+
+.experiment-card__section-header:hover .experiment-card__section-label {
+  color: var(--gold);
+}
+
+.experiment-card__chevron {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: transform 0.2s ease, color 0.15s;
+}
+
+.experiment-card__chevron--open {
+  transform: rotate(180deg);
+  color: var(--gold);
+}
+
+.experiment-card__section-header:hover .experiment-card__chevron {
+  color: var(--gold);
+}
+
+.experiment-card__section-body {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.6;
+  color: #999;
+  padding: 0 0 10px 0;
+  margin: 0;
+}
+
 /* ─── Warning Card ───────────────────────────────────────────────────── */
 .warning-card {
   max-width: 80%;

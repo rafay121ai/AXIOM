@@ -635,6 +635,10 @@ function MessageGroup({ msg }) {
         <ExperimentCard
           description={msg.experiment.description}
           windowHours={msg.experiment.window_hours}
+          howToDoIt={msg.experiment.how_to_do_it}
+          realWorldExample={msg.experiment.real_world_example}
+          whatToNotice={msg.experiment.what_to_notice}
+          successCondition={msg.experiment.success_condition}
         />
       )}
     </div>
