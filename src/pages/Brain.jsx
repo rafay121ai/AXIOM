@@ -163,8 +163,8 @@ function getNodeRadius(node) {
 function getEmissiveIntensity(node) {
   const importance = node.importance || 3
   const lit = ['active', 'bright', 'ghosted'].includes(node.status)
-  const base = importance === 5 ? 0.15 : importance === 4 ? 0.10 : 0.06
-  return lit ? base * 1.8 : base
+  const base = importance === 5 ? 0.55 : importance === 4 ? 0.40 : 0.25
+  return lit ? base : base * 0.18
 }
 
 function extractLabel(content) {
@@ -186,19 +186,15 @@ function createNodeMesh(node) {
   const color = getNodeColor(node)
   const emissiveIntensity = getEmissiveIntensity(node)
 
-  const geometry = new THREE.SphereGeometry(radius, 32, 32)
-  const material = new THREE.MeshPhysicalMaterial({
+  const geometry = new THREE.SphereGeometry(radius, 24, 24)
+  const material = new THREE.MeshStandardMaterial({
     color,
     emissive: color,
     emissiveIntensity,
-    metalness: 0.3,
-    roughness: 0.2,
-    transmission: 0.1,
-    thickness: 0.5,
-    clearcoat: 1.0,
-    clearcoatRoughness: 0.1,
+    roughness: 0.88,
+    metalness: 0.0,
     transparent: true,
-    opacity: ['active', 'bright', 'ghosted'].includes(node.status) ? 1.0 : 0.4,
+    opacity: ['active', 'bright', 'ghosted'].includes(node.status) ? 0.92 : 0.28,
   })
 
   const mesh = new THREE.Mesh(geometry, material)
@@ -566,7 +562,7 @@ export default function Brain() {
 
     const composer = new EffectComposer(renderer)
     composer.addPass(new RenderPass(scene, camera))
-    const bloom = new BloomEffect({ intensity: 0.4, radius: 0.3, luminanceThreshold: 0.85 })
+    const bloom = new BloomEffect({ intensity: 0.06, radius: 0.5, luminanceThreshold: 0.94 })
     composer.addPass(new EffectPass(camera, bloom))
 
     const labelRenderer = new CSS2DRenderer()
