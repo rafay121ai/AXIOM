@@ -219,10 +219,10 @@ function createNodeMesh(node) {
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
-    opacity: lit ? 0.55 : 0.18,
+    opacity: lit ? 0.38 : 0.12,
   })
   const sprite = new THREE.Sprite(spriteMat)
-  const spriteScale = radius * (lit ? 11 : 4.5)
+  const spriteScale = radius * (lit ? 3.2 : 1.6)
   sprite.scale.set(spriteScale, spriteScale, 1)
   mesh.add(sprite)
 
@@ -299,7 +299,7 @@ function igniteNode(mesh) {
   const lit = isNodeLit(node)
   const radius = getNodeRadius(node)
   const targetOpacity = lit ? 0.95 : 0.22
-  const targetSpriteScale = radius * (lit ? 11 : 4.5)
+  const targetSpriteScale = radius * (lit ? 3.2 : 1.6)
   const targetSpriteOpacity = lit ? 0.55 : 0.18
   const sprite = mesh.userData.sprite
 
@@ -383,8 +383,8 @@ function buildScene(th, graph) {
         mesh.material.opacity = lit ? 0.95 : 0.22
         const sprite = mesh.userData.sprite
         if (sprite) {
-          sprite.scale.setScalar(radius * (lit ? 11 : 4.5))
-          sprite.material.opacity = lit ? 0.55 : 0.18
+          sprite.scale.setScalar(radius * (lit ? 3.2 : 1.6))
+          sprite.material.opacity = lit ? 0.38 : 0.12
         }
       }
     })
@@ -605,9 +605,9 @@ export default function Brain() {
     composer.addPass(new RenderPass(scene, camera))
     const bloomPass = new UnrealBloomPass(
       new THREE.Vector2(window.innerWidth, window.innerHeight),
-      0.35,   // strength
-      0.5,    // radius
-      0.88,   // threshold
+      0.10,   // strength
+      0.4,    // radius
+      0.92,   // threshold
     )
     composer.addPass(bloomPass)
     composer.addPass(new OutputPass())
@@ -795,14 +795,14 @@ export default function Brain() {
       if (isActive) {
         mesh.material.opacity = 1.0
         if (sprite) {
-          sprite.scale.setScalar(radius * 20)
-          sprite.material.opacity = 0.75
+          sprite.scale.setScalar(radius * 5)
+          sprite.material.opacity = 0.55
         }
       } else {
         mesh.material.opacity = lit ? 0.95 : 0.22
         if (sprite) {
-          sprite.scale.setScalar(radius * (lit ? 11 : 4.5))
-          sprite.material.opacity = lit ? 0.55 : 0.18
+          sprite.scale.setScalar(radius * (lit ? 3.2 : 1.6))
+          sprite.material.opacity = lit ? 0.38 : 0.12
         }
       }
     })
