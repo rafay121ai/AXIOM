@@ -30,12 +30,14 @@ const PILLAR_COLORS = {
 }
 
 const NODE_TYPE_BASE_RADIUS = {
-  pillar:     0.035,
-  goal:       0.022,
-  experiment: 0.020,
-  pattern:    0.018,
-  concept:    0.016,
+  pillar:     0.010,
+  goal:       0.016,
+  experiment: 0.015,
+  pattern:    0.013,
+  concept:    0.011,
 }
+
+const MAX_VISIBLE_NODES = 80
 
 const STOP_WORDS = new Set([
   'the','a','an','is','are','was','to','of','in','that','it','for','on',
@@ -157,7 +159,7 @@ function getNodeColor(node) {
 }
 
 function getNodeRadius(node) {
-  const base = NODE_TYPE_BASE_RADIUS[node.type] ?? 0.12
+  const base = NODE_TYPE_BASE_RADIUS[node.type] ?? 0.011
   const importance = node.importance || 3
   const scale = importance === 5 ? 1.0 : importance === 4 ? 0.85 : 0.70
   return base * scale
@@ -165,6 +167,33 @@ function getNodeRadius(node) {
 
 function isNodeLit(node) {
   return ['active', 'bright', 'ghosted'].includes(node.status)
+}
+
+function nodeVisualScore(node) {
+  return (
+    (isNodeLit(node) ? 100 : 0) +
+    (node.type === 'experiment' ? 36 : 0) +
+    (node.type === 'goal' ? 24 : 0) +
+    (node.type === 'pattern' ? 18 : 0) +
+    (node.importance || 1) * 8 +
+    (node.confidence || 0) * 4
+  )
+}
+
+function visibleGraph(graph) {
+  const rawNodes = graph.nodes || []
+  const selectedNodes = rawNodes
+    .filter(node => node.type !== 'pillar')
+    .filter(node => isNodeLit(node) || node.type === 'experiment' || (node.importance || 0) >= 4)
+    .sort((a, b) => nodeVisualScore(b) - nodeVisualScore(a))
+    .slice(0, MAX_VISIBLE_NODES)
+
+  const visibleIds = new Set(selectedNodes.map(node => node.id))
+  const selectedEdges = (graph.edges || [])
+    .filter(edge => edge.relationship !== 'belongs_to')
+    .filter(edge => visibleIds.has(edge.source_node_id) && visibleIds.has(edge.target_node_id))
+
+  return { nodes: selectedNodes, edges: selectedEdges }
 }
 
 let _glowTexture = null
@@ -219,10 +248,10 @@ function createNodeMesh(node) {
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
-    opacity: lit ? 0.38 : 0.12,
+    opacity: lit ? 0.18 : 0.045,
   })
   const sprite = new THREE.Sprite(spriteMat)
-  const spriteScale = radius * (lit ? 3.2 : 1.6)
+  const spriteScale = radius * (lit ? 2.2 : 1.35)
   sprite.scale.set(spriteScale, spriteScale, 1)
   mesh.add(sprite)
 
@@ -241,10 +270,10 @@ function createEdge(sourcePos, targetPos, sourceNode, targetNode, relationship) 
   const material = new THREE.LineBasicMaterial({
     color: blended,
     transparent: true,
-    opacity: relationship === 'tested_by' ? 0.25 : 0.10,
+    opacity: relationship === 'tested_by' ? 0.12 : 0.035,
   })
   const line = new THREE.Line(geometry, material)
-  line.userData.targetOpacity = relationship === 'tested_by' ? 0.25 : 0.10
+  line.userData.targetOpacity = relationship === 'tested_by' ? 0.12 : 0.035
   return line
 }
 
@@ -298,9 +327,9 @@ function igniteNode(mesh) {
   const node = mesh.userData.node
   const lit = isNodeLit(node)
   const radius = getNodeRadius(node)
-  const targetOpacity = lit ? 0.95 : 0.22
-  const targetSpriteScale = radius * (lit ? 3.2 : 1.6)
-  const targetSpriteOpacity = lit ? 0.55 : 0.18
+  const targetOpacity = lit ? 0.92 : 0.42
+  const targetSpriteScale = radius * (lit ? 2.2 : 1.35)
+  const targetSpriteOpacity = lit ? 0.22 : 0.06
   const sprite = mesh.userData.sprite
 
   animateTween(0.01, 1.0, 500, v => { mesh.scale.set(v, v, v) }, 'easeOut')
@@ -310,10 +339,10 @@ function igniteNode(mesh) {
     sprite.material.opacity = 0
     sprite.scale.set(0, 0, 1)
     // flash wide then settle
-    animateTween(0, targetSpriteScale * 1.9, 220, v => { sprite.scale.set(v, v, 1) }, 'easeOut')
-    animateTween(0, Math.min(1, targetSpriteOpacity * 1.6), 220, v => { sprite.material.opacity = v }, 'easeOut')
+    animateTween(0, targetSpriteScale * 1.35, 220, v => { sprite.scale.set(v, v, 1) }, 'easeOut')
+    animateTween(0, Math.min(1, targetSpriteOpacity * 1.3), 220, v => { sprite.material.opacity = v }, 'easeOut')
     setTimeout(() => {
-      animateTween(targetSpriteScale * 1.9, targetSpriteScale, 350, v => { sprite.scale.set(v, v, 1) })
+      animateTween(targetSpriteScale * 1.35, targetSpriteScale, 350, v => { sprite.scale.set(v, v, 1) })
       animateTween(sprite.material.opacity, targetSpriteOpacity, 350, v => { sprite.material.opacity = v })
     }, 220)
   }
@@ -337,7 +366,7 @@ function playOpenAnimation(nodeMeshes, edgeMeshes, scene) {
 
   delay(200).then(() => {
     otherMeshes.forEach((mesh, i) => {
-      setTimeout(() => igniteNode(mesh), i * 15)
+      setTimeout(() => igniteNode(mesh), i * 10)
     })
   })
 
@@ -346,7 +375,7 @@ function playOpenAnimation(nodeMeshes, edgeMeshes, scene) {
       const targetOpacity = mesh.userData.targetOpacity ?? 0.20
       setTimeout(() => {
         animateTween(0, targetOpacity, 400, v => { mesh.material.opacity = v }, 'easeOut')
-      }, i * 8)
+      }, i * 5)
     })
   })
 
@@ -362,8 +391,7 @@ function playOpenAnimation(nodeMeshes, edgeMeshes, scene) {
 
 function buildScene(th, graph) {
   const { scene } = th
-  const nodes = graph.nodes || []
-  const edges = graph.edges || []
+  const { nodes, edges } = visibleGraph(graph)
 
   const existingIds = new Set(th.nodeMeshes.map(m => m.userData.node.id))
   const newIds = new Set(nodes.map(n => n.id))
@@ -411,7 +439,7 @@ function buildScene(th, graph) {
   let index = 0
   for (const node of nodes) {
     const pt = brainPoint(node, index, nonPillarCount)
-    posMap.set(node.id, new THREE.Vector3(pt.x * 2, pt.y * 2, pt.z * 2))
+    posMap.set(node.id, new THREE.Vector3(pt.x * 1.55, pt.y * 1.55 - 0.18, pt.z * 1.55))
     if (node.type !== 'pillar') index++
   }
 
@@ -434,7 +462,7 @@ function buildScene(th, graph) {
     const targetNode = nodeMap.get(edge.target_node_id)
     if (!sourcePos || !targetPos || !sourceNode || !targetNode) continue
     const edgeMesh = createEdge(sourcePos, targetPos, sourceNode, targetNode, edge.relationship)
-    edgeMesh.userData.targetOpacity = edge.relationship === 'tested_by' ? 0.35 : 0.20
+    edgeMesh.userData.targetOpacity = edge.relationship === 'tested_by' ? 0.12 : 0.035
     scene.add(edgeMesh)
     th.edgeMeshes.push(edgeMesh)
   }
@@ -594,12 +622,12 @@ export default function Brain() {
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     renderer.setSize(window.innerWidth, window.innerHeight)
-    renderer.setClearColor(0x0a0806)
+    renderer.setClearColor(0x000000)
 
     const scene = new THREE.Scene()
 
     const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 100)
-    camera.position.set(0, 0, 3.2)
+    camera.position.set(0, 0, 3.9)
 
     const composer = new EffectComposer(renderer)
     composer.addPass(new RenderPass(scene, camera))
@@ -629,7 +657,7 @@ export default function Brain() {
     let pointerDownPos = null
     const touchMap = new Map()
     let pinchStartDist = 0
-    let pinchStartZ = 3.2
+    let pinchStartZ = 3.9
 
     function onResize() {
       camera.aspect = window.innerWidth / window.innerHeight
@@ -795,14 +823,14 @@ export default function Brain() {
       if (isActive) {
         mesh.material.opacity = 1.0
         if (sprite) {
-          sprite.scale.setScalar(radius * 5)
-          sprite.material.opacity = 0.55
+          sprite.scale.setScalar(radius * 3.1)
+          sprite.material.opacity = 0.26
         }
       } else {
-        mesh.material.opacity = lit ? 0.95 : 0.22
+        mesh.material.opacity = lit ? 0.92 : 0.42
         if (sprite) {
-          sprite.scale.setScalar(radius * (lit ? 3.2 : 1.6))
-          sprite.material.opacity = lit ? 0.38 : 0.12
+          sprite.scale.setScalar(radius * (lit ? 2.2 : 1.35))
+          sprite.material.opacity = lit ? 0.18 : 0.045
         }
       }
     })
