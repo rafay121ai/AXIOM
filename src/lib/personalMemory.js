@@ -25,14 +25,14 @@ function normalizeMemory(memory) {
   return { type, content, importance, confidence }
 }
 
-export async function searchPersonalMemory(sessionId, query, matchCount = 5) {
-  if (!sessionId || !query) return []
+export async function searchPersonalMemory(userId, query, matchCount = 5) {
+  if (!userId || !query) return []
 
   try {
     const embedding = await generateEmbedding(query)
     const { data, error } = await supabase.rpc('match_personal_memories', {
       query_embedding: embedding,
-      match_session_id: sessionId,
+      match_user_id: userId,
       match_count: matchCount,
       similarity_threshold: 0.35,
     })
@@ -85,10 +85,10 @@ async function markMemoriesUsed(memoryIds) {
   }
 }
 
-async function findSimilarMemory(sessionId, memory, embedding) {
+async function findSimilarMemory(userId, memory, embedding) {
   const { data, error } = await supabase.rpc('find_similar_personal_memory', {
     query_embedding: embedding,
-    match_session_id: sessionId,
+    match_user_id: userId,
     match_type: memory.type,
     similarity_threshold: 0.82,
   })
@@ -102,8 +102,10 @@ async function findSimilarMemory(sessionId, memory, embedding) {
 }
 
 async function upsertPersonalMemory(sessionId, userId, memory) {
+  if (!userId) return
+
   const embedding = await generateEmbedding(memory.content)
-  const existing = await findSimilarMemory(sessionId, memory, embedding)
+  const existing = await findSimilarMemory(userId, memory, embedding)
 
   if (existing) {
     const existingImportance = existing.importance || 1
@@ -129,7 +131,7 @@ async function upsertPersonalMemory(sessionId, userId, memory) {
 
   const { error } = await supabase.from('personal_memories').insert({
     session_id: sessionId,
-    ...(userId ? { user_id: userId } : {}),
+    user_id: userId,
     type: memory.type,
     content: memory.content,
     importance: memory.importance,
@@ -143,6 +145,8 @@ async function upsertPersonalMemory(sessionId, userId, memory) {
 }
 
 async function savePersonalMemories(sessionId, userId, memories) {
+  if (!userId) return
+
   for (const rawMemory of memories) {
     const memory = normalizeMemory(rawMemory)
     if (!memory) continue

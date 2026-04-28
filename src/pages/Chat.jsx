@@ -413,7 +413,7 @@ export default function Chat() {
       // RAG: retrieve source knowledge and personal memory for this turn.
       const [{ chunks, confidence: retrievalConfidence }, personalMemories] = await Promise.all([
         searchWiki(text, 3),
-        searchPersonalMemory(session.id, text, 5),
+        searchPersonalMemory(session.user_id, text, 5),
       ])
       const wikiContext = await formatWikiContext(chunks)
       const graphContext = nodeContext

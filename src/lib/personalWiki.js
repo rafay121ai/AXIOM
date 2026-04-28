@@ -403,7 +403,7 @@ export async function syncPersonalWiki(session) {
     const { data: memories, error: memoriesError } = await supabase
       .from('personal_memories')
       .select('type, content, importance, confidence, updated_at')
-      .eq('session_id', session.id)
+      .eq('user_id', session.user_id)
       .order('updated_at', { ascending: false })
       .limit(10)
 
