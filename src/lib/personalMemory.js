@@ -92,7 +92,7 @@ async function findSimilarMemory(sessionId, memory, embedding) {
   return data?.[0] || null
 }
 
-async function upsertPersonalMemory(sessionId, memory) {
+async function upsertPersonalMemory(sessionId, userId, memory) {
   const embedding = await generateEmbedding(memory.content)
   const existing = await findSimilarMemory(sessionId, memory, embedding)
 
@@ -120,6 +120,7 @@ async function upsertPersonalMemory(sessionId, memory) {
 
   const { error } = await supabase.from('personal_memories').insert({
     session_id: sessionId,
+    ...(userId ? { user_id: userId } : {}),
     type: memory.type,
     content: memory.content,
     importance: memory.importance,
@@ -132,13 +133,13 @@ async function upsertPersonalMemory(sessionId, memory) {
   }
 }
 
-async function savePersonalMemories(sessionId, memories) {
+async function savePersonalMemories(sessionId, userId, memories) {
   for (const rawMemory of memories) {
     const memory = normalizeMemory(rawMemory)
     if (!memory) continue
 
     try {
-      await upsertPersonalMemory(sessionId, memory)
+      await upsertPersonalMemory(sessionId, userId, memory)
     } catch (err) {
       console.warn('[Memory] Save failed:', err?.message || err)
     }
@@ -172,7 +173,7 @@ export async function updatePersonalMemory(session, recentMessages, userMessage,
       }
     }
 
-    await savePersonalMemories(session.id, update.memories || [])
+    await savePersonalMemories(session.id, session.user_id || null, update.memories || [])
 
     return { ...session, session_notes: sessionNotes, concept_progress: conceptProgress.length > 0 ? conceptProgress : session.concept_progress }
   } catch (err) {

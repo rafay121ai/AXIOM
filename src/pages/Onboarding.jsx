@@ -467,18 +467,7 @@ export default function Onboarding() {
         warning_level: 0,
       }
 
-      let insertError = null
-      let insertResult = await supabase.from('sessions').insert(sessionPayload)
-      insertError = insertResult.error
-
-      if (insertError?.message?.toLowerCase().includes('user_id')) {
-        const fallbackResult = await supabase.from('sessions').insert({
-          ...sessionPayload,
-          user_id: undefined,
-        })
-        insertError = fallbackResult.error
-      }
-
+      const { error: insertError } = await supabase.from('sessions').insert(sessionPayload)
       if (insertError) throw insertError
 
       setStoredSessionToken(sessionToken)
