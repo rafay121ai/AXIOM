@@ -27,11 +27,11 @@ const PILLAR_COLORS = {
 }
 
 const NODE_TYPE_BASE_RADIUS = {
-  pillar:     0.22,
-  goal:       0.16,
-  experiment: 0.15,
-  pattern:    0.14,
-  concept:    0.12,
+  pillar:     0.035,
+  goal:       0.022,
+  experiment: 0.020,
+  pattern:    0.018,
+  concept:    0.016,
 }
 
 const STOP_WORDS = new Set([
@@ -215,7 +215,7 @@ function createEdge(sourcePos, targetPos, sourceNode, targetNode, relationship) 
   const curve = new THREE.QuadraticBezierCurve3(
     sourcePos.clone(), mid, targetPos.clone(),
   )
-  const tube = new THREE.TubeGeometry(curve, 20, 0.004, 6, false)
+  const tube = new THREE.TubeGeometry(curve, 20, 0.0008, 6, false)
   const sourceColor = new THREE.Color(getNodeColor(sourceNode))
   const targetColor = new THREE.Color(getNodeColor(targetNode))
   const blended = sourceColor.clone().lerp(targetColor, 0.5)
