@@ -38,6 +38,7 @@ const NODE_TYPE_BASE_RADIUS = {
 }
 
 const MAX_VISIBLE_NODES = 80
+const MAX_PILLAR_EDGES = 24
 
 const STOP_WORDS = new Set([
   'the','a','an','is','are','was','to','of','in','that','it','for','on',
@@ -182,18 +183,28 @@ function nodeVisualScore(node) {
 
 function visibleGraph(graph) {
   const rawNodes = graph.nodes || []
+  const pillarNodes = rawNodes.filter(node => node.type === 'pillar')
   const selectedNodes = rawNodes
     .filter(node => node.type !== 'pillar')
     .filter(node => isNodeLit(node) || node.type === 'experiment' || (node.importance || 0) >= 4)
     .sort((a, b) => nodeVisualScore(b) - nodeVisualScore(a))
     .slice(0, MAX_VISIBLE_NODES)
 
-  const visibleIds = new Set(selectedNodes.map(node => node.id))
-  const selectedEdges = (graph.edges || [])
+  const nodes = [...pillarNodes, ...selectedNodes]
+  const nodeById = new Map(nodes.map(node => [node.id, node]))
+  const visibleIds = new Set(nodes.map(node => node.id))
+
+  const nonPillarEdges = (graph.edges || [])
     .filter(edge => edge.relationship !== 'belongs_to')
     .filter(edge => visibleIds.has(edge.source_node_id) && visibleIds.has(edge.target_node_id))
 
-  return { nodes: selectedNodes, edges: selectedEdges }
+  const pillarEdges = (graph.edges || [])
+    .filter(edge => edge.relationship === 'belongs_to')
+    .filter(edge => visibleIds.has(edge.source_node_id) && visibleIds.has(edge.target_node_id))
+    .sort((a, b) => nodeVisualScore(nodeById.get(b.source_node_id)) - nodeVisualScore(nodeById.get(a.source_node_id)))
+    .slice(0, MAX_PILLAR_EDGES)
+
+  return { nodes, edges: [...nonPillarEdges, ...pillarEdges] }
 }
 
 let _glowTexture = null
@@ -233,12 +244,13 @@ function createNodeMesh(node) {
   const radius = getNodeRadius(node)
   const color = getNodeColor(node)
   const lit = isNodeLit(node)
+  const pillar = node.type === 'pillar'
 
   const geometry = new THREE.SphereGeometry(radius, 16, 16)
   const material = new THREE.MeshBasicMaterial({
     color,
     transparent: true,
-    opacity: lit ? 0.95 : 0.22,
+    opacity: pillar ? 0.72 : lit ? 0.95 : 0.42,
   })
   const mesh = new THREE.Mesh(geometry, material)
 
@@ -248,10 +260,10 @@ function createNodeMesh(node) {
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
-    opacity: lit ? 0.18 : 0.045,
+    opacity: pillar ? 0.08 : lit ? 0.18 : 0.045,
   })
   const sprite = new THREE.Sprite(spriteMat)
-  const spriteScale = radius * (lit ? 2.2 : 1.35)
+  const spriteScale = radius * (pillar ? 2.6 : lit ? 2.2 : 1.35)
   sprite.scale.set(spriteScale, spriteScale, 1)
   mesh.add(sprite)
 
@@ -267,13 +279,18 @@ function createEdge(sourcePos, targetPos, sourceNode, targetNode, relationship) 
     sourcePos.clone(),
     targetPos.clone(),
   ])
+  const targetOpacity = relationship === 'tested_by'
+    ? 0.12
+    : relationship === 'belongs_to'
+      ? 0.045
+      : 0.035
   const material = new THREE.LineBasicMaterial({
     color: blended,
     transparent: true,
-    opacity: relationship === 'tested_by' ? 0.12 : 0.035,
+    opacity: targetOpacity,
   })
   const line = new THREE.Line(geometry, material)
-  line.userData.targetOpacity = relationship === 'tested_by' ? 0.12 : 0.035
+  line.userData.targetOpacity = targetOpacity
   return line
 }
 
@@ -372,7 +389,7 @@ function playOpenAnimation(nodeMeshes, edgeMeshes, scene) {
 
   delay(400).then(() => {
     edgeMeshes.forEach((mesh, i) => {
-      const targetOpacity = mesh.userData.targetOpacity ?? 0.20
+    const targetOpacity = mesh.userData.targetOpacity ?? 0.20
       setTimeout(() => {
         animateTween(0, targetOpacity, 400, v => { mesh.material.opacity = v }, 'easeOut')
       }, i * 5)
@@ -462,7 +479,6 @@ function buildScene(th, graph) {
     const targetNode = nodeMap.get(edge.target_node_id)
     if (!sourcePos || !targetPos || !sourceNode || !targetNode) continue
     const edgeMesh = createEdge(sourcePos, targetPos, sourceNode, targetNode, edge.relationship)
-    edgeMesh.userData.targetOpacity = edge.relationship === 'tested_by' ? 0.12 : 0.035
     scene.add(edgeMesh)
     th.edgeMeshes.push(edgeMesh)
   }
