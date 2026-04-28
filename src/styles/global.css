@@ -1,12 +1,40 @@
 /* ─── Design Tokens ──────────────────────────────────────────────────── */
 :root {
   --bg:            #080808;
+  --surface:       #0E0E0E;
   --text-primary:  #EDEDEC;
-  --text-muted:    #666666;
+  --text-muted:    #6B6B6B;
   --gold:          #C9A84C;
+  --gold-core:      #D4A843;
+  --gold-mid:       #C9943A;
+  --gold-edge:      #B8832E;
+  --gold-highlight: #E8C56A;
   --red:           #CC3333;
+  --red-core:      #9B2335;
+  --red-mid:       #7D1A2A;
+  --red-edge:      #5C1020;
+  --red-highlight: #B83348;
   --input-bg:      #111111;
   --border:        #1A1A1A;
+
+  --pillar-money-core:      #D4A843;
+  --pillar-money-edge:      #B8832E;
+  --pillar-money-highlight: #E8C56A;
+  --pillar-mind-core:       #9B59B6;
+  --pillar-mind-edge:       #6C3483;
+  --pillar-mind-highlight:  #C39BD3;
+  --pillar-companies-core:      #2E86C1;
+  --pillar-companies-edge:      #1A5276;
+  --pillar-companies-highlight: #7FB3D3;
+  --pillar-future-core:      #27AE60;
+  --pillar-future-edge:      #1A7A44;
+  --pillar-future-highlight: #7DCEA0;
+  --pillar-think-core:      #EDEDEC;
+  --pillar-think-edge:      #AAAAAA;
+  --pillar-think-highlight: #FFFFFF;
+  --pillar-move-core:      #9B2335;
+  --pillar-move-edge:      #5C1020;
+  --pillar-move-highlight: #B83348;
 
   --font-serif:    'Canela', 'Playfair Display', Georgia, serif;
   --font-sans:     'Neue Montreal', 'Inter', system-ui, sans-serif;
@@ -147,8 +175,16 @@ h1, h2, h3 {
 .axiom-stagger-6 { animation-delay: 0.6s; }
 
 @keyframes axiom-node-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(201, 168, 76, 0.45); }
-  100% { box-shadow: 0 0 0 10px rgba(201, 168, 76, 0); }
+  0% {
+    box-shadow:
+      0 0 24px rgba(212,168,67,0.12),
+      0 0 0 0 rgba(212, 168, 67, 0.32);
+  }
+  100% {
+    box-shadow:
+      0 0 48px rgba(184,131,46,0.06),
+      0 0 0 10px rgba(212, 168, 67, 0);
+  }
 }
 
 .axiom-node-pulse {
@@ -196,16 +232,25 @@ h1, h2, h3 {
   justify-content: center;
   gap: 4px;
   padding: 14px 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: #111111;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  border-left: 1px solid rgba(255,255,255,0.05);
+  border-right: 1px solid rgba(255,255,255,0.03);
+  border-bottom: 1px solid rgba(255,255,255,0.02);
+  border-radius: 4px;
+  background: radial-gradient(ellipse at 30% 20%, rgba(255,255,255,0.055) 0%, var(--surface) 58%, var(--bg) 100%);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05);
   backface-visibility: hidden;
   line-height: 1.45;
 }
 
 .axiom-choice__back {
   transform: rotateY(180deg);
-  border-left: 3px solid var(--gold);
+  border-left: 1px solid rgba(212,168,67,0.25);
+  box-shadow:
+    0 8px 32px rgba(0,0,0,0.6),
+    inset 0 1px 0 rgba(255,255,255,0.05),
+    0 0 24px rgba(212,168,67,0.12),
+    0 0 48px rgba(184,131,46,0.06);
   color: var(--text-muted);
 }
 

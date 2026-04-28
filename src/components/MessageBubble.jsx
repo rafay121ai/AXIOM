@@ -7,6 +7,7 @@ function safeContent(text) {
     .replace(/<artifact[^>]*>[\s\S]*?<\/artifact>/g, '')
     .replace(/<artifact[^>]*>/g, '')
     .replace(/<\/artifact>/g, '')
+    .replace(/<artifact_here\s*\/>/gi, '')
     .replace(/<experiment>[\s\S]*?<\/experiment>/g, '')
     .replace(/<experiment>/g, '')
     .replace(/<\/experiment>/g, '')
@@ -80,26 +81,48 @@ function renderInline(text) {
   })
 }
 
-// Render text with inline markdown, splitting on newlines to preserve line breaks
-function renderContent(raw) {
-  const text = safeContent(raw)
-  if (!text) return null
+function renderTextBlock(text, keyPrefix = 'text') {
+  const clean = safeContent(text)
+  if (!clean) return null
 
-  return text.split('\n').map((line, i, arr) => (
-    <span key={i}>
+  return clean.split('\n').map((line, i, arr) => (
+    <span key={`${keyPrefix}-${i}`}>
       {renderInline(line)}
       {i < arr.length - 1 && <br />}
     </span>
   ))
 }
 
-export default function MessageBubble({ role, content, streaming }) {
+// Render text with inline markdown, and optionally insert an artifact exactly
+// where Axiom placed <artifact_here/>.
+function renderContent(raw, artifactNode = null) {
+  const text = raw || ''
+  const marker = /<artifact_here\s*\/>/i
+  if (!artifactNode || !marker.test(text)) return renderTextBlock(text)
+
+  const parts = text.split(marker)
+  return parts.flatMap((part, index) => {
+    const nodes = []
+    const textNode = renderTextBlock(part, `text-${index}`)
+    if (textNode) nodes.push(...textNode)
+    if (index < parts.length - 1) {
+      nodes.push(
+        <div key={`artifact-${index}`} style={{ margin: '10px 0' }}>
+          {artifactNode}
+        </div>
+      )
+    }
+    return nodes
+  })
+}
+
+export default function MessageBubble({ role, content, streaming, artifactNode }) {
   if (!content && !streaming) return null
 
   return (
     <div className={`msg-group msg-group--${role}`}>
       <div className={`msg msg--${role}${streaming ? ' msg--streaming' : ''}`}>
-        {renderContent(content)}
+        {renderContent(content, artifactNode)}
       </div>
     </div>
   )
