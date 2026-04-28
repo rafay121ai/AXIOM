@@ -155,7 +155,7 @@ function sphereNodeLabel(node) {
 }
 
 function shouldRenderSphereNode(node) {
-  return VALID_NODE_TYPES.has(node?.type) && (node?.importance || 0) >= 3
+  return VALID_NODE_TYPES.has(node?.type) && (node?.importance || 0) >= 4
 }
 
 function getNodeScale(importance) {
@@ -243,24 +243,6 @@ function projectPoint(point, camera) {
     depth: perspective,
     scale,
   }
-}
-
-function distanceFromCamera(point, camera) {
-  const yaw = camera.yaw
-  const pitch = camera.pitch
-  const progress = zoomProgress(camera.zoom)
-  const cosY = Math.cos(yaw)
-  const sinY = Math.sin(yaw)
-  const cosP = Math.cos(pitch)
-  const sinP = Math.sin(pitch)
-  const z1 = point.x * sinY + point.z * cosY
-  const z2 = point.y * sinP + z1 * cosP
-  const distance = 2.86 - progress * 1.96
-  return distance - z2
-}
-
-function nodeLabelVisible(point, camera, highlighted) {
-  return highlighted || distanceFromCamera(point, camera) <= 3
 }
 
 function nodePrompt(node) {
@@ -955,8 +937,7 @@ export default function Brain() {
               if (!projected) return null
               const lit = litIds.includes(node.id) || activeId === node.id
               const active = activeId === node.id
-              const highlighted = visibleLabelId === node.id || active
-              const labelVisible = nodeLabelVisible(sceneNode.point, camera, highlighted)
+              const labelVisible = visibleLabelId === node.id
               const internalBoost = 1 + currentZoomProgress * 0.18
               const nodeColor = nodeTypeColor(node)
               const emissiveIntensity = getEmissiveIntensity(node.importance)

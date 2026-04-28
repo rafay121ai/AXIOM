@@ -203,7 +203,7 @@ export function extractLabel(content) {
 
 export function memoryPassesNodeFilter(memory) {
   const nodeType = MEMORY_TYPE_TO_NODE_TYPE[memory?.type] || memory?.type
-  return VALID_NODE_TYPES.has(nodeType) && (memory?.importance || 0) >= 3
+  return VALID_NODE_TYPES.has(nodeType) && (memory?.importance || 0) >= 4
 }
 
 function inferPillar(text = '', fallback = null) {
