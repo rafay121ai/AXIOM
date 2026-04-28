@@ -20,6 +20,8 @@ import { generateEmbedding, openai, CHAT_MODEL } from './openai'
 //   limit match_count;
 // $$;
 
+const CONFIDENCE_THRESHOLD = 0.75
+
 // ─── Query Expansion ─────────────────────────────────────────────────────────
 async function expandQuery(query) {
   try {
@@ -63,8 +65,10 @@ async function searchSingleQuery(query, matchCount, filterPillar) {
   return data || []
 }
 
+// ─── Main Search ─────────────────────────────────────────────────────────────
+// Returns { chunks, confidence } where confidence is the top similarity score.
+// If no chunk clears CONFIDENCE_THRESHOLD, returns { chunks: [], confidence: 0 }.
 export async function searchWiki(query, matchCount = 3, filterPillar = null) {
-  // Expand query + run all searches in parallel
   const alternatives = await expandQuery(query)
   const allQueries = [query, ...alternatives]
 
@@ -74,7 +78,7 @@ export async function searchWiki(query, matchCount = 3, filterPillar = null) {
     allQueries.map((q) => searchSingleQuery(q, matchCount * 3, filterPillar))
   )
 
-  // Merge all results — deduplicate by title, keep highest similarity per source
+  // Merge — deduplicate by title, keep highest similarity per source
   const bestByTitle = new Map()
   for (const chunks of resultSets) {
     for (const chunk of chunks) {
@@ -86,24 +90,76 @@ export async function searchWiki(query, matchCount = 3, filterPillar = null) {
   }
 
   const deduped = [...bestByTitle.values()].sort((a, b) => b.similarity - a.similarity)
+  const aboveThreshold = deduped.filter((c) => c.similarity >= CONFIDENCE_THRESHOLD)
 
-  // Apply threshold; fall back to top results if nothing qualifies
-  const aboveThreshold = deduped.filter((c) => c.similarity >= 0.5)
-  const results = (aboveThreshold.length > 0 ? aboveThreshold : deduped).slice(0, matchCount)
+  if (aboveThreshold.length === 0) {
+    console.log(`[RAG] Top similarity ${deduped[0]?.similarity?.toFixed(3) ?? 'n/a'} — below threshold (${CONFIDENCE_THRESHOLD}). Returning empty context.`)
+    return { chunks: [], confidence: 0 }
+  }
 
-  console.log(`[RAG] Top chunks: ${results.map((c) => `"${c.title}" (${c.similarity.toFixed(3)})`).join(', ')}`)
+  const results = aboveThreshold.slice(0, matchCount)
+  const confidence = results[0].similarity
 
-  return results
+  console.log(`[RAG] Confidence: ${confidence.toFixed(3)} | chunks: ${results.map((c) => `"${c.title}" (${c.similarity.toFixed(3)})`).join(', ')}`)
+
+  return { chunks: results, confidence }
 }
 
-// ─── Format for System Prompt ────────────────────────────────────────────────
-export function formatWikiContext(chunks) {
+// ─── Internalized Priors ─────────────────────────────────────────────────────
+// Transforms retrieved chunks into first-person internalized knowledge statements.
+// Groups by source so duplicate chunks from the same book produce one prior.
+export async function formatWikiContext(chunks) {
   if (!chunks || chunks.length === 0) return ''
 
-  return chunks
-    .map(
-      (chunk) =>
-        `[${chunk.title} — ${chunk.author}]\n${chunk.key_frameworks}`
+  // Group by (author, title) — merge key_frameworks from same source
+  const bySource = new Map()
+  for (const chunk of chunks) {
+    const key = `${chunk.author}|||${chunk.title}`
+    if (!bySource.has(key)) {
+      bySource.set(key, { author: chunk.author, title: chunk.title, texts: [] })
+    }
+    bySource.get(key).texts.push(chunk.key_frameworks)
+  }
+
+  // Synthesize each source into an internalized prior in parallel
+  const priors = await Promise.all(
+    [...bySource.values()].map(({ author, title, texts }) =>
+      synthesizePrior(author, title, texts.join('\n\n'))
     )
-    .join('\n\n---\n\n')
+  )
+
+  return priors.join('\n\n')
+}
+
+async function synthesizePrior(author, title, combinedText) {
+  try {
+    const response = await openai.chat.completions.create({
+      model: CHAT_MODEL,
+      messages: [
+        {
+          role: 'system',
+          content: `You write internalized knowledge statements for a mentor AI named Axiom.
+
+Format (strict): Axiom knows from [Author], [Title]: [synthesis]
+
+Rules:
+- Maximum 2 sentences.
+- Write in Axiom's voice — direct, absorbed, opinionated. Not a quote. Not a summary. Something Axiom has internalized and would deploy from memory.
+- Capture the sharpest, most actionable insight from the source material.
+- Do not hedge. Do not use "suggests" or "argues". State it as fact Axiom holds.
+
+Author: ${author}
+Source: ${title}`,
+        },
+        { role: 'user', content: combinedText },
+      ],
+      max_completion_tokens: 120,
+    })
+    return response.choices[0].message.content.trim()
+  } catch (err) {
+    console.warn(`[RAG] Prior synthesis failed for "${title}":`, err?.message || err)
+    // Fallback: reformat raw text without LLM
+    const excerpt = combinedText.slice(0, 220).replace(/\n+/g, ' ').trim()
+    return `Axiom knows from ${author}, ${title}: ${excerpt}`
+  }
 }

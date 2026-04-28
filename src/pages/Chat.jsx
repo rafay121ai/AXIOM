@@ -411,11 +411,11 @@ export default function Chat() {
       })
 
       // RAG: retrieve source knowledge and personal memory for this turn.
-      const [chunks, personalMemories] = await Promise.all([
+      const [{ chunks, confidence: retrievalConfidence }, personalMemories] = await Promise.all([
         searchWiki(text, 3),
         searchPersonalMemory(session.id, text, 5),
       ])
-      const wikiContext = formatWikiContext(chunks)
+      const wikiContext = await formatWikiContext(chunks)
       const graphContext = nodeContext
         ? `Selected Founder Brain node: ${nodeContext.label} | type: ${nodeContext.type} | pillar: ${nodeContext.pillar || 'unmapped'} | read: ${nodeContext.summary || 'No node summary yet.'}`
         : ''
@@ -431,7 +431,7 @@ export default function Chat() {
 
       history.push({ role: 'user', content: text })
 
-      const systemPrompt = buildSystemPrompt(session, wikiContext, personalMemoryContext, aiMessageCount + 1)
+      const systemPrompt = buildSystemPrompt(session, wikiContext, personalMemoryContext, aiMessageCount + 1, retrievalConfidence)
 
       // Stream response
       const abort = new AbortController()
