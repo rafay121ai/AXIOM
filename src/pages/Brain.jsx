@@ -685,6 +685,7 @@ export default function Brain() {
     function onPointerUp(e) {
       touchMap.delete(e.pointerId)
       isDragging = false
+      pointerDownPos = null
     }
 
     function onClick(e) {
@@ -707,8 +708,8 @@ export default function Brain() {
 
     canvas.addEventListener('pointerdown', onPointerDown)
     canvas.addEventListener('pointermove', onPointerMove)
-    canvas.addEventListener('pointerup', onPointerUp)
-    canvas.addEventListener('pointercancel', onPointerUp)
+    window.addEventListener('pointerup', onPointerUp)
+    window.addEventListener('pointercancel', onPointerUp)
     canvas.addEventListener('click', onClick)
 
     let animFrameId
@@ -755,8 +756,8 @@ export default function Brain() {
       window.removeEventListener('wheel', onWheel)
       canvas.removeEventListener('pointerdown', onPointerDown)
       canvas.removeEventListener('pointermove', onPointerMove)
-      canvas.removeEventListener('pointerup', onPointerUp)
-      canvas.removeEventListener('pointercancel', onPointerUp)
+      window.removeEventListener('pointerup', onPointerUp)
+      window.removeEventListener('pointercancel', onPointerUp)
       canvas.removeEventListener('click', onClick)
       labelRenderer.domElement.remove()
       composer.dispose()
@@ -780,10 +781,9 @@ export default function Brain() {
     const th = threeRef.current
     if (!th) return
 
-    th.labelObjects.forEach(({ label, div }, id) => {
-      const visible = id === activeId
-      label.visible = visible
-      div.style.opacity = visible ? '1' : '0'
+    th.labelObjects.forEach(({ label, div }) => {
+      label.visible = false
+      div.style.opacity = '0'
     })
 
     th.nodeMeshes.forEach(mesh => {
