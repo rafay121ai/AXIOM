@@ -10,654 +10,41 @@ import { clearStoredSessionToken, getStoredSessionToken, supabase } from '../lib
 import { ensureCurrentWeeklyRead, fetchLatestWeeklyRead } from '../lib/sessionReads'
 import { fallbackGraph, getPersonalWikiGraph, markWikiNodeAccessed, syncPersonalWiki } from '../lib/personalWiki'
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ─── Constants ───────────────────────────────────────────────────────────────
 
 const NODE_TYPE_COLORS = {
-  pillar: null,
-  goal: 0xFF4800,
-  concept: 0x00FFD1,
+  pillar:     null,
+  goal:       0xFF4800,
+  concept:    0x00FFD1,
   experiment: 0xF72585,
-  pattern: 0x3A0CA3,
+  pattern:    0x3A0CA3,
 }
 
 const PILLAR_COLORS = {
-  psychology: 0x9B59B6,
-  economics: 0xD4A843,
+  psychology:        0x9B59B6,
+  economics:         0xD4A843,
   how_companies_win: 0x2E86C1,
-  whats_coming: 0x27AE60,
-  think_sharper: 0xEDEDEC,
-  move_people: 0x9B2335,
+  whats_coming:      0x27AE60,
+  think_sharper:     0xEDEDEC,
+  move_people:       0x9B2335,
 }
 
 const NODE_TYPE_BASE_RADIUS = {
-  pillar: 0.035,
-  goal: 0.022,
+  pillar:     0.035,
+  goal:       0.022,
   experiment: 0.020,
-  pattern: 0.018,
-  concept: 0.016,
+  pattern:    0.018,
+  concept:    0.016,
 }
 
 const STOP_WORDS = new Set([
-  'the', 'a', 'an', 'is', 'are', 'was', 'to', 'of', 'in', 'that', 'it', 'for', 'on',
-  'with', 'he', 'she', 'they', 'this', 'user', 'has', 'have', 'been', 'and', 'or',
-  'but', 'not', 'by', 'at', 'from', 'their', 'wants', 'need', 'needs', 'will',
-  'would', 'should', 'could',
+  'the','a','an','is','are','was','to','of','in','that','it','for','on',
+  'with','he','she','they','this','user','has','have','been','and','or',
+  'but','not','by','at','from','their','wants','need','needs','will',
+  'would','should','could',
 ])
 
-// ─── CSS ──────────────────────────────────────────────────────────────────────
-
-const STYLES = `
-  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&display=swap');
-
-  :root {
-    --bg:           #080705;
-    --bg-warm:      #0d0b08;
-    --surface:      rgba(18, 15, 10, 0.85);
-    --surface-high: rgba(28, 24, 16, 0.92);
-    --border:       rgba(255, 200, 120, 0.07);
-    --border-warm:  rgba(255, 200, 120, 0.13);
-    --text-primary: #f0ebe0;
-    --text-dim:     rgba(240, 235, 224, 0.38);
-    --text-muted:   rgba(240, 235, 224, 0.18);
-    --gold:         #d4a843;
-    --gold-dim:     rgba(212, 168, 67, 0.15);
-    --orange:       #ff4800;
-    --radius-sm:    4px;
-    --radius-md:    8px;
-    --radius-lg:    14px;
-    --font-display: 'DM Serif Display', Georgia, serif;
-    --font-mono:    'DM Mono', 'Fira Code', monospace;
-    --ease-out:     cubic-bezier(0.16, 1, 0.3, 1);
-    --ease-in-out:  cubic-bezier(0.45, 0, 0.55, 1);
-  }
-
-  *, *::before, *::after {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-  }
-
-  body {
-    background: var(--bg);
-    color: var(--text-primary);
-    font-family: var(--font-mono);
-    -webkit-font-smoothing: antialiased;
-    overflow: hidden;
-  }
-
-  /* ── Layout ── */
-
-  .brain {
-    position: fixed;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .brain__canvas {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    cursor: grab;
-    z-index: 1;
-  }
-
-  .brain__canvas:active {
-    cursor: grabbing;
-  }
-
-  /* ── Chrome / Header ── */
-
-  .brain__chrome {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 10;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 20px 28px;
-    pointer-events: none;
-  }
-
-  .brain__chrome > * {
-    pointer-events: auto;
-  }
-
-  .brain__wordmark {
-    font-family: var(--font-display);
-    font-size: 17px;
-    font-style: italic;
-    letter-spacing: 0.01em;
-    color: var(--text-primary);
-    opacity: 0.9;
-    user-select: none;
-  }
-
-  .brain__chrome-right {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  /* ── Shared chrome button ── */
-
-  .brain__chrome-btn {
-    height: 32px;
-    padding: 0 12px;
-    background: var(--surface);
-    border: 1px solid var(--border-warm);
-    border-radius: var(--radius-sm);
-    color: var(--text-dim);
-    font-family: var(--font-mono);
-    font-size: 10px;
-    font-weight: 400;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    cursor: pointer;
-    transition: color 160ms, border-color 160ms, background 160ms;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    white-space: nowrap;
-    display: flex;
-    align-items: center;
-    gap: 7px;
-  }
-
-  .brain__chrome-btn:hover {
-    color: var(--text-primary);
-    border-color: var(--border-warm);
-    background: var(--surface-high);
-  }
-
-  .brain__chrome-btn svg {
-    opacity: 0.6;
-    flex-shrink: 0;
-  }
-
-  .brain__chrome-btn:hover svg {
-    opacity: 1;
-  }
-
-  /* ── Panels ── */
-
-  .brain__panel {
-    position: absolute;
-    top: calc(100% + 6px);
-    right: 0;
-    min-width: 220px;
-    background: var(--surface-high);
-    border: 1px solid var(--border-warm);
-    border-radius: var(--radius-md);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    overflow: hidden;
-    animation: panelReveal 180ms var(--ease-out) both;
-    box-shadow: 0 24px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,200,120,0.04);
-  }
-
-  @keyframes panelReveal {
-    from { opacity: 0; transform: translateY(-6px) scale(0.97); }
-    to   { opacity: 1; transform: translateY(0) scale(1); }
-  }
-
-  .brain__panel-kicker {
-    padding: 11px 14px 8px;
-    font-size: 9px;
-    font-weight: 500;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--gold);
-    border-bottom: 1px solid var(--border);
-    opacity: 0.8;
-  }
-
-  .brain__panel-section {
-    padding: 8px;
-  }
-
-  .brain__panel-meta {
-    padding: 10px 14px;
-    font-size: 10px;
-    color: var(--text-dim);
-    line-height: 1.6;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .brain__panel-meta strong {
-    display: block;
-    color: var(--text-primary);
-    font-weight: 400;
-    margin-bottom: 2px;
-    font-size: 11px;
-  }
-
-  /* ── Thread items ── */
-
-  .brain__thread-item {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 3px;
-    padding: 9px 12px;
-    background: transparent;
-    border: none;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: background 140ms;
-    text-align: left;
-  }
-
-  .brain__thread-item:hover {
-    background: rgba(255,200,120,0.05);
-  }
-
-  .brain__thread-label {
-    font-size: 10px;
-    font-weight: 500;
-    letter-spacing: 0.08em;
-    color: var(--text-primary);
-    text-transform: uppercase;
-  }
-
-  .brain__thread-preview {
-    font-size: 10px;
-    color: var(--text-dim);
-    line-height: 1.5;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 220px;
-  }
-
-  .brain__threads-empty {
-    padding: 12px 14px;
-    font-size: 10px;
-    color: var(--text-muted);
-  }
-
-  /* ── Account panel specifics ── */
-
-  .brain__signout-btn {
-    width: 100%;
-    padding: 9px 12px;
-    background: transparent;
-    border: none;
-    border-top: 1px solid var(--border);
-    color: rgba(255, 72, 0, 0.5);
-    font-family: var(--font-mono);
-    font-size: 10px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    cursor: pointer;
-    text-align: left;
-    transition: color 140ms, background 140ms;
-  }
-
-  .brain__signout-btn:hover {
-    color: var(--orange);
-    background: rgba(255,72,0,0.04);
-  }
-
-  .brain__weekly-read-btn {
-    display: block;
-    width: 100%;
-    padding: 10px 12px;
-    background: var(--gold-dim);
-    border: none;
-    border-top: 1px solid var(--border);
-    border-bottom: 1px solid var(--border);
-    cursor: pointer;
-    text-align: left;
-    transition: background 140ms;
-  }
-
-  .brain__weekly-read-btn:hover {
-    background: rgba(212, 168, 67, 0.12);
-  }
-
-  .brain__weekly-read-kicker {
-    font-size: 8px;
-    font-weight: 500;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--gold);
-    margin-bottom: 4px;
-    display: block;
-  }
-
-  .brain__weekly-read-text {
-    font-size: 10px;
-    color: var(--text-dim);
-    line-height: 1.5;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  /* ── Floating tagline ── */
-
-  .brain__tagline {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 5;
-    text-align: center;
-    pointer-events: none;
-    user-select: none;
-  }
-
-  .brain__tagline-text {
-    font-family: var(--font-display);
-    font-size: clamp(22px, 3.5vw, 38px);
-    font-style: italic;
-    line-height: 1.25;
-    color: var(--text-primary);
-    opacity: 0.82;
-    letter-spacing: -0.01em;
-  }
-
-  .brain__tagline--node {
-    top: auto;
-    bottom: 160px;
-    transform: translateX(-50%);
-  }
-
-  /* ── Node nudge panel ── */
-
-  .brain__nudge {
-    position: absolute;
-    bottom: 100px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 10;
-    min-width: 280px;
-    max-width: 380px;
-    background: var(--surface-high);
-    border: 1px solid var(--border-warm);
-    border-radius: var(--radius-lg);
-    padding: 18px 20px;
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    animation: nudgeReveal 220ms var(--ease-out) both;
-    box-shadow: 0 32px 80px rgba(0,0,0,0.7);
-  }
-
-  @keyframes nudgeReveal {
-    from { opacity: 0; transform: translateX(-50%) translateY(12px); }
-    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
-  }
-
-  .brain__nudge-type {
-    font-size: 9px;
-    font-weight: 500;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    margin-bottom: 6px;
-  }
-
-  .brain__nudge-pillar {
-    font-size: 9px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    opacity: 0.55;
-    margin-bottom: 8px;
-  }
-
-  .brain__nudge-title {
-    font-family: var(--font-display);
-    font-size: 18px;
-    font-style: italic;
-    line-height: 1.3;
-    color: var(--text-primary);
-    margin-bottom: 8px;
-  }
-
-  .brain__nudge-summary {
-    font-size: 11px;
-    line-height: 1.65;
-    color: var(--text-dim);
-    margin-bottom: 14px;
-  }
-
-  .brain__nudge-cta {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 14px;
-    background: transparent;
-    border: 1px solid var(--border-warm);
-    border-radius: var(--radius-sm);
-    color: var(--text-primary);
-    font-family: var(--font-mono);
-    font-size: 10px;
-    font-weight: 400;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    cursor: pointer;
-    transition: background 160ms, border-color 160ms;
-  }
-
-  .brain__nudge-cta:hover {
-    background: rgba(255,200,120,0.06);
-    border-color: rgba(255,200,120,0.25);
-  }
-
-  .brain__nudge-cta svg {
-    opacity: 0.6;
-  }
-
-  /* ── Overlay message ── */
-
-  .brain__overlay-backdrop {
-    position: absolute;
-    inset: 0;
-    z-index: 14;
-    background: rgba(8, 7, 5, 0.7);
-    backdrop-filter: blur(3px);
-    -webkit-backdrop-filter: blur(3px);
-    animation: fadeIn 300ms ease both;
-  }
-
-  @keyframes fadeIn {
-    from { opacity: 0; }
-    to   { opacity: 1; }
-  }
-
-  .brain__overlay-card {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 15;
-    width: min(460px, calc(100vw - 48px));
-    background: var(--surface-high);
-    border: 1px solid var(--border-warm);
-    border-radius: var(--radius-lg);
-    padding: 28px 30px;
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    animation: panelReveal 260ms var(--ease-out) both;
-    box-shadow: 0 40px 100px rgba(0,0,0,0.8);
-  }
-
-  .brain__overlay-kicker {
-    font-size: 9px;
-    font-weight: 500;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    color: var(--gold);
-    margin-bottom: 14px;
-    opacity: 0.9;
-  }
-
-  .brain__overlay-text {
-    font-family: var(--font-display);
-    font-size: 18px;
-    font-style: italic;
-    line-height: 1.5;
-    color: var(--text-primary);
-    opacity: 0.88;
-  }
-
-  /* ── Gesture hint ── */
-
-  .brain__gesture-hint {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    opacity: 0;
-    transition: opacity 400ms;
-    pointer-events: none;
-    margin-right: 8px;
-  }
-
-  .brain__gesture-hint--visible {
-    opacity: 1;
-  }
-
-  .brain__gesture-copy {
-    font-size: 9px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-  }
-
-  .brain__gesture-visual {
-    display: flex;
-    align-items: center;
-    gap: 3px;
-  }
-
-  .brain__gesture-dot {
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background: var(--text-muted);
-  }
-
-  .brain__gesture-line {
-    width: 12px;
-    height: 1px;
-    background: var(--text-muted);
-    opacity: 0.5;
-  }
-
-  /* ── Input ── */
-
-  .brain__input-wrap {
-    position: absolute;
-    bottom: 28px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 10;
-    width: min(560px, calc(100vw - 48px));
-  }
-
-  .brain__input-inner {
-    display: flex;
-    align-items: center;
-    background: var(--surface);
-    border: 1px solid var(--border-warm);
-    border-radius: var(--radius-md);
-    padding: 0 6px 0 16px;
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    transition: border-color 200ms, box-shadow 200ms;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-  }
-
-  .brain__input-inner:focus-within {
-    border-color: rgba(212, 168, 67, 0.25);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 3px rgba(212, 168, 67, 0.06);
-  }
-
-  .brain__input {
-    flex: 1;
-    height: 46px;
-    background: transparent;
-    border: none;
-    outline: none;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    font-weight: 300;
-    letter-spacing: 0.04em;
-    color: var(--text-primary);
-    caret-color: var(--gold);
-  }
-
-  .brain__input::placeholder {
-    color: var(--text-muted);
-    font-style: italic;
-  }
-
-  .brain__send {
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    border: 1px solid var(--border-warm);
-    border-radius: var(--radius-sm);
-    color: var(--text-dim);
-    cursor: pointer;
-    transition: color 160ms, border-color 160ms, background 160ms;
-    flex-shrink: 0;
-  }
-
-  .brain__send:not(:disabled):hover {
-    color: var(--text-primary);
-    border-color: rgba(212, 168, 67, 0.3);
-    background: var(--gold-dim);
-  }
-
-  .brain__send:disabled {
-    opacity: 0.25;
-    cursor: not-allowed;
-  }
-
-  /* ── Loading ── */
-
-  .brain--loading {
-    align-items: center;
-    justify-content: center;
-  }
-
-  .brain__pulse {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--gold);
-    opacity: 0.6;
-    animation: pulse 1.4s ease-in-out infinite;
-  }
-
-  @keyframes pulse {
-    0%, 100% { transform: scale(1); opacity: 0.6; }
-    50%       { transform: scale(1.8); opacity: 1; }
-  }
-
-  /* ── Relative wrapper for panels ── */
-
-  .brain__rel {
-    position: relative;
-  }
-
-  /* ── Backdrop for open panels ── */
-  .brain__panel-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 8;
-  }
-`
-
-// ─── Preserved helpers ────────────────────────────────────────────────────────
+// ─── Preserved helpers ───────────────────────────────────────────────────────
 
 function isTouchDevice() {
   return typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
@@ -678,7 +65,7 @@ function hasSeenBrainOverlay(sessionToken) {
 
 function markBrainOverlaySeen(sessionToken) {
   try { localStorage.setItem(brainOverlaySeenKey(sessionToken), '1') }
-  catch { /* ignore */ }
+  catch { /* ignore storage failures */ }
 }
 
 function readBrainCache(sessionToken) {
@@ -755,7 +142,14 @@ function touchDistance(a, b) {
   return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)
 }
 
-// ─── Three.js helpers ─────────────────────────────────────────────────────────
+function touchCenter(a, b) {
+  return {
+    x: (a.clientX + b.clientX) / 2,
+    y: (a.clientY + b.clientY) / 2,
+  }
+}
+
+// ─── Three.js helpers ────────────────────────────────────────────────────────
 
 function getNodeColor(node) {
   if (node.type === 'pillar') return PILLAR_COLORS[node.pillar] ?? 0x888888
@@ -857,19 +251,18 @@ function createEdge(sourcePos, targetPos, sourceNode, targetNode, relationship) 
 function createLabel(node) {
   const div = document.createElement('div')
   div.style.cssText = `
-    font-family: 'DM Mono', monospace;
-    font-size: 10px;
-    font-weight: 400;
-    letter-spacing: 0.1em;
+    font-family: 'Neue Montreal', sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
     color: ${colorToHex(getNodeColor(node))};
     pointer-events: none;
     opacity: 0;
     transition: opacity 150ms ease;
-    background: rgba(8, 7, 5, 0.8);
+    background: rgba(5,5,5,0.74);
     padding: 3px 8px;
     border-radius: 3px;
     white-space: nowrap;
-    border: 1px solid ${colorToHex(getNodeColor(node))}22;
   `
   div.textContent = extractLabel(node.summary || node.label)
   const label = new CSS2DObject(div)
@@ -916,6 +309,7 @@ function igniteNode(mesh) {
   if (sprite) {
     sprite.material.opacity = 0
     sprite.scale.set(0, 0, 1)
+    // flash wide then settle
     animateTween(0, targetSpriteScale * 1.9, 220, v => { sprite.scale.set(v, v, 1) }, 'easeOut')
     animateTween(0, Math.min(1, targetSpriteOpacity * 1.6), 220, v => { sprite.material.opacity = v }, 'easeOut')
     setTimeout(() => {
@@ -1007,6 +401,7 @@ function buildScene(th, graph) {
     m.geometry.dispose()
     m.material.dispose()
   })
+  th.labelObjects.forEach(({ label }) => { /* label is child of mesh, removed with mesh */ void label })
   th.nodeMeshes = []
   th.edgeMeshes = []
   th.labelObjects = new Map()
@@ -1059,6 +454,7 @@ export default function Brain() {
   const [graph, setGraph] = useState({ nodes: [], edges: [] })
   const [conversationItems, setConversationItems] = useState([])
   const [activeId, setActiveId] = useState(null)
+  const [hoveredId, setHoveredId] = useState(null)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState('wide')
@@ -1075,7 +471,7 @@ export default function Brain() {
   const activeIdRef = useRef(null)
   const touch = isTouchDevice()
 
-  // ─── Data fetching ──────────────────────────────────────────────────────────
+  // ─── Data fetching (unchanged) ──────────────────────────────────────────────
 
   useEffect(() => {
     let cancelled = false
@@ -1141,9 +537,12 @@ export default function Brain() {
         setConversationItems(Array.from(byThread.values()).slice(0, 6))
       }
 
-      const recentForRead = (rawMessages || []).slice().reverse().slice(-24)
-      const storedRead = await ensureCurrentWeeklyRead(sessionData, recentForRead)
+      const recentForRead = (rawMessages || [])
+        .slice()
+        .reverse()
+        .slice(-24)
 
+      const storedRead = await ensureCurrentWeeklyRead(sessionData, recentForRead)
       if (!cancelled && storedRead) {
         setWeeklyRead(storedRead)
         setOverlayMessage(storedRead.content)
@@ -1156,6 +555,7 @@ export default function Brain() {
       }
 
       const firstBrainOpen = !hasSeenBrainOverlay(sessionToken)
+
       if (firstBrainOpen && !cancelled) setShowGestureHint(true)
 
       if (firstBrainOpen && !cancelled) {
@@ -1184,7 +584,7 @@ export default function Brain() {
     return () => { cancelled = true }
   }, [navigate])
 
-  // ─── Three.js init ──────────────────────────────────────────────────────────
+  // ─── Three.js init — runs once loading is done and canvas is in the DOM ──────
 
   useEffect(() => {
     if (loading) return
@@ -1194,30 +594,31 @@ export default function Brain() {
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     renderer.setSize(window.innerWidth, window.innerHeight)
-    renderer.setClearColor(0x080705)
+    renderer.setClearColor(0x0a0806)
 
     const scene = new THREE.Scene()
 
     const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 100)
     camera.position.set(0, 0, 3.2)
 
-    const ambient = new THREE.AmbientLight(0xfff4e0, 0.08)
-    const keyLight = new THREE.PointLight(0xffd080, 0.6, 12)
-    keyLight.position.set(2, 3, 4)
-    scene.add(ambient, keyLight)
-
     const composer = new EffectComposer(renderer)
     composer.addPass(new RenderPass(scene, camera))
     const bloomPass = new UnrealBloomPass(
       new THREE.Vector2(window.innerWidth, window.innerHeight),
-      0.38, 0.5, 0.86,
+      0.35,   // strength
+      0.5,    // radius
+      0.88,   // threshold
     )
     composer.addPass(bloomPass)
     composer.addPass(new OutputPass())
 
     const labelRenderer = new CSS2DRenderer()
     labelRenderer.setSize(window.innerWidth, window.innerHeight)
-    labelRenderer.domElement.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;z-index:2;'
+    labelRenderer.domElement.style.position = 'absolute'
+    labelRenderer.domElement.style.top = '0'
+    labelRenderer.domElement.style.left = '0'
+    labelRenderer.domElement.style.pointerEvents = 'none'
+    labelRenderer.domElement.style.zIndex = '2'
     document.body.appendChild(labelRenderer.domElement)
 
     const raycaster = new THREE.Raycaster()
@@ -1311,15 +712,10 @@ export default function Brain() {
     canvas.addEventListener('click', onClick)
 
     let animFrameId
-    let time = 0
     let lastViewMode = 'wide'
 
     function animate() {
       animFrameId = requestAnimationFrame(animate)
-      time += 0.016
-      const pulse = Math.sin(time * 0.25) * 0.015
-      keyLight.intensity = 0.6 + pulse
-      ambient.intensity = 0.08 + pulse * 0.3
 
       const th = threeRef.current
       if (!isDragging && !activeIdRef.current && th?.nodeMeshes?.length > 0) {
@@ -1393,15 +789,26 @@ export default function Brain() {
     th.nodeMeshes.forEach(mesh => {
       const node = mesh.userData.node
       const isActive = node.id === activeId
+      const lit = isNodeLit(node)
+      const radius = getNodeRadius(node)
+      const sprite = mesh.userData.sprite
       if (isActive) {
         mesh.material.opacity = 1.0
+        if (sprite) {
+          sprite.scale.setScalar(radius * 20)
+          sprite.material.opacity = 0.75
+        }
       } else {
-        mesh.material.opacity = ['active', 'bright', 'ghosted'].includes(node.status) ? 1.0 : 0.4
+        mesh.material.opacity = lit ? 0.95 : 0.22
+        if (sprite) {
+          sprite.scale.setScalar(radius * (lit ? 11 : 4.5))
+          sprite.material.opacity = lit ? 0.55 : 0.18
+        }
       }
     })
   }, [activeId])
 
-  // ─── Wire callbacks ─────────────────────────────────────────────────────────
+  // ─── Wire callbacks after every render ──────────────────────────────────────
 
   useEffect(() => {
     if (!threeRef.current) return
@@ -1410,7 +817,7 @@ export default function Brain() {
     threeRef.current.onViewModeChange = setViewMode
   })
 
-  // ─── UI timers ──────────────────────────────────────────────────────────────
+  // ─── UI effects (unchanged) ─────────────────────────────────────────────────
 
   useEffect(() => {
     if (!showGestureHint) return
@@ -1424,7 +831,29 @@ export default function Brain() {
     return () => clearTimeout(id)
   }, [showOverlayMessage])
 
-  // ─── Navigation helpers ─────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!accountOpen) return
+    function onDown(e) {
+      if (e.target.closest('.brain__account')) return
+      setAccountOpen(false)
+    }
+    window.addEventListener('pointerdown', onDown)
+    return () => window.removeEventListener('pointerdown', onDown)
+  }, [accountOpen])
+
+  useEffect(() => {
+    if (!threadsOpen) return
+    function onDown(e) {
+      if (e.target.closest('.brain__threads')) return
+      setThreadsOpen(false)
+    }
+    window.addEventListener('pointerdown', onDown)
+    return () => window.removeEventListener('pointerdown', onDown)
+  }, [threadsOpen])
+
+  // ─── Suppressed ESLint: selectNode defined below, used above in useEffect ───
+
+  // ─── Navigation helpers (unchanged) ────────────────────────────────────────
 
   function enterChat(extra = {}) {
     navigate('/chat', { state: { fromBrain: true, ...extra } })
@@ -1490,217 +919,181 @@ export default function Brain() {
   const nodes = graph.nodes || []
   const activeNode = nodes.find(n => n.id === activeId)
 
-  // ─── Render ─────────────────────────────────────────────────────────────────
-
   if (loading) {
     return (
-      <>
-        <style>{STYLES}</style>
-        <div className="brain brain--loading">
-          <div className="brain__pulse" />
-        </div>
-      </>
+      <div className="brain" style={{ alignItems: 'center', justifyContent: 'center' }}>
+        <div className="pulse-dot" />
+      </div>
     )
   }
 
-  const taglineText = activeNode
-    ? nodePrompt(activeNode)
-    : viewMode === 'inside'
-      ? 'Move through the lit nodes.'
-      : 'The dim map is potential. The lit map is behavior.'
-
   return (
-    <>
-      <style>{STYLES}</style>
-
-      <div className="brain">
-
-        {/* Header */}
-        <header className="brain__chrome">
-          <span className="brain__wordmark">Axiom</span>
-
-          <div className="brain__chrome-right">
-
-            {/* Gesture hint */}
-            <div className={`brain__gesture-hint${showGestureHint ? ' brain__gesture-hint--visible' : ''}`}>
-              {!touch && (
-                <>
-                  <div className="brain__gesture-visual" aria-hidden="true">
-                    <span className="brain__gesture-dot brain__gesture-dot--left" />
-                    <span className="brain__gesture-line" />
-                    <span className="brain__gesture-dot brain__gesture-dot--right" />
-                  </div>
-                  <div className="brain__gesture-copy">Scroll in. Pull back.</div>
-                </>
-              )}
+    <div className="brain brain--immersive brain--three">
+      <header className="brain__chrome">
+        <span className="brain__wordmark">Axiom</span>
+        <div className="brain__chrome-right">
+          <div className={`brain__gesture-hint${showGestureHint ? ' brain__gesture-hint--visible' : ''}${touch ? ' brain__gesture-hint--touch' : ''}`}>
+            <div className="brain__gesture-visual" aria-hidden="true">
+              <span className="brain__gesture-dot brain__gesture-dot--left" />
+              <span className="brain__gesture-dot brain__gesture-dot--right" />
+              <span className="brain__gesture-line" />
             </div>
-
-            {/* Threads */}
-            <div className="brain__rel">
-              <button
-                type="button"
-                className="brain__chrome-btn"
-                onClick={() => { setThreadsOpen(p => !p); setAccountOpen(false) }}
-              >
-                <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
-                  <rect x="1" y="2" width="10" height="1.2" rx="0.6" fill="currentColor" />
-                  <rect x="1" y="5.4" width="7" height="1.2" rx="0.6" fill="currentColor" />
-                  <rect x="1" y="8.8" width="5" height="1.2" rx="0.6" fill="currentColor" />
-                </svg>
-                Threads
-              </button>
-
-              {threadsOpen && (
-                <>
-                  <div className="brain__panel-backdrop" onClick={() => setThreadsOpen(false)} />
-                  <div className="brain__panel" style={{ zIndex: 20 }}>
-                    <div className="brain__panel-kicker">Recent threads</div>
-                    <div className="brain__panel-section">
-                      {conversationItems.length > 0 ? conversationItems.map(item => (
-                        <button
-                          key={item.threadId || 'main'}
-                          type="button"
-                          className="brain__thread-item"
-                          onClick={() => {
-                            setThreadsOpen(false)
-                            enterChat({ threadId: item.threadId, freshThread: false })
-                          }}
-                        >
-                          <span className="brain__thread-label">{item.label}</span>
-                          <span className="brain__thread-preview">{item.preview}</span>
-                        </button>
-                      )) : (
-                        <div className="brain__threads-empty">No saved threads yet.</div>
-                      )}
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Account */}
-            <div className="brain__rel">
-              <button
-                type="button"
-                className="brain__chrome-btn"
-                aria-label="Account"
-                onClick={() => { setAccountOpen(p => !p); setThreadsOpen(false) }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.4" />
-                  <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-                </svg>
-              </button>
-
-              {accountOpen && (
-                <>
-                  <div className="brain__panel-backdrop" onClick={() => setAccountOpen(false)} />
-                  <div className="brain__panel" style={{ zIndex: 20, minWidth: 240 }}>
-                    <div className="brain__panel-kicker">Account</div>
-                    <div className="brain__panel-meta">
-                      <strong>{authUser?.email || 'Signed in'}</strong>
-                      Graph, memory, and threads stay here.
-                    </div>
-
-                    {weeklyRead?.content && (
-                      <button type="button" className="brain__weekly-read-btn" onClick={openOverlayMessage}>
-                        <span className="brain__weekly-read-kicker">Axiom read</span>
-                        <span className="brain__weekly-read-text">{weeklyRead.content}</span>
-                      </button>
-                    )}
-
-                    <button
-                      type="button"
-                      className="brain__signout-btn"
-                      onClick={async () => {
-                        await supabase.auth.signOut()
-                        clearStoredSessionToken()
-                        navigate('/', { replace: true })
-                      }}
-                    >
-                      Leave this account
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </header>
-
-        {/* Tagline */}
-        <div className="brain__tagline" aria-live="polite">
-          <p className="brain__tagline-text">{taglineText}</p>
-        </div>
-
-        {/* Overlay message */}
-        {showOverlayMessage && overlayMessage && !activeNode && (
-          <>
-            <div className="brain__overlay-backdrop" onClick={() => setShowOverlayMessage(false)} />
-            <div className="brain__overlay-card">
-              <div className="brain__overlay-kicker">Axiom read</div>
-              <div className="brain__overlay-text">{overlayMessage}</div>
-            </div>
-          </>
-        )}
-
-        {/* Canvas */}
-        <canvas ref={canvasRef} className="brain__canvas" />
-
-        {/* Node nudge */}
-        {activeNode && (
-          <div className="brain__nudge">
-            <div
-              className="brain__nudge-type"
-              style={{ color: colorToHex(getNodeColor(activeNode)) }}
-            >
-              {activeNode.type.replace(/_/g, ' ')}
-            </div>
-
-            {activeNode.pillar && PILLAR_COLORS[activeNode.pillar] && (
-              <div
-                className="brain__nudge-pillar"
-                style={{ color: colorToHex(PILLAR_COLORS[activeNode.pillar]) }}
-              >
-                {activeNode.pillar.replace(/_/g, ' ')}
+            {!touch && (
+              <div className="brain__gesture-copy">
+                Scroll in. Pull back.
               </div>
             )}
+          </div>
 
-            <div className="brain__nudge-title">
-              {extractLabel(activeNode.summary || activeNode.label)}
-            </div>
-
-            {activeNode.summary && (
-              <div className="brain__nudge-summary">{activeNode.summary}</div>
+          <div className={`brain__threads${threadsOpen ? ' brain__threads--open' : ''}`}>
+            <button
+              type="button"
+              className="brain__threads-trigger"
+              aria-label="Open recent threads"
+              onClick={() => setThreadsOpen(prev => !prev)}
+            >
+              Threads
+            </button>
+            {threadsOpen && (
+              <div className="brain__threads-panel">
+                <div className="brain__threads-kicker">Recent threads</div>
+                <div className="brain__threads-list">
+                  {conversationItems.length > 0 ? (
+                    conversationItems.map(item => (
+                      <button
+                        key={item.threadId || 'main'}
+                        type="button"
+                        className="brain__threads-item"
+                        onClick={() => {
+                          setThreadsOpen(false)
+                          enterChat({ threadId: item.threadId, freshThread: false })
+                        }}
+                      >
+                        <span className="brain__threads-label">{item.label}</span>
+                        <span className="brain__threads-preview">{item.preview}</span>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="brain__threads-empty">No saved threads yet.</div>
+                  )}
+                </div>
+              </div>
             )}
+          </div>
 
-            <button className="brain__nudge-cta" onClick={() => startFromNode(activeNode)}>
-              Move with this
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                <path d="M3 8h10M13 8L9 4M13 8L9 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          <div className={`brain__account${accountOpen ? ' brain__account--open' : ''}`}>
+            <button
+              type="button"
+              className="brain__account-trigger"
+              aria-label="Open account"
+              onClick={() => {
+                setThreadsOpen(false)
+                setAccountOpen(prev => !prev)
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M8.9 7.4C8.9 5.1 10.3 3.5 12 3.5C13.7 3.5 15.1 5.1 15.1 7.4C15.1 9.9 13.7 11.8 12 11.8C10.3 11.8 8.9 9.9 8.9 7.4Z" stroke="currentColor" strokeWidth="1.4"/>
+                <path d="M7.1 14.3C8.4 13.4 10 12.9 12 12.9C14 12.9 15.6 13.4 16.9 14.3C18.2 15.2 18.9 16.5 18.9 18V19.5H5.1V18C5.1 16.5 5.8 15.2 7.1 14.3Z" stroke="currentColor" strokeWidth="1.4"/>
+                <circle cx="9" cy="8.1" r="0.9" fill="currentColor"/>
+                <circle cx="15" cy="8.1" r="0.9" fill="currentColor"/>
+                <path d="M9.8 10.1C10.4 10.5 11.1 10.7 12 10.7C12.9 10.7 13.6 10.5 14.2 10.1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
               </svg>
             </button>
+            {accountOpen && (
+              <div className="brain__account-panel">
+                <div className="brain__account-email">{authUser?.email || 'Signed in'}</div>
+                <div className="brain__account-note">Graph, memory, and threads stay here.</div>
+                {weeklyRead?.content && (
+                  <button
+                    type="button"
+                    className="brain__account-read"
+                    onClick={openOverlayMessage}
+                  >
+                    <span className="brain__account-read-kicker">Axiom read</span>
+                    <span className="brain__account-read-text">{weeklyRead.content}</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="brain__account-signout"
+                  onClick={async () => {
+                    await supabase.auth.signOut()
+                    clearStoredSessionToken()
+                    navigate('/', { replace: true })
+                  }}
+                >
+                  Leave this account
+                </button>
+              </div>
+            )}
           </div>
-        )}
+        </div>
+      </header>
 
-        {/* Input */}
-        <form className="brain__input-wrap" onSubmit={handleSubmit}>
-          <div className="brain__input-inner">
-            <input
-              ref={inputRef}
-              className="brain__input"
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              placeholder="Something on your mind?"
-              autoComplete="off"
-            />
-            <button className="brain__send" disabled={!input.trim()} aria-label="Start session">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <path d="M2 8L14 8M14 8L9 3M14 8L9 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-          </div>
-        </form>
+      <div className="brain__read brain__read--floating">
+        {activeNode
+          ? nodePrompt(activeNode)
+          : viewMode === 'inside'
+            ? 'Move through the lit nodes.'
+            : 'The dim map is potential. The lit map is behavior.'}
       </div>
-    </>
+
+      {showOverlayMessage && overlayMessage && !activeNode && (
+        <>
+          <div className="brain__overlay-backdrop" />
+          <div className="brain__overlay-message">
+            <div className="brain__overlay-kicker">Axiom read</div>
+            <div className="brain__overlay-text">{overlayMessage}</div>
+          </div>
+        </>
+      )}
+
+      {(threadsOpen || accountOpen) && <div className="brain__threads-backdrop" />}
+
+      <canvas ref={canvasRef} className="brain__canvas" />
+
+      {activeNode && (
+        <div className="brain__node-nudge">
+          <div
+            className="brain__node-kicker"
+            style={{ color: colorToHex(getNodeColor(activeNode)) }}
+          >
+            {activeNode.type.replace(/_/g, ' ')}
+          </div>
+          {activeNode.pillar && PILLAR_COLORS[activeNode.pillar] && (
+            <div
+              className="brain__node-pillar-tag"
+              style={{ color: colorToHex(PILLAR_COLORS[activeNode.pillar]) }}
+            >
+              {activeNode.pillar.replace(/_/g, ' ')}
+            </div>
+          )}
+          <div className="brain__node-title">
+            {extractLabel(activeNode.summary || activeNode.label)}
+          </div>
+          {activeNode.summary && (
+            <div className="brain__node-summary">{activeNode.summary}</div>
+          )}
+          <button onClick={() => startFromNode(activeNode)}>Move with this</button>
+        </div>
+      )}
+
+      <form className="brain__input-wrap" onSubmit={handleSubmit}>
+        <div className="brain__input-inner brain__input-inner--glass">
+          <input
+            ref={inputRef}
+            className="brain__input"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            placeholder="Something on your mind?"
+          />
+          <button className="brain__send" disabled={!input.trim()} aria-label="Start session">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M2 8L14 8M14 8L9 3M14 8L9 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </form>
+    </div>
   )
 }
