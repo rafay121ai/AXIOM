@@ -634,8 +634,21 @@ export default function Chat() {
 // ── Message Group ─────────────────────────────────────────────────────────────
 // Renders a message + optional experiment/warning card below it
 function MessageGroup({ msg, onAnswer, onUserPlot }) {
-  const showArtifact  = msg.role === 'assistant' && msg.artifact && !msg.streaming
+  const showArtifact   = msg.role === 'assistant' && msg.artifact && !msg.streaming
   const showExperiment = msg.role === 'assistant' && msg.experiment && !msg.streaming
+
+  // If Axiom placed <artifact_here/> inside the text, inject the artifact inline
+  // at that position instead of appending it below the bubble.
+  const inlineArtifact = showArtifact && /<artifact_here\s*\/>/i.test(msg.content || '')
+
+  const artifactElement = showArtifact ? (
+    <ArtifactRenderer
+      type={msg.artifact.type}
+      data={msg.artifact.data}
+      onAnswer={onAnswer}
+      onUserPlot={onUserPlot}
+    />
+  ) : null
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -643,15 +656,9 @@ function MessageGroup({ msg, onAnswer, onUserPlot }) {
         role={msg.role}
         content={msg.content}
         streaming={msg.streaming}
+        artifactNode={inlineArtifact ? artifactElement : null}
       />
-      {showArtifact && (
-        <ArtifactRenderer
-          type={msg.artifact.type}
-          data={msg.artifact.data}
-          onAnswer={onAnswer}
-          onUserPlot={onUserPlot}
-        />
-      )}
+      {showArtifact && !inlineArtifact && artifactElement}
       {showExperiment && (
         <ExperimentCard
           description={msg.experiment.description}
