@@ -913,19 +913,18 @@ h1, h2, h3 {
   pointer-events: none;
 }
 
-.brain__node-panel {
+.brain__node-nudge {
   position: fixed;
   left: 50%;
   bottom: 108px;
   z-index: 5;
   width: min(420px, calc(100vw - 32px));
-  max-height: 65vh;
   transform: translateX(-50%);
   display: flex;
+  align-items: center;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   padding: 18px 18px 16px;
-  overflow-y: auto;
   background:
     linear-gradient(180deg, rgba(255,255,255,0.095), rgba(255,255,255,0.035)),
     rgba(5,5,5,0.72);
@@ -935,47 +934,26 @@ h1, h2, h3 {
     0 22px 80px rgba(0,0,0,0.64),
     inset 0 1px 0 rgba(255,255,255,0.09);
   backdrop-filter: blur(22px);
-  text-align: left;
+  text-align: center;
 }
 
-.brain__node-panel-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.brain__node-panel-tag {
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  line-height: 1.2;
+.brain__node-kicker {
+  color: var(--gold);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 
-.brain__node-panel-title {
-  color: var(--text-primary);
-  font-family: var(--font-sans);
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 1.18;
-  overflow-wrap: anywhere;
-}
-
-.brain__node-panel-insight {
+.brain__node-title {
   color: var(--text-primary);
   font-family: var(--font-serif);
-  font-size: 18px;
-  font-weight: 400;
-  line-height: 1.28;
-  overflow-wrap: anywhere;
-  white-space: normal;
+  font-size: 26px;
+  line-height: 1.08;
 }
 
-.brain__node-panel button {
-  align-self: flex-start;
+.brain__node-nudge button {
   height: 38px;
-  margin-top: 2px;
   background: var(--text-primary);
   border: 0;
   border-radius: var(--radius-sm);
@@ -1161,17 +1139,13 @@ h1, h2, h3 {
     font-size: 18px;
   }
 
-  .brain__node-panel {
+  .brain__node-nudge {
     bottom: 104px;
     padding: 14px 14px 13px;
   }
 
-  .brain__node-panel-title {
-    font-size: 20px;
-  }
-
-  .brain__node-panel-insight {
-    font-size: 17px;
+  .brain__node-title {
+    font-size: 21px;
   }
 
   .brain__threads-panel {

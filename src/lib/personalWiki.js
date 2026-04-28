@@ -174,36 +174,14 @@ const CONCEPT_NODES = [
   },
 ]
 
-const VALID_NODE_TYPES = new Set(['goal', 'concept', 'experiment', 'pattern'])
-
 const MEMORY_TYPE_TO_NODE_TYPE = {
   goal: 'goal',
-  concept: 'concept',
   pattern: 'pattern',
-  experiment: 'experiment',
+  belief: 'belief',
   experiment_result: 'experiment',
-}
-
-const STOP_WORDS = new Set(['the','a','an','is','are','was','to','of','in',
-  'that','it','for','on','with','he','she','they','this','user','has',
-  'have','been','and','or','but','not','by','at','from','their','wants',
-  'need','needs','will','would','should','could'])
-
-export function extractLabel(content) {
-  const words = String(content || '').toLowerCase().split(/\s+/)
-  const meaningful = words
-    .map((word) => word.replace(/[^a-z0-9-]/g, ''))
-    .filter((word) => !STOP_WORDS.has(word) && word.length > 2)
-
-  return meaningful
-    .slice(0, 3)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ')
-}
-
-export function memoryPassesNodeFilter(memory) {
-  const nodeType = MEMORY_TYPE_TO_NODE_TYPE[memory?.type] || memory?.type
-  return VALID_NODE_TYPES.has(nodeType) && (memory?.importance || 0) >= 4
+  preference: 'belief',
+  decision: 'decision',
+  fact: 'concept',
 }
 
 function inferPillar(text = '', fallback = null) {
@@ -381,15 +359,10 @@ function seedNodesFromSession(session) {
 }
 
 function nodeFromMemory(memory, index) {
-  if (!memoryPassesNodeFilter(memory)) return null
-
   const pillar = inferPillar(memory.content, null)
-  const type = MEMORY_TYPE_TO_NODE_TYPE[memory.type] || memory.type
-  const label = extractLabel(memory.content) || type
-
   return normalizeNode({
-    label,
-    type,
+    label: memory.content.length > 54 ? `${memory.content.slice(0, 51)}...` : memory.content,
+    type: MEMORY_TYPE_TO_NODE_TYPE[memory.type] || 'concept',
     pillar,
     summary: memory.content,
     status: 'active',
@@ -432,11 +405,11 @@ export async function syncPersonalWiki(session) {
       .select('type, content, importance, confidence, updated_at')
       .eq('session_id', session.id)
       .order('updated_at', { ascending: false })
+      .limit(10)
 
     if (!memoriesError) {
-      const nodeMemories = (memories || []).filter(memoryPassesNodeFilter)
-      for (let i = 0; i < nodeMemories.length; i++) {
-        const node = await upsertNode(session.id, nodeFromMemory(nodeMemories[i], i + 8), i + 8)
+      for (let i = 0; i < (memories || []).length; i++) {
+        const node = await upsertNode(session.id, nodeFromMemory(memories[i], i + 8), i + 8)
         const root = roots.find((r) => r.pillar === node?.pillar)
         await upsertEdge(session.id, node, root, 'belongs_to', 0.55)
       }
