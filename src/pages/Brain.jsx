@@ -204,7 +204,98 @@ function visibleGraph(graph) {
     .sort((a, b) => nodeVisualScore(nodeById.get(b.source_node_id)) - nodeVisualScore(nodeById.get(a.source_node_id)))
     .slice(0, MAX_PILLAR_EDGES)
 
-  return { nodes, edges: [...nonPillarEdges, ...pillarEdges] }
+  const edges = [...nonPillarEdges, ...pillarEdges]
+  const connectedIds = new Set()
+  edges.forEach(edge => {
+    connectedIds.add(edge.source_node_id)
+    connectedIds.add(edge.target_node_id)
+  })
+
+  return { nodes, edges, connectedIds }
+}
+
+function isNodeMuted(node, connected) {
+  return node.type !== 'pillar' && !connected
+}
+
+function renderNodeColor(node, muted = false) {
+  return muted ? 0x676B70 : getNodeColor(node)
+}
+
+function createGradientNodeMaterial(colorInt, opacity, muted = false) {
+  const core = new THREE.Color(colorInt)
+  const edge = muted
+    ? new THREE.Color(0x25282B)
+    : core.clone().multiplyScalar(0.30)
+  const highlight = muted
+    ? new THREE.Color(0xA4A9AE)
+    : core.clone().lerp(new THREE.Color(0xffffff), 0.68)
+
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      coreColor: { value: core },
+      edgeColor: { value: edge },
+      highlightColor: { value: highlight },
+      opacity: { value: opacity },
+    },
+    vertexShader: `
+      varying vec3 vNormal;
+      varying vec3 vViewDir;
+
+      void main() {
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        vNormal = normalize(normalMatrix * normal);
+        vViewDir = normalize(-mvPosition.xyz);
+        gl_Position = projectionMatrix * mvPosition;
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 coreColor;
+      uniform vec3 edgeColor;
+      uniform vec3 highlightColor;
+      uniform float opacity;
+      varying vec3 vNormal;
+      varying vec3 vViewDir;
+
+      void main() {
+        vec3 normal = normalize(vNormal);
+        vec3 viewDir = normalize(vViewDir);
+        float facing = max(dot(normal, viewDir), 0.0);
+        float rim = pow(1.0 - facing, 2.0);
+        float light = pow(max(dot(normal, normalize(vec3(-0.42, 0.72, 0.55))), 0.0), 5.0);
+        vec3 color = mix(edgeColor, coreColor, smoothstep(0.08, 0.92, facing));
+        color += highlightColor * light * 0.42;
+        color = mix(color, edgeColor, rim * 0.24);
+        gl_FragColor = vec4(color, opacity);
+      }
+    `,
+    transparent: true,
+    depthWrite: true,
+  })
+}
+
+function setNodeOpacity(mesh, opacity) {
+  if (mesh.material?.uniforms?.opacity) {
+    mesh.material.uniforms.opacity.value = opacity
+  } else if (mesh.material) {
+    mesh.material.opacity = opacity
+  }
+}
+
+function setNodeGradientColors(mesh, colorInt, muted = false) {
+  if (!mesh.material?.uniforms) return
+
+  const core = new THREE.Color(colorInt)
+  const edge = muted
+    ? new THREE.Color(0x25282B)
+    : core.clone().multiplyScalar(0.30)
+  const highlight = muted
+    ? new THREE.Color(0xA4A9AE)
+    : core.clone().lerp(new THREE.Color(0xffffff), 0.68)
+
+  mesh.material.uniforms.coreColor.value.copy(core)
+  mesh.material.uniforms.edgeColor.value.copy(edge)
+  mesh.material.uniforms.highlightColor.value.copy(highlight)
 }
 
 let _glowTexture = null
@@ -240,18 +331,16 @@ function colorToHex(colorInt) {
   return `#${colorInt.toString(16).padStart(6, '0')}`
 }
 
-function createNodeMesh(node) {
+function createNodeMesh(node, connected = false) {
   const radius = getNodeRadius(node)
-  const color = getNodeColor(node)
+  const muted = isNodeMuted(node, connected)
+  const color = renderNodeColor(node, muted)
   const lit = isNodeLit(node)
   const pillar = node.type === 'pillar'
+  const opacity = muted ? 0.20 : pillar ? 0.72 : lit ? 0.95 : 0.42
 
   const geometry = new THREE.SphereGeometry(radius, 16, 16)
-  const material = new THREE.MeshBasicMaterial({
-    color,
-    transparent: true,
-    opacity: pillar ? 0.72 : lit ? 0.95 : 0.42,
-  })
+  const material = createGradientNodeMaterial(color, opacity, muted)
   const mesh = new THREE.Mesh(geometry, material)
 
   const spriteMat = new THREE.SpriteMaterial({
@@ -260,14 +349,14 @@ function createNodeMesh(node) {
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
-    opacity: pillar ? 0.11 : lit ? 0.20 : 0.075,
+    opacity: muted ? 0.035 : pillar ? 0.11 : lit ? 0.20 : 0.075,
   })
   const sprite = new THREE.Sprite(spriteMat)
-  const spriteScale = radius * (pillar ? 2.8 : lit ? 2.35 : 1.65)
+  const spriteScale = radius * (muted ? 1.35 : pillar ? 2.8 : lit ? 2.35 : 1.65)
   sprite.scale.set(spriteScale, spriteScale, 1)
   mesh.add(sprite)
 
-  mesh.userData = { node, sprite }
+  mesh.userData = { node, sprite, connected }
   return mesh
 }
 
@@ -344,14 +433,15 @@ function igniteNode(mesh) {
   const node = mesh.userData.node
   const lit = isNodeLit(node)
   const radius = getNodeRadius(node)
+  const muted = isNodeMuted(node, mesh.userData.connected)
   const targetOpacity = lit ? 0.92 : 0.42
   const pillar = node.type === 'pillar'
-  const targetSpriteScale = radius * (pillar ? 2.8 : lit ? 2.35 : 1.65)
-  const targetSpriteOpacity = pillar ? 0.13 : lit ? 0.22 : 0.08
+  const targetSpriteScale = radius * (muted ? 1.35 : pillar ? 2.8 : lit ? 2.35 : 1.65)
+  const targetSpriteOpacity = muted ? 0.035 : pillar ? 0.13 : lit ? 0.22 : 0.08
   const sprite = mesh.userData.sprite
 
   animateTween(0.01, 1.0, 500, v => { mesh.scale.set(v, v, v) }, 'easeOut')
-  animateTween(0, targetOpacity, 400, v => { mesh.material.opacity = v }, 'easeOut')
+  animateTween(0, muted ? 0.20 : targetOpacity, 400, v => { setNodeOpacity(mesh, v) }, 'easeOut')
 
   if (sprite) {
     sprite.material.opacity = 0
@@ -368,7 +458,7 @@ function igniteNode(mesh) {
 
 function playOpenAnimation(nodeMeshes, edgeMeshes, scene) {
   nodeMeshes.forEach(m => {
-    m.material.opacity = 0
+    setNodeOpacity(m, 0)
     m.scale.set(0.01, 0.01, 0.01)
     if (m.userData.sprite) {
       m.userData.sprite.material.opacity = 0
@@ -409,13 +499,14 @@ function playOpenAnimation(nodeMeshes, edgeMeshes, scene) {
 
 function buildScene(th, graph) {
   const { scene } = th
-  const { nodes, edges } = visibleGraph(graph)
+  const { nodes, edges, connectedIds } = visibleGraph(graph)
 
   const existingIds = new Set(th.nodeMeshes.map(m => m.userData.node.id))
   const newIds = new Set(nodes.map(n => n.id))
   const needsRebuild = th.nodeMeshes.length === 0
     || existingIds.size !== newIds.size
     || ![...newIds].every(id => existingIds.has(id))
+    || th.edgeMeshes.length !== edges.length
 
   if (!needsRebuild) {
     const nodeMap = new Map(nodes.map(n => [n.id, n]))
@@ -423,14 +514,20 @@ function buildScene(th, graph) {
       const latest = nodeMap.get(mesh.userData.node.id)
       if (!latest) return
       mesh.userData.node = latest
+      mesh.userData.connected = connectedIds.has(latest.id)
       if (mesh.userData.node.id !== th.activeIdRef?.current) {
         const lit = isNodeLit(latest)
         const radius = getNodeRadius(latest)
-        mesh.material.opacity = lit ? 0.95 : 0.22
+        const muted = isNodeMuted(latest, mesh.userData.connected)
+        const renderColor = renderNodeColor(latest, muted)
+        setNodeGradientColors(mesh, renderColor, muted)
+        setNodeOpacity(mesh, muted ? 0.20 : lit ? 0.95 : 0.42)
         const sprite = mesh.userData.sprite
         if (sprite) {
-          sprite.scale.setScalar(radius * (lit ? 3.2 : 1.6))
-          sprite.material.opacity = lit ? 0.38 : 0.12
+          const pillar = latest.type === 'pillar'
+          sprite.material.color.set(renderColor)
+          sprite.scale.setScalar(radius * (muted ? 1.35 : pillar ? 2.8 : lit ? 2.35 : 1.65))
+          sprite.material.opacity = muted ? 0.035 : pillar ? 0.11 : lit ? 0.20 : 0.075
         }
       }
     })
@@ -462,7 +559,7 @@ function buildScene(th, graph) {
   }
 
   for (const node of nodes) {
-    const mesh = createNodeMesh(node)
+    const mesh = createNodeMesh(node, connectedIds.has(node.id))
     const pos = posMap.get(node.id)
     if (pos) mesh.position.copy(pos)
     const { label, div } = createLabel(node)
@@ -837,18 +934,23 @@ export default function Brain() {
       const lit = isNodeLit(node)
       const radius = getNodeRadius(node)
       const sprite = mesh.userData.sprite
+      const muted = isNodeMuted(node, mesh.userData.connected)
+      const renderColor = renderNodeColor(node, muted)
+      setNodeGradientColors(mesh, renderColor, muted)
       if (isActive) {
-        mesh.material.opacity = 1.0
+        setNodeOpacity(mesh, 1.0)
         if (sprite) {
+          sprite.material.color.set(renderColor)
           sprite.scale.setScalar(radius * 3.1)
           sprite.material.opacity = 0.26
         }
       } else {
-        mesh.material.opacity = lit ? 0.92 : 0.42
+        setNodeOpacity(mesh, muted ? 0.20 : lit ? 0.92 : 0.42)
         if (sprite) {
           const pillar = node.type === 'pillar'
-          sprite.scale.setScalar(radius * (pillar ? 2.8 : lit ? 2.35 : 1.65))
-          sprite.material.opacity = pillar ? 0.11 : lit ? 0.20 : 0.075
+          sprite.material.color.set(renderColor)
+          sprite.scale.setScalar(radius * (muted ? 1.35 : pillar ? 2.8 : lit ? 2.35 : 1.65))
+          sprite.material.opacity = muted ? 0.035 : pillar ? 0.11 : lit ? 0.20 : 0.075
         }
       }
     })
