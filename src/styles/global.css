@@ -952,6 +952,24 @@ h1, h2, h3 {
   line-height: 1.08;
 }
 
+.brain__node-pillar-tag {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.brain__node-summary {
+  color: var(--text-primary);
+  font-family: var(--font-serif);
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1.5;
+  text-align: center;
+  max-width: 360px;
+}
+
 .brain__node-nudge button {
   height: 38px;
   background: var(--text-primary);

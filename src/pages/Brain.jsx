@@ -1,30 +1,47 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import * as THREE from 'three'
+import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js'
+import { EffectComposer, RenderPass, EffectPass, BloomEffect } from 'postprocessing'
 import { clearStoredSessionToken, getStoredSessionToken, supabase } from '../lib/supabase'
 import { ensureCurrentWeeklyRead, fetchLatestWeeklyRead } from '../lib/sessionReads'
 import { fallbackGraph, getPersonalWikiGraph, markWikiNodeAccessed, syncPersonalWiki } from '../lib/personalWiki'
 
-const NODE_COLORS = {
-  psychology: ['#6E91B8', '#E7F4FF'],
-  economics: ['#B99435', '#FFE7A3'],
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const NODE_TYPE_COLORS = {
+  pillar:     null,
+  goal:       0xFF4800,
+  concept:    0x00FFD1,
+  experiment: 0xF72585,
+  pattern:    0x3A0CA3,
 }
 
-const RELATION_COLORS = {
-  belongs_to: '#706B5B',
-  tested_by: '#D7B957',
-  tests: '#D7B957',
-  causes: '#B86767',
-  shows_up_as: '#7C9EBF',
-  contradicts: '#CC3333',
-  strengthens: '#B99435',
-  resolved_by: '#D9D6CC',
-  related_to: '#5E5E5E',
+const PILLAR_COLORS = {
+  psychology:        0x9B59B6,
+  economics:         0xD4A843,
+  how_companies_win: 0x2E86C1,
+  whats_coming:      0x27AE60,
+  think_sharper:     0xEDEDEC,
+  move_people:       0x9B2335,
 }
 
-const VIEWPORT = { width: 1400, height: 880 }
-const MIN_ZOOM = -0.52
-const MAX_ZOOM = 22.0
-const INSIDE_ZOOM = 1.35
+const NODE_TYPE_BASE_RADIUS = {
+  pillar:     0.22,
+  goal:       0.16,
+  experiment: 0.15,
+  pattern:    0.14,
+  concept:    0.12,
+}
+
+const STOP_WORDS = new Set([
+  'the','a','an','is','are','was','to','of','in','that','it','for','on',
+  'with','he','she','they','this','user','has','have','been','and','or',
+  'but','not','by','at','from','their','wants','need','needs','will',
+  'would','should','could',
+])
+
+// ─── Preserved helpers ───────────────────────────────────────────────────────
 
 function isTouchDevice() {
   return typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
@@ -39,19 +56,13 @@ function brainOverlaySeenKey(sessionToken) {
 }
 
 function hasSeenBrainOverlay(sessionToken) {
-  try {
-    return localStorage.getItem(brainOverlaySeenKey(sessionToken)) === '1'
-  } catch {
-    return false
-  }
+  try { return localStorage.getItem(brainOverlaySeenKey(sessionToken)) === '1' }
+  catch { return false }
 }
 
 function markBrainOverlaySeen(sessionToken) {
-  try {
-    localStorage.setItem(brainOverlaySeenKey(sessionToken), '1')
-  } catch {
-    // Ignore storage failures; this is only a UX hint flag.
-  }
+  try { localStorage.setItem(brainOverlaySeenKey(sessionToken), '1') }
+  catch { /* ignore storage failures */ }
 }
 
 function readBrainCache(sessionToken) {
@@ -60,46 +71,13 @@ function readBrainCache(sessionToken) {
     if (!cached) return null
     const graph = JSON.parse(cached)
     return Array.isArray(graph?.nodes) && Array.isArray(graph?.edges) ? graph : null
-  } catch {
-    return null
-  }
+  } catch { return null }
 }
 
 function writeBrainCache(sessionToken, graph) {
   if (!sessionToken || !graph?.nodes?.length) return
-  try {
-    localStorage.setItem(brainCacheKey(sessionToken), JSON.stringify(graph))
-  } catch {
-    // Cache is a speed layer only. Ignore storage quota/private mode failures.
-  }
-}
-
-function clampZoom(value) {
-  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value))
-}
-
-function smoothstep(edge0, edge1, value) {
-  const t = Math.min(1, Math.max(0, (value - edge0) / (edge1 - edge0)))
-  return t * t * (3 - 2 * t)
-}
-
-function zoomProgress(zoom) {
-  return smoothstep(MIN_ZOOM, MAX_ZOOM, zoom)
-}
-
-function touchDistance(a, b) {
-  return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)
-}
-
-function touchCenter(a, b) {
-  return {
-    x: (a.clientX + b.clientX) / 2,
-    y: (a.clientY + b.clientY) / 2,
-  }
-}
-
-function nodeColors(node) {
-  return NODE_COLORS[node.pillar] || ['#B8B4A8', '#FFFFFF']
+  try { localStorage.setItem(brainCacheKey(sessionToken), JSON.stringify(graph)) }
+  catch { /* cache is speed layer only */ }
 }
 
 function hashString(value = '') {
@@ -118,7 +96,6 @@ function brainPoint(node, index, total) {
       z: 0.06,
     }
   }
-
   const hash = hashString(`${node.label}-${node.type}-${index}`)
   const sideBias = node.pillar === 'economics' ? 0.22 : -0.22
   const t = total <= 1 ? 0 : index / Math.max(1, total - 1)
@@ -128,53 +105,10 @@ function brainPoint(node, index, total) {
   const frontBack = Math.cos(angle * 1.12) * (0.34 + (hash % 5) * 0.045)
   const lobe = Math.sin(angle) * (0.48 + (hash % 4) * 0.055)
   const notch = Math.max(0, 0.22 - Math.abs(vertical + 0.1)) * 0.55
-
   return {
     x: sideBias + lobe - notch * Math.sign(lobe || sideBias || 1),
     y: vertical,
     z: frontBack + layer * 0.06,
-  }
-}
-
-function statusLit(node) {
-  return ['active', 'bright', 'ghosted', 'resolved'].includes(node.status)
-}
-
-function nodeScore(node, session) {
-  const activeExperiments = session?.active_experiments || []
-  return (
-    (statusLit(node) ? 8 : 0) +
-    (node.status === 'ghosted' ? 5 : 0) +
-    (node.type === 'experiment' ? 3 : 0) +
-    (node.importance || 1) +
-    (activeExperiments.some((e) => node.summary?.includes(e.description)) ? 3 : 0)
-  )
-}
-
-function projectPoint(point, camera) {
-  const yaw = camera.yaw
-  const pitch = camera.pitch
-  const progress = zoomProgress(camera.zoom)
-  const cosY = Math.cos(yaw)
-  const sinY = Math.sin(yaw)
-  const cosP = Math.cos(pitch)
-  const sinP = Math.sin(pitch)
-
-  const x1 = point.x * cosY - point.z * sinY
-  const z1 = point.x * sinY + point.z * cosY
-  const y1 = point.y * cosP - z1 * sinP
-  const z2 = point.y * sinP + z1 * cosP
-
-  const distance = 2.86 - progress * 1.96
-  const perspective = 1 / Math.max(0.28, distance - z2)
-  const scale = perspective * (430 + progress * 120)
-
-  return {
-    x: VIEWPORT.width / 2 + x1 * scale + camera.panX,
-    y: VIEWPORT.height / 2 + y1 * scale + camera.panY,
-    z: z2,
-    depth: perspective,
-    scale,
   }
 }
 
@@ -193,7 +127,6 @@ function previewText(content = '') {
     .replace(/<experiment>[\s\S]*?<\/experiment>/g, '')
     .replace(/\s+/g, ' ')
     .trim()
-
   if (!text) return 'No saved text yet.'
   return text.length > 88 ? `${text.slice(0, 85)}...` : text
 }
@@ -201,6 +134,274 @@ function previewText(content = '') {
 function labelForThread(threadId) {
   return threadId ? 'Branch thread' : 'Main thread'
 }
+
+function touchDistance(a, b) {
+  return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)
+}
+
+function touchCenter(a, b) {
+  return {
+    x: (a.clientX + b.clientX) / 2,
+    y: (a.clientY + b.clientY) / 2,
+  }
+}
+
+// ─── Three.js helpers ────────────────────────────────────────────────────────
+
+function getNodeColor(node) {
+  if (node.type === 'pillar') return PILLAR_COLORS[node.pillar] ?? 0x888888
+  return NODE_TYPE_COLORS[node.type] ?? 0x888888
+}
+
+function getNodeRadius(node) {
+  const base = NODE_TYPE_BASE_RADIUS[node.type] ?? 0.12
+  const importance = node.importance || 3
+  const scale = importance === 5 ? 1.0 : importance === 4 ? 0.85 : 0.70
+  return base * scale
+}
+
+function getEmissiveIntensity(node) {
+  const importance = node.importance || 3
+  const lit = ['active', 'bright', 'ghosted'].includes(node.status)
+  const base = importance === 5 ? 0.15 : importance === 4 ? 0.10 : 0.06
+  return lit ? base * 1.8 : base
+}
+
+function extractLabel(content) {
+  const words = String(content || '').toLowerCase().split(/\s+/)
+  const meaningful = words
+    .map(w => w.replace(/[^a-z0-9]/g, ''))
+    .filter(w => !STOP_WORDS.has(w) && w.length > 2)
+  return meaningful.slice(0, 3)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ').toUpperCase()
+}
+
+function colorToHex(colorInt) {
+  return `#${colorInt.toString(16).padStart(6, '0')}`
+}
+
+function createNodeMesh(node) {
+  const radius = getNodeRadius(node)
+  const color = getNodeColor(node)
+  const emissiveIntensity = getEmissiveIntensity(node)
+
+  const geometry = new THREE.SphereGeometry(radius, 32, 32)
+  const material = new THREE.MeshPhysicalMaterial({
+    color,
+    emissive: color,
+    emissiveIntensity,
+    metalness: 0.3,
+    roughness: 0.2,
+    transmission: 0.1,
+    thickness: 0.5,
+    clearcoat: 1.0,
+    clearcoatRoughness: 0.1,
+    transparent: true,
+    opacity: ['active', 'bright', 'ghosted'].includes(node.status) ? 1.0 : 0.4,
+  })
+
+  const mesh = new THREE.Mesh(geometry, material)
+  mesh.userData = { node }
+  return mesh
+}
+
+function createEdge(sourcePos, targetPos, sourceNode, targetNode, relationship) {
+  const mid = new THREE.Vector3(
+    (sourcePos.x + targetPos.x) / 2,
+    (sourcePos.y + targetPos.y) / 2,
+    (sourcePos.z + targetPos.z) / 2 - 0.3,
+  )
+  const curve = new THREE.QuadraticBezierCurve3(
+    sourcePos.clone(), mid, targetPos.clone(),
+  )
+  const tube = new THREE.TubeGeometry(curve, 20, 0.004, 6, false)
+  const sourceColor = new THREE.Color(getNodeColor(sourceNode))
+  const targetColor = new THREE.Color(getNodeColor(targetNode))
+  const blended = sourceColor.clone().lerp(targetColor, 0.5)
+  const material = new THREE.MeshBasicMaterial({
+    color: blended,
+    transparent: true,
+    opacity: relationship === 'tested_by' ? 0.35 : 0.20,
+  })
+  return new THREE.Mesh(tube, material)
+}
+
+function createLabel(node) {
+  const div = document.createElement('div')
+  div.style.cssText = `
+    font-family: 'Neue Montreal', sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    color: ${colorToHex(getNodeColor(node))};
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 150ms ease;
+    background: rgba(5,5,5,0.74);
+    padding: 3px 8px;
+    border-radius: 3px;
+    white-space: nowrap;
+  `
+  div.textContent = extractLabel(node.summary || node.label)
+  const label = new CSS2DObject(div)
+  label.visible = false
+  label.position.set(0, getNodeRadius(node) * 1.5, 0)
+  return { label, div }
+}
+
+// ─── Animation utilities ──────────────────────────────────────────────────────
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function animateTween(from, to, duration, onUpdate, easing = 'easeOut') {
+  const startTime = performance.now()
+  function step() {
+    const elapsed = performance.now() - startTime
+    const t = Math.min(1, elapsed / duration)
+    let eased
+    if (easing === 'easeInOut') {
+      eased = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t
+    } else {
+      eased = 1 - (1 - t) * (1 - t)
+    }
+    onUpdate(from + (to - from) * eased)
+    if (t < 1) requestAnimationFrame(step)
+  }
+  requestAnimationFrame(step)
+}
+
+function igniteNode(mesh) {
+  const node = mesh.userData.node
+  const targetOpacity = ['active', 'bright', 'ghosted'].includes(node.status) ? 1.0 : 0.4
+  const targetEmissive = getEmissiveIntensity(node)
+  mesh.material.emissiveIntensity = 2.0
+  animateTween(0.01, 1.0, 600, v => { mesh.scale.set(v, v, v) }, 'easeOut')
+  setTimeout(() => {
+    animateTween(2.0, targetEmissive, 200, v => { mesh.material.emissiveIntensity = v })
+    animateTween(0, targetOpacity, 300, v => { mesh.material.opacity = v })
+  }, 200)
+}
+
+function playOpenAnimation(nodeMeshes, edgeMeshes, scene) {
+  nodeMeshes.forEach(m => {
+    m.material.opacity = 0
+    m.scale.set(0.01, 0.01, 0.01)
+  })
+  edgeMeshes.forEach(m => { m.material.opacity = 0 })
+
+  const pillarMeshes = nodeMeshes.filter(m => m.userData.node.type === 'pillar')
+  const otherMeshes = nodeMeshes.filter(m => m.userData.node.type !== 'pillar')
+
+  pillarMeshes.forEach(mesh => igniteNode(mesh))
+
+  delay(200).then(() => {
+    otherMeshes.forEach((mesh, i) => {
+      setTimeout(() => igniteNode(mesh), i * 15)
+    })
+  })
+
+  delay(400).then(() => {
+    edgeMeshes.forEach((mesh, i) => {
+      const targetOpacity = mesh.userData.targetOpacity ?? 0.20
+      setTimeout(() => {
+        animateTween(0, targetOpacity, 400, v => { mesh.material.opacity = v }, 'easeOut')
+      }, i * 8)
+    })
+  })
+
+  delay(800).then(() => {
+    const startY = scene.rotation.y
+    animateTween(startY, startY + Math.PI * 2, 1000, v => {
+      scene.rotation.y = v
+    }, 'easeInOut')
+  })
+}
+
+// ─── Scene builder ────────────────────────────────────────────────────────────
+
+function buildScene(th, graph) {
+  const { scene } = th
+  const nodes = graph.nodes || []
+  const edges = graph.edges || []
+
+  const existingIds = new Set(th.nodeMeshes.map(m => m.userData.node.id))
+  const newIds = new Set(nodes.map(n => n.id))
+  const needsRebuild = th.nodeMeshes.length === 0
+    || existingIds.size !== newIds.size
+    || ![...newIds].every(id => existingIds.has(id))
+
+  if (!needsRebuild) {
+    const nodeMap = new Map(nodes.map(n => [n.id, n]))
+    th.nodeMeshes.forEach(mesh => {
+      const latest = nodeMap.get(mesh.userData.node.id)
+      if (!latest) return
+      mesh.userData.node = latest
+      if (mesh.userData.node.id !== th.activeIdRef?.current) {
+        mesh.material.opacity = ['active', 'bright', 'ghosted'].includes(latest.status) ? 1.0 : 0.4
+        mesh.material.emissiveIntensity = getEmissiveIntensity(latest)
+      }
+    })
+    return
+  }
+
+  th.nodeMeshes.forEach(m => {
+    scene.remove(m)
+    m.geometry.dispose()
+    m.material.dispose()
+  })
+  th.edgeMeshes.forEach(m => {
+    scene.remove(m)
+    m.geometry.dispose()
+    m.material.dispose()
+  })
+  th.labelObjects.forEach(({ label }) => { /* label is child of mesh, removed with mesh */ void label })
+  th.nodeMeshes = []
+  th.edgeMeshes = []
+  th.labelObjects = new Map()
+
+  const nonPillarCount = nodes.filter(n => n.type !== 'pillar').length
+  const posMap = new Map()
+  let index = 0
+  for (const node of nodes) {
+    const pt = brainPoint(node, index, nonPillarCount)
+    posMap.set(node.id, new THREE.Vector3(pt.x * 2, pt.y * 2, pt.z * 2))
+    if (node.type !== 'pillar') index++
+  }
+
+  for (const node of nodes) {
+    const mesh = createNodeMesh(node)
+    const pos = posMap.get(node.id)
+    if (pos) mesh.position.copy(pos)
+    const { label, div } = createLabel(node)
+    mesh.add(label)
+    scene.add(mesh)
+    th.nodeMeshes.push(mesh)
+    th.labelObjects.set(node.id, { label, div })
+  }
+
+  const nodeMap = new Map(nodes.map(n => [n.id, n]))
+  for (const edge of edges) {
+    const sourcePos = posMap.get(edge.source_node_id)
+    const targetPos = posMap.get(edge.target_node_id)
+    const sourceNode = nodeMap.get(edge.source_node_id)
+    const targetNode = nodeMap.get(edge.target_node_id)
+    if (!sourcePos || !targetPos || !sourceNode || !targetNode) continue
+    const edgeMesh = createEdge(sourcePos, targetPos, sourceNode, targetNode, edge.relationship)
+    edgeMesh.userData.targetOpacity = edge.relationship === 'tested_by' ? 0.35 : 0.20
+    scene.add(edgeMesh)
+    th.edgeMeshes.push(edgeMesh)
+  }
+
+  if (!th.hasPlayedOpen) {
+    th.hasPlayedOpen = true
+    playOpenAnimation(th.nodeMeshes, th.edgeMeshes, scene)
+  }
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Brain() {
   const navigate = useNavigate()
@@ -216,30 +417,17 @@ export default function Brain() {
   const [showGestureHint, setShowGestureHint] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
   const [threadsOpen, setThreadsOpen] = useState(false)
-
   const [weeklyRead, setWeeklyRead] = useState(null)
   const [overlayMessage, setOverlayMessage] = useState('')
   const [showOverlayMessage, setShowOverlayMessage] = useState(false)
-  const [camera, setCamera] = useState({
-    yaw: -0.18,
-    pitch: 0.08,
-    zoom: 0,
-    panX: 0,
-    panY: 0,
-  })
-  const [drag, setDrag] = useState(null)
+
   const canvasRef = useRef(null)
   const inputRef = useRef(null)
-  const frameRef = useRef(null)
-  const zoomFrameRef = useRef(null)
-  const targetZoomRef = useRef(0)
-  const pointerDownRef = useRef(null)
-  const touch = useMemo(() => isTouchDevice(), [])
+  const threeRef = useRef(null)
+  const activeIdRef = useRef(null)
+  const touch = isTouchDevice()
 
-  useEffect(() => {
-    targetZoomRef.current = camera.zoom
-    return () => cancelAnimationFrame(zoomFrameRef.current)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // ─── Data fetching (unchanged) ──────────────────────────────────────────────
 
   useEffect(() => {
     let cancelled = false
@@ -324,9 +512,7 @@ export default function Brain() {
 
       const firstBrainOpen = !hasSeenBrainOverlay(sessionToken)
 
-      if (firstBrainOpen && !cancelled) {
-        setShowGestureHint(true)
-      }
+      if (firstBrainOpen && !cancelled) setShowGestureHint(true)
 
       if (firstBrainOpen && !cancelled) {
         const content = storedRead?.content
@@ -354,149 +540,271 @@ export default function Brain() {
     return () => { cancelled = true }
   }, [navigate])
 
-  useEffect(() => {
-    if (!showGestureHint) return undefined
-
-    const timeoutId = window.setTimeout(() => {
-      setShowGestureHint(false)
-    }, 3800)
-
-    return () => window.clearTimeout(timeoutId)
-  }, [showGestureHint])
+  // ─── Three.js init (mount once) ─────────────────────────────────────────────
 
   useEffect(() => {
-    if (!showOverlayMessage) return undefined
+    const canvas = canvasRef.current
+    if (!canvas) return
 
-    const timeoutId = window.setTimeout(() => {
-      setShowOverlayMessage(false)
-    }, 3500)
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    renderer.setSize(window.innerWidth, window.innerHeight)
+    renderer.toneMapping = THREE.ACESFilmicToneMapping
 
-    return () => window.clearTimeout(timeoutId)
-  }, [showOverlayMessage])
+    const scene = new THREE.Scene()
 
-  useEffect(() => {
-    if (!accountOpen) return undefined
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 100)
+    camera.position.set(0, 0, 3.2)
 
-    function handlePointerDown(event) {
-      if (event.target.closest('.brain__account')) return
-      setAccountOpen(false)
+    const ambient = new THREE.AmbientLight(0xffffff, 0.08)
+    const keyLight = new THREE.DirectionalLight(0xfff5e0, 0.6)
+    keyLight.position.set(2, 4, 2)
+    const rimLight = new THREE.DirectionalLight(0xc0d8ff, 0.3)
+    rimLight.position.set(-3, -2, -3)
+    scene.add(ambient, keyLight, rimLight)
+
+    const composer = new EffectComposer(renderer)
+    composer.addPass(new RenderPass(scene, camera))
+    const bloom = new BloomEffect({ intensity: 0.4, radius: 0.3, luminanceThreshold: 0.85 })
+    composer.addPass(new EffectPass(camera, bloom))
+
+    const labelRenderer = new CSS2DRenderer()
+    labelRenderer.setSize(window.innerWidth, window.innerHeight)
+    labelRenderer.domElement.style.position = 'absolute'
+    labelRenderer.domElement.style.top = '0'
+    labelRenderer.domElement.style.left = '0'
+    labelRenderer.domElement.style.pointerEvents = 'none'
+    labelRenderer.domElement.style.zIndex = '2'
+    document.body.appendChild(labelRenderer.domElement)
+
+    const raycaster = new THREE.Raycaster()
+    const mouse = new THREE.Vector2()
+
+    let isDragging = false
+    let prevMouse = { x: 0, y: 0 }
+    let pointerDownPos = null
+    const touchMap = new Map()
+    let pinchStartDist = 0
+    let pinchStartZ = 3.2
+
+    function onResize() {
+      camera.aspect = window.innerWidth / window.innerHeight
+      camera.updateProjectionMatrix()
+      renderer.setSize(window.innerWidth, window.innerHeight)
+      composer.setSize(window.innerWidth, window.innerHeight)
+      labelRenderer.setSize(window.innerWidth, window.innerHeight)
     }
+    window.addEventListener('resize', onResize)
 
-    window.addEventListener('pointerdown', handlePointerDown)
-    return () => window.removeEventListener('pointerdown', handlePointerDown)
-  }, [accountOpen])
-
-  useEffect(() => {
-    if (!threadsOpen) return undefined
-
-    function handlePointerDown(event) {
-      if (event.target.closest('.brain__threads')) return
-      setThreadsOpen(false)
-    }
-
-    window.addEventListener('pointerdown', handlePointerDown)
-    return () => window.removeEventListener('pointerdown', handlePointerDown)
-  }, [threadsOpen])
-
-
-  useEffect(() => {
-    if (drag || activeId) return undefined
-
-    function tick() {
-      setCamera((prev) => {
-        if (Math.abs(prev.zoom - targetZoomRef.current) > 0.004) return prev
-        return { ...prev, yaw: prev.yaw + 0.0007 }
-      })
-      frameRef.current = requestAnimationFrame(tick)
-    }
-
-    frameRef.current = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(frameRef.current)
-  }, [drag, activeId])
-
-  useEffect(() => {
-    function handleWheelEvent(e) {
-      // Only handle when the brain canvas is in the DOM and cursor is over it
-      if (!canvasRef.current?.contains(e.target)) return
+    function onWheel(e) {
       e.preventDefault()
-
-      // Normalize delta across deltaMode (pixel / line / page)
       let raw = e.deltaY
       if (e.deltaMode === 1) raw *= 16
       if (e.deltaMode === 2) raw *= 400
-
-      // macOS pinch sends ctrlKey=true with tiny delta (~3); scroll sends larger values
       const sensitivity = e.ctrlKey ? 0.018 : 0.005
-      const cappedDelta = Math.sign(raw) * Math.min(Math.abs(raw), 100)
+      const capped = Math.sign(raw) * Math.min(Math.abs(raw), 100)
+      camera.position.z = Math.max(0.5, Math.min(8.0, camera.position.z + capped * sensitivity))
+    }
+    window.addEventListener('wheel', onWheel, { passive: false })
 
-      setTargetZoom(targetZoomRef.current + cappedDelta * sensitivity)
+    function onPointerDown(e) {
+      pointerDownPos = { x: e.clientX, y: e.clientY }
+      touchMap.set(e.pointerId, e)
+      if (touchMap.size === 2) {
+        const [a, b] = Array.from(touchMap.values())
+        pinchStartDist = touchDistance(a, b)
+        pinchStartZ = camera.position.z
+        isDragging = false
+        return
+      }
+      isDragging = true
+      prevMouse = { x: e.clientX, y: e.clientY }
     }
 
-    // Window-level so cursor style / touch-action on child elements can't block it
-    window.addEventListener('wheel', handleWheelEvent, { passive: false })
-    return () => window.removeEventListener('wheel', handleWheelEvent)
-  }, [])
+    function onPointerMove(e) {
+      if (touchMap.has(e.pointerId)) touchMap.set(e.pointerId, e)
+      if (touchMap.size === 2) {
+        const [a, b] = Array.from(touchMap.values())
+        const dist = touchDistance(a, b)
+        camera.position.z = Math.max(0.5, Math.min(8.0, pinchStartZ + (pinchStartDist - dist) * 0.01))
+        return
+      }
+      if (!isDragging) return
+      const dx = e.clientX - prevMouse.x
+      const dy = e.clientY - prevMouse.y
+      scene.rotation.y += dx * 0.005
+      scene.rotation.x += dy * 0.005
+      prevMouse = { x: e.clientX, y: e.clientY }
+    }
 
-  function animateZoom() {
-    cancelAnimationFrame(zoomFrameRef.current)
+    function onPointerUp(e) {
+      touchMap.delete(e.pointerId)
+      isDragging = false
+    }
 
-    function step() {
-      let keepGoing = false
-
-      setCamera((prev) => {
-        const delta = targetZoomRef.current - prev.zoom
-        if (Math.abs(delta) < 0.003) {
-          return { ...prev, zoom: targetZoomRef.current }
-        }
-
-        keepGoing = true
-        return { ...prev, zoom: prev.zoom + delta * 0.1 }
-      })
-
-      if (keepGoing) {
-        zoomFrameRef.current = requestAnimationFrame(step)
+    function onClick(e) {
+      if (pointerDownPos) {
+        const dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y)
+        if (dist >= 8) return
+      }
+      mouse.x = (e.clientX / window.innerWidth) * 2 - 1
+      mouse.y = -(e.clientY / window.innerHeight) * 2 + 1
+      raycaster.setFromCamera(mouse, camera)
+      const th = threeRef.current
+      if (!th) return
+      const intersects = raycaster.intersectObjects(th.nodeMeshes)
+      if (intersects.length > 0) {
+        th.onSelectNode?.(intersects[0].object.userData.node)
+      } else {
+        th.onDeselectNode?.()
       }
     }
 
-    zoomFrameRef.current = requestAnimationFrame(step)
-  }
+    canvas.addEventListener('pointerdown', onPointerDown)
+    canvas.addEventListener('pointermove', onPointerMove)
+    canvas.addEventListener('pointerup', onPointerUp)
+    canvas.addEventListener('pointercancel', onPointerUp)
+    canvas.addEventListener('click', onClick)
 
-  function setTargetZoom(nextZoom) {
-    const clamped = clampZoom(nextZoom)
-    targetZoomRef.current = clamped
-    setViewMode(clamped > INSIDE_ZOOM ? 'inside' : 'wide')
-    animateZoom()
-  }
+    let animFrameId
+    let time = 0
+    let lastViewMode = 'wide'
 
-  const nodes = graph.nodes || []
-  const edges = graph.edges || []
-  const nonPillarCount = nodes.filter((node) => node.type !== 'pillar').length
-  const activeNode = nodes.find((node) => node.id === activeId)
-  const visibleLabelId = touch ? activeId : hoveredId
+    function animate() {
+      animFrameId = requestAnimationFrame(animate)
+      time += 0.016
+      const pulse = Math.sin(time * 0.25) * 0.015
+      keyLight.intensity = 0.6 + pulse
+      ambient.intensity = 0.08 + pulse * 0.3
 
-  const scene = useMemo(() => {
-    const points = new Map()
-    let index = 0
-    for (const node of nodes) {
-      const point = brainPoint(node, index, nonPillarCount)
-      points.set(node.id, {
-        point,
-        projected: projectPoint(point, camera),
-      })
-      if (node.type !== 'pillar') index += 1
+      const th = threeRef.current
+      if (!isDragging && !activeIdRef.current && th?.nodeMeshes?.length > 0) {
+        scene.rotation.y += 0.0007
+      }
+
+      const nextMode = camera.position.z < 1.5 ? 'inside' : 'wide'
+      if (nextMode !== lastViewMode) {
+        lastViewMode = nextMode
+        th?.onViewModeChange?.(nextMode)
+      }
+
+      composer.render()
+      labelRenderer.render(scene, camera)
     }
-    return points
-  }, [nodes, nonPillarCount, camera])
+    animate()
 
-  const currentZoomProgress = zoomProgress(camera.zoom)
+    threeRef.current = {
+      renderer,
+      scene,
+      camera,
+      composer,
+      labelRenderer,
+      nodeMeshes: [],
+      edgeMeshes: [],
+      labelObjects: new Map(),
+      hasPlayedOpen: false,
+      activeIdRef,
+      onSelectNode: null,
+      onDeselectNode: null,
+      onViewModeChange: null,
+    }
 
-  const litIds = useMemo(() => {
-    return nodes
-      .filter((node) => node.type !== 'pillar')
-      .filter((node) => statusLit(node) || nodeScore(node, session) >= 10)
-      .map((node) => node.id)
-  }, [nodes, session])
+    return () => {
+      cancelAnimationFrame(animFrameId)
+      window.removeEventListener('resize', onResize)
+      window.removeEventListener('wheel', onWheel)
+      canvas.removeEventListener('pointerdown', onPointerDown)
+      canvas.removeEventListener('pointermove', onPointerMove)
+      canvas.removeEventListener('pointerup', onPointerUp)
+      canvas.removeEventListener('pointercancel', onPointerUp)
+      canvas.removeEventListener('click', onClick)
+      labelRenderer.domElement.remove()
+      composer.dispose()
+      renderer.dispose()
+      threeRef.current = null
+    }
+  }, [])
 
+  // ─── Graph rebuild ──────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    const th = threeRef.current
+    if (!th || !graph.nodes?.length) return
+    buildScene(th, graph)
+  }, [graph])
+
+  // ─── Active ID → labels + materials ────────────────────────────────────────
+
+  useEffect(() => {
+    activeIdRef.current = activeId
+    const th = threeRef.current
+    if (!th) return
+
+    th.labelObjects.forEach(({ label, div }, id) => {
+      const visible = id === activeId
+      label.visible = visible
+      div.style.opacity = visible ? '1' : '0'
+    })
+
+    th.nodeMeshes.forEach(mesh => {
+      const node = mesh.userData.node
+      const isActive = node.id === activeId
+      if (isActive) {
+        mesh.material.emissiveIntensity = getEmissiveIntensity(node) * 3
+        mesh.material.opacity = 1.0
+      } else {
+        mesh.material.emissiveIntensity = getEmissiveIntensity(node)
+        mesh.material.opacity = ['active', 'bright', 'ghosted'].includes(node.status) ? 1.0 : 0.4
+      }
+    })
+  }, [activeId])
+
+  // ─── Wire callbacks after every render ──────────────────────────────────────
+
+  useEffect(() => {
+    if (!threeRef.current) return
+    threeRef.current.onSelectNode = selectNode
+    threeRef.current.onDeselectNode = () => setActiveId(null)
+    threeRef.current.onViewModeChange = setViewMode
+  })
+
+  // ─── UI effects (unchanged) ─────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!showGestureHint) return
+    const id = setTimeout(() => setShowGestureHint(false), 3800)
+    return () => clearTimeout(id)
+  }, [showGestureHint])
+
+  useEffect(() => {
+    if (!showOverlayMessage) return
+    const id = setTimeout(() => setShowOverlayMessage(false), 3500)
+    return () => clearTimeout(id)
+  }, [showOverlayMessage])
+
+  useEffect(() => {
+    if (!accountOpen) return
+    function onDown(e) {
+      if (e.target.closest('.brain__account')) return
+      setAccountOpen(false)
+    }
+    window.addEventListener('pointerdown', onDown)
+    return () => window.removeEventListener('pointerdown', onDown)
+  }, [accountOpen])
+
+  useEffect(() => {
+    if (!threadsOpen) return
+    function onDown(e) {
+      if (e.target.closest('.brain__threads')) return
+      setThreadsOpen(false)
+    }
+    window.addEventListener('pointerdown', onDown)
+    return () => window.removeEventListener('pointerdown', onDown)
+  }, [threadsOpen])
+
+  // ─── Suppressed ESLint: selectNode defined below, used above in useEffect ───
+
+  // ─── Navigation helpers (unchanged) ────────────────────────────────────────
 
   function enterChat(extra = {}) {
     navigate('/chat', { state: { fromBrain: true, ...extra } })
@@ -523,19 +831,17 @@ export default function Brain() {
     enterChat({
       freshThread: true,
       threadId: crypto.randomUUID(),
-      nodeContext: node
-        ? {
-            id: node.id,
-            label: node.label,
-            type: node.type,
-            pillar: node.pillar,
-            summary: node.summary,
-            status: node.status,
-            importance: node.importance,
-            confidence: node.confidence,
-            last_activated_at: node.last_activated_at,
-          }
-        : null,
+      nodeContext: node ? {
+        id: node.id,
+        label: node.label,
+        type: node.type,
+        pillar: node.pillar,
+        summary: node.summary,
+        status: node.status,
+        importance: node.importance,
+        confidence: node.confidence,
+        last_activated_at: node.last_activated_at,
+      } : null,
     })
   }
 
@@ -546,90 +852,12 @@ export default function Brain() {
     startFreshThread(text)
   }
 
-  function handlePointerDown(e) {
-    if (e.target.closest?.('.brain-node')) return
-    pointerDownRef.current = { x: e.clientX, y: e.clientY }
-    e.currentTarget.setPointerCapture?.(e.pointerId)
-    const touches = e.currentTarget._brainTouches || new Map()
-    touches.set(e.pointerId, e)
-    e.currentTarget._brainTouches = touches
-
-    if (touches.size === 2) {
-      const [first, second] = Array.from(touches.values())
-      const center = touchCenter(first, second)
-      setDrag({
-        type: 'pinch',
-        distance: touchDistance(first, second),
-        center,
-        startZoom: targetZoomRef.current,
-        startPanX: camera.panX,
-        startPanY: camera.panY,
-      })
-      return
-    }
-
-    setDrag({
-      type: 'rotate',
-      pointerId: e.pointerId,
-      x: e.clientX,
-      y: e.clientY,
-      start: camera,
-      pan: e.altKey || e.shiftKey,
-    })
-  }
-
-  function handlePointerMove(e) {
-    const touches = e.currentTarget._brainTouches
-    if (touches?.has(e.pointerId)) {
-      touches.set(e.pointerId, e)
-    }
-
-    if (!drag) return
-
-    if (drag.type === 'pinch' && touches?.size >= 2) {
-      const [first, second] = Array.from(touches.values())
-      const nextDistance = touchDistance(first, second)
-      const center = touchCenter(first, second)
-      const distanceDelta = nextDistance - drag.distance
-      setTargetZoom(drag.startZoom + distanceDelta * 0.05)
-      setCamera((prev) => ({
-        ...prev,
-        panX: drag.startPanX + (center.x - drag.center.x) * 0.82,
-        panY: drag.startPanY + (center.y - drag.center.y) * 0.82,
-      }))
-      return
-    }
-
-    const dx = e.clientX - drag.x
-    const dy = e.clientY - drag.y
-
-    if (drag.pan) {
-      setCamera({ ...drag.start, panX: drag.start.panX + dx, panY: drag.start.panY + dy })
-      return
-    }
-
-    setCamera({
-      ...drag.start,
-      yaw: drag.start.yaw + dx * 0.006,
-      pitch: Math.min(0.72, Math.max(-0.72, drag.start.pitch - dy * 0.005)),
-    })
-  }
-
-  function handlePointerUp(e) {
-    const touches = e.currentTarget._brainTouches
-    if (touches?.has(e.pointerId)) {
-      touches.delete(e.pointerId)
-    }
-    e.currentTarget.releasePointerCapture?.(e.pointerId)
-    setDrag(null)
-  }
-
   async function selectNode(node) {
     setActiveId(node.id)
-    if (!statusLit(node)) {
-      setGraph((prev) => ({
+    if (!['active', 'bright', 'ghosted', 'resolved'].includes(node.status)) {
+      setGraph(prev => ({
         ...prev,
-        nodes: prev.nodes.map((item) =>
+        nodes: prev.nodes.map(item =>
           item.id === node.id
             ? { ...item, status: 'bright', last_activated_at: new Date().toISOString() }
             : item
@@ -638,6 +866,9 @@ export default function Brain() {
       await markWikiNodeAccessed(node.id)
     }
   }
+
+  const nodes = graph.nodes || []
+  const activeNode = nodes.find(n => n.id === activeId)
 
   if (loading) {
     return (
@@ -670,27 +901,23 @@ export default function Brain() {
               type="button"
               className="brain__threads-trigger"
               aria-label="Open recent threads"
-              onClick={() => setThreadsOpen((prev) => !prev)}
+              onClick={() => setThreadsOpen(prev => !prev)}
             >
               Threads
             </button>
-
             {threadsOpen && (
               <div className="brain__threads-panel">
                 <div className="brain__threads-kicker">Recent threads</div>
                 <div className="brain__threads-list">
                   {conversationItems.length > 0 ? (
-                    conversationItems.map((item) => (
+                    conversationItems.map(item => (
                       <button
                         key={item.threadId || 'main'}
                         type="button"
                         className="brain__threads-item"
                         onClick={() => {
                           setThreadsOpen(false)
-                          enterChat({
-                            threadId: item.threadId,
-                            freshThread: false,
-                          })
+                          enterChat({ threadId: item.threadId, freshThread: false })
                         }}
                       >
                         <span className="brain__threads-label">{item.label}</span>
@@ -712,7 +939,7 @@ export default function Brain() {
               aria-label="Open account"
               onClick={() => {
                 setThreadsOpen(false)
-                setAccountOpen((prev) => !prev)
+                setAccountOpen(prev => !prev)
               }}
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -723,7 +950,6 @@ export default function Brain() {
                 <path d="M9.8 10.1C10.4 10.5 11.1 10.7 12 10.7C12.9 10.7 13.6 10.5 14.2 10.1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
               </svg>
             </button>
-
             {accountOpen && (
               <div className="brain__account-panel">
                 <div className="brain__account-email">{authUser?.email || 'Signed in'}</div>
@@ -756,7 +982,11 @@ export default function Brain() {
       </header>
 
       <div className="brain__read brain__read--floating">
-        {activeNode ? nodePrompt(activeNode) : viewMode === 'inside' ? 'Move through the lit nodes.' : 'The dim map is potential. The lit map is behavior.'}
+        {activeNode
+          ? nodePrompt(activeNode)
+          : viewMode === 'inside'
+            ? 'Move through the lit nodes.'
+            : 'The dim map is potential. The lit map is behavior.'}
       </div>
 
       {showOverlayMessage && overlayMessage && !activeNode && (
@@ -771,147 +1001,30 @@ export default function Brain() {
 
       {(threadsOpen || accountOpen) && <div className="brain__threads-backdrop" />}
 
-      <main
-        ref={canvasRef}
-        className="brain__canvas"
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-        onClick={(e) => {
-          if (e.target.closest?.('.brain-node')) return
-          const down = pointerDownRef.current
-          if (!down) return
-          const dist = Math.hypot(e.clientX - down.x, e.clientY - down.y)
-          if (dist < 8) setActiveId(null)
-        }}
-      >
-        <svg className="brain__graph" viewBox={`0 0 ${VIEWPORT.width} ${VIEWPORT.height}`} role="img">
-          <defs>
-            <radialGradient id="brainAtmosphere" cx="46%" cy="44%" r="58%">
-              <stop offset="0%" stopColor="#1F211F" stopOpacity="0.96" />
-              <stop offset="48%" stopColor="#0E1012" stopOpacity="0.78" />
-              <stop offset="100%" stopColor="#030303" stopOpacity="0" />
-            </radialGradient>
-            <filter id="nodeGlow" x="-100%" y="-100%" width="300%" height="300%">
-              <feGaussianBlur stdDeviation="4.5" result="blur" />
-              <feMerge>
-                <feMergeNode in="blur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-            {nodes.map((node) => {
-              const [a, b] = nodeColors(node)
-              return (
-                <radialGradient key={node.id} id={`nodeGradient-${node.id}`} cx="32%" cy="26%" r="74%">
-                  <stop offset="0%" stopColor="#FFFFFF" stopOpacity="1" />
-                  <stop offset="34%" stopColor={b} stopOpacity="0.94" />
-                  <stop offset="100%" stopColor={a} stopOpacity="0.78" />
-                </radialGradient>
-              )
-            })}
-          </defs>
-
-          <ellipse cx="700" cy="440" rx="432" ry="318" fill="url(#brainAtmosphere)" opacity={0.74 - currentZoomProgress * 0.52} />
-
-          {edges.map((edge) => {
-            const source = scene.get(edge.source_node_id)?.projected
-            const target = scene.get(edge.target_node_id)?.projected
-            if (!source || !target) return null
-            const stroke = RELATION_COLORS[edge.relationship] || '#454545'
-            const lit = litIds.includes(edge.source_node_id) || litIds.includes(edge.target_node_id)
-            const depth = Math.max(0.25, Math.min(1.25, (source.depth + target.depth) / 2))
-            return (
-              <line
-                key={edge.id}
-                x1={source.x}
-                y1={source.y}
-                x2={target.x}
-                y2={target.y}
-                stroke={stroke}
-                strokeWidth={(lit ? 0.75 : 0.38) * depth}
-                opacity={lit ? 0.32 : 0.075}
-              />
-            )
-          })}
-
-          {nodes
-            .slice()
-            .sort((a, b) => (scene.get(a.id)?.projected.z || 0) - (scene.get(b.id)?.projected.z || 0))
-            .map((node) => {
-              const projected = scene.get(node.id)?.projected
-              if (!projected) return null
-              const lit = litIds.includes(node.id) || activeId === node.id || node.type === 'pillar'
-              const active = activeId === node.id
-              const labelVisible = visibleLabelId === node.id || active
-              const internalBoost = 1 + currentZoomProgress * 0.18
-              const radius = Math.max(2.6, Math.min(9.5, (node.type === 'pillar' ? 5.2 : 3.2) * projected.depth * internalBoost))
-              const opacity = lit ? Math.min(1, 0.68 + projected.depth * 0.22) : Math.max(0.12, 0.26 * projected.depth)
-              const halo = active ? 22 : lit ? 12 : 0
-
-              return (
-                <g
-                  key={node.id}
-                  className={`brain-node ${lit ? 'brain-node--lit' : 'brain-node--dim'}`}
-                  onPointerEnter={() => !touch && setHoveredId(node.id)}
-                  onPointerLeave={() => !touch && setHoveredId(null)}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    selectNode(node)
-                  }}
-                >
-                  {halo > 0 && (
-                    <circle
-                      cx={projected.x}
-                      cy={projected.y}
-                      r={radius + halo}
-                      fill={`url(#nodeGradient-${node.id})`}
-                      opacity={active ? 0.17 : 0.075}
-                      filter="url(#nodeGlow)"
-                    />
-                  )}
-                  <circle
-                    cx={projected.x}
-                    cy={projected.y}
-                    r={radius}
-                    fill={`url(#nodeGradient-${node.id})`}
-                    opacity={opacity}
-                    stroke={active ? '#FFFFFF' : lit ? 'rgba(255,255,255,0.34)' : 'rgba(255,255,255,0.08)'}
-                    strokeWidth={active ? 1.4 : 0.55}
-                  />
-                  {labelVisible && (
-                    <g>
-                      <rect
-                        x={projected.x - 86}
-                        y={projected.y - radius - 38}
-                        width="172"
-                        height="26"
-                        rx="13"
-                        fill="rgba(5,5,5,0.74)"
-                        stroke="rgba(255,255,255,0.12)"
-                      />
-                      <text
-                        x={projected.x}
-                        y={projected.y - radius - 21}
-                        textAnchor="middle"
-                        fill="#F4F1E8"
-                        fontSize="10.5"
-                        fontFamily="inherit"
-                      >
-                        {node.label.length > 24 ? `${node.label.slice(0, 21)}...` : node.label}
-                      </text>
-                    </g>
-                  )}
-                </g>
-              )
-            })}
-        </svg>
-      </main>
+      <canvas ref={canvasRef} className="brain__canvas" />
 
       {activeNode && (
         <div className="brain__node-nudge">
-          <div className="brain__node-kicker">{activeNode.type.replace(/_/g, ' ')}</div>
-          <div className="brain__node-title">{activeNode.label}</div>
+          <div
+            className="brain__node-kicker"
+            style={{ color: colorToHex(getNodeColor(activeNode)) }}
+          >
+            {activeNode.type.replace(/_/g, ' ')}
+          </div>
+          {activeNode.pillar && PILLAR_COLORS[activeNode.pillar] && (
+            <div
+              className="brain__node-pillar-tag"
+              style={{ color: colorToHex(PILLAR_COLORS[activeNode.pillar]) }}
+            >
+              {activeNode.pillar.replace(/_/g, ' ')}
+            </div>
+          )}
+          <div className="brain__node-title">
+            {extractLabel(activeNode.summary || activeNode.label)}
+          </div>
+          {activeNode.summary && (
+            <div className="brain__node-summary">{activeNode.summary}</div>
+          )}
           <button onClick={() => startFromNode(activeNode)}>Move with this</button>
         </div>
       )}
@@ -922,7 +1035,7 @@ export default function Brain() {
             ref={inputRef}
             className="brain__input"
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={e => setInput(e.target.value)}
             placeholder="Something on your mind?"
           />
           <button className="brain__send" disabled={!input.trim()} aria-label="Start session">
