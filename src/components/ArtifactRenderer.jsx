@@ -41,6 +41,7 @@ const COMPONENT_MAP = {
   quadrant: Quadrant,
   radar_chart: RadarChart,
   scatter_plot: ScatterPlot,
+  signal_map: SignalMap,
   spectrum: Spectrum,
   stat_cards: StatCards,
   timeline: Timeline,
@@ -905,6 +906,226 @@ function BookRef({ data }) {
     <ArtifactShell title={data.book || data.title} style={{ borderLeft: `3px solid ${ACCENT}` }}>
       {data.excerpt && <div style={{ color: ACCENT_HIGHLIGHT, fontSize: 14, fontStyle: 'italic', lineHeight: 1.7, marginBottom: 12 }}>"{data.excerpt}"</div>}
       <div style={{ color: MUTED, fontSize: 12 }}>{data.author}</div>
+    </ArtifactShell>
+  )
+}
+
+function SignalMap({ data }) {
+  const sections = asArray(data.sections)
+  const sourceWeighting = asArray(data.source_weighting)
+  const counterforces = asArray(data.counterforces)
+  const confidence = data.confidence || {}
+  const confidenceTone =
+    confidence.level === 'high'
+      ? GOOD
+      : confidence.level === 'low'
+        ? BAD
+        : ACCENT
+
+  return (
+    <ArtifactShell
+      title={data.title}
+      style={{
+        background: 'linear-gradient(180deg, rgba(255,255,255,0.045) 0%, rgba(14,14,14,0.96) 100%)',
+        overflow: 'hidden',
+        padding: 0,
+        position: 'relative',
+      }}
+    >
+      <div
+        style={{
+          background: 'radial-gradient(circle at top left, rgba(212,168,67,0.18), transparent 42%), radial-gradient(circle at top right, rgba(160,98,255,0.12), transparent 36%)',
+          inset: 0,
+          pointerEvents: 'none',
+          position: 'absolute',
+        }}
+      />
+
+      <div style={{ display: 'grid', gap: 18, padding: 18, position: 'relative' }}>
+        <div style={{ display: 'grid', gap: 10 }}>
+          {data.topic && (
+            <div style={{ alignItems: 'center', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ color: ACCENT, fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{data.topic}</span>
+              {confidence.level && (
+                <span
+                  style={{
+                    background: 'rgba(255,255,255,0.04)',
+                    border: `1px solid ${BORDER}`,
+                    borderRadius: 999,
+                    color: confidenceTone,
+                    fontSize: 11,
+                    fontWeight: 800,
+                    letterSpacing: '0.04em',
+                    padding: '4px 8px',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {confidence.level} conviction
+                </span>
+              )}
+            </div>
+          )}
+
+          {data.core_shift && (
+            <div style={{ color: TEXT, fontFamily: 'var(--font-serif)', fontSize: 28, lineHeight: 1.08, maxWidth: 720 }}>
+              {data.core_shift}
+            </div>
+          )}
+
+          {confidence.why && (
+            <div style={{ color: MUTED, fontSize: 13, lineHeight: 1.55, maxWidth: 780 }}>
+              {confidence.why}
+            </div>
+          )}
+        </div>
+
+        <div
+          style={{
+            display: 'grid',
+            gap: 12,
+            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          }}
+        >
+          {sections.map((section, index) => {
+            const pillar = resolvePillar(section.pillar)
+            return (
+              <div
+                key={section.id || index}
+                className={data.animate !== false ? `axiom-animate-fade ${stagger(index)}` : ''}
+                style={{
+                  background: `linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)), radial-gradient(circle at top left, ${pillar.highlight}22, transparent 45%)`,
+                  ...GLASS_BORDER,
+                  borderRadius: 4,
+                  minHeight: 188,
+                  padding: 14,
+                  position: 'relative',
+                }}
+              >
+                <div style={{ alignItems: 'center', display: 'flex', gap: 8, marginBottom: 10 }}>
+                  <span style={{ background: getGradient(section.pillar), borderRadius: 999, boxShadow: GOLD_GLOW, height: 9, width: 9 }} />
+                  <span style={{ color: pillar.highlight, fontSize: 11, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                    {section.label || section.id}
+                  </span>
+                </div>
+                <div style={{ color: TEXT, fontSize: 14, fontWeight: 700, lineHeight: 1.45 }}>
+                  {section.signal}
+                </div>
+                {section.tension && (
+                  <div
+                    style={{
+                      borderTop: `1px solid ${BORDER}`,
+                      color: MUTED,
+                      fontSize: 12,
+                      lineHeight: 1.55,
+                      marginTop: 12,
+                      paddingTop: 10,
+                    }}
+                  >
+                    <span style={{ color: pillar.core, fontWeight: 700 }}>Tension:</span> {section.tension}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        {(sourceWeighting.length > 0 || counterforces.length > 0 || data.for_this_user) && (
+          <div
+            style={{
+              display: 'grid',
+              gap: 14,
+              gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 0.8fr)',
+            }}
+          >
+            <div
+              style={{
+                background: 'rgba(255,255,255,0.025)',
+                ...GLASS_BORDER,
+                borderRadius: 4,
+                display: 'grid',
+                gap: 12,
+                padding: 14,
+              }}
+            >
+              {sourceWeighting.length > 0 && (
+                <div>
+                  <div style={{ color: ACCENT, fontSize: 11, fontWeight: 800, letterSpacing: '0.05em', marginBottom: 10, textTransform: 'uppercase' }}>
+                    Source weighting
+                  </div>
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    {sourceWeighting.map((item, index) => (
+                      <div
+                        key={`${item.kind || 'source'}-${index}`}
+                        className={data.animate !== false ? `axiom-animate-fade ${stagger(index + 1)}` : ''}
+                        style={{ alignItems: 'flex-start', display: 'grid', gap: 6, gridTemplateColumns: 'auto 1fr' }}
+                      >
+                        <span
+                          style={{
+                            background: 'rgba(255,255,255,0.04)',
+                            border: `1px solid ${BORDER}`,
+                            borderRadius: 999,
+                            color: item.weight === 'high' ? GOOD : item.weight === 'low' ? BAD : ACCENT,
+                            fontSize: 10,
+                            fontWeight: 800,
+                            letterSpacing: '0.05em',
+                            padding: '4px 7px',
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          {item.weight || 'medium'}
+                        </span>
+                        <div>
+                          <div style={{ color: TEXT, fontSize: 12, fontWeight: 700, textTransform: 'capitalize' }}>
+                            {String(item.kind || '').replace(/_/g, ' ')}
+                          </div>
+                          {item.reason && <div style={{ color: MUTED, fontSize: 12, lineHeight: 1.5 }}>{item.reason}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {counterforces.length > 0 && (
+                <div>
+                  <div style={{ color: ACCENT, fontSize: 11, fontWeight: 800, letterSpacing: '0.05em', marginBottom: 8, textTransform: 'uppercase' }}>
+                    Counterforces
+                  </div>
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    {counterforces.map((item, index) => (
+                      <div key={index} style={{ color: MUTED, fontSize: 12, lineHeight: 1.55 }}>
+                        <span style={{ color: BAD, fontWeight: 800, marginRight: 6 }}>-</span>
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {data.for_this_user && (
+              <div
+                style={{
+                  background: 'linear-gradient(180deg, rgba(212,168,67,0.12), rgba(255,255,255,0.02))',
+                  ...GLASS_BORDER,
+                  borderRadius: 4,
+                  display: 'grid',
+                  alignContent: 'start',
+                  gap: 10,
+                  padding: 14,
+                }}
+              >
+                <div style={{ color: ACCENT, fontSize: 11, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                  What this means for you
+                </div>
+                <div style={{ color: TEXT, fontFamily: 'var(--font-serif)', fontSize: 22, lineHeight: 1.18 }}>
+                  {data.for_this_user}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </ArtifactShell>
   )
 }

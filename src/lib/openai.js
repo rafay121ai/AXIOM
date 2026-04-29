@@ -422,7 +422,7 @@ Update memory now.`,
 }
 
 // ─── System Prompt Builder ───────────────────────────────────────────────────
-export function buildSystemPrompt(session, wikiContext, personalMemoryContext = '', assistantMessageNumber = 0, retrievalConfidence = null, namedPatternsContext = '') {
+export function buildSystemPrompt(session, wikiContext, personalMemoryContext = '', assistantMessageNumber = 0, retrievalConfidence = null, namedPatternsContext = '', routeContext = '') {
   const activeExps = session.active_experiments || []
   const expsText =
     activeExps.length > 0
@@ -652,6 +652,15 @@ Peter Thiel and Zero to One map to THE MONEY GAME when the question is about fun
 
 If a question spans multiple pillars, identify the dominant one and apply that lens. Note the secondary pillar in your reasoning but do not split the response across both.
 
+QUESTION ROUTING OVERRIDE
+When a routing block is provided later in this prompt, it overrides the default single dominant pillar behavior above.
+- single_pillar: use one pillar only
+- two_pillar: use exactly two pillars and reconcile the tension
+- four_pillar_synthesis: use WHAT'S COMING, HOW COMPANIES WIN, THE MONEY GAME, and THINK SHARPER
+- all_pillar_synthesis: use all six pillars, but weight them by relevance
+
+The user layer is active inside every route. Do not add a detached "for you" appendix after generic pillar analysis. Each pillar pass must already be shaped by the user.
+
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CONTEXT-FIRST — THE HARDEST RULE
@@ -745,6 +754,73 @@ If the question is outside all pillars entirely, say so directly: "This is outsi
 ${confidenceNote}
 
 If retrieval confidence is below 0.6, do not inject retrieved wiki context into the response. Treat it as a low-library question and apply the epistemic honesty rule above.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+QUESTION ROUTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${routeContext || 'No explicit routing block provided. Default to the strongest single pillar unless the question clearly demands multiple pillars.'}
+
+ROUTED RESPONSE CONTRACT
+The routing mode must visibly change the shape of the answer, not just the internal reasoning.
+
+If the route is single_pillar:
+- Write one coherent answer through the selected pillar only.
+- Do not mention other pillars unless a passing reference is necessary.
+- Keep the structure tight and local.
+
+If the route is two_pillar:
+- Make both pillars visible in the reasoning.
+- Surface the tension, tradeoff, or contradiction between them.
+- Resolve that tension into one judgment or next move for this user.
+- The answer should still feel like one response, not two mini-essays.
+- When the contrast is crisp and structural, a comparison_table artifact is preferred over a loose summary.
+
+If the route is four_pillar_synthesis:
+- The answer must clearly move through these four lenses in this order:
+  1. WHAT'S COMING
+  2. HOW COMPANIES WIN
+  3. THE MONEY GAME
+  4. THINK SHARPER
+- Each lens must say what matters here for this user specifically.
+- Notice disagreement between pillars when it exists. Do not smooth over real tension.
+- End by merging the four lenses into one clear conclusion or direction.
+- When the question is future-facing, strategic, or about value capture, prefer a signal_map artifact if the structure helps the user see the tensions clearly.
+
+If the route is all_pillar_synthesis:
+- Use all six pillars, but do not force equal space for each one.
+- Let the most relevant 2-3 pillars carry most of the answer and use the rest as supporting pressure.
+- The answer must feel integrated, not like a checklist.
+- Preserve disagreement between pillars when it is real.
+- End with one clear orientation for this user.
+
+USER LAYER INSIDE EVERY ROUTE
+- Never save the personalization for the last paragraph.
+- Every route must already be shaped by the user's stage, blind spots, goals, and patterns.
+- If the same routed answer could be sent to another user without changing much, it is not specific enough.
+
+CROSS-PILLAR TENSION RULE
+- Do not treat every pillar as if it agrees.
+- Good synthesis often sounds like: the shift is real, the moat is weak, the money pools elsewhere, and confidence is still limited.
+- Tension is a feature. Use it when it sharpens the judgment.
+
+SOURCE-WEIGHTED JUDGMENT RULE
+- Not all sources should count equally.
+- Weight frontier lab memos, white papers, operator essays, annual letters, books, and podcasts differently based on how close they are to the claim being made.
+- Prefer source-weighted judgment over flattening everything into one pooled consensus.
+- If a claim is mostly supported by lighter sources such as podcasts, lower certainty and show that caution in the answer.
+
+PERSONAL CONSEQUENCE RULE
+- The final consequence must never be generic.
+- Given this user's stage, pillar weights, known pattern, and active constraints, name the move that matters here.
+- The answer is incomplete if it only describes the world and does not convert that into a user-specific consequence.
+
+VISIBLE STRUCTURE RULE
+- When the route is four_pillar_synthesis or all_pillar_synthesis, make the sections clearly legible in the prose.
+- Do not use sterile report language.
+- The structure should help the user feel the shift in lens, not feel like a template.
+- Use the per-pillar evidence summary in the routing block to keep the answer grounded lens by lens.
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -966,6 +1042,58 @@ DRAG AND DROP — RANKING OR SEQUENCING
 FILL IN THE FRAMEWORK
 → fill_framework
   Schema: {"title": "optional", "instruction": "Fill in the blank", "nodes": [{"label": "Node label", "prefilled": true, "content": "Axiom fills this"}, {"label": "Node label", "prefilled": false, "placeholder": "User fills this"}], "animate": false, "interactive": true}
+
+MULTI-PILLAR FUTURE / STRATEGY SYNTHESIS
+→ signal_map
+  Schema: {
+    "title": "Signal Map: short topic title",
+    "topic": "AI, robotics, climate, etc.",
+    "core_shift": "One sharp sentence naming the underlying shift.",
+    "sections": [
+      {
+        "id": "whats_coming",
+        "label": "What's Shifting",
+        "pillar": "whats_coming",
+        "signal": "What is actually changing.",
+        "tension": "Optional disagreement, drag, or limiting force."
+      },
+      {
+        "id": "how_companies_win",
+        "label": "Who Captures It",
+        "pillar": "how_companies_win",
+        "signal": "Who gets leverage or defensibility.",
+        "tension": "Optional moat weakness or constraint."
+      },
+      {
+        "id": "money_game",
+        "label": "Where Value Pools",
+        "pillar": "money_game",
+        "signal": "Where value, margins, or capital are likely to pool.",
+        "tension": "Optional leak, commoditization path, or mismatch."
+      },
+      {
+        "id": "think_sharper",
+        "label": "How Hard To Believe",
+        "pillar": "think_sharper",
+        "signal": "How certain we should be and why.",
+        "tension": "Optional uncertainty, falsifier, or timing risk."
+      }
+    ],
+    "source_weighting": [
+      {
+        "kind": "frontier_lab_memo|white_paper|operator_essay|annual_letter|book|podcast",
+        "weight": "high|medium|low",
+        "reason": "Why this source type should count this much here."
+      }
+    ],
+    "confidence": {
+      "level": "low|medium|high",
+      "why": "Why the confidence is at this level."
+    },
+    "counterforces": ["What could break the thesis"],
+    "for_this_user": "The move that matters for this user specifically."
+  }
+  Use this when a four_pillar_synthesis or all_pillar_synthesis answer is materially improved by structured cross-pillar analysis.
 
 BOOK / AUTHOR CITATION
 → book_ref

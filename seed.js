@@ -30,6 +30,18 @@ import OpenAI from 'openai'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const SOURCES_DIR = path.join(__dirname, 'sources')
 const execFileAsync = promisify(execFile)
+const SOURCE_ENRICHMENT_MODEL = process.env.OPENAI_SOURCE_ENRICH_MODEL || 'gpt-5.4-mini-2026-03-17'
+const SOURCE_ENRICHMENT_VERSION = 'wiki_sources_v1'
+const TIME_HORIZONS = new Set(['immediate', 'near_term', 'medium_term', 'long_term', 'timeless'])
+const SIGNAL_TYPES = new Set([
+  'capability_shift',
+  'distribution_shift',
+  'capital_flow',
+  'behavior_change',
+  'policy_shift',
+  'infrastructure_bottleneck',
+  'market_structure',
+])
 
 // ─── Clients ─────────────────────────────────────────────────────────────────
 const supabase = createClient(
@@ -476,6 +488,475 @@ const SOURCES = [
     title: 'Prospect Theory', author: 'Kahneman & Tversky',
     url: 'https://www.behavioraleconomics.com/resources/mini-encyclopedia-of-be/prospect-theory/',
   },
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // MONEY GAME — Additions
+  // ══════════════════════════════════════════════════════════════════════════
+  {
+    pillar: 'money_game', content_type: 'book',
+    title: 'Security Analysis', author: 'Benjamin Graham',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'money_game', content_type: 'book',
+    title: 'Common Stocks and Uncommon Profits', author: 'Philip Fisher',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'money_game', content_type: 'book',
+    title: "Where Are the Customers' Yachts", author: 'Fred Schwed',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'money_game', content_type: 'book',
+    title: 'Money Masters of Our Time', author: 'John Train',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'money_game', content_type: 'book',
+    title: 'Business Adventures', author: 'John Brooks',
+    needs_pdf: true, url: null,
+  },
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // HUMAN MIND — Additions
+  // ══════════════════════════════════════════════════════════════════════════
+  {
+    pillar: 'human_mind', content_type: 'book',
+    title: 'The Laws Of Human Nature', author: 'Robert Greene',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'human_mind', content_type: 'book',
+    title: 'The Art Of Seduction', author: 'Robert Greene',
+    needs_pdf: true, url: null,
+  },
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // HOW COMPANIES WIN — Books
+  // ══════════════════════════════════════════════════════════════════════════
+  {
+    pillar: 'how_companies_win', content_type: 'book',
+    title: 'High Output Management', author: 'Andrew Grove',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'book',
+    title: 'Crossing the Chasm', author: 'Geoffrey Moore',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'book',
+    title: 'The Lean Startup', author: 'Eric Ries',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'book',
+    title: 'High Growth Handbook', author: 'Elad Gil',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'book',
+    title: 'Good to Great', author: 'Jim Collins',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'book',
+    title: "The Innovator's Dilemma", author: 'Clayton Christensen',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'book',
+    title: '7 Powers: The Foundations of Business Strategy', author: 'Hamilton Helmer',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'book',
+    title: 'No Rules Rules', author: 'Reed Hastings and Erin Meyer',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'book',
+    title: 'Scaling Up', author: 'Verne Harnish',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'book',
+    title: 'The E-Myth Revisited', author: 'Michael Gerber',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'book',
+    title: 'The Hard Thing About Hard Things', author: 'Ben Horowitz',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'book',
+    title: 'Play Bigger', author: 'Al Ramadan, Dave Peterson, Christopher Lochhead, Kevin Maney',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'book',
+    title: 'The Cold Start Problem', author: 'Andrew Chen',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'book',
+    title: 'Blitzscaling', author: 'Reid Hoffman',
+    needs_pdf: true, url: null,
+  },
+
+  // HOW COMPANIES WIN — Biographies
+  {
+    pillar: 'how_companies_win', content_type: 'biography',
+    title: 'Steve Jobs', author: 'Walter Isaacson',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'biography',
+    title: 'Elon Musk', author: 'Walter Isaacson',
+    needs_pdf: true, url: null,
+  },
+
+  // HOW COMPANIES WIN — Articles
+  {
+    pillar: 'how_companies_win', content_type: 'article',
+    title: 'Aggregation Theory', author: 'Ben Thompson',
+    url: 'https://stratechery.com/2015/aggregation-theory/',
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'article',
+    title: 'The Pmarca Guide to Startups Part 1', author: 'Marc Andreessen',
+    url: 'https://pmarchive.com/guide_to_startups_part1.html',
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'article',
+    title: 'The Pmarca Guide to Startups Part 2', author: 'Marc Andreessen',
+    url: 'https://pmarchive.com/guide_to_startups_part2.html',
+  },
+  // SKIPPED — already in DB: "Do Things That Don't Scale"
+
+  // HOW COMPANIES WIN — Podcasts
+  {
+    pillar: 'how_companies_win', content_type: 'podcast',
+    title: 'Acquired — Apple Episode', author: 'Ben Gilbert & David Rosenthal',
+    youtubeUrl: 'https://www.youtube.com/watch?v=jQ_lFMqGFgo',
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'podcast',
+    title: 'Acquired — Nvidia Episode', author: 'Ben Gilbert & David Rosenthal',
+    youtubeUrl: 'https://www.youtube.com/watch?v=oRBDQaqnYHM',
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'podcast',
+    title: 'Acquired — Standard Oil Episode', author: 'Ben Gilbert & David Rosenthal',
+    youtubeUrl: 'https://www.youtube.com/watch?v=1ioFp1sSrMM',
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'podcast',
+    title: 'Masters of Scale — Reid Hoffman on Distribution', author: 'Reid Hoffman',
+    youtubeUrl: 'https://www.youtube.com/watch?v=orSFt6y0wEE',
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'podcast',
+    title: "Lenny's Podcast — Brian Balfour on Growth", author: 'Lenny Rachitsky',
+    youtubeUrl: 'https://www.youtube.com/watch?v=DLZP1LQwn8k',
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'podcast',
+    title: 'How I Built This — Airbnb Brian Chesky', author: 'Guy Raz',
+    youtubeUrl: 'https://www.youtube.com/watch?v=W608u6sBFpo',
+  },
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // WHAT'S COMING — Books
+  // ══════════════════════════════════════════════════════════════════════════
+  {
+    pillar: 'whats_coming', content_type: 'book',
+    title: 'Technological Revolutions and Financial Capital', author: 'Carlota Perez',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'whats_coming', content_type: 'book',
+    title: 'The Sovereign Individual', author: 'James Dale Davidson and William Rees-Mogg',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'whats_coming', content_type: 'book',
+    title: 'Hot Commodities', author: 'Jim Rogers',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'whats_coming', content_type: 'book',
+    title: 'The World for Sale', author: 'Javier Blas and Jack Farchy',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'whats_coming', content_type: 'book',
+    title: 'The Fourth Turning', author: 'William Strauss and Neil Howe',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'whats_coming', content_type: 'book',
+    title: 'The Second Machine Age', author: 'Erik Brynjolfsson and Andrew McAfee',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'whats_coming', content_type: 'book',
+    title: 'Power and Progress', author: 'Daron Acemoglu and Simon Johnson',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'whats_coming', content_type: 'book',
+    title: 'The New Map', author: 'Daniel Yergin',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'whats_coming', content_type: 'book',
+    title: 'The Inevitable', author: 'Kevin Kelly',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'whats_coming', content_type: 'book',
+    title: 'Superintelligence', author: 'Nick Bostrom',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'whats_coming', content_type: 'book',
+    title: 'Life 3.0', author: 'Max Tegmark',
+    needs_pdf: true, url: null,
+  },
+
+  // WHAT'S COMING — Articles
+  {
+    pillar: 'whats_coming', content_type: 'article',
+    title: 'Situational Awareness', author: 'Leopold Aschenbrenner',
+    url: 'https://situational-awareness.ai/',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'article',
+    title: 'Machines of Loving Grace', author: 'Dario Amodei',
+    url: 'https://dario.ai/machines-of-loving-grace',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'article',
+    title: 'The Urgency of Interpretability', author: 'Dario Amodei',
+    url: 'https://dario.ai/the-urgency-of-interpretability',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'academic_paper',
+    title: 'Technological Revolutions and Techno-Economic Paradigms', author: 'Carlota Perez',
+    url: 'https://carlotaperez.org/wp-content/downloads/publications/organizational-change/TRs_TEP_shifts_and_SIF_ch.pdf',
+  },
+
+  // WHAT'S COMING — Podcasts
+  {
+    pillar: 'whats_coming', content_type: 'podcast',
+    title: 'Lex Fridman — Sam Altman', author: 'Lex Fridman',
+    youtubeUrl: 'https://www.youtube.com/watch?v=jvqFAi7vkBc',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'podcast',
+    title: 'Lex Fridman — Andrej Karpathy', author: 'Lex Fridman',
+    youtubeUrl: 'https://www.youtube.com/watch?v=cdiD-9MMpb0',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'podcast',
+    title: 'Dwarkesh Podcast — Dario Amodei', author: 'Dwarkesh Patel',
+    youtubeUrl: 'https://www.youtube.com/watch?v=ugvHCXCOmm4',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'podcast',
+    title: 'Dwarkesh Podcast — Ilya Sutskever', author: 'Dwarkesh Patel',
+    youtubeUrl: 'https://www.youtube.com/watch?v=13CZPWmke6A',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'podcast',
+    title: 'All-In Podcast — AI and the Economy', author: 'All-In Podcast',
+    youtubeUrl: 'https://www.youtube.com/watch?v=vX9k-QJKuKU',
+  },
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // THINK SHARPER — Books
+  // ══════════════════════════════════════════════════════════════════════════
+  {
+    pillar: 'think_sharper', content_type: 'book',
+    title: 'The Great Mental Models Volume 1', author: 'Shane Parrish',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'think_sharper', content_type: 'book',
+    title: 'The Great Mental Models Volume 2', author: 'Shane Parrish',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'think_sharper', content_type: 'book',
+    title: 'Thinking in Bets', author: 'Annie Duke',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'think_sharper', content_type: 'book',
+    title: 'Superforecasting', author: 'Philip Tetlock',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'think_sharper', content_type: 'book',
+    title: 'The Signal and the Noise', author: 'Nate Silver',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'think_sharper', content_type: 'book',
+    title: 'Seeking Wisdom', author: 'Peter Bevelin',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'think_sharper', content_type: 'book',
+    title: 'Fooled by Randomness', author: 'Nassim Taleb',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'think_sharper', content_type: 'book',
+    title: 'The Black Swan', author: 'Nassim Taleb',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'think_sharper', content_type: 'book',
+    title: 'Antifragile', author: 'Nassim Taleb',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'think_sharper', content_type: 'book',
+    title: 'Being Wrong', author: 'Kathryn Schulz',
+    needs_pdf: true, url: null,
+  },
+
+  // THINK SHARPER — Articles
+  {
+    pillar: 'think_sharper', content_type: 'article',
+    title: 'Inversion: The Power of Avoiding Stupidity', author: 'fs.blog',
+    url: 'https://fs.blog/inversion/',
+  },
+  {
+    pillar: 'think_sharper', content_type: 'article',
+    title: 'The Work Required to Have an Opinion', author: 'fs.blog',
+    url: 'https://fs.blog/the-work-required-to-have-an-opinion/',
+  },
+  {
+    pillar: 'think_sharper', content_type: 'article',
+    title: 'First Principles Thinking', author: 'fs.blog',
+    url: 'https://fs.blog/first-principles/',
+  },
+  {
+    pillar: 'think_sharper', content_type: 'article',
+    title: 'Mental Models: How to Train Your Brain', author: 'fs.blog',
+    url: 'https://fs.blog/mental-models/',
+  },
+
+  // THINK SHARPER — Podcasts
+  {
+    pillar: 'think_sharper', content_type: 'podcast',
+    title: 'The Knowledge Project — Naval Ravikant', author: 'Shane Parrish',
+    youtubeUrl: 'https://www.youtube.com/watch?v=HiYo14wylQw',
+  },
+  {
+    pillar: 'think_sharper', content_type: 'podcast',
+    title: 'The Knowledge Project — Annie Duke', author: 'Shane Parrish',
+    youtubeUrl: 'https://www.youtube.com/watch?v=wnDnCbgG6Yk',
+  },
+  {
+    pillar: 'think_sharper', content_type: 'podcast',
+    title: 'Lex Fridman — Daniel Kahneman', author: 'Lex Fridman',
+    youtubeUrl: 'https://www.youtube.com/watch?v=UwwR7gSV7zc',
+  },
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // MOVE PEOPLE — Books
+  // ══════════════════════════════════════════════════════════════════════════
+  {
+    pillar: 'move_people', content_type: 'book',
+    title: 'The Art Of Seduction', author: 'Robert Greene',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'move_people', content_type: 'book',
+    title: 'The Laws Of Human Nature', author: 'Robert Greene',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'move_people', content_type: 'book',
+    title: 'The 48 Laws Of Power', author: 'Robert Greene',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'move_people', content_type: 'book',
+    title: 'Pre-Suasion', author: 'Robert Cialdini',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'move_people', content_type: 'book',
+    title: 'Made to Stick', author: 'Chip Heath and Dan Heath',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'move_people', content_type: 'book',
+    title: 'Never Split the Difference', author: 'Chris Voss',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'move_people', content_type: 'book',
+    title: 'Pitch Anything', author: 'Oren Klaff',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'move_people', content_type: 'book',
+    title: 'The Storytelling Animal', author: 'Jonathan Gottschall',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'move_people', content_type: 'book',
+    title: 'Talk Like TED', author: 'Carmine Gallo',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'move_people', content_type: 'book',
+    title: 'On Writing Well', author: 'William Zinsser',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'move_people', content_type: 'book',
+    title: 'Simply Said', author: 'Jay Sullivan',
+    needs_pdf: true, url: null,
+  },
+  {
+    pillar: 'move_people', content_type: 'book',
+    title: 'To Sell Is Human', author: 'Daniel Pink',
+    needs_pdf: true, url: null,
+  },
+
+  // MOVE PEOPLE — Articles
+  {
+    pillar: 'move_people', content_type: 'article',
+    title: 'How to Write Usefully', author: 'Paul Graham',
+    url: 'http://paulgraham.com/useful.html',
+  },
+  {
+    pillar: 'move_people', content_type: 'article',
+    title: 'The Anatomy of a Pitch', author: 'Sequoia Capital',
+    url: 'https://articles.sequoiacap.com/writing-a-business-plan',
+  },
+
+  // MOVE PEOPLE — Podcasts
+  {
+    pillar: 'move_people', content_type: 'podcast',
+    title: 'Masters of Scale — Storytelling with Reid Hoffman', author: 'Reid Hoffman',
+    youtubeUrl: 'https://www.youtube.com/watch?v=MGSV-VuCjPo',
+  },
+  // SKIPPED — already in DB: "How I Built This — Sara Blakely Spanx"
+  {
+    pillar: 'move_people', content_type: 'podcast',
+    title: 'The Tim Ferriss Show — Matthew McConaughey on Narrative Identity', author: 'Tim Ferriss',
+    youtubeUrl: 'https://www.youtube.com/watch?v=DMl7_UEsYpg',
+  },
 ]
 
 // ─── Chunking ─────────────────────────────────────────────────────────────────
@@ -508,6 +989,291 @@ function chunkText(text) {
   }
 
   return chunks
+}
+
+function buildSourceKey(source) {
+  const slug = `${source.pillar}-${source.content_type}-${source.title || ''}`
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return slug
+}
+
+function sourceUrlForRecord(source) {
+  return source.url || source.youtubeUrl || null
+}
+
+function clampConfidence(value, fallback = 0.5) {
+  const num = Number(value)
+  if (!Number.isFinite(num)) return fallback
+  return Math.max(0, Math.min(1, num))
+}
+
+function cleanString(value, fallback = '') {
+  const text = sanitizeText(String(value || '')).replace(/\s+/g, ' ').trim()
+  return text || fallback
+}
+
+function cleanStringArray(values, limit = 8) {
+  if (!Array.isArray(values)) return []
+  return [...new Set(values.map((item) => cleanString(item)).filter(Boolean))].slice(0, limit)
+}
+
+function cleanImplications(value) {
+  const input = value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+  return {
+    builders: cleanStringArray(input.builders, 6),
+    capital: cleanStringArray(input.capital, 6),
+    operators: cleanStringArray(input.operators, 6),
+    policy: cleanStringArray(input.policy, 6),
+  }
+}
+
+function parseJsonContent(content) {
+  const raw = String(content || '').trim()
+  const withoutFence = raw
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim()
+  return JSON.parse(withoutFence)
+}
+
+function buildEnrichmentExcerpt(rawText) {
+  const cleaned = sanitizeText(rawText).replace(/\s+/g, ' ').trim()
+  if (cleaned.length <= 18000) return cleaned
+
+  const segment = 6000
+  const middleStart = Math.max(0, Math.floor(cleaned.length / 2) - Math.floor(segment / 2))
+  const endStart = Math.max(0, cleaned.length - segment)
+
+  return [
+    cleaned.slice(0, segment),
+    cleaned.slice(middleStart, middleStart + segment),
+    cleaned.slice(endStart),
+  ].join('\n\n[...]\n\n')
+}
+
+function normalizeSourceClaims(payload) {
+  const input = payload && typeof payload === 'object' ? payload : {}
+  return {
+    core_thesis: cleanString(input.core_thesis),
+    main_themes: cleanStringArray(input.main_themes, 6),
+    keywords: cleanStringArray(input.keywords, 12),
+    domains: cleanStringArray(input.domains, 8),
+    representative_claims: cleanStringArray(input.representative_claims, 6),
+  }
+}
+
+function normalizeAxiomInterpretation(payload) {
+  const input = payload && typeof payload === 'object' ? payload : {}
+  const timeHorizon = cleanString(input.time_horizon)
+  return {
+    signal_types: cleanStringArray(input.signal_types, 6).filter((item) => SIGNAL_TYPES.has(item)),
+    time_horizon: TIME_HORIZONS.has(timeHorizon) ? timeHorizon : null,
+    practical_implications: cleanImplications(input.practical_implications),
+    counterarguments: cleanStringArray(input.counterarguments, 6),
+    uncertainty_notes: cleanStringArray(input.uncertainty_notes, 6),
+  }
+}
+
+async function extractSourceClaims(rawText, source) {
+  const excerpt = buildEnrichmentExcerpt(rawText)
+  const response = await openai.chat.completions.create({
+    model: SOURCE_ENRICHMENT_MODEL,
+    response_format: { type: 'json_object' },
+    max_completion_tokens: 700,
+    messages: [
+      {
+        role: 'system',
+        content: `You extract grounded claims from a source for Axiom's canonical knowledge layer.
+
+Return valid JSON only with this exact shape:
+{
+  "core_thesis": "string",
+  "main_themes": ["string"],
+  "keywords": ["string"],
+  "domains": ["string"],
+  "representative_claims": ["string"],
+  "confidence": 0.0
+}
+
+Rules:
+- Use only what is clearly supported by the source text.
+- Do not infer strategic implications.
+- Keep core_thesis to one sharp sentence.
+- main_themes should be 2 to 6 items.
+- representative_claims should be concrete claims the source itself makes.
+- confidence must be between 0 and 1.`,
+      },
+      {
+        role: 'user',
+        content: `Title: ${source.title}
+Author: ${source.author || 'Unknown'}
+Pillar: ${source.pillar}
+Content type: ${source.content_type}
+
+Source excerpt:
+${excerpt}`,
+      },
+    ],
+  })
+
+  const parsed = parseJsonContent(response.choices[0]?.message?.content)
+  return {
+    claims: normalizeSourceClaims(parsed),
+    confidence: clampConfidence(parsed.confidence, 0.55),
+  }
+}
+
+async function interpretSourceForAxiom(rawText, source, sourceClaims) {
+  const excerpt = buildEnrichmentExcerpt(rawText)
+  const response = await openai.chat.completions.create({
+    model: SOURCE_ENRICHMENT_MODEL,
+    response_format: { type: 'json_object' },
+    max_completion_tokens: 700,
+    messages: [
+      {
+        role: 'system',
+        content: `You interpret a source through Axiom's lens without pretending the source literally said these implications.
+
+Return valid JSON only with this exact shape:
+{
+  "signal_types": ["capability_shift|distribution_shift|capital_flow|behavior_change|policy_shift|infrastructure_bottleneck|market_structure"],
+  "time_horizon": "immediate|near_term|medium_term|long_term|timeless",
+  "practical_implications": {
+    "builders": ["string"],
+    "capital": ["string"],
+    "operators": ["string"],
+    "policy": ["string"]
+  },
+  "counterarguments": ["string"],
+  "uncertainty_notes": ["string"],
+  "confidence": 0.0
+}
+
+Rules:
+- This is Axiom's interpretation, not a quote from the source.
+- Be specific, not generic.
+- Include only implications that plausibly follow from the source claims.
+- confidence must be between 0 and 1.`,
+      },
+      {
+        role: 'user',
+        content: `Title: ${source.title}
+Author: ${source.author || 'Unknown'}
+Pillar: ${source.pillar}
+Content type: ${source.content_type}
+
+Grounded source claims:
+${JSON.stringify(sourceClaims, null, 2)}
+
+Source excerpt:
+${excerpt}`,
+      },
+    ],
+  })
+
+  const parsed = parseJsonContent(response.choices[0]?.message?.content)
+  return {
+    interpretation: normalizeAxiomInterpretation(parsed),
+    confidence: clampConfidence(parsed.confidence, 0.5),
+  }
+}
+
+async function upsertWikiSource(source, rawText) {
+  const payload = {
+    pillar: source.pillar,
+    content_type: source.content_type,
+    title: source.title,
+    author: source.author || null,
+    source_url: sourceUrlForRecord(source),
+    source_key: buildSourceKey(source),
+    summary_for_retrieval: sanitizeText(rawText).slice(0, 1200) || null,
+    enrichment_status: 'raw',
+    enrichment_version: SOURCE_ENRICHMENT_VERSION,
+    updated_at: new Date().toISOString(),
+  }
+
+  const { data, error } = await supabase
+    .from('wiki_sources')
+    .upsert(payload, { onConflict: 'source_key' })
+    .select('id')
+    .single()
+
+  if (error) {
+    throw new Error(`Could not upsert wiki_sources row for "${source.title}": ${error.message}`)
+  }
+
+  try {
+    const { claims, confidence: claimsConfidence } = await extractSourceClaims(rawText, source)
+    const { error: claimsError } = await supabase
+      .from('wiki_sources')
+      .update({
+        source_claims: claims,
+        source_claims_confidence: claimsConfidence,
+        enrichment_status: 'claims_extracted',
+        enrichment_version: SOURCE_ENRICHMENT_VERSION,
+        enriched_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', data.id)
+
+    if (claimsError) {
+      throw new Error(claimsError.message)
+    }
+
+    try {
+      const { interpretation, confidence: interpretationConfidence } = await interpretSourceForAxiom(rawText, source, claims)
+      const { error: interpretationError } = await supabase
+        .from('wiki_sources')
+        .update({
+          axiom_interpretation: interpretation,
+          axiom_interpretation_confidence: interpretationConfidence,
+          enrichment_status: 'interpreted',
+          enrichment_version: SOURCE_ENRICHMENT_VERSION,
+          enriched_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', data.id)
+
+      if (interpretationError) {
+        throw new Error(interpretationError.message)
+      }
+    } catch (err) {
+      console.warn(`    Source interpretation failed for "${source.title}": ${err.message}`)
+      const { error: failError } = await supabase
+        .from('wiki_sources')
+        .update({
+          enrichment_status: 'failed',
+          enrichment_version: SOURCE_ENRICHMENT_VERSION,
+          enriched_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', data.id)
+
+      if (failError) {
+        console.warn(`    Could not mark wiki_sources failure for "${source.title}": ${failError.message}`)
+      }
+    }
+  } catch (err) {
+    console.warn(`    Source claims extraction failed for "${source.title}": ${err.message}`)
+    const { error: failError } = await supabase
+      .from('wiki_sources')
+      .update({
+        enrichment_status: 'failed',
+        enrichment_version: SOURCE_ENRICHMENT_VERSION,
+        enriched_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', data.id)
+
+    if (failError) {
+      console.warn(`    Could not mark wiki_sources failure for "${source.title}": ${failError.message}`)
+    }
+  }
+
+  return data
 }
 
 // ─── Source Processors ───────────────────────────────────────────────────────
@@ -679,7 +1445,7 @@ async function processYouTube(youtubeUrl) {
 
 // ─── Embedding + Insert ───────────────────────────────────────────────────────
 
-async function embedAndInsert(source, chunks) {
+async function embedAndInsert(source, sourceRecord, chunks) {
   let inserted = 0
 
   for (let i = 0; i < chunks.length; i++) {
@@ -700,6 +1466,7 @@ async function embedAndInsert(source, chunks) {
 
     // Insert
     const { error } = await supabase.from('wiki_chunks').insert({
+      source_id: sourceRecord.id,
       pillar: source.pillar,
       content_type: source.content_type,
       title: source.title,
@@ -732,6 +1499,10 @@ async function processSource(source, processedTitles) {
 
   let rawText
 
+  if (source.needs_pdf && !source.filePath) {
+    throw new Error(`Manual PDF required for "${source.title}"`)
+  }
+
   if (source.filePath) {
     rawText = await processLocalPDF(source.filePath)
   } else if (source.transcriptPath) {
@@ -748,10 +1519,11 @@ async function processSource(source, processedTitles) {
     throw new Error(`Extracted text too short (${rawText?.trim().length ?? 0} chars) — likely a paywall, redirect, or empty page`)
   }
 
+  const sourceRecord = await upsertWikiSource(source, rawText)
   const chunks = chunkText(rawText)
   if (chunks.length === 0) throw new Error('No usable chunks extracted')
 
-  const inserted = await embedAndInsert(source, chunks)
+  const inserted = await embedAndInsert(source, sourceRecord, chunks)
   return { chunks: chunks.length, inserted }
 }
 
@@ -804,10 +1576,17 @@ async function main() {
   }
   console.log(`Found ${processedTitles.size} unique title(s) already in DB.\n`)
 
-  // Order: money_game first, then human_mind
+  // Order: pillars follow Axiom's six-pillar sequence
   // Within each pillar: book → article → podcast → financial_doc → biography → company_profile → academic_paper
   const TYPE_ORDER = ['book', 'article', 'podcast', 'financial_doc', 'case_study', 'biography', 'company_profile', 'academic_paper']
-  const PILLAR_ORDER = ['money_game', 'human_mind']
+  const PILLAR_ORDER = [
+    'money_game',
+    'human_mind',
+    'how_companies_win',
+    'whats_coming',
+    'think_sharper',
+    'move_people',
+  ]
 
   const ordered = [...SOURCES].sort((a, b) => {
     const pillarDiff = PILLAR_ORDER.indexOf(a.pillar) - PILLAR_ORDER.indexOf(b.pillar)
@@ -823,7 +1602,15 @@ async function main() {
 
   for (let i = 0; i < ordered.length; i++) {
     const source = ordered[i]
-    const sourceType = source.filePath ? 'pdf' : source.transcriptPath ? 'transcript' : source.youtubeUrl ? 'youtube' : 'url'
+    const sourceType = source.filePath
+      ? 'pdf'
+      : source.needs_pdf
+        ? 'needs_pdf'
+        : source.transcriptPath
+          ? 'transcript'
+          : source.youtubeUrl
+            ? 'youtube'
+            : 'url'
     console.log(`[${i + 1}/${total}] Processing: ${source.title} (${source.content_type}) [${sourceType}]`)
 
     try {

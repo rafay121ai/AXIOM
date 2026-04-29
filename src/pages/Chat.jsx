@@ -6,7 +6,7 @@ import WarningCard from '../components/WarningCard'
 import ArtifactRenderer from '../components/ArtifactRenderer'
 import { clearStoredSessionToken, getStoredSessionToken, supabase } from '../lib/supabase'
 import { openai, CHAT_MODEL, generateOpeningMessage, generateNodeOpeningMessage, buildSystemPrompt } from '../lib/openai'
-import { searchWiki, formatWikiContext } from '../lib/rag'
+import { routeQuestionMode, searchWikiForRoute, formatRouteContext, formatWikiContext } from '../lib/rag'
 import { searchPersonalMemory, formatNamedPatternsContext, formatPersonalMemoryContext, updatePersonalMemory } from '../lib/personalMemory'
 
 // ─── Message Tag Parsing ─────────────────────────────────────────────────────
@@ -425,11 +425,13 @@ export default function Chat() {
       })
 
       // RAG: retrieve source knowledge and personal memory for this turn.
-      const [{ chunks, confidence: retrievalConfidence }, personalMemories] = await Promise.all([
-        searchWiki(text, 3),
+      const [route, personalMemories] = await Promise.all([
+        routeQuestionMode(text, session, nodeContext),
         searchPersonalMemory(session.user_id, text, 5),
       ])
-      const wikiContext = await formatWikiContext(chunks)
+      const { chunks, sources, confidence: retrievalConfidence, pillarResults } = await searchWikiForRoute(text, route, 3)
+      const wikiContext = await formatWikiContext(chunks, sources)
+      const routeContext = formatRouteContext(route, pillarResults)
       const graphContext = nodeContext
         ? `Selected Founder Brain node: ${nodeContext.label} | type: ${nodeContext.type} | pillar: ${nodeContext.pillar || 'unmapped'} | read: ${nodeContext.summary || 'No node summary yet.'}`
         : ''
@@ -446,7 +448,15 @@ export default function Chat() {
 
       history.push({ role: 'user', content: text })
 
-      const systemPrompt = buildSystemPrompt(session, wikiContext, personalMemoryContext, aiMessageCount + 1, retrievalConfidence, namedPatternsContext)
+      const systemPrompt = buildSystemPrompt(
+        session,
+        wikiContext,
+        personalMemoryContext,
+        aiMessageCount + 1,
+        retrievalConfidence,
+        namedPatternsContext,
+        routeContext
+      )
 
       // Stream response
       const abort = new AbortController()

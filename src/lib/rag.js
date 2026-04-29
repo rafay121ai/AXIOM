@@ -21,6 +21,275 @@ import { generateEmbedding, openai, CHAT_MODEL } from './openai'
 // $$;
 
 const CONFIDENCE_THRESHOLD = 0.75
+const ROUTER_MODES = new Set([
+  'single_pillar',
+  'two_pillar',
+  'four_pillar_synthesis',
+  'all_pillar_synthesis',
+])
+const ALL_PILLARS = [
+  'human_mind',
+  'money_game',
+  'how_companies_win',
+  'whats_coming',
+  'think_sharper',
+  'move_people',
+]
+const FOUR_PILLAR_STACK = [
+  'whats_coming',
+  'how_companies_win',
+  'money_game',
+  'think_sharper',
+]
+
+function sourceMatchKey(item = {}) {
+  return `${item.pillar || ''}|||${item.author || ''}|||${item.title || ''}`
+}
+
+function pillarDisplayName(pillar = '') {
+  return pillar.replace(/_/g, ' ')
+}
+
+function sourceRank(source = {}) {
+  const statusScore =
+    source.enrichment_status === 'interpreted'
+      ? 3
+      : source.enrichment_status === 'claims_extracted'
+        ? 2
+        : source.enrichment_status === 'raw'
+          ? 1
+          : 0
+  const interpretationConfidence = Number(source.axiom_interpretation_confidence) || 0
+  const claimsConfidence = Number(source.source_claims_confidence) || 0
+  const qualityScore =
+    source.source_quality === 'foundational'
+      ? 2
+      : source.source_quality === 'high_signal'
+        ? 1.5
+        : source.source_quality === 'mixed'
+          ? 1
+          : source.source_quality === 'speculative'
+            ? 0.5
+            : 0
+
+  return (statusScore * 10) + (interpretationConfidence * 5) + (claimsConfidence * 2) + qualityScore
+}
+
+function describeSourceWeight(source = {}) {
+  const type = String(source.content_type || '').toLowerCase()
+  const confidence = Math.max(
+    Number(source.axiom_interpretation_confidence) || 0,
+    Number(source.source_claims_confidence) || 0
+  )
+
+  const kind =
+    type === 'academic_paper' ? 'white paper' :
+    type === 'essay' || type === 'article' ? 'operator essay' :
+    type === 'financial_document' ? 'annual letter' :
+    type === 'podcast' ? 'podcast' :
+    type === 'book' ? 'book' :
+    'source'
+
+  const weight = confidence >= 0.85 ? 'high' : confidence >= 0.7 ? 'medium' : 'low'
+  return `${kind} weight: ${weight}`
+}
+
+function normalizeRouterPayload(payload = {}) {
+  const requestedMode = ROUTER_MODES.has(payload.mode) ? payload.mode : 'single_pillar'
+  let pillars = Array.isArray(payload.pillars)
+    ? payload.pillars.filter((pillar) => ALL_PILLARS.includes(pillar))
+    : []
+
+  if (requestedMode === 'single_pillar') {
+    pillars = [pillars[0] || payload.primary_pillar || 'human_mind'].filter((pillar) => ALL_PILLARS.includes(pillar))
+  } else if (requestedMode === 'two_pillar') {
+    pillars = [...new Set(pillars)].slice(0, 2)
+    if (pillars.length < 2) pillars = ['human_mind', 'money_game']
+  } else if (requestedMode === 'four_pillar_synthesis') {
+    pillars = FOUR_PILLAR_STACK
+  } else if (requestedMode === 'all_pillar_synthesis') {
+    pillars = ALL_PILLARS
+  }
+
+  return {
+    mode: requestedMode,
+    pillars,
+    rationale: typeof payload.rationale === 'string' ? payload.rationale.trim() : '',
+  }
+}
+
+function fallbackRouteQuestionMode(query, session, nodeContext = null) {
+  const lower = String(query || '').toLowerCase()
+  const nodePillar = nodeContext?.pillar && ALL_PILLARS.includes(nodeContext.pillar) ? nodeContext.pillar : null
+
+  if (/\b(what'?s next|who wins|where (does|will) (value|money)|what happens if|underestimating|future|coming)\b/.test(lower)) {
+    return {
+      mode: 'four_pillar_synthesis',
+      pillars: FOUR_PILLAR_STACK,
+      rationale: 'Future or consequence question. Use the four-pillar stack.',
+    }
+  }
+
+  if (/\b(should i| vs | versus |tradeoff|rationalizing|conflict|tension|or should)\b/.test(lower)) {
+    return {
+      mode: 'two_pillar',
+      pillars: nodePillar ? [nodePillar, 'think_sharper'] : ['human_mind', 'money_game'],
+      rationale: 'Tradeoff or tension question. Use two pillars.',
+    }
+  }
+
+  if (/\b(life|career|next 5 years|next five years|who should i become|what should i do with my)\b/.test(lower)) {
+    return {
+      mode: 'all_pillar_synthesis',
+      pillars: ALL_PILLARS,
+      rationale: 'Major orientation question. Use all pillars.',
+    }
+  }
+
+  const weightedPillars = Object.entries(session?.pillar_weights || {})
+    .filter(([pillar]) => ALL_PILLARS.includes(pillar))
+    .sort((a, b) => b[1] - a[1])
+    .map(([pillar]) => pillar)
+
+  return {
+    mode: 'single_pillar',
+    pillars: [nodePillar || weightedPillars[0] || 'human_mind'],
+    rationale: 'Default to one pillar for a narrow or local question.',
+  }
+}
+
+export async function routeQuestionMode(query, session, nodeContext = null) {
+  try {
+    const response = await openai.chat.completions.create({
+      model: CHAT_MODEL,
+      response_format: { type: 'json_object' },
+      max_completion_tokens: 220,
+      messages: [
+        {
+          role: 'system',
+          content: `You route questions for Axiom.
+
+Return valid JSON only with this exact shape:
+{
+  "mode": "single_pillar|two_pillar|four_pillar_synthesis|all_pillar_synthesis",
+  "pillars": ["human_mind|money_game|how_companies_win|whats_coming|think_sharper|move_people"],
+  "rationale": "short string"
+}
+
+Rules:
+- single_pillar: exactly 1 pillar
+- two_pillar: exactly 2 pillars
+- four_pillar_synthesis: always use ["whats_coming","how_companies_win","money_game","think_sharper"]
+- all_pillar_synthesis: always use all six pillars
+- User context must influence the mode and pillar choice.
+- Choose the smallest mode that can answer the question well.`,
+        },
+        {
+          role: 'user',
+          content: `Question: ${query}
+Private theory: ${session?.axiom_profile || 'None'}
+Session notes: ${session?.session_notes || 'None'}
+Pillar weights: ${JSON.stringify(session?.pillar_weights || {})}
+Selected node: ${nodeContext ? `${nodeContext.label} | pillar: ${nodeContext.pillar || 'unknown'} | type: ${nodeContext.type}` : 'None'}`,
+        },
+      ],
+    })
+
+    const parsed = JSON.parse(response.choices[0]?.message?.content || '{}')
+    return normalizeRouterPayload(parsed)
+  } catch (err) {
+    console.warn('[RAG] Question routing failed (falling back):', err?.message || err)
+    return fallbackRouteQuestionMode(query, session, nodeContext)
+  }
+}
+
+export async function searchWikiForRoute(query, route, matchCount = 3) {
+  const mode = route?.mode || 'single_pillar'
+  const pillars = Array.isArray(route?.pillars) && route.pillars.length > 0 ? route.pillars : [null]
+
+  if (mode === 'single_pillar') {
+    const result = await searchWiki(query, matchCount, pillars[0] || null)
+    return {
+      ...result,
+      pillarResults: {
+        [pillars[0] || 'unscoped']: result,
+      },
+    }
+  }
+
+  const perPillarCount = mode === 'all_pillar_synthesis' ? 2 : Math.max(2, matchCount)
+  const resultsByPillar = await Promise.all(
+    pillars.map((pillar) => searchWiki(query, perPillarCount, pillar))
+  )
+  const pillarResults = Object.fromEntries(
+    pillars.map((pillar, index) => [pillar, resultsByPillar[index]])
+  )
+
+  const chunkMap = new Map()
+  const sourceMap = new Map()
+  let confidence = 0
+
+  for (const result of resultsByPillar) {
+    confidence = Math.max(confidence, result.confidence || 0)
+    for (const chunk of result.chunks || []) {
+      const key = sourceMatchKey(chunk)
+      const existing = chunkMap.get(key)
+      if (!existing || chunk.similarity > existing.similarity) {
+        chunkMap.set(key, chunk)
+      }
+    }
+    for (const source of result.sources || []) {
+      sourceMap.set(sourceMatchKey(source), source)
+    }
+  }
+
+  const chunkLimit = mode === 'all_pillar_synthesis' ? 8 : mode === 'four_pillar_synthesis' ? 6 : 4
+  const chunks = [...chunkMap.values()]
+    .sort((a, b) => (b.similarity || 0) - (a.similarity || 0))
+    .slice(0, chunkLimit)
+
+  const sources = [...sourceMap.values()].filter((source) =>
+    chunks.some((chunk) => sourceMatchKey(chunk) === sourceMatchKey(source))
+  )
+
+  return { chunks, sources, confidence, pillarResults }
+}
+
+function summarisePillarEvidence(pillar, result = {}) {
+  const chunkCount = Array.isArray(result.chunks) ? result.chunks.length : 0
+  const sourceNames = (result.sources || [])
+    .slice(0, 3)
+    .map((source) => source.title)
+    .filter(Boolean)
+
+  return [
+    `${pillarDisplayName(pillar)} -> confidence ${Number(result.confidence || 0).toFixed(3)}`,
+    chunkCount > 0 ? `${chunkCount} chunk${chunkCount === 1 ? '' : 's'}` : 'no strong chunk evidence',
+    sourceNames.length > 0 ? `sources: ${sourceNames.join(', ')}` : 'no source interpretations retrieved',
+  ].join(' | ')
+}
+
+export function formatRouteContext(route, pillarResults = {}) {
+  if (!route) return ''
+
+  const pillarsText = (route.pillars || []).map(pillarDisplayName).join(', ')
+  const modeInstructions = {
+    single_pillar: 'Answer through one pillar only. Keep the response tight and local. The user layer still applies fully.',
+    two_pillar: 'Answer through two pillars. Surface the tension between them, then reconcile it into one judgment. The user layer applies inside both pillars.',
+    four_pillar_synthesis: 'Answer through WHAT\'S COMING, HOW COMPANIES WIN, THE MONEY GAME, and THINK SHARPER. Each pillar must be filtered through the user before the synthesis.',
+    all_pillar_synthesis: 'Answer through all six pillars, but weight them by relevance. Do not force equal coverage. Every pillar is filtered through the user.',
+  }
+  const evidenceLines = (route.pillars || [])
+    .map((pillar) => summarisePillarEvidence(pillar, pillarResults[pillar]))
+    .join('\n')
+
+  return `Question routing mode: ${route.mode}
+Selected pillars: ${pillarsText}
+Routing rationale: ${route.rationale || 'None provided'}
+Routing instruction: ${modeInstructions[route.mode] || 'Use the selected pillars and keep the user layer active throughout.'}
+Per-pillar evidence:
+${evidenceLines || 'No per-pillar evidence summary available.'}`
+}
 
 // ─── Query Expansion ─────────────────────────────────────────────────────────
 async function expandQuery(query) {
@@ -65,9 +334,44 @@ async function searchSingleQuery(query, matchCount, filterPillar) {
   return data || []
 }
 
+async function fetchSourcesForChunks(chunks) {
+  if (!chunks || chunks.length === 0) return []
+
+  const titles = [...new Set(chunks.map((chunk) => chunk.title).filter(Boolean))]
+  if (titles.length === 0) return []
+
+  const { data, error } = await supabase
+    .from('wiki_sources')
+    .select(`
+      id,
+      pillar,
+      content_type,
+      title,
+      author,
+      source_claims,
+      axiom_interpretation,
+      source_claims_confidence,
+      axiom_interpretation_confidence,
+      enrichment_status,
+      source_quality,
+      summary_for_retrieval
+    `)
+    .in('title', titles)
+
+  if (error) {
+    console.warn('[RAG] Source fetch failed (continuing with chunks only):', error.message)
+    return []
+  }
+
+  const wantedKeys = new Set(chunks.map(sourceMatchKey))
+  return (data || [])
+    .filter((source) => wantedKeys.has(sourceMatchKey(source)))
+    .sort((a, b) => sourceRank(b) - sourceRank(a))
+}
+
 // ─── Main Search ─────────────────────────────────────────────────────────────
-// Returns { chunks, confidence } where confidence is the top similarity score.
-// If no chunk clears CONFIDENCE_THRESHOLD, returns { chunks: [], confidence: 0 }.
+// Returns { chunks, sources, confidence } where confidence is the top similarity score.
+// If no chunk clears CONFIDENCE_THRESHOLD, returns { chunks: [], sources: [], confidence: 0 }.
 export async function searchWiki(query, matchCount = 3, filterPillar = null) {
   const alternatives = await expandQuery(query)
   const allQueries = [query, ...alternatives]
@@ -94,22 +398,53 @@ export async function searchWiki(query, matchCount = 3, filterPillar = null) {
 
   if (aboveThreshold.length === 0) {
     console.log(`[RAG] Top similarity ${deduped[0]?.similarity?.toFixed(3) ?? 'n/a'} — below threshold (${CONFIDENCE_THRESHOLD}). Returning empty context.`)
-    return { chunks: [], confidence: 0 }
+    return { chunks: [], sources: [], confidence: 0 }
   }
 
   const results = aboveThreshold.slice(0, matchCount)
   const confidence = results[0].similarity
+  const sources = await fetchSourcesForChunks(results)
 
-  console.log(`[RAG] Confidence: ${confidence.toFixed(3)} | chunks: ${results.map((c) => `"${c.title}" (${c.similarity.toFixed(3)})`).join(', ')}`)
+  console.log(
+    `[RAG] Confidence: ${confidence.toFixed(3)} | chunks: ${results.map((c) => `"${c.title}" (${c.similarity.toFixed(3)})`).join(', ')} | sources: ${sources.length}`
+  )
 
-  return { chunks: results, confidence }
+  return { chunks: results, sources, confidence }
 }
 
 // ─── Internalized Priors ─────────────────────────────────────────────────────
 // Transforms retrieved chunks into first-person internalized knowledge statements.
 // Groups by source so duplicate chunks from the same book produce one prior.
-export async function formatWikiContext(chunks) {
-  if (!chunks || chunks.length === 0) return ''
+function formatSourceInterpretation(source) {
+  const claims = source?.source_claims || {}
+  const interpretation = source?.axiom_interpretation || {}
+  const thesis = claims.core_thesis || source.summary_for_retrieval || ''
+  const themes = Array.isArray(claims.main_themes) ? claims.main_themes.slice(0, 3).join(', ') : ''
+  const builderImplications = Array.isArray(interpretation?.practical_implications?.builders)
+    ? interpretation.practical_implications.builders.slice(0, 2).join(' ')
+    : ''
+  const capitalImplications = Array.isArray(interpretation?.practical_implications?.capital)
+    ? interpretation.practical_implications.capital.slice(0, 1).join(' ')
+    : ''
+  const uncertainty = Array.isArray(interpretation?.uncertainty_notes)
+    ? interpretation.uncertainty_notes.slice(0, 1).join(' ')
+    : ''
+
+  return [
+    thesis,
+    `Source weighting: ${describeSourceWeight(source)}.`,
+    themes ? `Themes: ${themes}.` : '',
+    builderImplications ? `Builders: ${builderImplications}` : '',
+    capitalImplications ? `Capital: ${capitalImplications}` : '',
+    uncertainty ? `Uncertainty: ${uncertainty}` : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .trim()
+}
+
+export async function formatWikiContext(chunks, sources = []) {
+  if ((!chunks || chunks.length === 0) && (!sources || sources.length === 0)) return ''
 
   // Group by (author, title) — merge key_frameworks from same source, skip null values
   const bySource = new Map()
@@ -120,6 +455,15 @@ export async function formatWikiContext(chunks) {
       bySource.set(key, { author: chunk.author, title: chunk.title, texts: [] })
     }
     bySource.get(key).texts.push(chunk.key_frameworks)
+  }
+
+  for (const source of sources) {
+    const key = `${source.author}|||${source.title}`
+    const interpreted = formatSourceInterpretation(source)
+    if (!bySource.has(key)) {
+      bySource.set(key, { author: source.author, title: source.title, texts: [] })
+    }
+    if (interpreted) bySource.get(key).texts.push(interpreted)
   }
 
   if (bySource.size === 0) return ''
