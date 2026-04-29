@@ -21,21 +21,12 @@ const NODE_TYPE_COLORS = {
 }
 
 const PILLAR_COLORS = {
-  human_mind:        0x9B59B6,
-  money_game:        0xD4A843,
+  psychology:        0x9B59B6,
+  economics:         0xD4A843,
   how_companies_win: 0x2E86C1,
   whats_coming:      0x27AE60,
   think_sharper:     0xEDEDEC,
   move_people:       0x9B2335,
-}
-
-const PILLAR_DISPLAY_NAMES = {
-  human_mind:        'The Human Mind',
-  money_game:        'The Money Game',
-  how_companies_win: 'How Companies Win',
-  whats_coming:      "What's Coming",
-  think_sharper:     'Think Sharper',
-  move_people:       'Move People',
 }
 
 const NODE_TYPE_BASE_RADIUS = {
@@ -103,21 +94,16 @@ function hashString(value = '') {
   return Math.abs(hash)
 }
 
-const PILLAR_POSITIONS = {
-  human_mind:        { x: -0.60, y:  0.15, z:  0.30 },
-  money_game:        { x:  0.60, y:  0.15, z:  0.30 },
-  how_companies_win: { x:  0.55, y:  0.15, z: -0.35 },
-  whats_coming:      { x:  0.00, y:  0.55, z: -0.15 },
-  think_sharper:     { x: -0.55, y:  0.15, z: -0.35 },
-  move_people:       { x:  0.00, y: -0.48, z:  0.15 },
-}
-
 function brainPoint(node, index, total) {
   if (node.type === 'pillar') {
-    return PILLAR_POSITIONS[node.pillar] ?? { x: 0.42, y: -0.02, z: 0.06 }
+    return {
+      x: node.pillar === 'psychology' ? -0.42 : 0.42,
+      y: -0.02,
+      z: 0.06,
+    }
   }
   const hash = hashString(`${node.label}-${node.type}-${index}`)
-  const sideBias = node.pillar === 'money_game' ? 0.22 : -0.22
+  const sideBias = node.pillar === 'economics' ? 0.22 : -0.22
   const t = total <= 1 ? 0 : index / Math.max(1, total - 1)
   const angle = t * Math.PI * 9.2 + (hash % 100) / 100
   const layer = ((hash % 7) - 3) / 3
@@ -458,9 +444,7 @@ function createLabel(node) {
     border-radius: 3px;
     white-space: nowrap;
   `
-  div.textContent = node.type === 'pillar'
-    ? (PILLAR_DISPLAY_NAMES[node.pillar] ?? extractLabel(node.label))
-    : extractLabel(node.summary || node.label)
+  div.textContent = extractLabel(node.summary || node.label)
   const label = new CSS2DObject(div)
   label.visible = false
   label.position.set(0, getNodeRadius(node) * 1.5, 0)
@@ -1312,13 +1296,11 @@ export default function Brain() {
               className="brain__node-pillar-tag"
               style={{ color: colorToHex(PILLAR_COLORS[activeNode.pillar]) }}
             >
-              {PILLAR_DISPLAY_NAMES[activeNode.pillar] ?? activeNode.pillar.replace(/_/g, ' ')}
+              {activeNode.pillar.replace(/_/g, ' ')}
             </div>
           )}
           <div className="brain__node-title">
-            {activeNode.type === 'pillar'
-              ? (PILLAR_DISPLAY_NAMES[activeNode.pillar] ?? extractLabel(activeNode.label))
-              : extractLabel(activeNode.summary || activeNode.label)}
+            {extractLabel(activeNode.summary || activeNode.label)}
           </div>
           {activeNode.summary && (
             <div className="brain__node-summary">{activeNode.summary}</div>

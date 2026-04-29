@@ -2,76 +2,28 @@ import { supabase } from './supabase'
 
 const ROOT_NODES = [
   {
-    label: 'The Human Mind',
+    label: 'Psychology',
     type: 'pillar',
-    pillar: 'human_mind',
-    summary: 'How you protect identity, handle fear, avoid action, and react under pressure.',
+    pillar: 'psychology',
+    summary: 'How the user protects identity, handles fear, avoids action, and reacts under pressure.',
     status: 'seed',
     importance: 5,
     confidence: 0.9,
-    x: -0.60,
-    y:  0.15,
-    z:  0.30,
+    x: -0.7,
+    y: 0,
+    z: 0.15,
   },
   {
-    label: 'The Money Game',
+    label: 'Economics',
     type: 'pillar',
-    pillar: 'money_game',
-    summary: 'How you think about incentives, opportunity cost, demand, money, and market feedback.',
+    pillar: 'economics',
+    summary: 'How the user thinks about incentives, opportunity cost, demand, money, and market feedback.',
     status: 'seed',
     importance: 5,
     confidence: 0.9,
-    x:  0.60,
-    y:  0.15,
-    z:  0.30,
-  },
-  {
-    label: 'How Companies Win',
-    type: 'pillar',
-    pillar: 'how_companies_win',
-    summary: 'Distribution, moats, category creation, and why most competition is a choice.',
-    status: 'seed',
-    importance: 5,
-    confidence: 0.9,
-    x:  0.55,
-    y:  0.15,
-    z: -0.35,
-  },
-  {
-    label: "What's Coming",
-    type: 'pillar',
-    pillar: 'whats_coming',
-    summary: 'S-curves, regime shifts, and the window between a trend being real and being crowded.',
-    status: 'seed',
-    importance: 5,
-    confidence: 0.9,
-    x:  0.00,
-    y:  0.55,
-    z: -0.15,
-  },
-  {
-    label: 'Think Sharper',
-    type: 'pillar',
-    pillar: 'think_sharper',
-    summary: 'Mental models, decision quality, and the willingness to update under pressure.',
-    status: 'seed',
-    importance: 5,
-    confidence: 0.9,
-    x: -0.55,
-    y:  0.15,
-    z: -0.35,
-  },
-  {
-    label: 'Move People',
-    type: 'pillar',
-    pillar: 'move_people',
-    summary: 'Persuasion, influence, and leadership — understanding the room before you open your mouth.',
-    status: 'seed',
-    importance: 5,
-    confidence: 0.9,
-    x:  0.00,
-    y: -0.48,
-    z:  0.15,
+    x: 0.7,
+    y: 0,
+    z: 0.15,
   },
 ]
 
@@ -79,7 +31,7 @@ const CONCEPT_NODES = [
   {
     label: 'Choice Architecture',
     type: 'concept',
-    pillar: 'human_mind',
+    pillar: 'psychology',
     summary: 'How framing, defaults, and visible options shape the next decision.',
     status: 'dim',
     importance: 3,
@@ -88,7 +40,7 @@ const CONCEPT_NODES = [
   {
     label: 'Identity Protection',
     type: 'concept',
-    pillar: 'human_mind',
+    pillar: 'psychology',
     summary: 'The ways a person protects self-image from market feedback, rejection, or visible failure.',
     status: 'dim',
     importance: 4,
@@ -97,7 +49,7 @@ const CONCEPT_NODES = [
   {
     label: 'Rejection Avoidance',
     type: 'concept',
-    pillar: 'human_mind',
+    pillar: 'psychology',
     summary: 'Avoiding contact with buyers or peers because the answer may expose a weak assumption.',
     status: 'dim',
     importance: 4,
@@ -106,7 +58,7 @@ const CONCEPT_NODES = [
   {
     label: 'Procrastination',
     type: 'concept',
-    pillar: 'human_mind',
+    pillar: 'psychology',
     summary: 'Delay that hides inside preparation, refinement, and standards.',
     status: 'dim',
     importance: 4,
@@ -115,7 +67,7 @@ const CONCEPT_NODES = [
   {
     label: 'Status Anxiety',
     type: 'concept',
-    pillar: 'human_mind',
+    pillar: 'psychology',
     summary: 'Fear that a visible attempt will lower how others rank or interpret you.',
     status: 'dim',
     importance: 3,
@@ -124,7 +76,7 @@ const CONCEPT_NODES = [
   {
     label: 'Self-Deception',
     type: 'concept',
-    pillar: 'human_mind',
+    pillar: 'psychology',
     summary: 'A private story that makes avoidance feel intelligent or principled.',
     status: 'dim',
     importance: 4,
@@ -133,7 +85,7 @@ const CONCEPT_NODES = [
   {
     label: 'Feedback Loops',
     type: 'concept',
-    pillar: 'human_mind',
+    pillar: 'psychology',
     summary: 'The cycle where action creates data, data changes behavior, and behavior changes outcomes.',
     status: 'dim',
     importance: 3,
@@ -142,7 +94,7 @@ const CONCEPT_NODES = [
   {
     label: 'Commitment',
     type: 'concept',
-    pillar: 'human_mind',
+    pillar: 'psychology',
     summary: 'A chosen constraint that forces behavior to become visible.',
     status: 'dim',
     importance: 3,
@@ -151,7 +103,7 @@ const CONCEPT_NODES = [
   {
     label: 'Offer Sharpness',
     type: 'concept',
-    pillar: 'money_game',
+    pillar: 'economics',
     summary: 'How clearly a buyer understands the problem, promise, proof, and next step.',
     status: 'dim',
     importance: 4,
@@ -160,7 +112,7 @@ const CONCEPT_NODES = [
   {
     label: 'Market Demand',
     type: 'concept',
-    pillar: 'money_game',
+    pillar: 'economics',
     summary: 'Evidence that a real buyer cares enough to spend attention, time, money, or reputation.',
     status: 'dim',
     importance: 4,
@@ -169,7 +121,7 @@ const CONCEPT_NODES = [
   {
     label: 'Opportunity Cost',
     type: 'concept',
-    pillar: 'money_game',
+    pillar: 'economics',
     summary: 'The hidden price of spending effort on one path instead of the highest-leverage alternative.',
     status: 'dim',
     importance: 4,
@@ -178,7 +130,7 @@ const CONCEPT_NODES = [
   {
     label: 'Incentives',
     type: 'concept',
-    pillar: 'money_game',
+    pillar: 'economics',
     summary: 'The rewards, penalties, and pressures that explain what people actually do.',
     status: 'dim',
     importance: 3,
@@ -187,7 +139,7 @@ const CONCEPT_NODES = [
   {
     label: 'Pricing',
     type: 'concept',
-    pillar: 'money_game',
+    pillar: 'economics',
     summary: 'The signal that connects value, willingness to pay, positioning, and buyer seriousness.',
     status: 'dim',
     importance: 3,
@@ -196,7 +148,7 @@ const CONCEPT_NODES = [
   {
     label: 'Buyer Objections',
     type: 'concept',
-    pillar: 'money_game',
+    pillar: 'economics',
     summary: 'The reasons buyers hesitate, delay, compare, or reject an offer.',
     status: 'dim',
     importance: 4,
@@ -205,7 +157,7 @@ const CONCEPT_NODES = [
   {
     label: 'Sales Friction',
     type: 'concept',
-    pillar: 'money_game',
+    pillar: 'economics',
     summary: 'Anything that makes the buyer slower, less certain, or less willing to act.',
     status: 'dim',
     importance: 3,
@@ -214,155 +166,11 @@ const CONCEPT_NODES = [
   {
     label: 'Demand Testing',
     type: 'concept',
-    pillar: 'money_game',
+    pillar: 'economics',
     summary: 'Putting an offer in front of buyers before polishing it in private.',
     status: 'dim',
     importance: 4,
     confidence: 0.85,
-  },
-  {
-    label: 'Distribution vs Product',
-    type: 'concept',
-    pillar: 'how_companies_win',
-    summary: 'A mediocre product with perfect distribution outlasts a great product nobody can find.',
-    status: 'dim',
-    importance: 4,
-    confidence: 0.85,
-  },
-  {
-    label: 'Category Creation',
-    type: 'concept',
-    pillar: 'how_companies_win',
-    summary: 'The company that wins makes everything before it feel broken, not by arriving first but by making the gap unthinkable to cross.',
-    status: 'dim',
-    importance: 4,
-    confidence: 0.85,
-  },
-  {
-    label: 'Competitive Moats',
-    type: 'concept',
-    pillar: 'how_companies_win',
-    summary: 'The structural advantages that make a business expensive to copy and painful to leave.',
-    status: 'dim',
-    importance: 4,
-    confidence: 0.8,
-  },
-  {
-    label: 'Switching Costs',
-    type: 'concept',
-    pillar: 'how_companies_win',
-    summary: 'The friction, cost, and risk a customer takes on when moving from one product to another.',
-    status: 'dim',
-    importance: 3,
-    confidence: 0.8,
-  },
-  {
-    label: 'S-Curve Adoption',
-    type: 'concept',
-    pillar: 'whats_coming',
-    summary: 'Every technology moves from fringe to crowded through a predictable compression window.',
-    status: 'dim',
-    importance: 4,
-    confidence: 0.85,
-  },
-  {
-    label: 'Technology Timing',
-    type: 'concept',
-    pillar: 'whats_coming',
-    summary: 'The window between a shift being real and being crowded is where all the leverage lives.',
-    status: 'dim',
-    importance: 4,
-    confidence: 0.85,
-  },
-  {
-    label: 'Second-Order Effects',
-    type: 'concept',
-    pillar: 'whats_coming',
-    summary: 'Most people react to what a change does. The edge is in seeing what the change enables next.',
-    status: 'dim',
-    importance: 4,
-    confidence: 0.8,
-  },
-  {
-    label: 'Regime Shifts',
-    type: 'concept',
-    pillar: 'whats_coming',
-    summary: 'Moments when the rules of a market, technology, or system change permanently and without warning.',
-    status: 'dim',
-    importance: 3,
-    confidence: 0.8,
-  },
-  {
-    label: 'Inversion',
-    type: 'concept',
-    pillar: 'think_sharper',
-    summary: 'Instead of asking how to succeed, ask what guarantees failure — then avoid it.',
-    status: 'dim',
-    importance: 4,
-    confidence: 0.85,
-  },
-  {
-    label: 'First Principles',
-    type: 'concept',
-    pillar: 'think_sharper',
-    summary: 'Breaking a problem to its irreducible facts instead of reasoning by analogy from what already exists.',
-    status: 'dim',
-    importance: 4,
-    confidence: 0.85,
-  },
-  {
-    label: 'Decision Traps',
-    type: 'concept',
-    pillar: 'think_sharper',
-    summary: 'The recurring errors in judgment that repeat not from lack of intelligence but from unexamined identity.',
-    status: 'dim',
-    importance: 4,
-    confidence: 0.8,
-  },
-  {
-    label: 'Updating Beliefs',
-    type: 'concept',
-    pillar: 'think_sharper',
-    summary: 'The willingness to change your position when the evidence changes — not when the social cost drops.',
-    status: 'dim',
-    importance: 3,
-    confidence: 0.8,
-  },
-  {
-    label: 'Audience Diagnosis',
-    type: 'concept',
-    pillar: 'move_people',
-    summary: 'Understanding what the room already believes before deciding what to say.',
-    status: 'dim',
-    importance: 4,
-    confidence: 0.85,
-  },
-  {
-    label: 'Framing',
-    type: 'concept',
-    pillar: 'move_people',
-    summary: 'The same fact lands differently depending on what it is placed next to.',
-    status: 'dim',
-    importance: 4,
-    confidence: 0.85,
-  },
-  {
-    label: 'Trust Building',
-    type: 'concept',
-    pillar: 'move_people',
-    summary: 'Trust is built through consistency, specificity, and the visible willingness to be wrong.',
-    status: 'dim',
-    importance: 4,
-    confidence: 0.8,
-  },
-  {
-    label: 'Persuasion Architecture',
-    type: 'concept',
-    pillar: 'move_people',
-    summary: 'The structure of how an argument, pitch, or conversation is sequenced to move someone to action.',
-    status: 'dim',
-    importance: 3,
-    confidence: 0.8,
   },
 ]
 
@@ -378,29 +186,17 @@ const MEMORY_TYPE_TO_NODE_TYPE = {
 
 function inferPillar(text = '', fallback = null) {
   const lower = text.toLowerCase()
-  if (/\b(money|price|pricing|buyer|market|offer|sales|revenue|cost|incentive|demand|outreach|customer|invest|capital|wealth|profit|cash|fund|equity)\b/.test(lower)) {
-    return 'money_game'
+  if (/\b(money|price|pricing|buyer|market|offer|sales|revenue|cost|incentive|demand|outreach|customer)\b/.test(lower)) {
+    return 'economics'
   }
-  if (/\b(fear|avoid|identity|stress|confidence|rejection|procrastinat|anxiety|status|self|mind|emotion|habit|behavior|pattern|cognitive|bias)\b/.test(lower)) {
-    return 'human_mind'
-  }
-  if (/\b(compan|competi|strateg|distribut|moat|startup|advantage|category|defensib|switching|scale|product.market)\b/.test(lower)) {
-    return 'how_companies_win'
-  }
-  if (/\b(future|trend|technolog|shift|coming|emerg|wave|transform|predict|decade|geopolit|regime|s.curve)\b/.test(lower)) {
-    return 'whats_coming'
-  }
-  if (/\b(think|reason|decision|mental.model|framework|logic|clarity|sharp|invert|first.principle|judgment|update|belief)\b/.test(lower)) {
-    return 'think_sharper'
-  }
-  if (/\b(persuad|communicat|influence|leader|speak|present|network|relationship|trust|negotiat|pitch|audience|convinc|frame)\b/.test(lower)) {
-    return 'move_people'
+  if (/\b(fear|avoid|identity|stress|confidence|rejection|procrastinat|anxiety|status|self|mind|emotion)\b/.test(lower)) {
+    return 'psychology'
   }
   return fallback
 }
 
 function nodePosition(index, pillar) {
-  const side = pillar === 'money_game' ? 1 : -1
+  const side = pillar === 'economics' ? 1 : -1
   const ring = 0.44 + (index % 4) * 0.11
   const angle = -1.2 + (index % 7) * 0.42
   return {
@@ -414,7 +210,7 @@ function normalizeNode(rawNode, index = 0) {
   const label = typeof rawNode?.label === 'string' ? rawNode.label.trim() : ''
   if (!label) return null
 
-  const pillar = rawNode.pillar || inferPillar(`${label} ${rawNode.summary || ''}`, 'human_mind')
+  const pillar = rawNode.pillar || inferPillar(`${label} ${rawNode.summary || ''}`, 'psychology')
   const pos = rawNode.x == null ? nodePosition(index, pillar) : rawNode
 
   return {
@@ -435,20 +231,13 @@ async function upsertNode(sessionId, rawNode, index = 0) {
   const node = normalizeNode(rawNode, index)
   if (!node) return null
 
-  // Pillar nodes match by pillar+type so label renames update the existing record
-  const query = supabase
+  const { data: existing, error: selectError } = await supabase
     .from('personal_wiki_nodes')
     .select('*')
     .eq('session_id', sessionId)
+    .eq('label', node.label)
     .eq('type', node.type)
-
-  if (node.type === 'pillar') {
-    query.eq('pillar', node.pillar)
-  } else {
-    query.eq('label', node.label)
-  }
-
-  const { data: existing, error: selectError } = await query.maybeSingle()
+    .maybeSingle()
 
   if (selectError) {
     console.warn('[Wiki] Node lookup skipped:', selectError.message)
@@ -457,7 +246,6 @@ async function upsertNode(sessionId, rawNode, index = 0) {
 
   if (existing) {
     const updates = {
-      label: node.label,
       pillar: node.pillar || existing.pillar,
       summary: node.summary || existing.summary,
       status: existing.status === 'bright' ? existing.status : node.status,
@@ -540,10 +328,10 @@ function seedNodesFromSession(session) {
   const answers = session?.onboarding_answers || []
   const profile = session?.axiom_profile || ''
 
-  const profilePillar = inferPillar(profile, 'human_mind')
+  const profilePillar = inferPillar(profile, 'psychology')
   if (profile) {
     nodes.push({
-      label: profilePillar === 'money_game' ? 'Market Behavior Pattern' : 'Identity Protection Pattern',
+      label: profilePillar === 'economics' ? 'Market Behavior Pattern' : 'Identity Protection Pattern',
       type: 'pattern',
       pillar: profilePillar,
       summary: profile,
@@ -555,7 +343,7 @@ function seedNodesFromSession(session) {
 
   for (const qa of answers.slice(0, 4)) {
     const text = `${qa.question || ''} ${qa.answer || ''}`
-    const pillar = inferPillar(text, qa.pillar === 'money_game' ? 'money_game' : 'human_mind')
+    const pillar = inferPillar(text, qa.pillar === 'money_game' ? 'economics' : 'psychology')
     nodes.push({
       label: qa.answer || qa.question,
       type: 'concept',
@@ -587,7 +375,7 @@ function nodeFromExperiment(experiment, index) {
   return normalizeNode({
     label: experiment.description.length > 54 ? `${experiment.description.slice(0, 51)}...` : experiment.description,
     type: 'experiment',
-    pillar: inferPillar(experiment.description, 'human_mind'),
+    pillar: inferPillar(experiment.description, 'psychology'),
     summary: `${experiment.description} (${experiment.window_hours}h window)`,
     status: experiment.status === 'ghosted' ? 'ghosted' : 'active',
     importance: 4,
