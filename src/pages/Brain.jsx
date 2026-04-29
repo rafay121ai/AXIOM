@@ -23,10 +23,23 @@ const NODE_TYPE_COLORS = {
 const PILLAR_COLORS = {
   psychology:        0x9B59B6,
   economics:         0xD4A843,
+  human_mind:        0x9B59B6,
+  money_game:        0xD4A843,
   how_companies_win: 0x2E86C1,
   whats_coming:      0x27AE60,
   think_sharper:     0xEDEDEC,
   move_people:       0x9B2335,
+}
+
+const PILLAR_DISPLAY_NAMES = {
+  psychology: 'THE HUMAN MIND',
+  economics: 'THE MONEY GAME',
+  human_mind: 'THE HUMAN MIND',
+  money_game: 'THE MONEY GAME',
+  how_companies_win: 'HOW COMPANIES WIN',
+  whats_coming: "WHAT'S COMING",
+  think_sharper: 'THINK SHARPER',
+  move_people: 'MOVE PEOPLE',
 }
 
 const NODE_TYPE_BASE_RADIUS = {
@@ -39,13 +52,6 @@ const NODE_TYPE_BASE_RADIUS = {
 
 const MAX_VISIBLE_NODES = 80
 const MAX_PILLAR_EDGES = 24
-
-const STOP_WORDS = new Set([
-  'the','a','an','is','are','was','to','of','in','that','it','for','on',
-  'with','he','she','they','this','user','has','have','been','and','or',
-  'but','not','by','at','from','their','wants','need','needs','will',
-  'would','should','could',
-])
 
 // ─── Preserved helpers ───────────────────────────────────────────────────────
 
@@ -97,13 +103,13 @@ function hashString(value = '') {
 function brainPoint(node, index, total) {
   if (node.type === 'pillar') {
     return {
-      x: node.pillar === 'psychology' ? -0.42 : 0.42,
+      x: ['psychology', 'human_mind'].includes(node.pillar) ? -0.42 : 0.42,
       y: -0.02,
       z: 0.06,
     }
   }
   const hash = hashString(`${node.label}-${node.type}-${index}`)
-  const sideBias = node.pillar === 'economics' ? 0.22 : -0.22
+  const sideBias = ['economics', 'money_game'].includes(node.pillar) ? 0.22 : -0.22
   const t = total <= 1 ? 0 : index / Math.max(1, total - 1)
   const angle = t * Math.PI * 9.2 + (hash % 100) / 100
   const layer = ((hash % 7) - 3) / 3
@@ -349,14 +355,45 @@ function getHaloTexture() {
   return _haloTexture
 }
 
-function extractLabel(content) {
-  const words = String(content || '').toLowerCase().split(/\s+/)
-  const meaningful = words
-    .map(w => w.replace(/[^a-z0-9]/g, ''))
-    .filter(w => !STOP_WORDS.has(w) && w.length > 2)
-  return meaningful.slice(0, 3)
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ').toUpperCase()
+function titleCase(value = '') {
+  return String(value)
+    .replace(/_/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+    .replace(/\b[a-z]/g, char => char.toUpperCase())
+}
+
+function sentenceCase(value = '') {
+  const text = String(value)
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!text) return ''
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
+function cleanNodeLabel(value = '') {
+  return String(value)
+    .replace(/\s+/g, ' ')
+    .replace(/\.\.\.$/, '')
+    .replace(/^the user\s+(wants|needs|is trying|is working|has been trying)\s+/i, '')
+    .trim()
+}
+
+function displayPillarName(pillar = '') {
+  return PILLAR_DISPLAY_NAMES[pillar] || titleCase(pillar).toUpperCase()
+}
+
+function displayNodeTitle(node) {
+  if (!node) return ''
+  if (node.type === 'pillar') return displayPillarName(node.pillar)
+  const label = cleanNodeLabel(node.label || node.summary || 'Untitled node')
+  const words = label.split(/\s+/).filter(Boolean)
+  return words.length > 5 ? sentenceCase(label) : titleCase(label)
+}
+
+function displayNodeType(type = '') {
+  return titleCase(type)
 }
 
 function colorToHex(colorInt) {
@@ -444,7 +481,7 @@ function createLabel(node) {
     border-radius: 3px;
     white-space: nowrap;
   `
-  div.textContent = extractLabel(node.summary || node.label)
+  div.textContent = displayNodeTitle(node)
   const label = new CSS2DObject(div)
   label.visible = false
   label.position.set(0, getNodeRadius(node) * 1.5, 0)
@@ -1149,6 +1186,7 @@ export default function Brain() {
 
   const nodes = graph.nodes || []
   const activeNode = nodes.find(n => n.id === activeId)
+  const activeIsPillar = activeNode?.type === 'pillar'
 
   if (loading) {
     return (
@@ -1289,20 +1327,20 @@ export default function Brain() {
             className="brain__node-kicker"
             style={{ color: colorToHex(getNodeColor(activeNode)) }}
           >
-            {activeNode.type.replace(/_/g, ' ')}
+            {displayNodeType(activeNode.type)}
           </div>
-          {activeNode.pillar && PILLAR_COLORS[activeNode.pillar] && (
+          {!activeIsPillar && activeNode.pillar && PILLAR_COLORS[activeNode.pillar] && (
             <div
               className="brain__node-pillar-tag"
               style={{ color: colorToHex(PILLAR_COLORS[activeNode.pillar]) }}
             >
-              {activeNode.pillar.replace(/_/g, ' ')}
+              {displayPillarName(activeNode.pillar)}
             </div>
           )}
           <div className="brain__node-title">
-            {extractLabel(activeNode.summary || activeNode.label)}
+            {displayNodeTitle(activeNode)}
           </div>
-          {activeNode.summary && (
+          {!activeIsPillar && activeNode.summary && (
             <div className="brain__node-summary">{activeNode.summary}</div>
           )}
           <button onClick={() => startFromNode(activeNode)}>Move with this</button>

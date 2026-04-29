@@ -17,17 +17,19 @@ import 'dotenv/config'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { execFile } from 'child_process'
+import { promisify } from 'util'
 import axios from 'axios'
 import * as cheerio from 'cheerio'
 import { createRequire } from 'module'
 const require = createRequire(import.meta.url)
 const pdfParse = require('pdf-parse')
-import { getSubtitles } from 'youtube-captions-scraper'
 import { createClient } from '@supabase/supabase-js'
 import OpenAI from 'openai'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const SOURCES_DIR = path.join(__dirname, 'sources')
+const execFileAsync = promisify(execFile)
 
 // ─── Clients ─────────────────────────────────────────────────────────────────
 const supabase = createClient(
@@ -598,27 +600,81 @@ async function processURL(url) {
   return text
 }
 
-async function processYouTube(youtubeUrl) {
-  // Extract video ID from any YouTube URL format
-  const match = youtubeUrl.match(
-    /(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/
-  )
-  if (!match) throw new Error(`Could not extract video ID from: ${youtubeUrl}`)
+function extractYouTubeVideoId(youtubeUrl) {
+  try {
+    const url = new URL(youtubeUrl)
+    const hostname = url.hostname.replace(/^www\./, '').replace(/^m\./, '').toLowerCase()
+    const parts = url.pathname.split('/').filter(Boolean)
 
-  const videoId = match[1]
-  let segments
+    if (hostname === 'youtu.be') return parts[0]
+
+    if (hostname === 'youtube.com' || hostname === 'youtube-nocookie.com') {
+      if (url.pathname === '/watch') return url.searchParams.get('v')
+      if (parts[0] === 'embed' || parts[0] === 'shorts') return parts[1]
+    }
+  } catch {
+    // Fall through to the regex fallback below.
+  }
+
+  const match = youtubeUrl.match(
+    /(?:youtube(?:-nocookie)?\.com\/(?:watch\?[^#\s]*v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/
+  )
+  return match?.[1]
+}
+
+async function fetchYouTubeTranscript(videoId) {
+  const helperPath = path.join(__dirname, 'scripts', 'fetch_youtube_transcript.py')
+  const pythonBins = [process.env.PYTHON_BIN || 'python3', 'python']
+  let lastErr
+
+  for (const pythonBin of [...new Set(pythonBins)]) {
+    try {
+      const { stdout, stderr } = await execFileAsync(
+        pythonBin,
+        [helperPath, videoId],
+        {
+          cwd: __dirname,
+          env: process.env,
+          maxBuffer: 50 * 1024 * 1024,
+        }
+      )
+
+      if (stderr.trim()) console.warn(stderr.trim())
+
+      return JSON.parse(stdout)
+    } catch (err) {
+      lastErr = err
+      if (err.code !== 'ENOENT') break
+    }
+  }
+
+  const stderr = lastErr?.stderr?.trim()
+  const message = stderr || lastErr?.message || 'unknown transcript fetch error'
+  throw new Error(message)
+}
+
+async function processYouTube(youtubeUrl) {
+  const videoId = extractYouTubeVideoId(youtubeUrl)
+  if (!videoId || !/^[A-Za-z0-9_-]{11}$/.test(videoId)) {
+    throw new Error(`Could not extract video ID from: ${youtubeUrl}`)
+  }
 
   try {
-    segments = await getSubtitles({ videoID: videoId, lang: 'en' })
+    const result = await fetchYouTubeTranscript(videoId)
+
+    if (!result.text || result.char_count === 0) {
+      console.log(`    YouTube ${videoId}: failed — empty response`)
+      throw new Error('empty response')
+    }
+
+    console.log(
+      `    YouTube ${videoId}: ${result.method} succeeded — ${result.char_count} chars extracted`
+    )
+    return result.text
   } catch (err) {
+    console.log(`    YouTube ${videoId}: failed — ${err.message}`)
     throw new Error(`Transcript unavailable for ${youtubeUrl}: ${err.message}`)
   }
-
-  if (!segments || segments.length === 0) {
-    throw new Error(`Transcript unavailable for ${youtubeUrl}: empty response`)
-  }
-
-  return segments.map((s) => s.text).join(' ')
 }
 
 // ─── Embedding + Insert ───────────────────────────────────────────────────────
