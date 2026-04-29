@@ -21,12 +21,21 @@ const NODE_TYPE_COLORS = {
 }
 
 const PILLAR_COLORS = {
-  psychology:        0x9B59B6,
-  economics:         0xD4A843,
+  human_mind:        0x9B59B6,
+  money_game:        0xD4A843,
   how_companies_win: 0x2E86C1,
   whats_coming:      0x27AE60,
   think_sharper:     0xEDEDEC,
   move_people:       0x9B2335,
+}
+
+const PILLAR_DISPLAY_NAMES = {
+  human_mind:        'The Human Mind',
+  money_game:        'The Money Game',
+  how_companies_win: 'How Companies Win',
+  whats_coming:      "What's Coming",
+  think_sharper:     'Think Sharper',
+  move_people:       'Move People',
 }
 
 const NODE_TYPE_BASE_RADIUS = {
@@ -97,13 +106,13 @@ function hashString(value = '') {
 function brainPoint(node, index, total) {
   if (node.type === 'pillar') {
     return {
-      x: node.pillar === 'psychology' ? -0.42 : 0.42,
+      x: node.pillar === 'human_mind' ? -0.42 : 0.42,
       y: -0.02,
       z: 0.06,
     }
   }
   const hash = hashString(`${node.label}-${node.type}-${index}`)
-  const sideBias = node.pillar === 'economics' ? 0.22 : -0.22
+  const sideBias = node.pillar === 'money_game' ? 0.22 : -0.22
   const t = total <= 1 ? 0 : index / Math.max(1, total - 1)
   const angle = t * Math.PI * 9.2 + (hash % 100) / 100
   const layer = ((hash % 7) - 3) / 3
@@ -444,7 +453,9 @@ function createLabel(node) {
     border-radius: 3px;
     white-space: nowrap;
   `
-  div.textContent = extractLabel(node.summary || node.label)
+  div.textContent = node.type === 'pillar'
+    ? (PILLAR_DISPLAY_NAMES[node.pillar] ?? extractLabel(node.label))
+    : extractLabel(node.summary || node.label)
   const label = new CSS2DObject(div)
   label.visible = false
   label.position.set(0, getNodeRadius(node) * 1.5, 0)
@@ -1296,7 +1307,7 @@ export default function Brain() {
               className="brain__node-pillar-tag"
               style={{ color: colorToHex(PILLAR_COLORS[activeNode.pillar]) }}
             >
-              {activeNode.pillar.replace(/_/g, ' ')}
+              {PILLAR_DISPLAY_NAMES[activeNode.pillar] ?? activeNode.pillar.replace(/_/g, ' ')}
             </div>
           )}
           <div className="brain__node-title">
