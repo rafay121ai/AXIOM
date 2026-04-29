@@ -103,13 +103,18 @@ function hashString(value = '') {
   return Math.abs(hash)
 }
 
+const PILLAR_POSITIONS = {
+  human_mind:        { x: -0.60, y:  0.15, z:  0.30 },
+  money_game:        { x:  0.60, y:  0.15, z:  0.30 },
+  how_companies_win: { x:  0.55, y:  0.15, z: -0.35 },
+  whats_coming:      { x:  0.00, y:  0.55, z: -0.15 },
+  think_sharper:     { x: -0.55, y:  0.15, z: -0.35 },
+  move_people:       { x:  0.00, y: -0.48, z:  0.15 },
+}
+
 function brainPoint(node, index, total) {
   if (node.type === 'pillar') {
-    return {
-      x: node.pillar === 'human_mind' ? -0.42 : 0.42,
-      y: -0.02,
-      z: 0.06,
-    }
+    return PILLAR_POSITIONS[node.pillar] ?? { x: 0.42, y: -0.02, z: 0.06 }
   }
   const hash = hashString(`${node.label}-${node.type}-${index}`)
   const sideBias = node.pillar === 'money_game' ? 0.22 : -0.22
@@ -1311,7 +1316,9 @@ export default function Brain() {
             </div>
           )}
           <div className="brain__node-title">
-            {extractLabel(activeNode.summary || activeNode.label)}
+            {activeNode.type === 'pillar'
+              ? (PILLAR_DISPLAY_NAMES[activeNode.pillar] ?? extractLabel(activeNode.label))
+              : extractLabel(activeNode.summary || activeNode.label)}
           </div>
           {activeNode.summary && (
             <div className="brain__node-summary">{activeNode.summary}</div>

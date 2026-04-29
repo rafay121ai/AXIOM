@@ -2,28 +2,76 @@ import { supabase } from './supabase'
 
 const ROOT_NODES = [
   {
-    label: 'Psychology',
+    label: 'The Human Mind',
     type: 'pillar',
     pillar: 'human_mind',
-    summary: 'How the user protects identity, handles fear, avoids action, and reacts under pressure.',
+    summary: 'How you protect identity, handle fear, avoid action, and react under pressure.',
     status: 'seed',
     importance: 5,
     confidence: 0.9,
-    x: -0.7,
-    y: 0,
-    z: 0.15,
+    x: -0.60,
+    y:  0.15,
+    z:  0.30,
   },
   {
-    label: 'Economics',
+    label: 'The Money Game',
     type: 'pillar',
     pillar: 'money_game',
-    summary: 'How the user thinks about incentives, opportunity cost, demand, money, and market feedback.',
+    summary: 'How you think about incentives, opportunity cost, demand, money, and market feedback.',
     status: 'seed',
     importance: 5,
     confidence: 0.9,
-    x: 0.7,
-    y: 0,
-    z: 0.15,
+    x:  0.60,
+    y:  0.15,
+    z:  0.30,
+  },
+  {
+    label: 'How Companies Win',
+    type: 'pillar',
+    pillar: 'how_companies_win',
+    summary: 'Distribution, moats, category creation, and why most competition is a choice.',
+    status: 'seed',
+    importance: 5,
+    confidence: 0.9,
+    x:  0.55,
+    y:  0.15,
+    z: -0.35,
+  },
+  {
+    label: "What's Coming",
+    type: 'pillar',
+    pillar: 'whats_coming',
+    summary: 'S-curves, regime shifts, and the window between a trend being real and being crowded.',
+    status: 'seed',
+    importance: 5,
+    confidence: 0.9,
+    x:  0.00,
+    y:  0.55,
+    z: -0.15,
+  },
+  {
+    label: 'Think Sharper',
+    type: 'pillar',
+    pillar: 'think_sharper',
+    summary: 'Mental models, decision quality, and the willingness to update under pressure.',
+    status: 'seed',
+    importance: 5,
+    confidence: 0.9,
+    x: -0.55,
+    y:  0.15,
+    z: -0.35,
+  },
+  {
+    label: 'Move People',
+    type: 'pillar',
+    pillar: 'move_people',
+    summary: 'Persuasion, influence, and leadership — understanding the room before you open your mouth.',
+    status: 'seed',
+    importance: 5,
+    confidence: 0.9,
+    x:  0.00,
+    y: -0.48,
+    z:  0.15,
   },
 ]
 
@@ -172,6 +220,150 @@ const CONCEPT_NODES = [
     importance: 4,
     confidence: 0.85,
   },
+  {
+    label: 'Distribution vs Product',
+    type: 'concept',
+    pillar: 'how_companies_win',
+    summary: 'A mediocre product with perfect distribution outlasts a great product nobody can find.',
+    status: 'dim',
+    importance: 4,
+    confidence: 0.85,
+  },
+  {
+    label: 'Category Creation',
+    type: 'concept',
+    pillar: 'how_companies_win',
+    summary: 'The company that wins makes everything before it feel broken, not by arriving first but by making the gap unthinkable to cross.',
+    status: 'dim',
+    importance: 4,
+    confidence: 0.85,
+  },
+  {
+    label: 'Competitive Moats',
+    type: 'concept',
+    pillar: 'how_companies_win',
+    summary: 'The structural advantages that make a business expensive to copy and painful to leave.',
+    status: 'dim',
+    importance: 4,
+    confidence: 0.8,
+  },
+  {
+    label: 'Switching Costs',
+    type: 'concept',
+    pillar: 'how_companies_win',
+    summary: 'The friction, cost, and risk a customer takes on when moving from one product to another.',
+    status: 'dim',
+    importance: 3,
+    confidence: 0.8,
+  },
+  {
+    label: 'S-Curve Adoption',
+    type: 'concept',
+    pillar: 'whats_coming',
+    summary: 'Every technology moves from fringe to crowded through a predictable compression window.',
+    status: 'dim',
+    importance: 4,
+    confidence: 0.85,
+  },
+  {
+    label: 'Technology Timing',
+    type: 'concept',
+    pillar: 'whats_coming',
+    summary: 'The window between a shift being real and being crowded is where all the leverage lives.',
+    status: 'dim',
+    importance: 4,
+    confidence: 0.85,
+  },
+  {
+    label: 'Second-Order Effects',
+    type: 'concept',
+    pillar: 'whats_coming',
+    summary: 'Most people react to what a change does. The edge is in seeing what the change enables next.',
+    status: 'dim',
+    importance: 4,
+    confidence: 0.8,
+  },
+  {
+    label: 'Regime Shifts',
+    type: 'concept',
+    pillar: 'whats_coming',
+    summary: 'Moments when the rules of a market, technology, or system change permanently and without warning.',
+    status: 'dim',
+    importance: 3,
+    confidence: 0.8,
+  },
+  {
+    label: 'Inversion',
+    type: 'concept',
+    pillar: 'think_sharper',
+    summary: 'Instead of asking how to succeed, ask what guarantees failure — then avoid it.',
+    status: 'dim',
+    importance: 4,
+    confidence: 0.85,
+  },
+  {
+    label: 'First Principles',
+    type: 'concept',
+    pillar: 'think_sharper',
+    summary: 'Breaking a problem to its irreducible facts instead of reasoning by analogy from what already exists.',
+    status: 'dim',
+    importance: 4,
+    confidence: 0.85,
+  },
+  {
+    label: 'Decision Traps',
+    type: 'concept',
+    pillar: 'think_sharper',
+    summary: 'The recurring errors in judgment that repeat not from lack of intelligence but from unexamined identity.',
+    status: 'dim',
+    importance: 4,
+    confidence: 0.8,
+  },
+  {
+    label: 'Updating Beliefs',
+    type: 'concept',
+    pillar: 'think_sharper',
+    summary: 'The willingness to change your position when the evidence changes — not when the social cost drops.',
+    status: 'dim',
+    importance: 3,
+    confidence: 0.8,
+  },
+  {
+    label: 'Audience Diagnosis',
+    type: 'concept',
+    pillar: 'move_people',
+    summary: 'Understanding what the room already believes before deciding what to say.',
+    status: 'dim',
+    importance: 4,
+    confidence: 0.85,
+  },
+  {
+    label: 'Framing',
+    type: 'concept',
+    pillar: 'move_people',
+    summary: 'The same fact lands differently depending on what it is placed next to.',
+    status: 'dim',
+    importance: 4,
+    confidence: 0.85,
+  },
+  {
+    label: 'Trust Building',
+    type: 'concept',
+    pillar: 'move_people',
+    summary: 'Trust is built through consistency, specificity, and the visible willingness to be wrong.',
+    status: 'dim',
+    importance: 4,
+    confidence: 0.8,
+  },
+  {
+    label: 'Persuasion Architecture',
+    type: 'concept',
+    pillar: 'move_people',
+    summary: 'The structure of how an argument, pitch, or conversation is sequenced to move someone to action.',
+    status: 'dim',
+    importance: 3,
+    confidence: 0.8,
+  },
 ]
 
 const MEMORY_TYPE_TO_NODE_TYPE = {
@@ -186,11 +378,23 @@ const MEMORY_TYPE_TO_NODE_TYPE = {
 
 function inferPillar(text = '', fallback = null) {
   const lower = text.toLowerCase()
-  if (/\b(money|price|pricing|buyer|market|offer|sales|revenue|cost|incentive|demand|outreach|customer)\b/.test(lower)) {
+  if (/\b(money|price|pricing|buyer|market|offer|sales|revenue|cost|incentive|demand|outreach|customer|invest|capital|wealth|profit|cash|fund|equity)\b/.test(lower)) {
     return 'money_game'
   }
-  if (/\b(fear|avoid|identity|stress|confidence|rejection|procrastinat|anxiety|status|self|mind|emotion)\b/.test(lower)) {
+  if (/\b(fear|avoid|identity|stress|confidence|rejection|procrastinat|anxiety|status|self|mind|emotion|habit|behavior|pattern|cognitive|bias)\b/.test(lower)) {
     return 'human_mind'
+  }
+  if (/\b(compan|competi|strateg|distribut|moat|startup|advantage|category|defensib|switching|scale|product.market)\b/.test(lower)) {
+    return 'how_companies_win'
+  }
+  if (/\b(future|trend|technolog|shift|coming|emerg|wave|transform|predict|decade|geopolit|regime|s.curve)\b/.test(lower)) {
+    return 'whats_coming'
+  }
+  if (/\b(think|reason|decision|mental.model|framework|logic|clarity|sharp|invert|first.principle|judgment|update|belief)\b/.test(lower)) {
+    return 'think_sharper'
+  }
+  if (/\b(persuad|communicat|influence|leader|speak|present|network|relationship|trust|negotiat|pitch|audience|convinc|frame)\b/.test(lower)) {
+    return 'move_people'
   }
   return fallback
 }
@@ -231,13 +435,20 @@ async function upsertNode(sessionId, rawNode, index = 0) {
   const node = normalizeNode(rawNode, index)
   if (!node) return null
 
-  const { data: existing, error: selectError } = await supabase
+  // Pillar nodes match by pillar+type so label renames update the existing record
+  const query = supabase
     .from('personal_wiki_nodes')
     .select('*')
     .eq('session_id', sessionId)
-    .eq('label', node.label)
     .eq('type', node.type)
-    .maybeSingle()
+
+  if (node.type === 'pillar') {
+    query.eq('pillar', node.pillar)
+  } else {
+    query.eq('label', node.label)
+  }
+
+  const { data: existing, error: selectError } = await query.maybeSingle()
 
   if (selectError) {
     console.warn('[Wiki] Node lookup skipped:', selectError.message)
@@ -246,6 +457,7 @@ async function upsertNode(sessionId, rawNode, index = 0) {
 
   if (existing) {
     const updates = {
+      label: node.label,
       pillar: node.pillar || existing.pillar,
       summary: node.summary || existing.summary,
       status: existing.status === 'bright' ? existing.status : node.status,
