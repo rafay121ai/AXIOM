@@ -184,12 +184,27 @@ function nodeVisualScore(node) {
 function visibleGraph(graph) {
   const rawNodes = graph.nodes || []
   const pillarNodes = rawNodes.filter(node => node.type === 'pillar')
-  const selectedNodes = rawNodes
+  const candidateNodes = rawNodes
     .filter(node => node.type !== 'pillar')
     .filter(node => isNodeLit(node) || node.type === 'experiment' || (node.importance || 0) >= 4)
     .sort((a, b) => nodeVisualScore(b) - nodeVisualScore(a))
     .slice(0, MAX_VISIBLE_NODES)
 
+  // Pre-compute which candidates are connected before committing to visibility
+  const candidateIds = new Set([
+    ...pillarNodes.map(n => n.id),
+    ...candidateNodes.map(n => n.id),
+  ])
+  const connectedIds = new Set()
+  ;(graph.edges || []).forEach(edge => {
+    if (candidateIds.has(edge.source_node_id) && candidateIds.has(edge.target_node_id)) {
+      connectedIds.add(edge.source_node_id)
+      connectedIds.add(edge.target_node_id)
+    }
+  })
+
+  // Drop non-pillar nodes with no edges — they carry no relational context
+  const selectedNodes = candidateNodes.filter(n => connectedIds.has(n.id))
   const nodes = [...pillarNodes, ...selectedNodes]
   const nodeById = new Map(nodes.map(node => [node.id, node]))
   const visibleIds = new Set(nodes.map(node => node.id))
@@ -205,11 +220,6 @@ function visibleGraph(graph) {
     .slice(0, MAX_PILLAR_EDGES)
 
   const edges = [...nonPillarEdges, ...pillarEdges]
-  const connectedIds = new Set()
-  edges.forEach(edge => {
-    connectedIds.add(edge.source_node_id)
-    connectedIds.add(edge.target_node_id)
-  })
 
   return { nodes, edges, connectedIds }
 }
@@ -317,6 +327,28 @@ function getGlowTexture() {
   return _glowTexture
 }
 
+let _haloTexture = null
+function getHaloTexture() {
+  if (_haloTexture) return _haloTexture
+  const size = 128
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  const cx = size / 2, cy = size / 2, r = size / 2
+  // Ring shape: transparent center, peak at ~50%, fade to transparent edge
+  const grad = ctx.createRadialGradient(cx, cy, r * 0.32, cx, cy, r)
+  grad.addColorStop(0.00, 'rgba(255,255,255,0.0)')
+  grad.addColorStop(0.30, 'rgba(255,255,255,0.85)')
+  grad.addColorStop(0.52, 'rgba(255,255,255,0.55)')
+  grad.addColorStop(0.78, 'rgba(255,255,255,0.12)')
+  grad.addColorStop(1.00, 'rgba(255,255,255,0.0)')
+  ctx.fillStyle = grad
+  ctx.fillRect(0, 0, size, size)
+  _haloTexture = new THREE.CanvasTexture(canvas)
+  return _haloTexture
+}
+
 function extractLabel(content) {
   const words = String(content || '').toLowerCase().split(/\s+/)
   const meaningful = words
@@ -356,7 +388,20 @@ function createNodeMesh(node, connected = false) {
   sprite.scale.set(spriteScale, spriteScale, 1)
   mesh.add(sprite)
 
-  mesh.userData = { node, sprite, connected }
+  const haloMat = new THREE.SpriteMaterial({
+    map: getHaloTexture(),
+    color,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    opacity: muted ? 0 : pillar ? 0.18 : lit ? 0.22 : 0.12,
+  })
+  const halo = new THREE.Sprite(haloMat)
+  const haloScale = muted ? 0 : radius * (pillar ? 3.5 : lit ? 3.0 : 2.4)
+  halo.scale.set(haloScale, haloScale, 1)
+  mesh.add(halo)
+
+  mesh.userData = { node, sprite, halo, connected }
   return mesh
 }
 
@@ -369,10 +414,10 @@ function createEdge(sourcePos, targetPos, sourceNode, targetNode, relationship) 
     targetPos.clone(),
   ])
   const targetOpacity = relationship === 'tested_by'
-    ? 0.12
+    ? 0.24
     : relationship === 'belongs_to'
-      ? 0.045
-      : 0.035
+      ? 0.09
+      : 0.08
   const material = new THREE.LineBasicMaterial({
     color: blended,
     transparent: true,
@@ -438,7 +483,10 @@ function igniteNode(mesh) {
   const pillar = node.type === 'pillar'
   const targetSpriteScale = radius * (muted ? 1.35 : pillar ? 2.8 : lit ? 2.35 : 1.65)
   const targetSpriteOpacity = muted ? 0.035 : pillar ? 0.13 : lit ? 0.22 : 0.08
+  const targetHaloScale = muted ? 0 : radius * (pillar ? 3.5 : lit ? 3.0 : 2.4)
+  const targetHaloOpacity = muted ? 0 : pillar ? 0.18 : lit ? 0.22 : 0.12
   const sprite = mesh.userData.sprite
+  const halo = mesh.userData.halo
 
   animateTween(0.01, 1.0, 500, v => { mesh.scale.set(v, v, v) }, 'easeOut')
   animateTween(0, muted ? 0.20 : targetOpacity, 400, v => { setNodeOpacity(mesh, v) }, 'easeOut')
@@ -454,6 +502,17 @@ function igniteNode(mesh) {
       animateTween(sprite.material.opacity, targetSpriteOpacity, 350, v => { sprite.material.opacity = v })
     }, 220)
   }
+
+  if (halo && targetHaloScale > 0) {
+    halo.material.opacity = 0
+    halo.scale.set(0, 0, 1)
+    animateTween(0, targetHaloScale * 1.2, 300, v => { halo.scale.set(v, v, 1) }, 'easeOut')
+    animateTween(0, Math.min(1, targetHaloOpacity * 1.5), 300, v => { halo.material.opacity = v }, 'easeOut')
+    setTimeout(() => {
+      animateTween(targetHaloScale * 1.2, targetHaloScale, 420, v => { halo.scale.set(v, v, 1) })
+      animateTween(halo.material.opacity, targetHaloOpacity, 420, v => { halo.material.opacity = v })
+    }, 300)
+  }
 }
 
 function playOpenAnimation(nodeMeshes, edgeMeshes, scene) {
@@ -463,6 +522,10 @@ function playOpenAnimation(nodeMeshes, edgeMeshes, scene) {
     if (m.userData.sprite) {
       m.userData.sprite.material.opacity = 0
       m.userData.sprite.scale.set(0, 0, 1)
+    }
+    if (m.userData.halo) {
+      m.userData.halo.material.opacity = 0
+      m.userData.halo.scale.set(0, 0, 1)
     }
   })
   edgeMeshes.forEach(m => { m.material.opacity = 0 })
@@ -528,6 +591,13 @@ function buildScene(th, graph) {
           sprite.material.color.set(renderColor)
           sprite.scale.setScalar(radius * (muted ? 1.35 : pillar ? 2.8 : lit ? 2.35 : 1.65))
           sprite.material.opacity = muted ? 0.035 : pillar ? 0.11 : lit ? 0.20 : 0.075
+        }
+        const halo = mesh.userData.halo
+        if (halo) {
+          const pillar = latest.type === 'pillar'
+          halo.material.color.set(renderColor)
+          halo.scale.setScalar(muted ? 0 : radius * (pillar ? 3.5 : lit ? 3.0 : 2.4))
+          halo.material.opacity = muted ? 0 : pillar ? 0.18 : lit ? 0.22 : 0.12
         }
       }
     })
@@ -934,6 +1004,7 @@ export default function Brain() {
       const lit = isNodeLit(node)
       const radius = getNodeRadius(node)
       const sprite = mesh.userData.sprite
+      const halo = mesh.userData.halo
       const muted = isNodeMuted(node, mesh.userData.connected)
       const renderColor = renderNodeColor(node, muted)
       setNodeGradientColors(mesh, renderColor, muted)
@@ -944,6 +1015,12 @@ export default function Brain() {
           sprite.scale.setScalar(radius * 3.1)
           sprite.material.opacity = 0.26
         }
+        if (halo) {
+          const pillar = node.type === 'pillar'
+          halo.material.color.set(renderColor)
+          halo.scale.setScalar(radius * (pillar ? 4.2 : 3.8))
+          halo.material.opacity = pillar ? 0.30 : 0.34
+        }
       } else {
         setNodeOpacity(mesh, muted ? 0.20 : lit ? 0.92 : 0.42)
         if (sprite) {
@@ -951,6 +1028,12 @@ export default function Brain() {
           sprite.material.color.set(renderColor)
           sprite.scale.setScalar(radius * (muted ? 1.35 : pillar ? 2.8 : lit ? 2.35 : 1.65))
           sprite.material.opacity = muted ? 0.035 : pillar ? 0.11 : lit ? 0.20 : 0.075
+        }
+        if (halo) {
+          const pillar = node.type === 'pillar'
+          halo.material.color.set(renderColor)
+          halo.scale.setScalar(muted ? 0 : radius * (pillar ? 3.5 : lit ? 3.0 : 2.4))
+          halo.material.opacity = muted ? 0 : pillar ? 0.18 : lit ? 0.22 : 0.12
         }
       }
     })

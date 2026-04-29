@@ -93,6 +93,7 @@ function stripForDisplay(text) {
     .replace(/<artifact[^>]*>[\s\S]*/g, '')   // partial opening tag mid-stream
     .replace(/<experiment>[\s\S]*?<\/experiment>/g, '')
     .replace(/<experiment>[\s\S]*/g, '')        // partial opening tag mid-stream
+    .replace(/\[JAILBREAK_REDIRECT\]\s*$/g, '')
     .trim()
 }
 
@@ -379,6 +380,19 @@ export default function Chat() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // ── Jailbreak Counter ────────────────────────────────────────────────────
+  async function incrementJailbreakCounter(sessionId) {
+    try {
+      const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
+      const res = await fetch(`${API_BASE}/api/session/${sessionId}/jailbreak`, { method: 'POST' })
+      if (!res.ok) return null
+      const data = await res.json()
+      return data.jailbreak_attempts ?? null
+    } catch {
+      return null
+    }
+  }
+
   // ── Send Message ──────────────────────────────────────────────────────────
   async function sendMessage(overrideText = null) {
     const text = (overrideText ?? input).trim()
@@ -467,6 +481,23 @@ export default function Chat() {
       }
 
       abortControllerRef.current = null
+
+      // Jailbreak: termination
+      if (fullContent.trim() === 'AXIOM_SESSION_TERMINATED') {
+        setMessages((prev) => prev.filter((m) => m.id !== assistantMsgId))
+        await incrementJailbreakCounter(session.id)
+        navigate('/brain')
+        return
+      }
+
+      // Jailbreak: redirect (attempts 1 & 2) — strip signal, increment counter
+      const isJailbreakRedirect = fullContent.includes('[JAILBREAK_REDIRECT]')
+      if (isJailbreakRedirect) {
+        fullContent = fullContent.replace(/\[JAILBREAK_REDIRECT\]\s*$/, '').trimEnd()
+        incrementJailbreakCounter(session.id).then((next) => {
+          if (next !== null) setSession((prev) => ({ ...prev, jailbreak_attempts: next }))
+        })
+      }
 
       // Parse artifact and experiment tags — done exactly once after stream ends
       const { cleanText, artifact, experiment } = parseMessage(fullContent)

@@ -25,6 +25,17 @@ const openai = new OpenAI({
   apiKey: openaiApiKey,
 })
 
+const supabaseUrl = process.env.VITE_SUPABASE_URL
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.warn('[Axiom API] Missing Supabase credentials — jailbreak endpoint will not function')
+}
+
+const supabaseAdmin = supabaseUrl && supabaseServiceKey
+  ? createClient(supabaseUrl, supabaseServiceKey)
+  : null
+
 app.use(cors({
   origin: frontendUrl === '*' ? true : frontendUrl.split(',').map((url) => url.trim()),
 }))
@@ -76,6 +87,40 @@ app.post('/api/openai/chat', async (req, res) => {
 
     res.status(err.status || 500).json({ error: err.message || 'Chat request failed' })
   }
+})
+
+
+app.post('/api/session/:id/jailbreak', async (req, res) => {
+  if (!supabaseAdmin) {
+    return res.status(503).json({ error: 'Supabase not configured' })
+  }
+
+  const { id } = req.params
+
+  const { data, error: fetchError } = await supabaseAdmin
+    .from('sessions')
+    .select('jailbreak_attempts')
+    .eq('id', id)
+    .single()
+
+  if (fetchError) {
+    console.error('[Jailbreak] Fetch error:', fetchError)
+    return res.status(500).json({ error: 'Failed to fetch session' })
+  }
+
+  const next = (data?.jailbreak_attempts || 0) + 1
+
+  const { error: updateError } = await supabaseAdmin
+    .from('sessions')
+    .update({ jailbreak_attempts: next })
+    .eq('id', id)
+
+  if (updateError) {
+    console.error('[Jailbreak] Update error:', updateError)
+    return res.status(500).json({ error: 'Failed to update session' })
+  }
+
+  res.json({ jailbreak_attempts: next })
 })
 
 
