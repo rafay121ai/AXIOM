@@ -41,6 +41,13 @@ const FOUR_PILLAR_STACK = [
   'money_game',
   'think_sharper',
 ]
+const ARTIFACT_STRATEGIES = new Set([
+  'none',
+  'signal_map',
+  'comparison_table',
+  'quadrant',
+  'mental_model',
+])
 
 function sourceMatchKey(item = {}) {
   return `${item.pillar || ''}|||${item.author || ''}|||${item.title || ''}`
@@ -99,21 +106,27 @@ function normalizeRouterPayload(payload = {}) {
   let pillars = Array.isArray(payload.pillars)
     ? payload.pillars.filter((pillar) => ALL_PILLARS.includes(pillar))
     : []
+  let artifactStrategy = ARTIFACT_STRATEGIES.has(payload.artifact_strategy) ? payload.artifact_strategy : 'none'
 
   if (requestedMode === 'single_pillar') {
     pillars = [pillars[0] || payload.primary_pillar || 'human_mind'].filter((pillar) => ALL_PILLARS.includes(pillar))
+    artifactStrategy = artifactStrategy === 'none' ? 'none' : artifactStrategy
   } else if (requestedMode === 'two_pillar') {
     pillars = [...new Set(pillars)].slice(0, 2)
     if (pillars.length < 2) pillars = ['human_mind', 'money_game']
+    if (artifactStrategy === 'none') artifactStrategy = 'comparison_table'
   } else if (requestedMode === 'four_pillar_synthesis') {
     pillars = FOUR_PILLAR_STACK
+    if (artifactStrategy === 'none') artifactStrategy = 'signal_map'
   } else if (requestedMode === 'all_pillar_synthesis') {
     pillars = ALL_PILLARS
+    if (artifactStrategy === 'none') artifactStrategy = 'signal_map'
   }
 
   return {
     mode: requestedMode,
     pillars,
+    artifactStrategy,
     rationale: typeof payload.rationale === 'string' ? payload.rationale.trim() : '',
   }
 }
@@ -126,6 +139,7 @@ function fallbackRouteQuestionMode(query, session, nodeContext = null) {
     return {
       mode: 'four_pillar_synthesis',
       pillars: FOUR_PILLAR_STACK,
+      artifactStrategy: 'signal_map',
       rationale: 'Future or consequence question. Use the four-pillar stack.',
     }
   }
@@ -134,6 +148,7 @@ function fallbackRouteQuestionMode(query, session, nodeContext = null) {
     return {
       mode: 'two_pillar',
       pillars: nodePillar ? [nodePillar, 'think_sharper'] : ['human_mind', 'money_game'],
+      artifactStrategy: 'comparison_table',
       rationale: 'Tradeoff or tension question. Use two pillars.',
     }
   }
@@ -142,6 +157,7 @@ function fallbackRouteQuestionMode(query, session, nodeContext = null) {
     return {
       mode: 'all_pillar_synthesis',
       pillars: ALL_PILLARS,
+      artifactStrategy: 'signal_map',
       rationale: 'Major orientation question. Use all pillars.',
     }
   }
@@ -154,6 +170,7 @@ function fallbackRouteQuestionMode(query, session, nodeContext = null) {
   return {
     mode: 'single_pillar',
     pillars: [nodePillar || weightedPillars[0] || 'human_mind'],
+    artifactStrategy: 'none',
     rationale: 'Default to one pillar for a narrow or local question.',
   }
 }
@@ -173,6 +190,7 @@ Return valid JSON only with this exact shape:
 {
   "mode": "single_pillar|two_pillar|four_pillar_synthesis|all_pillar_synthesis",
   "pillars": ["human_mind|money_game|how_companies_win|whats_coming|think_sharper|move_people"],
+  "artifact_strategy": "none|signal_map|comparison_table|quadrant|mental_model",
   "rationale": "short string"
 }
 
@@ -279,6 +297,9 @@ export function formatRouteContext(route, pillarResults = {}) {
     four_pillar_synthesis: 'Answer through WHAT\'S COMING, HOW COMPANIES WIN, THE MONEY GAME, and THINK SHARPER. Each pillar must be filtered through the user before the synthesis.',
     all_pillar_synthesis: 'Answer through all six pillars, but weight them by relevance. Do not force equal coverage. Every pillar is filtered through the user.',
   }
+  const artifactInstruction = route.artifactStrategy && route.artifactStrategy !== 'none'
+    ? `Recommended artifact strategy: ${route.artifactStrategy}`
+    : 'Recommended artifact strategy: none'
   const evidenceLines = (route.pillars || [])
     .map((pillar) => summarisePillarEvidence(pillar, pillarResults[pillar]))
     .join('\n')
@@ -287,6 +308,7 @@ export function formatRouteContext(route, pillarResults = {}) {
 Selected pillars: ${pillarsText}
 Routing rationale: ${route.rationale || 'None provided'}
 Routing instruction: ${modeInstructions[route.mode] || 'Use the selected pillars and keep the user layer active throughout.'}
+${artifactInstruction}
 Per-pillar evidence:
 ${evidenceLines || 'No per-pillar evidence summary available.'}`
 }

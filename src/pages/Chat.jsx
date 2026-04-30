@@ -5,7 +5,7 @@ import ExperimentCard from '../components/ExperimentCard'
 import WarningCard from '../components/WarningCard'
 import ArtifactRenderer from '../components/ArtifactRenderer'
 import { clearStoredSessionToken, getStoredSessionToken, supabase } from '../lib/supabase'
-import { openai, CHAT_MODEL, generateOpeningMessage, generateNodeOpeningMessage, buildSystemPrompt } from '../lib/openai'
+import { openai, CHAT_MODEL, generateOpeningMessage, generateNodeOpeningMessage, generateSignalMapArtifact, buildSystemPrompt } from '../lib/openai'
 import { routeQuestionMode, searchWikiForRoute, formatRouteContext, formatWikiContext } from '../lib/rag'
 import { searchPersonalMemory, formatNamedPatternsContext, formatPersonalMemoryContext, updatePersonalMemory } from '../lib/personalMemory'
 
@@ -531,7 +531,32 @@ export default function Chat() {
       }
 
       // Parse artifact and experiment tags — done exactly once after stream ends
-      const { cleanText, artifact, experiment } = parseMessage(fullContent)
+      let parsed = parseMessage(fullContent)
+      let artifact = parsed.artifact
+      let cleanText = parsed.cleanText
+      const experiment = parsed.experiment
+
+      if (!artifact && route?.artifactStrategy === 'signal_map') {
+        try {
+          const signalMapData = await generateSignalMapArtifact({
+            query: text,
+            session,
+            routeContext,
+            wikiContext,
+            personalMemoryContext,
+            namedPatternsContext,
+            answerDraft: cleanText,
+          })
+
+          if (signalMapData && Object.keys(signalMapData).length > 0) {
+            artifact = { type: 'signal_map', data: signalMapData }
+            fullContent = `${cleanText}\n\n<artifact type="signal_map">\n${JSON.stringify(signalMapData)}\n</artifact>`
+          }
+        } catch (artifactErr) {
+          console.warn('Signal map generation failed:', artifactErr?.message || artifactErr)
+        }
+      }
+
       auditArtifact(text, fullContent, artifact)
 
       setMessages((prev) =>

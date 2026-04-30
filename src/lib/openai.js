@@ -216,6 +216,124 @@ Warning level: ${session.warning_level || 0}`,
   return response.choices[0].message.content.trim()
 }
 
+export async function generateSignalMapArtifact({
+  query,
+  session,
+  routeContext = '',
+  wikiContext = '',
+  personalMemoryContext = '',
+  namedPatternsContext = '',
+  answerDraft = '',
+}) {
+  const response = await openai.chat.completions.create({
+    model: CHAT_MODEL,
+    response_format: { type: 'json_object' },
+    max_completion_tokens: 900,
+    messages: [
+      {
+        role: 'system',
+        content: `You generate only the JSON payload for Axiom's signal_map artifact.
+
+Return valid JSON only. Do not wrap it in markdown. Do not include <artifact> tags.
+
+Rules:
+- Ground the map in concrete present-tense signals first, then interpretation, then forecast.
+- Prefer factual observations over abstraction.
+- Use qualitative estimates sparingly and only when exact counts are unavailable.
+- Keep the artifact specific to the user's situation when possible.
+- Include real tension across pillars when it exists.
+
+Required JSON shape:
+{
+  "title": "Signal Map: short topic title",
+  "topic": "string",
+  "core_shift": "string",
+  "trend_state": {
+    "current_phase": "early|rising|crowded|mainstreaming|peaking|unclear",
+    "current_read": "string",
+    "signal_strength": "weak|medium|strong",
+    "estimate_note": "optional string"
+  },
+  "what_is_happening_now": [
+    { "label": "string", "detail": "string", "evidence": "string" }
+  ],
+  "observed_moves": [
+    { "actor": "string", "action": "string", "implication": "string" }
+  ],
+  "sections": [
+    { "id": "whats_coming", "label": "What's Shifting", "pillar": "whats_coming", "signal": "string", "tension": "optional string" },
+    { "id": "how_companies_win", "label": "Who Captures It", "pillar": "how_companies_win", "signal": "string", "tension": "optional string" },
+    { "id": "money_game", "label": "Where Value Pools", "pillar": "money_game", "signal": "string", "tension": "optional string" },
+    { "id": "think_sharper", "label": "How Hard To Believe", "pillar": "think_sharper", "signal": "string", "tension": "optional string" }
+  ],
+  "forecast": {
+    "now": { "label": "Now", "value": 0, "note": "string" },
+    "next_12_months": { "label": "12 months", "value": 0, "note": "string" },
+    "next_3_years": { "label": "3 years", "value": 0, "note": "string" }
+  },
+  "frameworks": [
+    {
+      "name": "string",
+      "kind": "cycle|stack|spectrum",
+      "explanation": "string",
+      "items": ["string"],
+      "position": 0.5,
+      "left_label": "optional string",
+      "right_label": "optional string"
+    }
+  ],
+  "source_weighting": [
+    { "kind": "string", "weight": "high|medium|low", "reason": "string" }
+  ],
+  "confidence": {
+    "level": "low|medium|high",
+    "why": "string"
+  },
+  "watch_points": ["string"],
+  "counterforces": ["string"],
+  "for_this_user": "string"
+}
+
+Use at least:
+- 2 current signals
+- 2 observed moves
+- 1 framework
+- 2 watch points`,
+      },
+      {
+        role: 'user',
+        content: `Question: ${query}
+
+Route context:
+${routeContext || 'None'}
+
+Private theory:
+${session?.axiom_profile || 'None'}
+
+Session notes:
+${session?.session_notes || 'None'}
+
+Pillar weights:
+${JSON.stringify(session?.pillar_weights || {})}
+
+Named patterns:
+${namedPatternsContext || 'None'}
+
+Personal context:
+${personalMemoryContext || 'None'}
+
+Wiki context:
+${wikiContext || 'None'}
+
+Draft answer:
+${answerDraft || 'None'}`,
+      },
+    ],
+  })
+
+  return JSON.parse(response.choices[0]?.message?.content || '{}')
+}
+
 export async function generateWeeklyRead(session, recentMessages = []) {
   const history = recentMessages
     .filter((message) => message?.content)
@@ -786,9 +904,9 @@ If the route is four_pillar_synthesis:
 - Each lens must say what matters here for this user specifically.
 - Notice disagreement between pillars when it exists. Do not smooth over real tension.
 - End by merging the four lenses into one clear conclusion or direction.
-- When the question is future-facing, strategic, or about value capture, you must emit exactly one signal_map artifact.
-- Place <artifact_here/> where the signal_map should appear.
-- Do not fall back to prose-only synthesis for this class of question unless the user explicitly asked for no artifact.
+- Follow the artifact strategy in the routing block.
+- Broad landscape / "what's next" / "where does value accrue" questions should usually use signal_map.
+- Narrower four-pillar questions inside the same niche may use a tighter artifact like comparison_table or quadrant if that serves the question better.
 
 If the route is all_pillar_synthesis:
 - Use all six pillars, but do not force equal space for each one.
