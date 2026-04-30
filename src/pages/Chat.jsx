@@ -64,6 +64,46 @@ function deepMergeArtifactData(base, patch) {
   return next
 }
 
+function artifactLooksComplete(type, data) {
+  if (!data || typeof data !== 'object') return false
+
+  if (type === 'signal_map') {
+    return Boolean(
+      data.core_shift &&
+      data.trend_state &&
+      Array.isArray(data.what_is_happening_now) && data.what_is_happening_now.length > 0 &&
+      Array.isArray(data.observed_moves) && data.observed_moves.length > 0 &&
+      Array.isArray(data.sections) && data.sections.length >= 4 &&
+      data.forecast &&
+      Array.isArray(data.frameworks) && data.frameworks.length > 0 &&
+      Array.isArray(data.watch_points) && data.watch_points.length > 0 &&
+      data.for_this_user
+    )
+  }
+
+  if (type === 'comparison_table') {
+    return Array.isArray(data.headers) && data.headers.length >= 2 && Array.isArray(data.rows) && data.rows.length > 0
+  }
+
+  if (type === 'behavior_loop' || type === 'reasoning_cycle') {
+    return Array.isArray(data.steps) && data.steps.length >= 3
+  }
+
+  if (type === 'reasoning_stack' || type === 'reasoning_pyramid') {
+    return Array.isArray(data.layers) && data.layers.length >= 3
+  }
+
+  if (type === 'reasoning_curve') {
+    return Array.isArray(data.stages) && data.stages.length >= 3
+  }
+
+  if (type === 'reasoning_wave') {
+    return Array.isArray(data.drivers) && data.drivers.length >= 3
+  }
+
+  return true
+}
+
 function shouldHaveArtifact(text) {
   return /\b(example|examples|framework|steps|process|compare|comparison|breakdown|checklist|matrix|timeline|how does|how do|how should|what should be in|walk me through)\b/i.test(text)
 }
@@ -617,8 +657,8 @@ export default function Chat() {
 
           abortControllerRef.current = null
 
-          if ((!progressiveData || Object.keys(progressiveData).length === 0) && requiredArtifactType) {
-            progressiveData = await generateStructuredArtifact({
+          if ((!progressiveData || Object.keys(progressiveData).length === 0 || !artifactLooksComplete(requiredArtifactType, progressiveData)) && requiredArtifactType) {
+            const finalizedArtifactData = await generateStructuredArtifact({
               artifactType: requiredArtifactType,
               query: text,
               session,
@@ -628,6 +668,12 @@ export default function Chat() {
               namedPatternsContext,
               answerDraft: cleanText,
             })
+
+            if (finalizedArtifactData && Object.keys(finalizedArtifactData).length > 0) {
+              progressiveData = progressiveData
+                ? deepMergeArtifactData(progressiveData, finalizedArtifactData)
+                : finalizedArtifactData
+            }
           }
 
           if (progressiveData && Object.keys(progressiveData).length > 0) {
