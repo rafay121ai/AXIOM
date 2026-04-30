@@ -274,12 +274,14 @@ Required JSON shape:
   "frameworks": [
     {
       "name": "string",
-      "kind": "cycle|stack|spectrum",
+      "kind": "cycle|stack|spectrum|pyramid|curve|wave",
       "explanation": "string",
       "items": ["string"],
       "position": 0.5,
       "left_label": "optional string",
-      "right_label": "optional string"
+      "right_label": "optional string",
+      "curve_label": "optional string",
+      "peak_label": "optional string"
     }
   ],
   "source_weighting": [
@@ -298,7 +300,9 @@ Use at least:
 - 2 current signals
 - 2 observed moves
 - 1 framework
-- 2 watch points`,
+- 2 watch points
+
+Make the framework genuinely visual. If the logic is staged, cyclical, hierarchical, or curve-based, choose the matching kind instead of flattening it into a list.`,
       },
       {
         role: 'user',
@@ -1109,6 +1113,17 @@ STRUCTURED OUTPUT RULE
 - If the answer needs a process or loop, emit a flow_diagram or behavior_loop artifact.
 - Structured thinking must become structured artifacts, not improvised formatting.
 
+VISUAL REASONING RULE
+- Use visual reasoning whenever the idea has shape, sequence, recurrence, buildup, hierarchy, tradeoff, or inflection.
+- Do not reduce frameworks to named cards with explanatory prose when the reasoning is inherently spatial or staged.
+- Prefer Axiom-native reasoning artifacts that make the logic visible:
+  - curve for phase change, adoption, rise/peak/decline, or compounding
+  - cycle for repeated dynamics, loops, and recurrence
+  - pyramid for dependency, layered buildup, and constraint hierarchy
+  - stack for layered value capture, system layers, or control layers
+  - wave for swell, saturation, and crest/decay patterns
+- When a framework is visual by nature, render the framework itself rather than merely naming it.
+
 Choose the type that makes the concept clearest:
 
 COMPARISON / CONTRAST
@@ -1123,6 +1138,31 @@ PROCESS / SEQUENCE
 FRAMEWORKS / MENTAL MODELS
 → mental_model
   Schema: {"title": "optional", "items": [{"label": "Point", "description": "Explanation"}], "animate": true, "interactive": true}
+
+VISUAL REASONING — CURVE / PHASE CHANGE
+→ reasoning_curve
+  Schema: {"title": "optional", "left_label": "Start", "right_label": "Later", "curve_label": "Main movement", "peak_label": "optional", "stages": [{"label": "Stage", "position": 0.2, "detail": "optional"}], "animate": true, "interactive": true}
+  Use this for adoption curves, compounding, rise/peak/decline, capability vs capture arcs, and staged inflection.
+
+VISUAL REASONING — CYCLE / LOOP
+→ reasoning_cycle
+  Schema: {"title": "optional", "steps": [{"label": "Stage", "description": "optional"}], "animate": true, "interactive": true}
+  Use this when a framework is cyclical and should be understood as recurring motion rather than a flat list.
+
+VISUAL REASONING — PYRAMID / DEPENDENCY
+→ reasoning_pyramid
+  Schema: {"title": "optional", "layers": [{"label": "Layer", "detail": "optional"}], "animate": true, "interactive": true}
+  Use this when the upper layers depend on lower ones, or when a framework climbs from base reality to higher-order outcome.
+
+VISUAL REASONING — STACK / LAYERS
+→ reasoning_stack
+  Schema: {"title": "optional", "layers": [{"label": "Layer", "detail": "optional", "emphasis": "optional"}], "animate": true, "interactive": true}
+  Use this for value capture ladders, system stacks, ownership layers, or where leverage moves between layers.
+
+VISUAL REASONING — WAVE / SWELL
+→ reasoning_wave
+  Schema: {"title": "optional", "left_label": "Early", "right_label": "Later", "crest_label": "optional", "drivers": [{"label": "Driver", "position": 0.2, "detail": "optional"}], "animate": true, "interactive": true}
+  Use this for buildup-to-crest patterns, saturation arcs, hype-to-infrastructure transitions, or broad cyclical swells.
 
 CYCLES / FEEDBACK LOOPS
 → behavior_loop
@@ -1257,12 +1297,14 @@ MULTI-PILLAR FUTURE / STRATEGY SYNTHESIS
     "frameworks": [
       {
         "name": "Framework name",
-        "kind": "cycle|stack|spectrum",
+        "kind": "cycle|stack|spectrum|pyramid|curve|wave",
         "explanation": "Why this framework clarifies the pattern.",
         "items": ["Step or layer 1", "Step or layer 2", "Step or layer 3"],
         "position": 0.65,
         "left_label": "low",
-        "right_label": "high"
+        "right_label": "high",
+        "curve_label": "optional string",
+        "peak_label": "optional string"
       }
     ],
     "source_weighting": [
@@ -1286,7 +1328,7 @@ MULTI-PILLAR FUTURE / STRATEGY SYNTHESIS
   This is mandatory for four_pillar_synthesis questions like "what's next", "who wins", "where does value accrue", "what are people missing", and "what does this mean for me strategically", unless the user explicitly asked for no artifact.
   Build this from concrete present-tense signals first, then interpretation, then forecast, then user consequence.
   Prefer factual observations over abstraction. Use qualitative estimates only when exact counts are unavailable, and keep them clearly bounded.
-  Frameworks must be structured visually through the artifact fields, not merely named in prose.
+  Frameworks must be structured visually through the artifact fields, not merely named in prose. Choose the framework kind whose geometry best explains the logic.
   When a signal_map is present, keep the normal answer body lean and avoid repeating the artifact's sections in full prose.
 
 BOOK / AUTHOR CITATION

@@ -40,6 +40,11 @@ const COMPONENT_MAP = {
   mental_model: MentalModel,
   quadrant: Quadrant,
   radar_chart: RadarChart,
+  reasoning_curve: ReasoningCurve,
+  reasoning_cycle: ReasoningCycle,
+  reasoning_pyramid: ReasoningPyramid,
+  reasoning_stack: ReasoningStack,
+  reasoning_wave: ReasoningWave,
   scatter_plot: ScatterPlot,
   signal_map: SignalMap,
   spectrum: Spectrum,
@@ -901,12 +906,422 @@ function FillFramework({ data, onSubmit }) {
   )
 }
 
+function VisualReasoningShell({ title, subtitle, children }) {
+  return (
+    <ArtifactShell title={title}>
+      {subtitle && <div style={{ color: MUTED, fontSize: 12, lineHeight: 1.55, marginBottom: 12 }}>{subtitle}</div>}
+      {children}
+    </ArtifactShell>
+  )
+}
+
+function visualReasoningGridStyle() {
+  return {
+    background:
+      'linear-gradient(180deg, rgba(255,255,255,0.018), rgba(255,255,255,0.006)), linear-gradient(90deg, rgba(255,255,255,0.024) 1px, transparent 1px), linear-gradient(180deg, rgba(255,255,255,0.024) 1px, transparent 1px)',
+    backgroundPosition: '0 0, 0 0, 0 0',
+    backgroundSize: '100% 100%, 28px 28px, 28px 28px',
+    ...GLASS_BORDER,
+    borderRadius: 4,
+    overflow: 'hidden',
+    padding: 14,
+  }
+}
+
+function ReasoningCurve({ data }) {
+  const stages = asArray(data.stages)
+  const markers = stages.length ? stages : [
+    { label: 'Start', position: 0.14, detail: '' },
+    { label: 'Inflection', position: 0.48, detail: '' },
+    { label: 'Capture', position: 0.82, detail: '' },
+  ]
+
+  return (
+    <VisualReasoningShell title={data.title} subtitle={data.curve_label}>
+      <div style={visualReasoningGridStyle()}>
+        <svg viewBox="0 0 720 280" style={{ display: 'block', height: 'auto', width: '100%' }}>
+          <defs>
+            <linearGradient id="axiomCurveStroke" x1="0%" y1="100%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="var(--gold-edge)" />
+              <stop offset="55%" stopColor="var(--gold-core)" />
+              <stop offset="100%" stopColor="var(--gold-highlight)" />
+            </linearGradient>
+          </defs>
+          <line x1="52" y1="226" x2="670" y2="226" stroke={BORDER} strokeWidth="1.25" />
+          <line x1="52" y1="24" x2="52" y2="226" stroke={BORDER} strokeWidth="1.25" />
+          <path d="M56 206 C 184 206, 250 172, 332 128 S 496 34, 660 46" fill="none" stroke="url(#axiomCurveStroke)" strokeLinecap="round" strokeWidth="6" />
+          {data.peak_label && (
+            <>
+              <line x1="520" y1="42" x2="520" y2="226" stroke="rgba(212,168,67,0.22)" strokeDasharray="6 7" strokeWidth="1.5" />
+              <text x="528" y="36" fill={ACCENT} fontSize="11" fontWeight="800">{data.peak_label}</text>
+            </>
+          )}
+          {markers.map((stage, index) => {
+            const px = 60 + clamp01(stage.position ?? (index + 1) / (markers.length + 1)) * 590
+            const py = 206 - Math.sin(clamp01(stage.position ?? 0.5) * Math.PI * 0.84) * 150
+            return (
+              <g key={index}>
+                <circle cx={px} cy={py} fill={ACCENT} r="6" />
+                <circle cx={px} cy={py} fill="none" opacity="0.24" r="14" stroke={ACCENT} />
+                <line x1={px} y1={py + 10} x2={px} y2="226" stroke="rgba(255,255,255,0.08)" strokeDasharray="4 6" />
+                <text x={px} y={250} fill={TEXT} fontSize="11" fontWeight="700" textAnchor="middle">{stage.label}</text>
+              </g>
+            )
+          })}
+        </svg>
+        <div style={{ color: MUTED, display: 'flex', fontSize: 11, justifyContent: 'space-between', marginTop: 8 }}>
+          <span>{data.left_label || 'Start'}</span>
+          <span>{data.right_label || 'Later'}</span>
+        </div>
+        {markers.some((stage) => stage.detail) && (
+          <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', marginTop: 12 }}>
+            {markers.map((stage, index) => (
+              <div key={index} style={{ ...glassSurfaceStyle(false), display: 'grid', gap: 5, padding: 10 }}>
+                <div style={{ color: TEXT, fontSize: 12, fontWeight: 800 }}>{stage.label}</div>
+                {stage.detail && <div style={{ color: MUTED, fontSize: 11, lineHeight: 1.5 }}>{stage.detail}</div>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </VisualReasoningShell>
+  )
+}
+
+function ReasoningCycle({ data }) {
+  const steps = asArray(data.steps).map(normalizeStep)
+  const total = Math.max(steps.length, 4)
+
+  return (
+    <VisualReasoningShell title={data.title}>
+      <div style={visualReasoningGridStyle()}>
+        <div style={{ alignItems: 'center', display: 'grid', justifyItems: 'center' }}>
+          <svg viewBox="0 0 420 320" style={{ display: 'block', maxWidth: 420, width: '100%' }}>
+            <defs>
+              <linearGradient id="axiomCycleArc" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="var(--gold-highlight)" />
+                <stop offset="100%" stopColor="var(--gold-core)" />
+              </linearGradient>
+            </defs>
+            <circle cx="210" cy="160" fill="none" opacity="0.18" r="92" stroke={ACCENT} strokeDasharray="8 11" strokeWidth="2" />
+            {steps.map((step, index) => {
+              const angle = (-Math.PI / 2) + (index / total) * Math.PI * 2
+              const x = 210 + Math.cos(angle) * 112
+              const y = 160 + Math.sin(angle) * 112
+              return (
+                <g key={index}>
+                  <circle cx={x} cy={y} fill="rgba(18,18,18,0.98)" r="28" stroke={ACCENT} strokeWidth="1.5" />
+                  <text x={x} y={y + 4} fill={TEXT} fontSize="11" fontWeight="800" textAnchor="middle">{index + 1}</text>
+                  <text x={x} y={y + 48} fill={TEXT} fontSize="11" fontWeight="700" textAnchor="middle">{step.label}</text>
+                </g>
+              )
+            })}
+            <path d="M210 52 C 290 58, 346 118, 334 194" fill="none" markerEnd="url(#cycleArrow)" stroke="url(#axiomCycleArc)" strokeLinecap="round" strokeWidth="4" />
+            <defs>
+              <marker id="cycleArrow" markerHeight="8" markerWidth="8" orient="auto" refX="4" refY="4">
+                <path d="M0,0 L8,4 L0,8 z" fill={ACCENT} />
+              </marker>
+            </defs>
+          </svg>
+        </div>
+        <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', marginTop: 10 }}>
+          {steps.map((step, index) => (
+            <div key={index} style={{ ...glassSurfaceStyle(false), display: 'grid', gap: 5, padding: 10 }}>
+              <div style={{ color: ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Step {index + 1}</div>
+              <div style={{ color: TEXT, fontSize: 12, fontWeight: 800 }}>{step.label}</div>
+              {step.description && <div style={{ color: MUTED, fontSize: 11, lineHeight: 1.5 }}>{step.description}</div>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </VisualReasoningShell>
+  )
+}
+
+function ReasoningPyramid({ data }) {
+  const layers = asArray(data.layers)
+  const reversed = [...layers].reverse()
+
+  return (
+    <VisualReasoningShell title={data.title}>
+      <div style={visualReasoningGridStyle()}>
+        <div style={{ display: 'grid', gap: 10, justifyItems: 'center' }}>
+          <div style={{ display: 'grid', gap: 6, width: '100%', maxWidth: 420 }}>
+            {reversed.map((layer, index) => {
+              const width = `${34 + ((index + 1) / reversed.length) * 66}%`
+              return (
+                <div
+                  key={index}
+                  style={{
+                    ...glassSurfaceStyle(index === reversed.length - 1),
+                    display: 'grid',
+                    gap: 5,
+                    justifySelf: 'center',
+                    padding: '12px 14px',
+                    width,
+                  }}
+                >
+                  <div style={{ color: TEXT, fontSize: 12, fontWeight: 800 }}>{layer.label || layer}</div>
+                  {layer.detail && <div style={{ color: MUTED, fontSize: 11, lineHeight: 1.5 }}>{layer.detail}</div>}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    </VisualReasoningShell>
+  )
+}
+
+function ReasoningStack({ data }) {
+  const layers = asArray(data.layers)
+  return (
+    <VisualReasoningShell title={data.title}>
+      <div style={visualReasoningGridStyle()}>
+        <div style={{ display: 'grid', gap: 10 }}>
+          {layers.map((layer, index) => (
+            <div key={index} style={{ ...glassSurfaceStyle(layer.emphasis === 'high'), display: 'grid', gap: 6, gridTemplateColumns: '30px 1fr', padding: 12 }}>
+              <div style={{ alignItems: 'center', background: layer.emphasis === 'high' ? GOLD_GRADIENT : 'rgba(255,255,255,0.06)', borderRadius: 999, color: layer.emphasis === 'high' ? 'var(--bg)' : TEXT, display: 'flex', fontSize: 11, fontWeight: 800, height: 24, justifyContent: 'center', width: 24 }}>
+                {index + 1}
+              </div>
+              <div style={{ display: 'grid', gap: 4 }}>
+                <div style={{ color: TEXT, fontSize: 12, fontWeight: 800 }}>{layer.label || layer}</div>
+                {layer.detail && <div style={{ color: MUTED, fontSize: 11, lineHeight: 1.5 }}>{layer.detail}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </VisualReasoningShell>
+  )
+}
+
+function ReasoningWave({ data }) {
+  const drivers = asArray(data.drivers)
+  return (
+    <VisualReasoningShell title={data.title} subtitle={data.crest_label}>
+      <div style={visualReasoningGridStyle()}>
+        <svg viewBox="0 0 720 250" style={{ display: 'block', height: 'auto', width: '100%' }}>
+          <defs>
+            <linearGradient id="axiomWaveStroke" x1="0%" y1="100%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="var(--gold-edge)" />
+              <stop offset="55%" stopColor="var(--gold-core)" />
+              <stop offset="100%" stopColor="var(--gold-highlight)" />
+            </linearGradient>
+          </defs>
+          <line x1="52" y1="198" x2="670" y2="198" stroke={BORDER} strokeWidth="1.25" />
+          <path d="M56 196 C 154 190, 206 144, 288 122 S 458 24, 540 68 S 632 172, 666 178" fill="none" stroke="url(#axiomWaveStroke)" strokeLinecap="round" strokeWidth="6" />
+          {drivers.map((driver, index) => {
+            const px = 60 + clamp01(driver.position ?? (index + 1) / (drivers.length + 1)) * 590
+            const py = 196 - Math.sin(clamp01(driver.position ?? 0.5) * Math.PI) * 124
+            return (
+              <g key={index}>
+                <circle cx={px} cy={py} fill={ACCENT} r="5" />
+                <line x1={px} y1={py + 8} x2={px} y2="198" stroke="rgba(255,255,255,0.08)" strokeDasharray="4 6" />
+                <text x={px} y={220} fill={TEXT} fontSize="11" fontWeight="700" textAnchor="middle">{driver.label}</text>
+              </g>
+            )
+          })}
+        </svg>
+        <div style={{ color: MUTED, display: 'flex', fontSize: 11, justifyContent: 'space-between', marginTop: 8 }}>
+          <span>{data.left_label || 'Early'}</span>
+          <span>{data.right_label || 'Later'}</span>
+        </div>
+        {drivers.some((driver) => driver.detail) && (
+          <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', marginTop: 12 }}>
+            {drivers.map((driver, index) => (
+              <div key={index} style={{ ...glassSurfaceStyle(false), display: 'grid', gap: 5, padding: 10 }}>
+                <div style={{ color: TEXT, fontSize: 12, fontWeight: 800 }}>{driver.label}</div>
+                {driver.detail && <div style={{ color: MUTED, fontSize: 11, lineHeight: 1.5 }}>{driver.detail}</div>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </VisualReasoningShell>
+  )
+}
+
 function BookRef({ data }) {
   return (
     <ArtifactShell title={data.book || data.title} style={{ borderLeft: `3px solid ${ACCENT}` }}>
       {data.excerpt && <div style={{ color: ACCENT_HIGHLIGHT, fontSize: 14, fontStyle: 'italic', lineHeight: 1.7, marginBottom: 12 }}>"{data.excerpt}"</div>}
       <div style={{ color: MUTED, fontSize: 12 }}>{data.author}</div>
     </ArtifactShell>
+  )
+}
+
+function renderFrameworkVisual(framework) {
+  const items = asArray(framework.items).map((item) => (typeof item === 'string' ? { label: item } : item))
+  const kind = framework.kind || 'stack'
+
+  if (kind === 'cycle') {
+    const steps = items.map(normalizeStep)
+    const total = Math.max(steps.length, 4)
+    return (
+      <div style={visualReasoningGridStyle()}>
+        <div style={{ alignItems: 'center', display: 'grid', justifyItems: 'center' }}>
+          <svg viewBox="0 0 420 320" style={{ display: 'block', maxWidth: 420, width: '100%' }}>
+            <defs>
+              <linearGradient id="axiomCycleArcInline" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="var(--gold-highlight)" />
+                <stop offset="100%" stopColor="var(--gold-core)" />
+              </linearGradient>
+              <marker id="cycleArrowInline" markerHeight="8" markerWidth="8" orient="auto" refX="4" refY="4">
+                <path d="M0,0 L8,4 L0,8 z" fill={ACCENT} />
+              </marker>
+            </defs>
+            <circle cx="210" cy="160" fill="none" opacity="0.18" r="92" stroke={ACCENT} strokeDasharray="8 11" strokeWidth="2" />
+            {steps.map((step, index) => {
+              const angle = (-Math.PI / 2) + (index / total) * Math.PI * 2
+              const x = 210 + Math.cos(angle) * 112
+              const y = 160 + Math.sin(angle) * 112
+              return (
+                <g key={index}>
+                  <circle cx={x} cy={y} fill="rgba(18,18,18,0.98)" r="28" stroke={ACCENT} strokeWidth="1.5" />
+                  <text x={x} y={y + 4} fill={TEXT} fontSize="11" fontWeight="800" textAnchor="middle">{index + 1}</text>
+                  <text x={x} y={y + 48} fill={TEXT} fontSize="11" fontWeight="700" textAnchor="middle">{step.label}</text>
+                </g>
+              )
+            })}
+            <path d="M210 52 C 290 58, 346 118, 334 194" fill="none" markerEnd="url(#cycleArrowInline)" stroke="url(#axiomCycleArcInline)" strokeLinecap="round" strokeWidth="4" />
+          </svg>
+        </div>
+      </div>
+    )
+  }
+
+  if (kind === 'pyramid') {
+    const reversed = [...items].reverse()
+    return (
+      <div style={visualReasoningGridStyle()}>
+        <div style={{ display: 'grid', gap: 6, margin: '0 auto', maxWidth: 420 }}>
+          {reversed.map((layer, index) => {
+            const width = `${34 + ((index + 1) / reversed.length) * 66}%`
+            return (
+              <div key={index} style={{ ...glassSurfaceStyle(index === reversed.length - 1), display: 'grid', gap: 5, justifySelf: 'center', padding: '12px 14px', width }}>
+                <div style={{ color: TEXT, fontSize: 12, fontWeight: 800 }}>{layer.label || layer}</div>
+                {layer.detail && <div style={{ color: MUTED, fontSize: 11, lineHeight: 1.5 }}>{layer.detail}</div>}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
+  if (kind === 'curve') {
+    const stages = items.map((item, index) => ({
+      label: item.label,
+      detail: item.detail,
+      position: typeof item.position === 'number' ? item.position : (index + 1) / (items.length + 1),
+    }))
+    return (
+      <div style={visualReasoningGridStyle()}>
+        <svg viewBox="0 0 720 280" style={{ display: 'block', height: 'auto', width: '100%' }}>
+          <defs>
+            <linearGradient id="axiomCurveStrokeInline" x1="0%" y1="100%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="var(--gold-edge)" />
+              <stop offset="55%" stopColor="var(--gold-core)" />
+              <stop offset="100%" stopColor="var(--gold-highlight)" />
+            </linearGradient>
+          </defs>
+          <line x1="52" y1="226" x2="670" y2="226" stroke={BORDER} strokeWidth="1.25" />
+          <line x1="52" y1="24" x2="52" y2="226" stroke={BORDER} strokeWidth="1.25" />
+          <path d="M56 206 C 184 206, 250 172, 332 128 S 496 34, 660 46" fill="none" stroke="url(#axiomCurveStrokeInline)" strokeLinecap="round" strokeWidth="6" />
+          {framework.peak_label && (
+            <>
+              <line x1="520" y1="42" x2="520" y2="226" stroke="rgba(212,168,67,0.22)" strokeDasharray="6 7" strokeWidth="1.5" />
+              <text x="528" y="36" fill={ACCENT} fontSize="11" fontWeight="800">{framework.peak_label}</text>
+            </>
+          )}
+          {stages.map((stage, index) => {
+            const px = 60 + clamp01(stage.position ?? (index + 1) / (stages.length + 1)) * 590
+            const py = 206 - Math.sin(clamp01(stage.position ?? 0.5) * Math.PI * 0.84) * 150
+            return (
+              <g key={index}>
+                <circle cx={px} cy={py} fill={ACCENT} r="6" />
+                <line x1={px} y1={py + 10} x2={px} y2="226" stroke="rgba(255,255,255,0.08)" strokeDasharray="4 6" />
+                <text x={px} y={250} fill={TEXT} fontSize="11" fontWeight="700" textAnchor="middle">{stage.label}</text>
+              </g>
+            )
+          })}
+        </svg>
+        <div style={{ color: MUTED, display: 'flex', fontSize: 11, justifyContent: 'space-between', marginTop: 8 }}>
+          <span>{framework.left_label || 'Start'}</span>
+          <span>{framework.right_label || 'Later'}</span>
+        </div>
+      </div>
+    )
+  }
+  if (kind === 'wave') {
+    const drivers = items.map((item, index) => ({
+      label: item.label,
+      detail: item.detail,
+      position: typeof item.position === 'number' ? item.position : (index + 1) / (items.length + 1),
+    }))
+    return (
+      <div style={visualReasoningGridStyle()}>
+        <svg viewBox="0 0 720 250" style={{ display: 'block', height: 'auto', width: '100%' }}>
+          <defs>
+            <linearGradient id="axiomWaveStrokeInline" x1="0%" y1="100%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="var(--gold-edge)" />
+              <stop offset="55%" stopColor="var(--gold-core)" />
+              <stop offset="100%" stopColor="var(--gold-highlight)" />
+            </linearGradient>
+          </defs>
+          <line x1="52" y1="198" x2="670" y2="198" stroke={BORDER} strokeWidth="1.25" />
+          <path d="M56 196 C 154 190, 206 144, 288 122 S 458 24, 540 68 S 632 172, 666 178" fill="none" stroke="url(#axiomWaveStrokeInline)" strokeLinecap="round" strokeWidth="6" />
+          {drivers.map((driver, index) => {
+            const px = 60 + clamp01(driver.position ?? (index + 1) / (drivers.length + 1)) * 590
+            const py = 196 - Math.sin(clamp01(driver.position ?? 0.5) * Math.PI) * 124
+            return (
+              <g key={index}>
+                <circle cx={px} cy={py} fill={ACCENT} r="5" />
+                <line x1={px} y1={py + 8} x2={px} y2="198" stroke="rgba(255,255,255,0.08)" strokeDasharray="4 6" />
+                <text x={px} y={220} fill={TEXT} fontSize="11" fontWeight="700" textAnchor="middle">{driver.label}</text>
+              </g>
+            )
+          })}
+        </svg>
+        <div style={{ color: MUTED, display: 'flex', fontSize: 11, justifyContent: 'space-between', marginTop: 8 }}>
+          <span>{framework.left_label || 'Early'}</span>
+          <span>{framework.right_label || 'Later'}</span>
+        </div>
+      </div>
+    )
+  }
+  if (kind === 'spectrum') {
+    const position = clamp01(framework.position ?? 0.5)
+    return (
+      <div style={{ display: 'grid', gap: 8 }}>
+        <div style={{ background: 'rgba(255,255,255,0.035)', borderRadius: 999, height: 8, position: 'relative' }}>
+          <div style={{ background: GOLD_GRADIENT, borderRadius: 999, boxShadow: GOLD_GLOW, height: 14, left: `${position * 100}%`, position: 'absolute', top: '50%', transform: 'translate(-50%, -50%)', width: 14 }} />
+        </div>
+        <div style={{ color: MUTED, display: 'flex', fontSize: 11, justifyContent: 'space-between' }}>
+          <span>{framework.left_label || 'low'}</span>
+          <span>{framework.right_label || 'high'}</span>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={visualReasoningGridStyle()}>
+      <div style={{ display: 'grid', gap: 10 }}>
+        {items.map((layer, index) => (
+          <div key={index} style={{ ...glassSurfaceStyle(layer.emphasis === 'high'), display: 'grid', gap: 6, gridTemplateColumns: '30px 1fr', padding: 12 }}>
+            <div style={{ alignItems: 'center', background: layer.emphasis === 'high' ? GOLD_GRADIENT : 'rgba(255,255,255,0.06)', borderRadius: 999, color: layer.emphasis === 'high' ? 'var(--bg)' : TEXT, display: 'flex', fontSize: 11, fontWeight: 800, height: 24, justifyContent: 'center', width: 24 }}>
+              {index + 1}
+            </div>
+            <div style={{ display: 'grid', gap: 4 }}>
+              <div style={{ color: TEXT, fontSize: 12, fontWeight: 800 }}>{layer.label || layer}</div>
+              {layer.detail && <div style={{ color: MUTED, fontSize: 11, lineHeight: 1.5 }}>{layer.detail}</div>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -932,82 +1347,6 @@ function SignalMap({ data }) {
     forecast.next_12_months,
     forecast.next_3_years,
   ].filter(Boolean)
-
-  function FrameworkVisual({ framework }) {
-    const items = asArray(framework.items)
-    const kind = framework.kind || 'stack'
-
-    if (kind === 'cycle' && items.length > 0) {
-      return (
-        <div style={{ display: 'grid', gap: 8 }}>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {items.map((item, index) => (
-              <div key={index} style={{ alignItems: 'center', display: 'flex', gap: 8 }}>
-                <span style={{ ...GLASS_BORDER, background: 'rgba(255,255,255,0.03)', borderRadius: 999, color: TEXT, fontSize: 11, padding: '6px 10px' }}>{item}</span>
-                {index < items.length - 1 && <span style={{ color: MUTED, fontSize: 12 }}>→</span>}
-              </div>
-            ))}
-          </div>
-        </div>
-      )
-    }
-
-    if (kind === 'spectrum') {
-      const position = clamp01(framework.position ?? 0.5)
-      return (
-        <div style={{ display: 'grid', gap: 8 }}>
-          <div style={{ background: 'rgba(255,255,255,0.035)', borderRadius: 999, height: 8, position: 'relative' }}>
-            <div style={{ background: GOLD_GRADIENT, borderRadius: 999, boxShadow: GOLD_GLOW, height: 14, left: `${position * 100}%`, position: 'absolute', top: '50%', transform: 'translate(-50%, -50%)', width: 14 }} />
-          </div>
-          <div style={{ color: MUTED, display: 'flex', fontSize: 11, justifyContent: 'space-between' }}>
-            <span>{framework.left_label || 'low'}</span>
-            <span>{framework.right_label || 'high'}</span>
-          </div>
-        </div>
-      )
-    }
-
-    if (kind === 'stack' && items.length > 0) {
-      return (
-        <div style={{ display: 'grid', gap: 10 }}>
-          <div style={{ position: 'relative', paddingLeft: 18 }}>
-            <div style={{ background: 'linear-gradient(180deg, rgba(212,168,67,0.4), rgba(212,168,67,0.04))', borderRadius: 999, bottom: 4, left: 4, position: 'absolute', top: 4, width: 2 }} />
-            <div style={{ display: 'grid', gap: 8 }}>
-              {items.map((item, index) => (
-                <div
-                  key={index}
-                  style={{
-                    alignItems: 'center',
-                    display: 'grid',
-                    gap: 10,
-                    gridTemplateColumns: '28px 1fr',
-                  }}
-                >
-                  <div style={{ alignItems: 'center', background: getGradient('money_game'), borderRadius: 999, boxShadow: GOLD_GLOW, color: 'var(--bg)', display: 'flex', fontSize: 11, fontWeight: 800, height: 24, justifyContent: 'center', width: 24 }}>
-                    {index + 1}
-                  </div>
-                  <div style={{ ...glassSurfaceStyle(false), color: TEXT, fontSize: 12, fontWeight: 700, padding: '10px 12px' }}>
-                    {item}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )
-    }
-
-    return (
-      <div style={{ display: 'grid', gap: 8 }}>
-        {items.map((item, index) => (
-          <div key={index} style={{ ...glassSurfaceStyle(false), color: TEXT, fontSize: 12, fontWeight: 700, padding: '9px 11px' }}>
-            <span style={{ color: ACCENT, marginRight: 8 }}>{index + 1}</span>
-            {item}
-          </div>
-        ))}
-      </div>
-    )
-  }
 
   return (
     <ArtifactShell
@@ -1225,7 +1564,7 @@ function SignalMap({ data }) {
                   {frameworks.map((framework, index) => (
                     <div key={index} className={data.animate !== false ? `axiom-animate-fade ${stagger(index + 2)}` : ''} style={{ ...glassSurfaceStyle(false), display: 'grid', gap: 10, padding: 14 }}>
                       <div style={{ color: TEXT, fontSize: 13, fontWeight: 800 }}>{framework.name}</div>
-                      <FrameworkVisual framework={framework} />
+                      {renderFrameworkVisual(framework)}
                       {framework.explanation && <div style={{ color: MUTED, fontSize: 12, lineHeight: 1.55 }}>{framework.explanation}</div>}
                     </div>
                   ))}
