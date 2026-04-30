@@ -177,6 +177,24 @@ export default function Chat() {
   const initialInputAppliedRef = useRef(false)
   const initialInputSentRef = useRef(false)
 
+  const clearTransientRouteState = useCallback(() => {
+    const state = location.state || {}
+    if (!('autoSend' in state) && !('initialInput' in state) && !('freshThread' in state) && !('skipOpening' in state)) {
+      return
+    }
+
+    navigate(location.pathname, {
+      replace: true,
+      state: {
+        ...state,
+        autoSend: false,
+        initialInput: '',
+        freshThread: false,
+        skipOpening: false,
+      },
+    })
+  }, [location.pathname, location.state, navigate])
+
   // ── Init ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (initCalledRef.current) return
@@ -286,6 +304,8 @@ export default function Chat() {
     } else if (isNew) {
       await streamOpeningMessage(updatedSession)
     }
+
+    clearTransientRouteState()
   }
 
   useEffect(() => {
@@ -300,14 +320,15 @@ export default function Chat() {
       !session ||
       !autoSend ||
       !initialInput ||
-      initialInputSentRef.current
+      initialInputSentRef.current ||
+      messages.length > 0
     ) {
       return
     }
 
     initialInputSentRef.current = true
     sendMessage(initialInput)
-  }, [autoSend, initialInput, loading, session])
+  }, [autoSend, initialInput, loading, messages.length, session])
 
   function normalizeMsg(m) {
     const { cleanText, artifact, experiment } = parseMessage(m.content || '')

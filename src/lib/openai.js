@@ -786,7 +786,9 @@ If the route is four_pillar_synthesis:
 - Each lens must say what matters here for this user specifically.
 - Notice disagreement between pillars when it exists. Do not smooth over real tension.
 - End by merging the four lenses into one clear conclusion or direction.
-- When the question is future-facing, strategic, or about value capture, prefer a signal_map artifact if the structure helps the user see the tensions clearly.
+- When the question is future-facing, strategic, or about value capture, you must emit exactly one signal_map artifact.
+- Place <artifact_here/> where the signal_map should appear.
+- Do not fall back to prose-only synthesis for this class of question unless the user explicitly asked for no artifact.
 
 If the route is all_pillar_synthesis:
 - Use all six pillars, but do not force equal space for each one.
@@ -1111,7 +1113,7 @@ MULTI-PILLAR FUTURE / STRATEGY SYNTHESIS
     "for_this_user": "The move that matters for this user specifically."
   }
   Use this when a four_pillar_synthesis or all_pillar_synthesis answer is materially improved by structured cross-pillar analysis.
-  Prefer this for questions like "what's next", "who wins", "where does value accrue", "what are people missing", and "what does this mean for me strategically".
+  This is mandatory for four_pillar_synthesis questions like "what's next", "who wins", "where does value accrue", "what are people missing", and "what does this mean for me strategically", unless the user explicitly asked for no artifact.
 
 BOOK / AUTHOR CITATION
 → book_ref
