@@ -1667,7 +1667,7 @@ function SignalMap({ data }) {
           </div>
         )}
 
-        {(watchPoints.length > 0 || counterforces.length > 0 || forThisUser) && (
+        {(watchPoints.length > 0 || forThisUser) && (
           <div
             style={{
               display: 'grid',
