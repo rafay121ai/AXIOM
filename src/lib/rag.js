@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import { generateEmbedding, openai, CHAT_MODEL } from './openai'
+import { generateEmbedding, openai, CHAT_MODEL, requestJsonObject } from './openai'
 
 // ─── Similarity Search ───────────────────────────────────────────────────────
 // Requires the match_wiki_chunks function in Supabase:
@@ -262,10 +262,9 @@ export async function routeQuestionMode(query, session, nodeContext = null) {
   if (explicit) return explicit
 
   try {
-    const response = await openai.chat.completions.create({
-      model: CHAT_MODEL,
-      response_format: { type: 'json_object' },
-      max_completion_tokens: 220,
+    const parsed = await requestJsonObject({
+      label: 'question router payload',
+      maxCompletionTokens: 220,
       messages: [
         {
           role: 'system',
@@ -297,8 +296,6 @@ Selected node: ${nodeContext ? `${nodeContext.label} | pillar: ${nodeContext.pil
         },
       ],
     })
-
-    const parsed = JSON.parse(response.choices[0]?.message?.content || '{}')
     return normalizeRouterPayload(parsed)
   } catch (err) {
     console.warn('[RAG] Question routing failed (falling back):', err?.message || err)

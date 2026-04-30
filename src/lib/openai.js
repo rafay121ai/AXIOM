@@ -1,3 +1,5 @@
+import { getArtifactProfile } from './artifactRegistry'
+
 export const PROFILE_MODEL = 'gpt-5.2-2025-12-11'
 export const CHAT_MODEL = 'gpt-5.4-mini-2026-03-17'
 export const EMBED_MODEL = 'text-embedding-3-small'
@@ -89,6 +91,99 @@ export const openai = {
       return postJson('/api/openai/embeddings', payload, options)
     },
   },
+}
+
+function stripJsonFences(text = '') {
+  return String(text || '')
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+}
+
+function extractJsonCandidate(text = '') {
+  const raw = stripJsonFences(text)
+  const firstBrace = raw.indexOf('{')
+  const lastBrace = raw.lastIndexOf('}')
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    return raw.slice(firstBrace, lastBrace + 1)
+  }
+  return raw
+}
+
+function parseJsonCandidate(text = '') {
+  const candidate = extractJsonCandidate(text)
+  return JSON.parse(candidate || '{}')
+}
+
+async function repairJsonObject(rawText, label = 'json payload') {
+  const response = await openai.chat.completions.create({
+    model: CHAT_MODEL,
+    response_format: { type: 'json_object' },
+    max_completion_tokens: 1200,
+    messages: [
+      {
+        role: 'system',
+        content: `You repair malformed JSON.
+
+Return valid JSON only.
+
+Rules:
+- Preserve the original structure and keys whenever possible.
+- Do not add narrative or markdown.
+- If a value is visibly truncated, close it conservatively.
+- If the missing tail cannot be recovered, use an empty string, empty array, or empty object rather than inventing detailed content.
+- Never rename keys unless the original is clearly broken beyond repair.`,
+      },
+      {
+        role: 'user',
+        content: `Repair this malformed ${label} into valid JSON only:\n\n${rawText}`,
+      },
+    ],
+  })
+
+  return parseJsonCandidate(response.choices[0]?.message?.content || '{}')
+}
+
+export async function requestJsonObject({
+  messages,
+  maxCompletionTokens,
+  label = 'json payload',
+  model = CHAT_MODEL,
+  retries = 1,
+}) {
+  let lastError = null
+  let lastRaw = ''
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const response = await openai.chat.completions.create({
+      model,
+      response_format: { type: 'json_object' },
+      max_completion_tokens: maxCompletionTokens,
+      messages: attempt === 0
+        ? messages
+        : [
+            ...messages,
+            {
+              role: 'system',
+              content: `Your previous ${label} was malformed or truncated. Return valid JSON only this time. No markdown. No commentary.`,
+            },
+          ],
+    })
+
+    lastRaw = response.choices[0]?.message?.content || '{}'
+
+    try {
+      return parseJsonCandidate(lastRaw)
+    } catch (error) {
+      lastError = error
+    }
+  }
+
+  try {
+    return await repairJsonObject(lastRaw, label)
+  } catch (repairError) {
+    throw new Error(`Failed to parse ${label}: ${repairError?.message || lastError?.message || 'unknown parse error'}`)
+  }
 }
 
 // ─── Embeddings ─────────────────────────────────────────────────────────────
@@ -216,248 +311,6 @@ Warning level: ${session.warning_level || 0}`,
   return response.choices[0].message.content.trim()
 }
 
-export async function generateSignalMapArtifact({
-  query,
-  session,
-  routeContext = '',
-  wikiContext = '',
-  personalMemoryContext = '',
-  namedPatternsContext = '',
-  answerDraft = '',
-}) {
-  const response = await openai.chat.completions.create({
-    model: CHAT_MODEL,
-    response_format: { type: 'json_object' },
-    max_completion_tokens: 900,
-    messages: [
-      {
-        role: 'system',
-        content: `You generate only the JSON payload for Axiom's signal_map artifact.
-
-Return valid JSON only. Do not wrap it in markdown. Do not include <artifact> tags.
-
-Rules:
-- Ground the map in concrete present-tense signals first, then interpretation, then forecast.
-- Prefer factual observations over abstraction.
-- Use qualitative estimates sparingly and only when exact counts are unavailable.
-- Keep the artifact specific to the user's situation when possible.
-- Include real tension across pillars when it exists.
-
-Required JSON shape:
-{
-  "title": "Signal Map: short topic title",
-  "topic": "string",
-  "core_shift": "string",
-  "trend_state": {
-    "current_phase": "early|rising|crowded|mainstreaming|peaking|unclear",
-    "current_read": "string",
-    "signal_strength": "weak|medium|strong",
-    "estimate_note": "optional string"
-  },
-  "what_is_happening_now": [
-    { "label": "string", "detail": "string", "evidence": "string" }
-  ],
-  "observed_moves": [
-    { "actor": "string", "action": "string", "implication": "string" }
-  ],
-  "sections": [
-    { "id": "whats_coming", "label": "What's Shifting", "pillar": "whats_coming", "signal": "string", "tension": "optional string" },
-    { "id": "how_companies_win", "label": "Who Captures It", "pillar": "how_companies_win", "signal": "string", "tension": "optional string" },
-    { "id": "money_game", "label": "Where Value Pools", "pillar": "money_game", "signal": "string", "tension": "optional string" },
-    { "id": "think_sharper", "label": "How Hard To Believe", "pillar": "think_sharper", "signal": "string", "tension": "optional string" }
-  ],
-  "forecast": {
-    "now": { "label": "Now", "value": 0, "note": "string" },
-    "next_12_months": { "label": "12 months", "value": 0, "note": "string" },
-    "next_3_years": { "label": "3 years", "value": 0, "note": "string" }
-  },
-  "frameworks": [
-    {
-      "name": "string",
-      "kind": "cycle|stack|spectrum|pyramid|curve|wave",
-      "explanation": "string",
-      "items": ["string"],
-      "position": 0.5,
-      "left_label": "optional string",
-      "right_label": "optional string",
-      "curve_label": "optional string",
-      "peak_label": "optional string"
-    }
-  ],
-  "source_weighting": [
-    { "kind": "string", "weight": "high|medium|low", "reason": "string" }
-  ],
-  "confidence": {
-    "level": "low|medium|high",
-    "why": "string"
-  },
-  "watch_points": ["string"],
-  "counterforces": ["string"],
-  "for_this_user": "string"
-}
-
-Use at least:
-- 2 current signals
-- 2 observed moves
-- 1 framework
-- 2 watch points
-
-Make the framework genuinely visual. If the logic is staged, cyclical, hierarchical, or curve-based, choose the matching kind instead of flattening it into a list.`,
-      },
-      {
-        role: 'user',
-        content: `Question: ${query}
-
-Route context:
-${routeContext || 'None'}
-
-Private theory:
-${session?.axiom_profile || 'None'}
-
-Session notes:
-${session?.session_notes || 'None'}
-
-Pillar weights:
-${JSON.stringify(session?.pillar_weights || {})}
-
-Named patterns:
-${namedPatternsContext || 'None'}
-
-Personal context:
-${personalMemoryContext || 'None'}
-
-Wiki context:
-${wikiContext || 'None'}
-
-Draft answer:
-${answerDraft || 'None'}`,
-      },
-    ],
-  })
-
-  return JSON.parse(response.choices[0]?.message?.content || '{}')
-}
-
-const STRUCTURED_ARTIFACT_SPECS = {
-  comparison_table: {
-    maxTokens: 500,
-    schema: `{
-  "headers": ["string", "string", "string"],
-  "rows": [["string", "string", "string"]],
-  "animate": true,
-  "interactive": false
-}`,
-    rules: [
-      'Use this for clean structural contrasts, tradeoffs, options, layers, value pools, or what something gives versus what it costs.',
-      'Keep headers short and rows concrete.',
-      'Prefer 3 columns and 3-6 rows.',
-    ],
-  },
-  behavior_loop: {
-    maxTokens: 500,
-    schema: `{
-  "title": "string",
-  "steps": [
-    { "label": "string", "description": "string" }
-  ],
-  "animate": true,
-  "interactive": true
-}`,
-    rules: [
-      'Use 4-6 stages.',
-      'Make the emotional trigger, defensive move, short-term relief, and reinforcement visible.',
-      'This should explain a self-protective or self-defeating loop, not a neutral process.',
-    ],
-  },
-  reasoning_cycle: {
-    maxTokens: 500,
-    schema: `{
-  "title": "string",
-  "steps": [
-    { "label": "string", "description": "string" }
-  ],
-  "animate": true,
-  "interactive": true
-}`,
-    rules: [
-      'Use 4-6 stages.',
-      'This is for reinforcing mechanisms like compounding, repeated loops, or recurring dynamics.',
-      'Each stage should make the next stage more intelligible.',
-    ],
-  },
-  reasoning_stack: {
-    maxTokens: 500,
-    schema: `{
-  "title": "string",
-  "layers": [
-    { "label": "string", "detail": "string", "emphasis": "optional" }
-  ],
-  "animate": true,
-  "interactive": true
-}`,
-    rules: [
-      'Use 3-6 layers.',
-      'This is for layered value capture, system stacks, or control layers.',
-      'Use "emphasis": "high" only for the layer where durable leverage or capture is strongest.',
-    ],
-  },
-  reasoning_curve: {
-    maxTokens: 550,
-    schema: `{
-  "title": "string",
-  "left_label": "string",
-  "right_label": "string",
-  "curve_label": "string",
-  "peak_label": "optional string",
-  "stages": [
-    { "label": "string", "position": 0.2, "detail": "string" }
-  ],
-  "animate": true,
-  "interactive": true
-}`,
-    rules: [
-      'Use 3-5 stages.',
-      'Use positions between 0 and 1 to show where each stage sits on the curve.',
-      'Best for adoption curves, compounding, phase shifts, or rise-peak-decline dynamics.',
-    ],
-  },
-  reasoning_wave: {
-    maxTokens: 550,
-    schema: `{
-  "title": "string",
-  "left_label": "string",
-  "right_label": "string",
-  "crest_label": "optional string",
-  "drivers": [
-    { "label": "string", "position": 0.2, "detail": "string" }
-  ],
-  "animate": true,
-  "interactive": true
-}`,
-    rules: [
-      'Use 3-5 drivers.',
-      'Use positions between 0 and 1 to place the drivers along the swell and fade pattern.',
-      'Best for hype cycles, saturation arcs, or buildup-to-crest movement.',
-    ],
-  },
-  reasoning_pyramid: {
-    maxTokens: 500,
-    schema: `{
-  "title": "string",
-  "layers": [
-    { "label": "string", "detail": "string" }
-  ],
-  "animate": true,
-  "interactive": true
-}`,
-    rules: [
-      'Use 3-5 layers.',
-      'This is for dependency and hierarchy, where upper layers depend on lower layers.',
-      'Order layers from base to top.',
-    ],
-  },
-}
-
 export async function generateStructuredArtifact({
   artifactType,
   query,
@@ -468,25 +321,12 @@ export async function generateStructuredArtifact({
   namedPatternsContext = '',
   answerDraft = '',
 }) {
-  if (artifactType === 'signal_map') {
-    return generateSignalMapArtifact({
-      query,
-      session,
-      routeContext,
-      wikiContext,
-      personalMemoryContext,
-      namedPatternsContext,
-      answerDraft,
-    })
-  }
-
-  const spec = STRUCTURED_ARTIFACT_SPECS[artifactType]
+  const spec = getArtifactProfile(artifactType)
   if (!spec) return null
 
-  const response = await openai.chat.completions.create({
-    model: CHAT_MODEL,
-    response_format: { type: 'json_object' },
-    max_completion_tokens: spec.maxTokens,
+  return requestJsonObject({
+    label: `${spec.label || artifactType} artifact`,
+    maxCompletionTokens: spec.maxTokens || 600,
     messages: [
       {
         role: 'system',
@@ -535,8 +375,6 @@ ${answerDraft || 'None'}`,
       },
     ],
   })
-
-  return JSON.parse(response.choices[0]?.message?.content || '{}')
 }
 
 export async function* streamStructuredArtifact({
@@ -550,7 +388,8 @@ export async function* streamStructuredArtifact({
   answerDraft = '',
   signal,
 }) {
-  const spec = STRUCTURED_ARTIFACT_SPECS[artifactType]
+  const spec = getArtifactProfile(artifactType)
+  if (!spec) return
 
   const systemPrompt =
     artifactType === 'signal_map'
@@ -563,17 +402,7 @@ Rules:
 - No markdown.
 - No prose outside JSON.
 - Emit one top-level section per line in this order:
-  1. title, topic, core_shift
-  2. trend_state
-  3. what_is_happening_now
-  4. observed_moves
-  5. sections
-  6. forecast
-  7. frameworks
-  8. confidence
-  9. watch_points
-  10. counterforces
-  11. for_this_user
+${spec.streamOrder.map((item, index) => `  ${index + 1}. ${item}`).join('\n')}
 - Ground the map in concrete present-tense signals first, then interpretation, then forecast.
 - Keep it specific to the user's situation when possible.
 - Make the framework genuinely visual, not list-like.`
@@ -787,8 +616,9 @@ export async function generateMemoryUpdate(session, recentMessages, userMessage,
     .map((m) => `${m.role === 'user' ? 'User' : 'Axiom'}: ${m.content}`)
     .join('\n\n')
 
-  const response = await openai.chat.completions.create({
-    model: CHAT_MODEL,
+  const parsed = await requestJsonObject({
+    label: 'memory update',
+    maxCompletionTokens: 500,
     messages: [
       {
         role: 'system',
@@ -851,12 +681,7 @@ ${assistantMessage}
 Update memory now.`,
       },
     ],
-    max_completion_tokens: 500,
   })
-
-  const raw = response.choices[0].message.content.trim()
-  const jsonText = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
-  const parsed = JSON.parse(jsonText)
 
   return {
     session_notes: typeof parsed.session_notes === 'string' ? parsed.session_notes.trim() : '',

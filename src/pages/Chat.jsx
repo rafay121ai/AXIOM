@@ -6,38 +6,61 @@ import WarningCard from '../components/WarningCard'
 import ArtifactRenderer from '../components/ArtifactRenderer'
 import { clearStoredSessionToken, getStoredSessionToken, supabase } from '../lib/supabase'
 import { openai, CHAT_MODEL, generateOpeningMessage, generateNodeOpeningMessage, buildSystemPrompt } from '../lib/openai'
-import { buildArtifactForResponse, getRequiredArtifactType } from '../lib/artifacts'
+import { buildArtifactForResponse, getArtifactBuildSteps, getRequiredArtifactType, humanizeArtifactType } from '../lib/artifacts'
 import { routeQuestionMode, searchWikiForRoute, formatRouteContext, formatWikiContext } from '../lib/rag'
 import { searchPersonalMemory, formatNamedPatternsContext, formatPersonalMemoryContext, updatePersonalMemory } from '../lib/personalMemory'
 
 // ─── Message Tag Parsing ─────────────────────────────────────────────────────
+function extractJsonCandidate(text = '') {
+  const raw = String(text || '')
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+
+  const firstBrace = raw.indexOf('{')
+  const lastBrace = raw.lastIndexOf('}')
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    return raw.slice(firstBrace, lastBrace + 1)
+  }
+  return raw
+}
+
+function safeParseJsonText(text) {
+  try {
+    return JSON.parse(extractJsonCandidate(text))
+  } catch {
+    return null
+  }
+}
+
 function parseArtifact(text) {
   const match = text.match(/<artifact[^>]*type="([^"]+)"[^>]*>([\s\S]*?)<\/artifact>/)
   if (!match) return { cleanText: text, artifact: null }
 
-  try {
-    const type = match[1]
-    const data = JSON.parse(match[2].trim())
-    const cleanText = text.replace(/<artifact[^>]*>[\s\S]*?<\/artifact>/, '').trim()
-    return { cleanText, artifact: { type, data } }
-  } catch (e) {
-    console.warn('[parseArtifact] JSON parse failed:', e?.message, '| raw:', match[2]?.slice(0, 200))
-    const cleanText = text.replace(/<artifact[^>]*>[\s\S]*?<\/artifact>/, '').trim()
+  const type = match[1]
+  const data = safeParseJsonText(match[2])
+  const cleanText = text.replace(/<artifact[^>]*>[\s\S]*?<\/artifact>/, '').trim()
+
+  if (!data || typeof data !== 'object') {
+    console.warn('[parseArtifact] JSON parse failed or returned non-object', { type, raw: match[2]?.slice(0, 200) })
     return { cleanText, artifact: null }
   }
+
+  return { cleanText, artifact: { type, data } }
 }
 
 function parseExperiment(text) {
   const match = text.match(/<experiment>([\s\S]*?)<\/experiment>/)
   if (!match) return { cleanText: text, experiment: null }
 
-  try {
-    const experiment = JSON.parse(match[1].trim())
-    const cleanText = text.replace(/<experiment>[\s\S]*?<\/experiment>/, '').trim()
-    return { cleanText, experiment }
-  } catch {
+  const experiment = safeParseJsonText(match[1])
+  const cleanText = text.replace(/<experiment>[\s\S]*?<\/experiment>/, '').trim()
+
+  if (!experiment || typeof experiment !== 'object') {
     return { cleanText: text, experiment: null }
   }
+
+  return { cleanText, experiment }
 }
 
 function parseMessage(text) {
@@ -819,7 +842,7 @@ function MessageGroup({ msg, onAnswer, onSubmit, onUserPlot }) {
 
 function ArtifactLoadingPreview({ artifactType }) {
   const [stepIndex, setStepIndex] = useState(0)
-  const steps = artifactBuildSteps(artifactType)
+  const steps = getArtifactBuildSteps(artifactType)
 
   useEffect(() => {
     setStepIndex(0)
@@ -853,31 +876,4 @@ function ArtifactLoadingPreview({ artifactType }) {
       </div>
     </div>
   )
-}
-
-function artifactBuildSteps(type) {
-  switch (type) {
-    case 'signal_map':
-      return ['Reading live signals', 'Tracing actors and moves', 'Projecting the forecast', 'Locking the user consequence']
-    case 'reasoning_stack':
-      return ['Finding the layers', 'Separating commodity from control', 'Marking the capture point']
-    case 'reasoning_cycle':
-      return ['Tracing the loop', 'Marking reinforcement points', 'Closing the cycle']
-    case 'behavior_loop':
-      return ['Finding the trigger', 'Mapping the defense move', 'Showing the reinforcement']
-    case 'reasoning_curve':
-      return ['Locating the inflection', 'Placing the stages', 'Drawing the arc']
-    case 'reasoning_wave':
-      return ['Reading the swell', 'Placing the drivers', 'Marking the crest']
-    case 'reasoning_pyramid':
-      return ['Finding the base', 'Stacking dependencies', 'Marking the top constraint']
-    case 'comparison_table':
-      return ['Selecting the dimensions', 'Lining up the tradeoff', 'Sharpening the contrast']
-    default:
-      return ['Structuring the read', 'Building the visual', 'Refining the signal']
-  }
-}
-
-function humanizeArtifactType(type = '') {
-  return String(type).replace(/_/g, ' ')
 }
