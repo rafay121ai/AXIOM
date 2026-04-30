@@ -50,7 +50,7 @@ async function buildSignalMapProgressively({
   for (const section of profile.progressiveSections || []) {
     const partial = await requestJsonObject({
       label: `signal_map ${section.key}`,
-      maxCompletionTokens: 500,
+      maxCompletionTokens: 320,
       messages: [
         {
           role: 'system',

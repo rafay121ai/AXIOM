@@ -860,19 +860,18 @@ function ArtifactLoadingPreview({ artifactType }) {
     return () => window.clearInterval(interval)
   }, [artifactType, steps.length])
 
+  const currentStep = steps[Math.min(stepIndex, steps.length - 1)] || 'Sketching the shape'
+
   return (
     <div className="artifact-loading axiom-animate-fade">
-      <div className="artifact-loading__header">
-        <span className="artifact-loading__label">Axiom is building the visual</span>
-        <span className="artifact-loading__type">{humanizeArtifactType(artifactType)}</span>
-      </div>
       <div className="artifact-loading__canvas">
         <div className="artifact-loading__scanline" />
         <div className={`artifact-loading__shape artifact-loading__shape--${artifactType}`} />
       </div>
-      <div className="artifact-loading__status">
+      <div className="artifact-loading__whisper">
         <span className="artifact-loading__dot artifact-loading__dot--live" />
-        <span className="artifact-loading__status-text">{steps[Math.min(stepIndex, steps.length - 1)]}</span>
+        <span className="artifact-loading__whisper-text">{currentStep}</span>
+        <span className="artifact-loading__type">{humanizeArtifactType(artifactType)}</span>
       </div>
     </div>
   )

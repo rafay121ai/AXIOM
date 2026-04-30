@@ -261,6 +261,15 @@ function normalizeVisualNode(item, index = 0) {
   }
 }
 
+function clampText(lines) {
+  return {
+    display: '-webkit-box',
+    overflow: 'hidden',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: lines,
+  }
+}
+
 function usePercentDrag(initialValue, onRelease) {
   const ref = useRef(null)
   const [value, setValue] = useState(clamp01(initialValue ?? 0.5))
@@ -1386,18 +1395,18 @@ function SignalMap({ data }) {
     label: stringifyRenderable(signal?.label) || `Signal ${index + 1}`,
     detail: stringifyRenderable(signal?.detail),
     evidence: stringifyRenderable(signal?.evidence),
-  }))
+  })).slice(0, 2)
   const observedMoves = asArray(data.observed_moves).map((move, index) => ({
     actor: stringifyRenderable(move?.actor) || `Actor ${index + 1}`,
     action: stringifyRenderable(move?.action),
     implication: stringifyRenderable(move?.implication),
-  }))
+  })).slice(0, 3)
   const sections = asArray(data.sections).map((section, index) => ({
     ...section,
     label: stringifyRenderable(section?.label) || stringifyRenderable(section?.id) || `Section ${index + 1}`,
     signal: stringifyRenderable(section?.signal),
     tension: stringifyRenderable(section?.tension),
-  }))
+  })).slice(0, 4)
   const frameworks = asArray(data.frameworks).map((framework, index) => ({
     ...framework,
     name: stringifyRenderable(framework?.name) || `Framework ${index + 1}`,
@@ -1406,9 +1415,8 @@ function SignalMap({ data }) {
     right_label: stringifyRenderable(framework?.right_label),
     curve_label: stringifyRenderable(framework?.curve_label),
     peak_label: stringifyRenderable(framework?.peak_label),
-  }))
-  const watchPoints = asArray(data.watch_points).map(stringifyRenderable).filter(Boolean)
-  const counterforces = asArray(data.counterforces).map(stringifyRenderable).filter(Boolean)
+  })).slice(0, 1)
+  const watchPoints = asArray(data.watch_points).map(stringifyRenderable).filter(Boolean).slice(0, 3)
   const confidence = data.confidence || {}
   const trendState = data.trend_state || {}
   const forecast = data.forecast || {}
@@ -1479,13 +1487,13 @@ function SignalMap({ data }) {
           )}
 
           {coreShift && (
-            <div style={{ color: TEXT, fontSize: 24, fontWeight: 700, letterSpacing: '0.01em', lineHeight: 1.1, maxWidth: 760 }}>
+            <div style={{ color: TEXT, fontSize: 20, fontWeight: 700, letterSpacing: '0.01em', lineHeight: 1.1, maxWidth: 760, ...clampText(4) }}>
               {coreShift}
             </div>
           )}
 
           {confidenceWhy && (
-            <div style={{ color: MUTED, fontSize: 12, lineHeight: 1.55, maxWidth: 780 }}>
+            <div style={{ color: MUTED, fontSize: 12, lineHeight: 1.5, maxWidth: 720, ...clampText(2) }}>
               {confidenceWhy}
             </div>
           )}
@@ -1506,7 +1514,7 @@ function SignalMap({ data }) {
             <div style={{ color: ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
               Live read
             </div>
-            <div style={{ color: TEXT, fontSize: 13, fontWeight: 700, lineHeight: 1.4 }}>
+            <div style={{ color: TEXT, fontSize: 13, fontWeight: 700, lineHeight: 1.4, ...clampText(2) }}>
               {currentRead || 'Current state read not provided.'}
             </div>
             <div style={{ display: 'grid', gap: 6, justifyItems: 'end' }}>
@@ -1533,8 +1541,8 @@ function SignalMap({ data }) {
               {currentSignals.map((signal, index) => (
                 <div key={index} className={data.animate !== false ? `axiom-animate-fade ${stagger(index + 1)}` : ''} style={{ ...glassSurfaceStyle(false), display: 'grid', gap: 8, padding: 12 }}>
                   <div style={{ color: TEXT, fontSize: 13, fontWeight: 800 }}>{signal.label}</div>
-                  {signal.detail && <div style={{ color: TEXT, fontSize: 12, lineHeight: 1.55 }}>{signal.detail}</div>}
-                  {signal.evidence && <div style={{ color: MUTED, fontSize: 11, lineHeight: 1.5 }}><span style={{ color: ACCENT }}>Visible signal:</span> {signal.evidence}</div>}
+                  {signal.detail && <div style={{ color: TEXT, fontSize: 12, lineHeight: 1.5, ...clampText(3) }}>{signal.detail}</div>}
+                  {signal.evidence && <div style={{ color: MUTED, fontSize: 11, lineHeight: 1.45, ...clampText(2) }}><span style={{ color: ACCENT }}>Visible signal:</span> {signal.evidence}</div>}
                 </div>
               ))}
             </div>
@@ -1548,13 +1556,13 @@ function SignalMap({ data }) {
             </div>
             <div style={{ display: 'grid', gap: 8 }}>
               {observedMoves.map((move, index) => (
-                <div key={index} className={data.animate !== false ? `axiom-animate-fade ${stagger(index + 1)}` : ''} style={{ ...glassSurfaceStyle(false), display: 'grid', gap: 6, gridTemplateColumns: '120px 1fr', padding: 12 }}>
+                <div key={index} className={data.animate !== false ? `axiom-animate-fade ${stagger(index + 1)}` : ''} style={{ ...glassSurfaceStyle(false), display: 'grid', gap: 6, gridTemplateColumns: '112px 1fr', padding: 12 }}>
                   <div style={{ color: ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
                     {move.actor}
                   </div>
                   <div style={{ display: 'grid', gap: 5 }}>
-                    <div style={{ color: TEXT, fontSize: 12, fontWeight: 700 }}>{move.action}</div>
-                    {move.implication && <div style={{ color: MUTED, fontSize: 12, lineHeight: 1.5 }}>{move.implication}</div>}
+                    <div style={{ color: TEXT, fontSize: 12, fontWeight: 700, ...clampText(2) }}>{move.action}</div>
+                    {move.implication && <div style={{ color: MUTED, fontSize: 12, lineHeight: 1.45, ...clampText(2) }}>{move.implication}</div>}
                   </div>
                 </div>
               ))}
@@ -1590,7 +1598,7 @@ function SignalMap({ data }) {
                     {section.label || section.id}
                   </span>
                 </div>
-                <div style={{ color: TEXT, fontSize: 13, fontWeight: 700, lineHeight: 1.48 }}>
+                <div style={{ color: TEXT, fontSize: 13, fontWeight: 700, lineHeight: 1.45, ...clampText(4) }}>
                   {section.signal}
                 </div>
                 {section.tension && (
@@ -1599,9 +1607,10 @@ function SignalMap({ data }) {
                       borderTop: `1px solid ${BORDER}`,
                       color: MUTED,
                       fontSize: 12,
-                      lineHeight: 1.55,
+                      lineHeight: 1.45,
                       marginTop: 12,
                       paddingTop: 10,
+                      ...clampText(3),
                     }}
                   >
                     <span style={{ color: pillar.core, fontWeight: 700 }}>Tension:</span> {section.tension}
@@ -1613,25 +1622,25 @@ function SignalMap({ data }) {
         </div>
 
         {(forecastBars.length > 0 || frameworks.length > 0) && (
-          <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'minmax(260px, 0.9fr) minmax(0, 1.1fr)' }}>
+          <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'minmax(220px, 0.8fr) minmax(0, 1fr)' }}>
             {forecastBars.length > 0 && (
               <div style={{ ...glassSurfaceStyle(false), display: 'grid', gap: 12, padding: 14 }}>
                 <div style={{ color: ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
                   Forecast
                 </div>
-                <div style={{ alignItems: 'end', display: 'grid', gap: 8, gridTemplateColumns: `repeat(${forecastBars.length}, minmax(0, 1fr))`, minHeight: 180 }}>
+                <div style={{ alignItems: 'end', display: 'grid', gap: 8, gridTemplateColumns: `repeat(${forecastBars.length}, minmax(0, 1fr))`, minHeight: 132 }}>
                   {forecastBars.map((item, index) => {
                     const value = Math.max(0, Math.min(100, Number(item.value) || 0))
                     return (
                       <div key={index} className={data.animate !== false ? `axiom-animate-fade ${stagger(index + 2)}` : ''} style={{ display: 'grid', gap: 8, height: '100%' }}>
-                        <div style={{ alignItems: 'end', background: 'linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.005))', border: `1px solid ${BORDER}`, borderRadius: 4, display: 'flex', minHeight: 132, overflow: 'hidden', padding: 6 }}>
+                        <div style={{ alignItems: 'end', background: 'linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.005))', border: `1px solid ${BORDER}`, borderRadius: 4, display: 'flex', minHeight: 96, overflow: 'hidden', padding: 6 }}>
                           <div style={{ background: GOLD_GRADIENT, borderRadius: 4, boxShadow: GOLD_GLOW, height: `${Math.max(10, value)}%`, minHeight: 18, width: '100%' }} />
                         </div>
                         <div style={{ alignItems: 'center', display: 'flex', justifyContent: 'space-between' }}>
                           <span style={{ color: TEXT, fontSize: 11, fontWeight: 700 }}>{item.label}</span>
                           <span style={{ color: ACCENT, fontSize: 11, fontWeight: 800 }}>{value}</span>
                         </div>
-                        {item.note && <div style={{ color: MUTED, fontSize: 11, lineHeight: 1.45 }}>{item.note}</div>}
+                        {item.note && <div style={{ color: MUTED, fontSize: 11, lineHeight: 1.4, ...clampText(2) }}>{item.note}</div>}
                       </div>
                     )
                   })}
@@ -1666,11 +1675,11 @@ function SignalMap({ data }) {
               gridTemplateColumns: 'minmax(0, 1.15fr) minmax(280px, 0.85fr)',
             }}
           >
-            <div
-              style={{
-                background: 'rgba(255,255,255,0.018)',
-                ...GLASS_BORDER,
-                borderRadius: 4,
+              <div
+                style={{
+                  background: 'rgba(255,255,255,0.018)',
+                  ...GLASS_BORDER,
+                  borderRadius: 4,
                 display: 'grid',
                 gap: 12,
                 padding: 14,
@@ -1683,24 +1692,8 @@ function SignalMap({ data }) {
                   </div>
                   <div style={{ display: 'grid', gap: 8 }}>
                     {watchPoints.map((item, index) => (
-                      <div key={index} style={{ color: MUTED, fontSize: 12, lineHeight: 1.55 }}>
+                      <div key={index} style={{ color: MUTED, fontSize: 12, lineHeight: 1.45, ...clampText(2) }}>
                         <span style={{ color: ACCENT, fontWeight: 800, marginRight: 6 }}>•</span>
-                        {item}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {counterforces.length > 0 && (
-                <div>
-                  <div style={{ color: ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', marginBottom: 8, textTransform: 'uppercase' }}>
-                    Counterforces
-                  </div>
-                  <div style={{ display: 'grid', gap: 8 }}>
-                    {counterforces.map((item, index) => (
-                      <div key={index} style={{ color: MUTED, fontSize: 12, lineHeight: 1.55 }}>
-                        <span style={{ color: BAD, fontWeight: 800, marginRight: 6 }}>+</span>
                         {item}
                       </div>
                     ))}
@@ -1724,7 +1717,7 @@ function SignalMap({ data }) {
                 <div style={{ color: ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
                   What this means for you
                 </div>
-                <div style={{ color: TEXT, fontSize: 18, fontWeight: 700, lineHeight: 1.3 }}>
+                <div style={{ color: TEXT, fontSize: 17, fontWeight: 700, lineHeight: 1.3, ...clampText(8) }}>
                   {forThisUser}
                 </div>
               </div>

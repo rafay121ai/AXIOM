@@ -3,40 +3,40 @@ const DEFAULT_BUILD_STEPS = ['Structuring the read', 'Building the visual', 'Ref
 export const ARTIFACT_PROFILES = {
   signal_map: {
     label: 'signal map',
-    maxTokens: 1400,
-    buildSteps: ['Reading live signals', 'Tracing actors and moves', 'Projecting the forecast', 'Locking the user consequence'],
+    maxTokens: 900,
+    buildSteps: ['Finding the signal', 'Sketching the shape', 'Locking the read'],
     schema: `{
   "title": "Signal Map: short topic title",
   "topic": "string",
-  "core_shift": "string",
+  "core_shift": "One sharp sentence only",
   "trend_state": {
     "current_phase": "early|rising|crowded|mainstreaming|peaking|unclear",
-    "current_read": "string",
+    "current_read": "One compact sentence only",
     "signal_strength": "weak|medium|strong",
     "estimate_note": "optional string"
   },
   "what_is_happening_now": [
-    { "label": "string", "detail": "string", "evidence": "string" }
+    { "label": "short string", "detail": "one short sentence", "evidence": "very short factual cue" }
   ],
   "observed_moves": [
-    { "actor": "string", "action": "string", "implication": "string" }
+    { "actor": "string", "action": "one short sentence", "implication": "very short sentence" }
   ],
   "sections": [
-    { "id": "whats_coming", "label": "What's Shifting", "pillar": "whats_coming", "signal": "string", "tension": "optional string" },
-    { "id": "how_companies_win", "label": "Who Captures It", "pillar": "how_companies_win", "signal": "string", "tension": "optional string" },
-    { "id": "money_game", "label": "Where Value Pools", "pillar": "money_game", "signal": "string", "tension": "optional string" },
-    { "id": "think_sharper", "label": "How Hard To Believe", "pillar": "think_sharper", "signal": "string", "tension": "optional string" }
+    { "id": "whats_coming", "label": "What's Shifting", "pillar": "whats_coming", "signal": "one short sentence", "tension": "optional short sentence" },
+    { "id": "how_companies_win", "label": "Who Captures It", "pillar": "how_companies_win", "signal": "one short sentence", "tension": "optional short sentence" },
+    { "id": "money_game", "label": "Where Value Pools", "pillar": "money_game", "signal": "one short sentence", "tension": "optional short sentence" },
+    { "id": "think_sharper", "label": "How Hard To Believe", "pillar": "think_sharper", "signal": "one short sentence", "tension": "optional short sentence" }
   ],
   "forecast": {
-    "now": { "label": "Now", "value": 0, "note": "string" },
-    "next_12_months": { "label": "12 months", "value": 0, "note": "string" },
-    "next_3_years": { "label": "3 years", "value": 0, "note": "string" }
+    "now": { "label": "Now", "value": 0, "note": "short phrase" },
+    "next_12_months": { "label": "12 months", "value": 0, "note": "short phrase" },
+    "next_3_years": { "label": "3 years", "value": 0, "note": "short phrase" }
   },
   "frameworks": [
     {
       "name": "string",
       "kind": "cycle|stack|spectrum|pyramid|curve|wave",
-      "explanation": "string",
+      "explanation": "one short sentence",
       "items": ["string"],
       "position": 0.5,
       "left_label": "optional string",
@@ -50,19 +50,20 @@ export const ARTIFACT_PROFILES = {
   ],
   "confidence": {
     "level": "low|medium|high",
-    "why": "string"
+    "why": "short sentence"
   },
   "watch_points": ["string"],
-  "counterforces": ["string"],
   "for_this_user": "string"
 }`,
     rules: [
+      'Return a compact read, not a report.',
       'Ground the map in concrete present-tense signals first, then interpretation, then forecast.',
       'Prefer factual observations over abstraction.',
       'Use qualitative estimates sparingly and only when exact counts are unavailable.',
       'Keep the artifact specific to the user when possible.',
       'Include real tension across pillars when it exists.',
-      'Use at least 2 current signals, 2 observed moves, 1 framework, and 2 watch points.',
+      'Keep every field tight: one sharp sentence or phrase unless a list is explicitly requested.',
+      'Use exactly 2 current signals, up to 3 observed moves, 1 framework, and up to 3 watch points.',
       'Make the framework genuinely visual. If the logic is staged, cyclical, hierarchical, or curve-based, choose the matching kind instead of flattening it into a list.',
     ],
     streamOrder: [
@@ -102,7 +103,8 @@ export const ARTIFACT_PROFILES = {
         key: 'what_is_happening_now',
         schema: `{
   "what_is_happening_now": [
-    { "label": "string", "detail": "string", "evidence": "string" }
+    { "label": "short string", "detail": "one short sentence", "evidence": "very short factual cue" },
+    { "label": "short string", "detail": "one short sentence", "evidence": "very short factual cue" }
   ]
 }`,
       },
@@ -110,7 +112,7 @@ export const ARTIFACT_PROFILES = {
         key: 'observed_moves',
         schema: `{
   "observed_moves": [
-    { "actor": "string", "action": "string", "implication": "string" }
+    { "actor": "string", "action": "one short sentence", "implication": "very short sentence" }
   ]
 }`,
       },
@@ -166,7 +168,6 @@ export const ARTIFACT_PROFILES = {
         key: 'watch_points',
         schema: `{
   "watch_points": ["string"],
-  "counterforces": ["string"],
   "for_this_user": "string"
 }`,
       },
