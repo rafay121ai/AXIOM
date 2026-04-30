@@ -1,4 +1,4 @@
-import { generateStructuredArtifact, requestJsonObject, streamStructuredArtifact } from './openai'
+import { generateStructuredArtifact, streamStructuredArtifact } from './openai'
 import { getArtifactBuildSteps, getArtifactProfile, humanizeArtifactType } from './artifactRegistry'
 export { getArtifactBuildSteps, humanizeArtifactType } from './artifactRegistry'
 
@@ -34,81 +34,6 @@ export function getRequiredArtifactType(route) {
     : null
 }
 
-async function buildSignalMapProgressively({
-  profile,
-  query,
-  session,
-  routeContext = '',
-  wikiContext = '',
-  personalMemoryContext = '',
-  namedPatternsContext = '',
-  answerDraft = '',
-  onProgress,
-}) {
-  let progressiveData = {}
-
-  for (const section of profile.progressiveSections || []) {
-    const partial = await requestJsonObject({
-      label: `signal_map ${section.key}`,
-      maxCompletionTokens: 320,
-      messages: [
-        {
-          role: 'system',
-          content: `You generate one section of Axiom's signal_map artifact.
-
-Return valid JSON only.
-
-Rules:
-- Return only the fields requested in the schema below.
-- Do not repeat already generated sections unless needed for consistency.
-- Keep this section consistent with the already generated signal_map draft.
-- Prefer factual observations over abstraction.
-- Keep the artifact specific to the user when possible.
-
-Full signal_map rules:
-${profile.rules.map((rule) => `- ${rule}`).join('\n')}
-
-This section schema:
-${section.schema}`,
-        },
-        {
-          role: 'user',
-          content: `Question: ${query}
-
-Route context:
-${routeContext || 'None'}
-
-Private theory:
-${session?.axiom_profile || 'None'}
-
-Session notes:
-${session?.session_notes || 'None'}
-
-Named patterns:
-${namedPatternsContext || 'None'}
-
-Personal context:
-${personalMemoryContext || 'None'}
-
-Wiki context:
-${wikiContext || 'None'}
-
-Draft answer:
-${answerDraft || 'None'}
-
-Existing partial signal_map:
-${JSON.stringify(progressiveData)}`,
-        },
-      ],
-    })
-
-    progressiveData = deepMergeArtifactData(progressiveData, partial)
-    onProgress?.(progressiveData)
-  }
-
-  return progressiveData
-}
-
 export async function buildArtifactForResponse({
   artifactType,
   query,
@@ -127,24 +52,7 @@ export async function buildArtifactForResponse({
 
   let progressiveData = null
 
-  if (artifactType === 'signal_map' && Array.isArray(profile.progressiveSections)) {
-    try {
-      progressiveData = await buildSignalMapProgressively({
-        profile,
-        query,
-        session,
-        routeContext,
-        wikiContext,
-        personalMemoryContext,
-        namedPatternsContext,
-        answerDraft,
-        onProgress,
-      })
-    } catch (error) {
-      if (error?.name === 'AbortError') throw error
-      console.warn(`Progressive signal_map build failed:`, error?.message || error)
-    }
-  } else {
+  if (artifactType !== 'signal_map') {
     try {
       for await (const merge of streamStructuredArtifact({
         artifactType,

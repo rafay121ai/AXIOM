@@ -1391,6 +1391,20 @@ function renderFrameworkVisual(framework) {
 }
 
 function SignalMap({ data }) {
+  const [revealStage, setRevealStage] = useState(1)
+
+  useEffect(() => {
+    setRevealStage(1)
+    let stage = 1
+    const interval = window.setInterval(() => {
+      stage += 1
+      setRevealStage((prev) => (prev < 5 ? prev + 1 : prev))
+      if (stage >= 5) window.clearInterval(interval)
+    }, 120)
+
+    return () => window.clearInterval(interval)
+  }, [data.title, data.topic, data.core_shift])
+
   const currentSignals = asArray(data.what_is_happening_now).map((signal, index) => ({
     label: stringifyRenderable(signal?.label) || `Signal ${index + 1}`,
     detail: stringifyRenderable(signal?.detail),
@@ -1499,7 +1513,7 @@ function SignalMap({ data }) {
           )}
         </div>
 
-        {(currentPhase || currentRead || signalStrength) && (
+        {revealStage >= 1 && (currentPhase || currentRead || signalStrength) && (
           <div
             className={data.animate !== false ? 'axiom-animate-fade' : ''}
             style={{
@@ -1532,7 +1546,7 @@ function SignalMap({ data }) {
           </div>
         )}
 
-        {currentSignals.length > 0 && (
+        {revealStage >= 2 && currentSignals.length > 0 && (
           <div style={{ display: 'grid', gap: 10 }}>
             <div style={{ color: ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
               What is happening now
@@ -1549,7 +1563,7 @@ function SignalMap({ data }) {
           </div>
         )}
 
-        {observedMoves.length > 0 && (
+        {revealStage >= 2 && observedMoves.length > 0 && (
           <div style={{ display: 'grid', gap: 10 }}>
             <div style={{ color: ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
               What people are doing
@@ -1570,6 +1584,7 @@ function SignalMap({ data }) {
           </div>
         )}
 
+        {revealStage >= 3 && (
         <div
           style={{
             display: 'grid',
@@ -1620,8 +1635,9 @@ function SignalMap({ data }) {
             )
           })}
         </div>
+        )}
 
-        {(forecastBars.length > 0 || frameworks.length > 0) && (
+        {revealStage >= 4 && (forecastBars.length > 0 || frameworks.length > 0) && (
           <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'minmax(220px, 0.8fr) minmax(0, 1fr)' }}>
             {forecastBars.length > 0 && (
               <div style={{ ...glassSurfaceStyle(false), display: 'grid', gap: 12, padding: 14 }}>
@@ -1667,7 +1683,7 @@ function SignalMap({ data }) {
           </div>
         )}
 
-        {(watchPoints.length > 0 || forThisUser) && (
+        {revealStage >= 5 && (watchPoints.length > 0 || forThisUser) && (
           <div
             style={{
               display: 'grid',
