@@ -1068,6 +1068,26 @@ MULTI-PILLAR FUTURE / STRATEGY SYNTHESIS
     "title": "Signal Map: short topic title",
     "topic": "AI, robotics, climate, etc.",
     "core_shift": "One sharp sentence naming the underlying shift.",
+    "trend_state": {
+      "current_phase": "early|rising|crowded|mainstreaming|peaking|unclear",
+      "current_read": "What stage this trend appears to be in right now.",
+      "signal_strength": "weak|medium|strong",
+      "estimate_note": "Use qualitative estimation sparingly and explain why."
+    },
+    "what_is_happening_now": [
+      {
+        "label": "Concrete present-tense signal",
+        "detail": "What is actually happening in the world now.",
+        "evidence": "What behavior, release, adoption pattern, or market move makes this visible."
+      }
+    ],
+    "observed_moves": [
+      {
+        "actor": "labs|startups|incumbents|users|institutions",
+        "action": "What this actor is doing now.",
+        "implication": "Why that move matters."
+      }
+    ],
     "sections": [
       {
         "id": "whats_coming",
@@ -1098,6 +1118,34 @@ MULTI-PILLAR FUTURE / STRATEGY SYNTHESIS
         "tension": "Optional uncertainty, falsifier, or timing risk."
       }
     ],
+    "forecast": {
+      "now": {
+        "label": "Now",
+        "value": 28,
+        "note": "What the current state looks like."
+      },
+      "next_12_months": {
+        "label": "12 months",
+        "value": 54,
+        "note": "What likely changes next."
+      },
+      "next_3_years": {
+        "label": "3 years",
+        "value": 78,
+        "note": "What the pattern may mature into."
+      }
+    },
+    "frameworks": [
+      {
+        "name": "Framework name",
+        "kind": "cycle|stack|spectrum",
+        "explanation": "Why this framework clarifies the pattern.",
+        "items": ["Step or layer 1", "Step or layer 2", "Step or layer 3"],
+        "position": 0.65,
+        "left_label": "low",
+        "right_label": "high"
+      }
+    ],
     "source_weighting": [
       {
         "kind": "frontier_lab_memo|white_paper|operator_essay|annual_letter|book|podcast",
@@ -1109,11 +1157,17 @@ MULTI-PILLAR FUTURE / STRATEGY SYNTHESIS
       "level": "low|medium|high",
       "why": "Why the confidence is at this level."
     },
+    "watch_points": [
+      "Specific developments that would confirm or weaken the read"
+    ],
     "counterforces": ["What could break the thesis"],
     "for_this_user": "The move that matters for this user specifically."
   }
   Use this when a four_pillar_synthesis or all_pillar_synthesis answer is materially improved by structured cross-pillar analysis.
   This is mandatory for four_pillar_synthesis questions like "what's next", "who wins", "where does value accrue", "what are people missing", and "what does this mean for me strategically", unless the user explicitly asked for no artifact.
+  Build this from concrete present-tense signals first, then interpretation, then forecast, then user consequence.
+  Prefer factual observations over abstraction. Use qualitative estimates only when exact counts are unavailable, and keep them clearly bounded.
+  Frameworks must be structured visually through the artifact fields, not merely named in prose.
 
 BOOK / AUTHOR CITATION
 → book_ref

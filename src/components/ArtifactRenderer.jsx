@@ -911,16 +911,74 @@ function BookRef({ data }) {
 }
 
 function SignalMap({ data }) {
+  const currentSignals = asArray(data.what_is_happening_now)
+  const observedMoves = asArray(data.observed_moves)
   const sections = asArray(data.sections)
+  const frameworks = asArray(data.frameworks)
+  const watchPoints = asArray(data.watch_points)
   const sourceWeighting = asArray(data.source_weighting)
   const counterforces = asArray(data.counterforces)
   const confidence = data.confidence || {}
+  const trendState = data.trend_state || {}
+  const forecast = data.forecast || {}
   const confidenceTone =
     confidence.level === 'high'
       ? GOOD
       : confidence.level === 'low'
         ? BAD
         : ACCENT
+
+  const forecastBars = [
+    forecast.now,
+    forecast.next_12_months,
+    forecast.next_3_years,
+  ].filter(Boolean)
+
+  function FrameworkVisual({ framework }) {
+    const items = asArray(framework.items)
+    const kind = framework.kind || 'stack'
+
+    if (kind === 'cycle' && items.length > 0) {
+      return (
+        <div style={{ display: 'grid', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {items.map((item, index) => (
+              <div key={index} style={{ alignItems: 'center', display: 'flex', gap: 8 }}>
+                <span style={{ ...GLASS_BORDER, background: 'rgba(255,255,255,0.03)', borderRadius: 999, color: TEXT, fontSize: 11, padding: '6px 10px' }}>{item}</span>
+                {index < items.length - 1 && <span style={{ color: MUTED, fontSize: 12 }}>→</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )
+    }
+
+    if (kind === 'spectrum') {
+      const position = clamp01(framework.position ?? 0.5)
+      return (
+        <div style={{ display: 'grid', gap: 8 }}>
+          <div style={{ background: 'rgba(255,255,255,0.035)', borderRadius: 999, height: 8, position: 'relative' }}>
+            <div style={{ background: GOLD_GRADIENT, borderRadius: 999, boxShadow: GOLD_GLOW, height: 14, left: `${position * 100}%`, position: 'absolute', top: '50%', transform: 'translate(-50%, -50%)', width: 14 }} />
+          </div>
+          <div style={{ color: MUTED, display: 'flex', fontSize: 11, justifyContent: 'space-between' }}>
+            <span>{framework.left_label || 'low'}</span>
+            <span>{framework.right_label || 'high'}</span>
+          </div>
+        </div>
+      )
+    }
+
+    return (
+      <div style={{ display: 'grid', gap: 8 }}>
+        {items.map((item, index) => (
+          <div key={index} style={{ ...glassSurfaceStyle(false), color: TEXT, fontSize: 12, fontWeight: 700, padding: '9px 11px' }}>
+            <span style={{ color: ACCENT, marginRight: 8 }}>{index + 1}</span>
+            {item}
+          </div>
+        ))}
+      </div>
+    )
+  }
 
   return (
     <ArtifactShell
@@ -981,6 +1039,77 @@ function SignalMap({ data }) {
           )}
         </div>
 
+        {(trendState.current_phase || trendState.current_read || trendState.signal_strength) && (
+          <div
+            className={data.animate !== false ? 'axiom-animate-fade' : ''}
+            style={{
+              alignItems: 'center',
+              display: 'grid',
+              gap: 10,
+              gridTemplateColumns: 'auto 1fr auto',
+              ...glassSurfaceStyle(false),
+              padding: '12px 14px',
+            }}
+          >
+            <div style={{ color: ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              Live read
+            </div>
+            <div style={{ color: TEXT, fontSize: 13, fontWeight: 700, lineHeight: 1.4 }}>
+              {trendState.current_read || 'Current state read not provided.'}
+            </div>
+            <div style={{ display: 'grid', gap: 6, justifyItems: 'end' }}>
+              {trendState.current_phase && (
+                <span style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: 999, color: TEXT, fontSize: 10, fontWeight: 800, letterSpacing: '0.05em', padding: '4px 8px', textTransform: 'uppercase' }}>
+                  {trendState.current_phase}
+                </span>
+              )}
+              {trendState.signal_strength && (
+                <span style={{ color: confidenceTone, fontSize: 10, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                  {trendState.signal_strength} signal
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {currentSignals.length > 0 && (
+          <div style={{ display: 'grid', gap: 10 }}>
+            <div style={{ color: ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              What is happening now
+            </div>
+            <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+              {currentSignals.map((signal, index) => (
+                <div key={index} className={data.animate !== false ? `axiom-animate-fade ${stagger(index + 1)}` : ''} style={{ ...glassSurfaceStyle(false), display: 'grid', gap: 8, padding: 12 }}>
+                  <div style={{ color: TEXT, fontSize: 13, fontWeight: 800 }}>{signal.label}</div>
+                  {signal.detail && <div style={{ color: TEXT, fontSize: 12, lineHeight: 1.55 }}>{signal.detail}</div>}
+                  {signal.evidence && <div style={{ color: MUTED, fontSize: 11, lineHeight: 1.5 }}><span style={{ color: ACCENT }}>Visible signal:</span> {signal.evidence}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {observedMoves.length > 0 && (
+          <div style={{ display: 'grid', gap: 10 }}>
+            <div style={{ color: ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              What people are doing
+            </div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {observedMoves.map((move, index) => (
+                <div key={index} className={data.animate !== false ? `axiom-animate-fade ${stagger(index + 1)}` : ''} style={{ ...glassSurfaceStyle(false), display: 'grid', gap: 6, gridTemplateColumns: '120px 1fr', padding: 12 }}>
+                  <div style={{ color: ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                    {move.actor}
+                  </div>
+                  <div style={{ display: 'grid', gap: 5 }}>
+                    <div style={{ color: TEXT, fontSize: 12, fontWeight: 700 }}>{move.action}</div>
+                    {move.implication && <div style={{ color: MUTED, fontSize: 12, lineHeight: 1.5 }}>{move.implication}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div
           style={{
             display: 'grid',
@@ -1031,7 +1160,53 @@ function SignalMap({ data }) {
           })}
         </div>
 
-        {(sourceWeighting.length > 0 || counterforces.length > 0 || data.for_this_user) && (
+        {(forecastBars.length > 0 || frameworks.length > 0) && (
+          <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'minmax(260px, 0.9fr) minmax(0, 1.1fr)' }}>
+            {forecastBars.length > 0 && (
+              <div style={{ ...glassSurfaceStyle(false), display: 'grid', gap: 10, padding: 14 }}>
+                <div style={{ color: ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                  Forecast
+                </div>
+                <div style={{ display: 'grid', gap: 10 }}>
+                  {forecastBars.map((item, index) => {
+                    const value = Math.max(0, Math.min(100, Number(item.value) || 0))
+                    return (
+                      <div key={index} className={data.animate !== false ? `axiom-animate-fade ${stagger(index + 2)}` : ''} style={{ display: 'grid', gap: 5 }}>
+                        <div style={{ alignItems: 'center', display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: TEXT, fontSize: 12, fontWeight: 700 }}>{item.label}</span>
+                          <span style={{ color: ACCENT, fontSize: 11, fontWeight: 800 }}>{value}</span>
+                        </div>
+                        <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 999, height: 8, overflow: 'hidden' }}>
+                          <div style={{ background: GOLD_GRADIENT, borderRadius: 999, boxShadow: GOLD_GLOW, height: '100%', width: `${value}%` }} />
+                        </div>
+                        {item.note && <div style={{ color: MUTED, fontSize: 11, lineHeight: 1.45 }}>{item.note}</div>}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {frameworks.length > 0 && (
+              <div style={{ display: 'grid', gap: 10 }}>
+                <div style={{ color: ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                  Frameworks Axiom is using
+                </div>
+                <div style={{ display: 'grid', gap: 10 }}>
+                  {frameworks.map((framework, index) => (
+                    <div key={index} className={data.animate !== false ? `axiom-animate-fade ${stagger(index + 2)}` : ''} style={{ ...glassSurfaceStyle(false), display: 'grid', gap: 10, padding: 14 }}>
+                      <div style={{ color: TEXT, fontSize: 13, fontWeight: 800 }}>{framework.name}</div>
+                      <FrameworkVisual framework={framework} />
+                      {framework.explanation && <div style={{ color: MUTED, fontSize: 12, lineHeight: 1.55 }}>{framework.explanation}</div>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {(sourceWeighting.length > 0 || watchPoints.length > 0 || counterforces.length > 0 || data.for_this_user) && (
           <div
             style={{
               display: 'grid',
@@ -1082,6 +1257,22 @@ function SignalMap({ data }) {
                           </div>
                           {item.reason && <div style={{ color: MUTED, fontSize: 12, lineHeight: 1.5 }}>{item.reason}</div>}
                         </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {watchPoints.length > 0 && (
+                <div>
+                  <div style={{ color: ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', marginBottom: 8, textTransform: 'uppercase' }}>
+                    What to watch
+                  </div>
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    {watchPoints.map((item, index) => (
+                      <div key={index} style={{ color: MUTED, fontSize: 12, lineHeight: 1.55 }}>
+                        <span style={{ color: ACCENT, fontWeight: 800, marginRight: 6 }}>•</span>
+                        {item}
                       </div>
                     ))}
                   </div>
