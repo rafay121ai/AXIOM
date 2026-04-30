@@ -338,6 +338,328 @@ ${answerDraft || 'None'}`,
   return JSON.parse(response.choices[0]?.message?.content || '{}')
 }
 
+const STRUCTURED_ARTIFACT_SPECS = {
+  comparison_table: {
+    maxTokens: 500,
+    schema: `{
+  "headers": ["string", "string", "string"],
+  "rows": [["string", "string", "string"]],
+  "animate": true,
+  "interactive": false
+}`,
+    rules: [
+      'Use this for clean structural contrasts, tradeoffs, options, layers, value pools, or what something gives versus what it costs.',
+      'Keep headers short and rows concrete.',
+      'Prefer 3 columns and 3-6 rows.',
+    ],
+  },
+  behavior_loop: {
+    maxTokens: 500,
+    schema: `{
+  "title": "string",
+  "steps": [
+    { "label": "string", "description": "string" }
+  ],
+  "animate": true,
+  "interactive": true
+}`,
+    rules: [
+      'Use 4-6 stages.',
+      'Make the emotional trigger, defensive move, short-term relief, and reinforcement visible.',
+      'This should explain a self-protective or self-defeating loop, not a neutral process.',
+    ],
+  },
+  reasoning_cycle: {
+    maxTokens: 500,
+    schema: `{
+  "title": "string",
+  "steps": [
+    { "label": "string", "description": "string" }
+  ],
+  "animate": true,
+  "interactive": true
+}`,
+    rules: [
+      'Use 4-6 stages.',
+      'This is for reinforcing mechanisms like compounding, repeated loops, or recurring dynamics.',
+      'Each stage should make the next stage more intelligible.',
+    ],
+  },
+  reasoning_stack: {
+    maxTokens: 500,
+    schema: `{
+  "title": "string",
+  "layers": [
+    { "label": "string", "detail": "string", "emphasis": "optional" }
+  ],
+  "animate": true,
+  "interactive": true
+}`,
+    rules: [
+      'Use 3-6 layers.',
+      'This is for layered value capture, system stacks, or control layers.',
+      'Use "emphasis": "high" only for the layer where durable leverage or capture is strongest.',
+    ],
+  },
+  reasoning_curve: {
+    maxTokens: 550,
+    schema: `{
+  "title": "string",
+  "left_label": "string",
+  "right_label": "string",
+  "curve_label": "string",
+  "peak_label": "optional string",
+  "stages": [
+    { "label": "string", "position": 0.2, "detail": "string" }
+  ],
+  "animate": true,
+  "interactive": true
+}`,
+    rules: [
+      'Use 3-5 stages.',
+      'Use positions between 0 and 1 to show where each stage sits on the curve.',
+      'Best for adoption curves, compounding, phase shifts, or rise-peak-decline dynamics.',
+    ],
+  },
+  reasoning_wave: {
+    maxTokens: 550,
+    schema: `{
+  "title": "string",
+  "left_label": "string",
+  "right_label": "string",
+  "crest_label": "optional string",
+  "drivers": [
+    { "label": "string", "position": 0.2, "detail": "string" }
+  ],
+  "animate": true,
+  "interactive": true
+}`,
+    rules: [
+      'Use 3-5 drivers.',
+      'Use positions between 0 and 1 to place the drivers along the swell and fade pattern.',
+      'Best for hype cycles, saturation arcs, or buildup-to-crest movement.',
+    ],
+  },
+  reasoning_pyramid: {
+    maxTokens: 500,
+    schema: `{
+  "title": "string",
+  "layers": [
+    { "label": "string", "detail": "string" }
+  ],
+  "animate": true,
+  "interactive": true
+}`,
+    rules: [
+      'Use 3-5 layers.',
+      'This is for dependency and hierarchy, where upper layers depend on lower layers.',
+      'Order layers from base to top.',
+    ],
+  },
+}
+
+export async function generateStructuredArtifact({
+  artifactType,
+  query,
+  session,
+  routeContext = '',
+  wikiContext = '',
+  personalMemoryContext = '',
+  namedPatternsContext = '',
+  answerDraft = '',
+}) {
+  if (artifactType === 'signal_map') {
+    return generateSignalMapArtifact({
+      query,
+      session,
+      routeContext,
+      wikiContext,
+      personalMemoryContext,
+      namedPatternsContext,
+      answerDraft,
+    })
+  }
+
+  const spec = STRUCTURED_ARTIFACT_SPECS[artifactType]
+  if (!spec) return null
+
+  const response = await openai.chat.completions.create({
+    model: CHAT_MODEL,
+    response_format: { type: 'json_object' },
+    max_completion_tokens: spec.maxTokens,
+    messages: [
+      {
+        role: 'system',
+        content: `You generate only the JSON payload for Axiom's ${artifactType} artifact.
+
+Return valid JSON only. Do not wrap it in markdown. Do not include <artifact> tags.
+
+Rules:
+- The artifact must answer the user's actual question shape, not a broader neighboring question.
+- Make the structure concrete, tight, and visually intelligible.
+- Keep it specific to the user's situation when possible.
+- Do not turn a focused structural question into a broad landscape map.
+
+Required JSON shape:
+${spec.schema}
+
+Additional rules:
+${spec.rules.map((rule) => `- ${rule}`).join('\n')}`,
+      },
+      {
+        role: 'user',
+        content: `Question: ${query}
+
+Artifact type: ${artifactType}
+
+Route context:
+${routeContext || 'None'}
+
+Private theory:
+${session?.axiom_profile || 'None'}
+
+Session notes:
+${session?.session_notes || 'None'}
+
+Named patterns:
+${namedPatternsContext || 'None'}
+
+Personal context:
+${personalMemoryContext || 'None'}
+
+Wiki context:
+${wikiContext || 'None'}
+
+Draft answer:
+${answerDraft || 'None'}`,
+      },
+    ],
+  })
+
+  return JSON.parse(response.choices[0]?.message?.content || '{}')
+}
+
+export async function* streamStructuredArtifact({
+  artifactType,
+  query,
+  session,
+  routeContext = '',
+  wikiContext = '',
+  personalMemoryContext = '',
+  namedPatternsContext = '',
+  answerDraft = '',
+  signal,
+}) {
+  const spec = STRUCTURED_ARTIFACT_SPECS[artifactType]
+
+  const systemPrompt =
+    artifactType === 'signal_map'
+      ? `You stream JSON merge events for Axiom's signal_map artifact.
+
+Return newline-delimited JSON only. Each line must be a complete valid JSON object with this exact shape:
+{"merge": { ...partial artifact fields... }}
+
+Rules:
+- No markdown.
+- No prose outside JSON.
+- Emit one top-level section per line in this order:
+  1. title, topic, core_shift
+  2. trend_state
+  3. what_is_happening_now
+  4. observed_moves
+  5. sections
+  6. forecast
+  7. frameworks
+  8. confidence
+  9. watch_points
+  10. counterforces
+  11. for_this_user
+- Ground the map in concrete present-tense signals first, then interpretation, then forecast.
+- Keep it specific to the user's situation when possible.
+- Make the framework genuinely visual, not list-like.`
+      : `You stream JSON merge events for Axiom's ${artifactType} artifact.
+
+Return newline-delimited JSON only. Each line must be a complete valid JSON object with this exact shape:
+{"merge": { ...partial artifact fields... }}
+
+Rules:
+- No markdown.
+- No prose outside JSON.
+- The artifact must answer the user's actual question shape, not a broader neighboring question.
+- Emit one meaningful section per line until the artifact is complete.
+- Keep the structure tight, concrete, and visually intelligible.
+${spec ? spec.rules.map((rule) => `- ${rule}`).join('\n') : ''}`
+
+  const response = await openai.chat.completions.create({
+    model: CHAT_MODEL,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      {
+        role: 'user',
+        content: `Question: ${query}
+
+Artifact type: ${artifactType}
+
+Route context:
+${routeContext || 'None'}
+
+Private theory:
+${session?.axiom_profile || 'None'}
+
+Session notes:
+${session?.session_notes || 'None'}
+
+Named patterns:
+${namedPatternsContext || 'None'}
+
+Personal context:
+${personalMemoryContext || 'None'}
+
+Wiki context:
+${wikiContext || 'None'}
+
+Draft answer:
+${answerDraft || 'None'}`,
+      },
+    ],
+    stream: true,
+  }, { signal })
+
+  let buffer = ''
+  for await (const chunk of response) {
+    const delta = chunk.choices?.[0]?.delta?.content || ''
+    if (!delta) continue
+    buffer += delta
+    const lines = buffer.split('\n')
+    buffer = lines.pop() || ''
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim()
+      if (!line) continue
+      try {
+        const parsed = JSON.parse(line)
+        if (parsed?.merge && typeof parsed.merge === 'object') {
+          yield parsed.merge
+        }
+      } catch {
+        // Ignore malformed partial lines; the model sometimes emits a line break late.
+      }
+    }
+  }
+
+  const finalLine = buffer.trim()
+  if (finalLine) {
+    try {
+      const parsed = JSON.parse(finalLine)
+      if (parsed?.merge && typeof parsed.merge === 'object') {
+        yield parsed.merge
+      }
+    } catch {
+      // Ignore trailing malformed output
+    }
+  }
+}
+
 export async function generateWeeklyRead(session, recentMessages = []) {
   const history = recentMessages
     .filter((message) => message?.content)

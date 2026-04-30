@@ -5,7 +5,7 @@ import ExperimentCard from '../components/ExperimentCard'
 import WarningCard from '../components/WarningCard'
 import ArtifactRenderer from '../components/ArtifactRenderer'
 import { clearStoredSessionToken, getStoredSessionToken, supabase } from '../lib/supabase'
-import { openai, CHAT_MODEL, generateOpeningMessage, generateNodeOpeningMessage, generateSignalMapArtifact, buildSystemPrompt } from '../lib/openai'
+import { openai, CHAT_MODEL, generateOpeningMessage, generateNodeOpeningMessage, generateStructuredArtifact, streamStructuredArtifact, buildSystemPrompt } from '../lib/openai'
 import { routeQuestionMode, searchWikiForRoute, formatRouteContext, formatWikiContext } from '../lib/rag'
 import { searchPersonalMemory, formatNamedPatternsContext, formatPersonalMemoryContext, updatePersonalMemory } from '../lib/personalMemory'
 
@@ -43,6 +43,25 @@ function parseMessage(text) {
   const { cleanText: afterArtifact, artifact } = parseArtifact(text)
   const { cleanText, experiment } = parseExperiment(afterArtifact)
   return { cleanText, artifact, experiment }
+}
+
+function isPlainObject(value) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function deepMergeArtifactData(base, patch) {
+  if (Array.isArray(patch)) return patch
+  if (!isPlainObject(base) || !isPlainObject(patch)) return patch
+
+  const next = { ...base }
+  for (const [key, value] of Object.entries(patch)) {
+    if (isPlainObject(value) && isPlainObject(next[key])) {
+      next[key] = deepMergeArtifactData(next[key], value)
+    } else {
+      next[key] = value
+    }
+  }
+  return next
 }
 
 function shouldHaveArtifact(text) {
@@ -163,7 +182,7 @@ export default function Chat() {
   const skipOpening = Boolean(location.state?.skipOpening)
 
   const [session, setSession] = useState(null)
-  const [messages, setMessages] = useState([])  // { id, role, content, streaming, experiment }
+  const [messages, setMessages] = useState([])  // { id, role, content, streaming, experiment, artifactPendingType }
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -355,7 +374,7 @@ export default function Chat() {
     const msgId = crypto.randomUUID()
     setMessages((prev) => [
       ...prev,
-      { id: msgId, role: 'assistant', content: '', streaming: true, experiment: null },
+      { id: msgId, role: 'assistant', content: '', streaming: true, experiment: null, artifactPendingType: null },
     ])
 
     try {
@@ -377,7 +396,7 @@ export default function Chat() {
     const msgId = crypto.randomUUID()
     setMessages((prev) => [
       ...prev,
-      { id: msgId, role: 'assistant', content: '', streaming: true, experiment: null },
+      { id: msgId, role: 'assistant', content: '', streaming: true, experiment: null, artifactPendingType: null },
     ])
 
     try {
@@ -433,7 +452,7 @@ export default function Chat() {
     setMessages((prev) => [
       ...prev,
       { id: userMsgId, role: 'user', content: text, artifact: null, experiment: null },
-      { id: assistantMsgId, role: 'assistant', content: '', streaming: true, artifact: null, experiment: null },
+      { id: assistantMsgId, role: 'assistant', content: '', streaming: true, artifact: null, experiment: null, artifactPendingType: null },
     ])
 
     try {
@@ -450,6 +469,19 @@ export default function Chat() {
         routeQuestionMode(text, session, nodeContext),
         searchPersonalMemory(session.user_id, text, 5),
       ])
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMsgId
+            ? {
+                ...m,
+                artifactPendingType:
+                  route?.artifactStrategy && route.artifactStrategy !== 'none'
+                    ? route.artifactStrategy
+                    : null,
+              }
+            : m
+        )
+      )
       const { chunks, sources, confidence: retrievalConfidence, pillarResults } = await searchWikiForRoute(text, route, 3)
       const wikiContext = await formatWikiContext(chunks, sources)
       const routeContext = formatRouteContext(route, pillarResults)
@@ -536,9 +568,27 @@ export default function Chat() {
       let cleanText = parsed.cleanText
       const experiment = parsed.experiment
 
-      if (!artifact && route?.artifactStrategy === 'signal_map') {
+      const requiredArtifactType = route?.artifactStrategy && route.artifactStrategy !== 'none'
+        ? route.artifactStrategy
+        : null
+
+      if (requiredArtifactType) {
+        artifact = null
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId
+              ? { ...m, content: cleanText, streaming: false, artifact: null, experiment, artifactPendingType: requiredArtifactType }
+              : m
+          )
+        )
+
         try {
-          const signalMapData = await generateSignalMapArtifact({
+          const artifactAbort = new AbortController()
+          abortControllerRef.current = artifactAbort
+          let progressiveData = null
+
+          for await (const merge of streamStructuredArtifact({
+            artifactType: requiredArtifactType,
             query: text,
             session,
             routeContext,
@@ -546,14 +596,46 @@ export default function Chat() {
             personalMemoryContext,
             namedPatternsContext,
             answerDraft: cleanText,
-          })
+            signal: artifactAbort.signal,
+          })) {
+            progressiveData = deepMergeArtifactData(progressiveData || {}, merge)
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMsgId
+                  ? {
+                      ...m,
+                      content: cleanText,
+                      streaming: false,
+                      artifact: { type: requiredArtifactType, data: progressiveData },
+                      experiment,
+                      artifactPendingType: requiredArtifactType,
+                    }
+                  : m
+              )
+            )
+          }
 
-          if (signalMapData && Object.keys(signalMapData).length > 0) {
-            artifact = { type: 'signal_map', data: signalMapData }
-            fullContent = `${cleanText}\n\n<artifact type="signal_map">\n${JSON.stringify(signalMapData)}\n</artifact>`
+          abortControllerRef.current = null
+
+          if ((!progressiveData || Object.keys(progressiveData).length === 0) && requiredArtifactType) {
+            progressiveData = await generateStructuredArtifact({
+              artifactType: requiredArtifactType,
+              query: text,
+              session,
+              routeContext,
+              wikiContext,
+              personalMemoryContext,
+              namedPatternsContext,
+              answerDraft: cleanText,
+            })
+          }
+
+          if (progressiveData && Object.keys(progressiveData).length > 0) {
+            artifact = { type: requiredArtifactType, data: progressiveData }
+            fullContent = `${cleanText}\n\n<artifact type="${requiredArtifactType}">\n${JSON.stringify(progressiveData)}\n</artifact>`
           }
         } catch (artifactErr) {
-          console.warn('Signal map generation failed:', artifactErr?.message || artifactErr)
+          console.warn(`Structured artifact generation failed for ${requiredArtifactType}:`, artifactErr?.message || artifactErr)
         }
       }
 
@@ -562,7 +644,7 @@ export default function Chat() {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantMsgId
-            ? { ...m, content: cleanText, streaming: false, artifact, experiment }
+            ? { ...m, content: cleanText, streaming: false, artifact, experiment, artifactPendingType: null }
             : m
         )
       )
@@ -594,7 +676,7 @@ export default function Chat() {
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsgId
-              ? { ...m, content: 'Something went wrong. Try again.', streaming: false }
+              ? { ...m, content: 'Something went wrong. Try again.', streaming: false, artifactPendingType: null }
               : m
           )
         )
@@ -729,6 +811,7 @@ export default function Chat() {
 function MessageGroup({ msg, onAnswer, onSubmit, onUserPlot }) {
   const showArtifact   = msg.role === 'assistant' && msg.artifact && !msg.streaming
   const showExperiment = msg.role === 'assistant' && msg.experiment && !msg.streaming
+  const showArtifactPending = msg.role === 'assistant' && !msg.artifact && !!msg.artifactPendingType
 
   // If Axiom placed <artifact_here/> inside the text, inject the artifact inline
   // at that position instead of appending it below the bubble.
@@ -752,6 +835,9 @@ function MessageGroup({ msg, onAnswer, onSubmit, onUserPlot }) {
         streaming={msg.streaming}
         artifactNode={inlineArtifact ? artifactElement : null}
       />
+      {showArtifactPending && (
+        <ArtifactLoadingPreview artifactType={msg.artifactPendingType} />
+      )}
       {showArtifact && !inlineArtifact && artifactElement}
       {showExperiment && (
         <ExperimentCard
@@ -765,4 +851,76 @@ function MessageGroup({ msg, onAnswer, onSubmit, onUserPlot }) {
       )}
     </div>
   )
+}
+
+function ArtifactLoadingPreview({ artifactType }) {
+  const [stepIndex, setStepIndex] = useState(0)
+  const steps = artifactBuildSteps(artifactType)
+
+  useEffect(() => {
+    setStepIndex(0)
+    if (steps.length <= 1) return
+
+    let current = 0
+    const interval = window.setInterval(() => {
+      current += 1
+      setStepIndex((prev) => (prev < steps.length - 1 ? prev + 1 : prev))
+      if (current >= steps.length - 1) {
+        window.clearInterval(interval)
+      }
+    }, 380)
+
+    return () => window.clearInterval(interval)
+  }, [artifactType, steps.length])
+
+  return (
+    <div className="artifact-loading axiom-animate-fade">
+      <div className="artifact-loading__header">
+        <span className="artifact-loading__label">Axiom is building the visual</span>
+        <span className="artifact-loading__type">{humanizeArtifactType(artifactType)}</span>
+      </div>
+      <div className="artifact-loading__canvas">
+        <div className="artifact-loading__scanline" />
+        <div className={`artifact-loading__shape artifact-loading__shape--${artifactType}`} />
+      </div>
+      <div className="artifact-loading__steps">
+        {steps.map((step, index) => (
+          <div
+            key={step}
+            className={`artifact-loading__step${index <= stepIndex ? ' is-active' : ''}${index === stepIndex ? ' is-current' : ''}`}
+          >
+            <span className="artifact-loading__dot" />
+            <span>{step}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function artifactBuildSteps(type) {
+  switch (type) {
+    case 'signal_map':
+      return ['Reading live signals', 'Tracing actors and moves', 'Projecting the forecast', 'Locking the user consequence']
+    case 'reasoning_stack':
+      return ['Finding the layers', 'Separating commodity from control', 'Marking the capture point']
+    case 'reasoning_cycle':
+      return ['Tracing the loop', 'Marking reinforcement points', 'Closing the cycle']
+    case 'behavior_loop':
+      return ['Finding the trigger', 'Mapping the defense move', 'Showing the reinforcement']
+    case 'reasoning_curve':
+      return ['Locating the inflection', 'Placing the stages', 'Drawing the arc']
+    case 'reasoning_wave':
+      return ['Reading the swell', 'Placing the drivers', 'Marking the crest']
+    case 'reasoning_pyramid':
+      return ['Finding the base', 'Stacking dependencies', 'Marking the top constraint']
+    case 'comparison_table':
+      return ['Selecting the dimensions', 'Lining up the tradeoff', 'Sharpening the contrast']
+    default:
+      return ['Structuring the read', 'Building the visual', 'Refining the signal']
+  }
+}
+
+function humanizeArtifactType(type = '') {
+  return String(type).replace(/_/g, ' ')
 }
