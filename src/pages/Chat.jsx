@@ -608,6 +608,11 @@ export default function Chat() {
     sendMessage(message)
   }
 
+  function handleArtifactSubmit(values) {
+    const message = `[I submitted: ${JSON.stringify(values)}]`
+    sendMessage(message)
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -635,6 +640,7 @@ export default function Chat() {
               key={msg.id}
               msg={msg}
               onAnswer={handleAnswer}
+              onSubmit={handleArtifactSubmit}
               onUserPlot={handleUserPlot}
             />
           ))}
@@ -674,7 +680,7 @@ export default function Chat() {
 
 // ── Message Group ─────────────────────────────────────────────────────────────
 // Renders a message + optional experiment/warning card below it
-function MessageGroup({ msg, onAnswer, onUserPlot }) {
+function MessageGroup({ msg, onAnswer, onSubmit, onUserPlot }) {
   const showArtifact   = msg.role === 'assistant' && msg.artifact && !msg.streaming
   const showExperiment = msg.role === 'assistant' && msg.experiment && !msg.streaming
 
@@ -687,6 +693,7 @@ function MessageGroup({ msg, onAnswer, onUserPlot }) {
       type={msg.artifact.type}
       data={msg.artifact.data}
       onAnswer={onAnswer}
+      onSubmit={onSubmit}
       onUserPlot={onUserPlot}
     />
   ) : null
