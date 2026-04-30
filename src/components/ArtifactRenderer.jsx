@@ -200,9 +200,9 @@ function normalizeStep(item) {
 }
 
 function normalizeRows(row) {
-  if (Array.isArray(row)) return row
-  if (row && typeof row === 'object') return Object.values(row)
-  return [String(row ?? '')]
+  if (Array.isArray(row)) return row.map(stringifyRenderable)
+  if (row && typeof row === 'object') return Object.values(row).map(stringifyRenderable)
+  return [stringifyRenderable(row)]
 }
 
 function stringifyRenderable(value) {
@@ -1382,15 +1382,43 @@ function renderFrameworkVisual(framework) {
 }
 
 function SignalMap({ data }) {
-  const currentSignals = asArray(data.what_is_happening_now)
-  const observedMoves = asArray(data.observed_moves)
-  const sections = asArray(data.sections)
-  const frameworks = asArray(data.frameworks)
-  const watchPoints = asArray(data.watch_points)
-  const counterforces = asArray(data.counterforces)
+  const currentSignals = asArray(data.what_is_happening_now).map((signal, index) => ({
+    label: stringifyRenderable(signal?.label) || `Signal ${index + 1}`,
+    detail: stringifyRenderable(signal?.detail),
+    evidence: stringifyRenderable(signal?.evidence),
+  }))
+  const observedMoves = asArray(data.observed_moves).map((move, index) => ({
+    actor: stringifyRenderable(move?.actor) || `Actor ${index + 1}`,
+    action: stringifyRenderable(move?.action),
+    implication: stringifyRenderable(move?.implication),
+  }))
+  const sections = asArray(data.sections).map((section, index) => ({
+    ...section,
+    label: stringifyRenderable(section?.label) || stringifyRenderable(section?.id) || `Section ${index + 1}`,
+    signal: stringifyRenderable(section?.signal),
+    tension: stringifyRenderable(section?.tension),
+  }))
+  const frameworks = asArray(data.frameworks).map((framework, index) => ({
+    ...framework,
+    name: stringifyRenderable(framework?.name) || `Framework ${index + 1}`,
+    explanation: stringifyRenderable(framework?.explanation),
+    left_label: stringifyRenderable(framework?.left_label),
+    right_label: stringifyRenderable(framework?.right_label),
+    curve_label: stringifyRenderable(framework?.curve_label),
+    peak_label: stringifyRenderable(framework?.peak_label),
+  }))
+  const watchPoints = asArray(data.watch_points).map(stringifyRenderable).filter(Boolean)
+  const counterforces = asArray(data.counterforces).map(stringifyRenderable).filter(Boolean)
   const confidence = data.confidence || {}
   const trendState = data.trend_state || {}
   const forecast = data.forecast || {}
+  const topic = stringifyRenderable(data.topic)
+  const coreShift = stringifyRenderable(data.core_shift)
+  const confidenceWhy = stringifyRenderable(confidence.why)
+  const currentRead = stringifyRenderable(trendState.current_read)
+  const currentPhase = stringifyRenderable(trendState.current_phase)
+  const signalStrength = stringifyRenderable(trendState.signal_strength)
+  const forThisUser = stringifyRenderable(data.for_this_user)
   const confidenceTone =
     confidence.level === 'high'
       ? GOOD
@@ -1427,9 +1455,9 @@ function SignalMap({ data }) {
 
       <div style={{ display: 'grid', gap: 18, padding: 18, position: 'relative' }}>
         <div style={{ display: 'grid', gap: 10 }}>
-          {data.topic && (
+          {topic && (
             <div style={{ alignItems: 'center', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ color: ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{data.topic}</span>
+              <span style={{ color: ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{topic}</span>
               {confidence.level && (
                 <span
                   style={{
@@ -1450,20 +1478,20 @@ function SignalMap({ data }) {
             </div>
           )}
 
-          {data.core_shift && (
+          {coreShift && (
             <div style={{ color: TEXT, fontSize: 24, fontWeight: 700, letterSpacing: '0.01em', lineHeight: 1.1, maxWidth: 760 }}>
-              {data.core_shift}
+              {coreShift}
             </div>
           )}
 
-          {confidence.why && (
+          {confidenceWhy && (
             <div style={{ color: MUTED, fontSize: 12, lineHeight: 1.55, maxWidth: 780 }}>
-              {confidence.why}
+              {confidenceWhy}
             </div>
           )}
         </div>
 
-        {(trendState.current_phase || trendState.current_read || trendState.signal_strength) && (
+        {(currentPhase || currentRead || signalStrength) && (
           <div
             className={data.animate !== false ? 'axiom-animate-fade' : ''}
             style={{
@@ -1479,17 +1507,17 @@ function SignalMap({ data }) {
               Live read
             </div>
             <div style={{ color: TEXT, fontSize: 13, fontWeight: 700, lineHeight: 1.4 }}>
-              {trendState.current_read || 'Current state read not provided.'}
+              {currentRead || 'Current state read not provided.'}
             </div>
             <div style={{ display: 'grid', gap: 6, justifyItems: 'end' }}>
-              {trendState.current_phase && (
+              {currentPhase && (
                 <span style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: 999, color: TEXT, fontSize: 10, fontWeight: 800, letterSpacing: '0.05em', padding: '4px 8px', textTransform: 'uppercase' }}>
-                  {trendState.current_phase}
+                  {currentPhase}
                 </span>
               )}
-              {trendState.signal_strength && (
+              {signalStrength && (
                 <span style={{ color: confidenceTone, fontSize: 10, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-                  {trendState.signal_strength} signal
+                  {signalStrength} signal
                 </span>
               )}
             </div>
@@ -1630,7 +1658,7 @@ function SignalMap({ data }) {
           </div>
         )}
 
-        {(watchPoints.length > 0 || counterforces.length > 0 || data.for_this_user) && (
+        {(watchPoints.length > 0 || counterforces.length > 0 || forThisUser) && (
           <div
             style={{
               display: 'grid',
@@ -1681,7 +1709,7 @@ function SignalMap({ data }) {
               )}
             </div>
 
-            {data.for_this_user && (
+            {forThisUser && (
               <div
                 style={{
                   background: 'linear-gradient(180deg, rgba(212,168,67,0.06), rgba(255,255,255,0.015))',
@@ -1697,7 +1725,7 @@ function SignalMap({ data }) {
                   What this means for you
                 </div>
                 <div style={{ color: TEXT, fontSize: 18, fontWeight: 700, lineHeight: 1.3 }}>
-                  {data.for_this_user}
+                  {forThisUser}
                 </div>
               </div>
             )}
