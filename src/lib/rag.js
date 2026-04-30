@@ -55,6 +55,90 @@ const ARTIFACT_STRATEGIES = new Set([
   'reasoning_pyramid',
 ])
 
+const QUESTION_SHAPE_RULES = [
+  {
+    matches: (lower) =>
+      /\b(value stack|stack of value|capture stack|value ladder|layer cake|stack in)\b/.test(lower) ||
+      (/\b(show me|map|visuali[sz]e)\b/.test(lower) && /\b(stack|layers|ladder)\b/.test(lower)),
+    build: () => ({
+      mode: 'two_pillar',
+      pillars: ['how_companies_win', 'money_game'],
+      artifactStrategy: 'reasoning_stack',
+      rationale: 'Focused structural layer question. Use a stack, not a broad landscape artifact.',
+    }),
+  },
+  {
+    matches: (lower) =>
+      /\b(compounding loop|compounding cycle|what does .*compounding.*look like|how does .*compound|loop in a career)\b/.test(lower),
+    build: ({ defaultSingle }) => ({
+      mode: 'single_pillar',
+      pillars: [defaultSingle === 'human_mind' ? 'money_game' : defaultSingle],
+      artifactStrategy: 'reasoning_cycle',
+      rationale: 'Compounding is a recurring mechanism. Show the reinforcing loop directly.',
+    }),
+  },
+  {
+    matches: (lower) =>
+      /\b(stay stuck|stuck even when|self-justification|identity protection|avoidance loop|loop keeps me stuck|why do people repeat)\b/.test(lower),
+    build: () => ({
+      mode: 'two_pillar',
+      pillars: ['human_mind', 'think_sharper'],
+      artifactStrategy: 'behavior_loop',
+      rationale: 'Psychological stuckness is a defensive loop. Use a behavior loop artifact.',
+    }),
+  },
+  {
+    matches: (lower) =>
+      /\b(hype cycle|rise[, ]+peak[, ]+and decline|rise and decline|adoption curve|s-curve|compounding curve|show me the curve)\b/.test(lower),
+    build: ({ nodePillar, lower }) => ({
+      mode: 'single_pillar',
+      pillars: [nodePillar || 'think_sharper'],
+      artifactStrategy: /\bhype|wave|swell\b/.test(lower) ? 'reasoning_wave' : 'reasoning_curve',
+      rationale: 'Phase-change question. Use a curve or wave artifact to make the movement visible.',
+    }),
+  },
+  {
+    matches: (lower) =>
+      /\b(pyramid|hierarchy|depends on what|built on what|foundation of|layers of dependency)\b/.test(lower),
+    build: ({ nodePillar }) => ({
+      mode: 'single_pillar',
+      pillars: [nodePillar || 'how_companies_win'],
+      artifactStrategy: 'reasoning_pyramid',
+      rationale: 'Dependency or hierarchy question. Use a pyramid artifact.',
+    }),
+  },
+  {
+    matches: (lower) =>
+      /\b(what'?s coming|where will the real value accrue|where does the real value accrue|what are people missing|who wins|where does value accrue|what happens if)\b/.test(lower),
+    build: () => ({
+      mode: 'four_pillar_synthesis',
+      pillars: FOUR_PILLAR_STACK,
+      artifactStrategy: 'signal_map',
+      rationale: 'Broad landscape / value-accrual question. Use a full signal map.',
+    }),
+  },
+  {
+    matches: (lower) =>
+      /\b(should i| vs | versus |tradeoff|rationalizing|conflict|tension|or should|optimize for)\b/.test(lower),
+    build: ({ nodePillar }) => ({
+      mode: 'two_pillar',
+      pillars: nodePillar ? [nodePillar, 'think_sharper'] : ['human_mind', 'money_game'],
+      artifactStrategy: 'comparison_table',
+      rationale: 'Tradeoff question. Use a direct comparison.',
+    }),
+  },
+  {
+    matches: (lower) =>
+      /\b(life|career|next 5 years|next five years|who should i become|what should i do with my)\b/.test(lower),
+    build: () => ({
+      mode: 'all_pillar_synthesis',
+      pillars: ALL_PILLARS,
+      artifactStrategy: 'signal_map',
+      rationale: 'Major orientation question. Use all pillars and a full synthesis artifact.',
+    }),
+  },
+]
+
 function explicitQuestionShapeRoute(query, session, nodeContext = null) {
   const lower = String(query || '').toLowerCase().trim()
   const nodePillar = nodeContext?.pillar && ALL_PILLARS.includes(nodeContext.pillar) ? nodeContext.pillar : null
@@ -64,88 +148,9 @@ function explicitQuestionShapeRoute(query, session, nodeContext = null) {
     .map(([pillar]) => pillar)
   const defaultSingle = nodePillar || weightedPillars[0] || 'human_mind'
 
-  if (
-    /\b(value stack|stack of value|capture stack|value ladder|layer cake|stack in)\b/.test(lower) ||
-    (/\b(show me|map|visuali[sz]e)\b/.test(lower) && /\b(stack|layers|ladder)\b/.test(lower))
-  ) {
-    return {
-      mode: 'two_pillar',
-      pillars: ['how_companies_win', 'money_game'],
-      artifactStrategy: 'reasoning_stack',
-      rationale: 'Focused structural layer question. Use a stack, not a broad landscape artifact.',
-    }
-  }
-
-  if (
-    /\b(compounding loop|compounding cycle|what does .*compounding.*look like|how does .*compound|loop in a career)\b/.test(lower)
-  ) {
-    return {
-      mode: 'single_pillar',
-      pillars: [defaultSingle === 'human_mind' ? 'money_game' : defaultSingle],
-      artifactStrategy: 'reasoning_cycle',
-      rationale: 'Compounding is a recurring mechanism. Show the reinforcing loop directly.',
-    }
-  }
-
-  if (
-    /\b(stay stuck|stuck even when|self-justification|identity protection|avoidance loop|loop keeps me stuck|why do people repeat)\b/.test(lower)
-  ) {
-    return {
-      mode: 'two_pillar',
-      pillars: ['human_mind', 'think_sharper'],
-      artifactStrategy: 'behavior_loop',
-      rationale: 'Psychological stuckness is a defensive loop. Use a behavior loop artifact.',
-    }
-  }
-
-  if (
-    /\b(hype cycle|rise[, ]+peak[, ]+and decline|rise and decline|adoption curve|s-curve|compounding curve|show me the curve)\b/.test(lower)
-  ) {
-    return {
-      mode: 'single_pillar',
-      pillars: [nodePillar || 'think_sharper'],
-      artifactStrategy: /\bhype|wave|swell\b/.test(lower) ? 'reasoning_wave' : 'reasoning_curve',
-      rationale: 'Phase-change question. Use a curve or wave artifact to make the movement visible.',
-    }
-  }
-
-  if (
-    /\b(pyramid|hierarchy|depends on what|built on what|foundation of|layers of dependency)\b/.test(lower)
-  ) {
-    return {
-      mode: 'single_pillar',
-      pillars: [nodePillar || 'how_companies_win'],
-      artifactStrategy: 'reasoning_pyramid',
-      rationale: 'Dependency or hierarchy question. Use a pyramid artifact.',
-    }
-  }
-
-  if (
-    /\b(what'?s coming|where will the real value accrue|where does the real value accrue|what are people missing|who wins|where does value accrue|what happens if)\b/.test(lower)
-  ) {
-    return {
-      mode: 'four_pillar_synthesis',
-      pillars: FOUR_PILLAR_STACK,
-      artifactStrategy: 'signal_map',
-      rationale: 'Broad landscape / value-accrual question. Use a full signal map.',
-    }
-  }
-
-  if (/\b(should i| vs | versus |tradeoff|rationalizing|conflict|tension|or should|optimize for)\b/.test(lower)) {
-    return {
-      mode: 'two_pillar',
-      pillars: nodePillar ? [nodePillar, 'think_sharper'] : ['human_mind', 'money_game'],
-      artifactStrategy: 'comparison_table',
-      rationale: 'Tradeoff question. Use a direct comparison.',
-    }
-  }
-
-  if (/\b(life|career|next 5 years|next five years|who should i become|what should i do with my)\b/.test(lower)) {
-    return {
-      mode: 'all_pillar_synthesis',
-      pillars: ALL_PILLARS,
-      artifactStrategy: 'signal_map',
-      rationale: 'Major orientation question. Use all pillars and a full synthesis artifact.',
+  for (const rule of QUESTION_SHAPE_RULES) {
+    if (rule.matches(lower)) {
+      return rule.build({ lower, nodePillar, defaultSingle })
     }
   }
 

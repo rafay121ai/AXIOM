@@ -5,7 +5,8 @@ import ExperimentCard from '../components/ExperimentCard'
 import WarningCard from '../components/WarningCard'
 import ArtifactRenderer from '../components/ArtifactRenderer'
 import { clearStoredSessionToken, getStoredSessionToken, supabase } from '../lib/supabase'
-import { openai, CHAT_MODEL, generateOpeningMessage, generateNodeOpeningMessage, generateStructuredArtifact, streamStructuredArtifact, buildSystemPrompt } from '../lib/openai'
+import { openai, CHAT_MODEL, generateOpeningMessage, generateNodeOpeningMessage, buildSystemPrompt } from '../lib/openai'
+import { buildArtifactForResponse, getRequiredArtifactType } from '../lib/artifacts'
 import { routeQuestionMode, searchWikiForRoute, formatRouteContext, formatWikiContext } from '../lib/rag'
 import { searchPersonalMemory, formatNamedPatternsContext, formatPersonalMemoryContext, updatePersonalMemory } from '../lib/personalMemory'
 
@@ -43,65 +44,6 @@ function parseMessage(text) {
   const { cleanText: afterArtifact, artifact } = parseArtifact(text)
   const { cleanText, experiment } = parseExperiment(afterArtifact)
   return { cleanText, artifact, experiment }
-}
-
-function isPlainObject(value) {
-  return value && typeof value === 'object' && !Array.isArray(value)
-}
-
-function deepMergeArtifactData(base, patch) {
-  if (Array.isArray(patch)) return patch
-  if (!isPlainObject(base) || !isPlainObject(patch)) return patch
-
-  const next = { ...base }
-  for (const [key, value] of Object.entries(patch)) {
-    if (isPlainObject(value) && isPlainObject(next[key])) {
-      next[key] = deepMergeArtifactData(next[key], value)
-    } else {
-      next[key] = value
-    }
-  }
-  return next
-}
-
-function artifactLooksComplete(type, data) {
-  if (!data || typeof data !== 'object') return false
-
-  if (type === 'signal_map') {
-    return Boolean(
-      data.core_shift &&
-      data.trend_state &&
-      Array.isArray(data.what_is_happening_now) && data.what_is_happening_now.length > 0 &&
-      Array.isArray(data.observed_moves) && data.observed_moves.length > 0 &&
-      Array.isArray(data.sections) && data.sections.length >= 4 &&
-      data.forecast &&
-      Array.isArray(data.frameworks) && data.frameworks.length > 0 &&
-      Array.isArray(data.watch_points) && data.watch_points.length > 0 &&
-      data.for_this_user
-    )
-  }
-
-  if (type === 'comparison_table') {
-    return Array.isArray(data.headers) && data.headers.length >= 2 && Array.isArray(data.rows) && data.rows.length > 0
-  }
-
-  if (type === 'behavior_loop' || type === 'reasoning_cycle') {
-    return Array.isArray(data.steps) && data.steps.length >= 3
-  }
-
-  if (type === 'reasoning_stack' || type === 'reasoning_pyramid') {
-    return Array.isArray(data.layers) && data.layers.length >= 3
-  }
-
-  if (type === 'reasoning_curve') {
-    return Array.isArray(data.stages) && data.stages.length >= 3
-  }
-
-  if (type === 'reasoning_wave') {
-    return Array.isArray(data.drivers) && data.drivers.length >= 3
-  }
-
-  return true
 }
 
 function shouldHaveArtifact(text) {
@@ -608,9 +550,7 @@ export default function Chat() {
       let cleanText = parsed.cleanText
       const experiment = parsed.experiment
 
-      const requiredArtifactType = route?.artifactStrategy && route.artifactStrategy !== 'none'
-        ? route.artifactStrategy
-        : null
+      const requiredArtifactType = getRequiredArtifactType(route)
 
       if (requiredArtifactType) {
         artifact = null
@@ -625,9 +565,7 @@ export default function Chat() {
         try {
           const artifactAbort = new AbortController()
           abortControllerRef.current = artifactAbort
-          let progressiveData = null
-
-          for await (const merge of streamStructuredArtifact({
+          artifact = await buildArtifactForResponse({
             artifactType: requiredArtifactType,
             query: text,
             session,
@@ -637,48 +575,28 @@ export default function Chat() {
             namedPatternsContext,
             answerDraft: cleanText,
             signal: artifactAbort.signal,
-          })) {
-            progressiveData = deepMergeArtifactData(progressiveData || {}, merge)
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantMsgId
-                  ? {
-                      ...m,
-                      content: cleanText,
-                      streaming: false,
-                      artifact: { type: requiredArtifactType, data: progressiveData },
-                      experiment,
-                      artifactPendingType: requiredArtifactType,
-                    }
-                  : m
+            onProgress: (progressiveData) => {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMsgId
+                    ? {
+                        ...m,
+                        content: cleanText,
+                        streaming: false,
+                        artifact: { type: requiredArtifactType, data: progressiveData },
+                        experiment,
+                        artifactPendingType: requiredArtifactType,
+                      }
+                    : m
+                )
               )
-            )
-          }
+            },
+          })
 
           abortControllerRef.current = null
 
-          if ((!progressiveData || Object.keys(progressiveData).length === 0 || !artifactLooksComplete(requiredArtifactType, progressiveData)) && requiredArtifactType) {
-            const finalizedArtifactData = await generateStructuredArtifact({
-              artifactType: requiredArtifactType,
-              query: text,
-              session,
-              routeContext,
-              wikiContext,
-              personalMemoryContext,
-              namedPatternsContext,
-              answerDraft: cleanText,
-            })
-
-            if (finalizedArtifactData && Object.keys(finalizedArtifactData).length > 0) {
-              progressiveData = progressiveData
-                ? deepMergeArtifactData(progressiveData, finalizedArtifactData)
-                : finalizedArtifactData
-            }
-          }
-
-          if (progressiveData && Object.keys(progressiveData).length > 0) {
-            artifact = { type: requiredArtifactType, data: progressiveData }
-            fullContent = `${cleanText}\n\n<artifact type="${requiredArtifactType}">\n${JSON.stringify(progressiveData)}\n</artifact>`
+          if (artifact?.data) {
+            fullContent = `${cleanText}\n\n<artifact type="${requiredArtifactType}">\n${JSON.stringify(artifact.data)}\n</artifact>`
           }
         } catch (artifactErr) {
           console.warn(`Structured artifact generation failed for ${requiredArtifactType}:`, artifactErr?.message || artifactErr)
