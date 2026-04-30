@@ -907,6 +907,7 @@ If the route is four_pillar_synthesis:
 - Follow the artifact strategy in the routing block.
 - Broad landscape / "what's next" / "where does value accrue" questions should usually use signal_map.
 - Narrower four-pillar questions inside the same niche may use a tighter artifact like comparison_table or quadrant if that serves the question better.
+- If a signal_map artifact is present, keep the prose above it short. Set up the read, then let the artifact do the heavy lifting.
 
 If the route is all_pillar_synthesis:
 - Use all six pillars, but do not force equal space for each one.
@@ -1286,6 +1287,7 @@ MULTI-PILLAR FUTURE / STRATEGY SYNTHESIS
   Build this from concrete present-tense signals first, then interpretation, then forecast, then user consequence.
   Prefer factual observations over abstraction. Use qualitative estimates only when exact counts are unavailable, and keep them clearly bounded.
   Frameworks must be structured visually through the artifact fields, not merely named in prose.
+  When a signal_map is present, keep the normal answer body lean and avoid repeating the artifact's sections in full prose.
 
 BOOK / AUTHOR CITATION
 → book_ref

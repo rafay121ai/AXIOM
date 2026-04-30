@@ -916,7 +916,6 @@ function SignalMap({ data }) {
   const sections = asArray(data.sections)
   const frameworks = asArray(data.frameworks)
   const watchPoints = asArray(data.watch_points)
-  const sourceWeighting = asArray(data.source_weighting)
   const counterforces = asArray(data.counterforces)
   const confidence = data.confidence || {}
   const trendState = data.trend_state || {}
@@ -963,6 +962,36 @@ function SignalMap({ data }) {
           <div style={{ color: MUTED, display: 'flex', fontSize: 11, justifyContent: 'space-between' }}>
             <span>{framework.left_label || 'low'}</span>
             <span>{framework.right_label || 'high'}</span>
+          </div>
+        </div>
+      )
+    }
+
+    if (kind === 'stack' && items.length > 0) {
+      return (
+        <div style={{ display: 'grid', gap: 10 }}>
+          <div style={{ position: 'relative', paddingLeft: 18 }}>
+            <div style={{ background: 'linear-gradient(180deg, rgba(212,168,67,0.4), rgba(212,168,67,0.04))', borderRadius: 999, bottom: 4, left: 4, position: 'absolute', top: 4, width: 2 }} />
+            <div style={{ display: 'grid', gap: 8 }}>
+              {items.map((item, index) => (
+                <div
+                  key={index}
+                  style={{
+                    alignItems: 'center',
+                    display: 'grid',
+                    gap: 10,
+                    gridTemplateColumns: '28px 1fr',
+                  }}
+                >
+                  <div style={{ alignItems: 'center', background: getGradient('money_game'), borderRadius: 999, boxShadow: GOLD_GLOW, color: 'var(--bg)', display: 'flex', fontSize: 11, fontWeight: 800, height: 24, justifyContent: 'center', width: 24 }}>
+                    {index + 1}
+                  </div>
+                  <div style={{ ...glassSurfaceStyle(false), color: TEXT, fontSize: 12, fontWeight: 700, padding: '10px 12px' }}>
+                    {item}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )
@@ -1163,21 +1192,21 @@ function SignalMap({ data }) {
         {(forecastBars.length > 0 || frameworks.length > 0) && (
           <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'minmax(260px, 0.9fr) minmax(0, 1.1fr)' }}>
             {forecastBars.length > 0 && (
-              <div style={{ ...glassSurfaceStyle(false), display: 'grid', gap: 10, padding: 14 }}>
+              <div style={{ ...glassSurfaceStyle(false), display: 'grid', gap: 12, padding: 14 }}>
                 <div style={{ color: ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
                   Forecast
                 </div>
-                <div style={{ display: 'grid', gap: 10 }}>
+                <div style={{ alignItems: 'end', display: 'grid', gap: 8, gridTemplateColumns: `repeat(${forecastBars.length}, minmax(0, 1fr))`, minHeight: 180 }}>
                   {forecastBars.map((item, index) => {
                     const value = Math.max(0, Math.min(100, Number(item.value) || 0))
                     return (
-                      <div key={index} className={data.animate !== false ? `axiom-animate-fade ${stagger(index + 2)}` : ''} style={{ display: 'grid', gap: 5 }}>
-                        <div style={{ alignItems: 'center', display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: TEXT, fontSize: 12, fontWeight: 700 }}>{item.label}</span>
-                          <span style={{ color: ACCENT, fontSize: 11, fontWeight: 800 }}>{value}</span>
+                      <div key={index} className={data.animate !== false ? `axiom-animate-fade ${stagger(index + 2)}` : ''} style={{ display: 'grid', gap: 8, height: '100%' }}>
+                        <div style={{ alignItems: 'end', background: 'linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.005))', border: `1px solid ${BORDER}`, borderRadius: 4, display: 'flex', minHeight: 132, overflow: 'hidden', padding: 6 }}>
+                          <div style={{ background: GOLD_GRADIENT, borderRadius: 4, boxShadow: GOLD_GLOW, height: `${Math.max(10, value)}%`, minHeight: 18, width: '100%' }} />
                         </div>
-                        <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 999, height: 8, overflow: 'hidden' }}>
-                          <div style={{ background: GOLD_GRADIENT, borderRadius: 999, boxShadow: GOLD_GLOW, height: '100%', width: `${value}%` }} />
+                        <div style={{ alignItems: 'center', display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: TEXT, fontSize: 11, fontWeight: 700 }}>{item.label}</span>
+                          <span style={{ color: ACCENT, fontSize: 11, fontWeight: 800 }}>{value}</span>
                         </div>
                         {item.note && <div style={{ color: MUTED, fontSize: 11, lineHeight: 1.45 }}>{item.note}</div>}
                       </div>
@@ -1206,7 +1235,7 @@ function SignalMap({ data }) {
           </div>
         )}
 
-        {(sourceWeighting.length > 0 || watchPoints.length > 0 || counterforces.length > 0 || data.for_this_user) && (
+        {(watchPoints.length > 0 || counterforces.length > 0 || data.for_this_user) && (
           <div
             style={{
               display: 'grid',
@@ -1224,45 +1253,6 @@ function SignalMap({ data }) {
                 padding: 14,
               }}
             >
-              {sourceWeighting.length > 0 && (
-                <div>
-                  <div style={{ color: ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', marginBottom: 10, textTransform: 'uppercase' }}>
-                    Source weighting
-                  </div>
-                  <div style={{ display: 'grid', gap: 8 }}>
-                    {sourceWeighting.map((item, index) => (
-                      <div
-                        key={`${item.kind || 'source'}-${index}`}
-                        className={data.animate !== false ? `axiom-animate-fade ${stagger(index + 1)}` : ''}
-                        style={{ alignItems: 'flex-start', display: 'grid', gap: 8, gridTemplateColumns: 'auto 1fr' }}
-                      >
-                        <span
-                          style={{
-                            background: 'rgba(255,255,255,0.03)',
-                            border: `1px solid ${BORDER}`,
-                            borderRadius: 999,
-                            color: item.weight === 'high' ? GOOD : item.weight === 'low' ? BAD : ACCENT,
-                            fontSize: 10,
-                            fontWeight: 800,
-                            letterSpacing: '0.05em',
-                            padding: '4px 7px',
-                            textTransform: 'uppercase',
-                          }}
-                        >
-                          {item.weight || 'medium'}
-                        </span>
-                        <div>
-                          <div style={{ color: TEXT, fontSize: 11, fontWeight: 700, letterSpacing: '0.02em', textTransform: 'capitalize' }}>
-                            {String(item.kind || '').replace(/_/g, ' ')}
-                          </div>
-                          {item.reason && <div style={{ color: MUTED, fontSize: 12, lineHeight: 1.5 }}>{item.reason}</div>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {watchPoints.length > 0 && (
                 <div>
                   <div style={{ color: ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', marginBottom: 8, textTransform: 'uppercase' }}>
