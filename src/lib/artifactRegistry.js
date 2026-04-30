@@ -78,6 +78,99 @@ export const ARTIFACT_PROFILES = {
       'counterforces',
       'for_this_user',
     ],
+    progressiveSections: [
+      {
+        key: 'header',
+        schema: `{
+  "title": "Signal Map: short topic title",
+  "topic": "string",
+  "core_shift": "string"
+}`,
+      },
+      {
+        key: 'trend_state',
+        schema: `{
+  "trend_state": {
+    "current_phase": "early|rising|crowded|mainstreaming|peaking|unclear",
+    "current_read": "string",
+    "signal_strength": "weak|medium|strong",
+    "estimate_note": "optional string"
+  }
+}`,
+      },
+      {
+        key: 'what_is_happening_now',
+        schema: `{
+  "what_is_happening_now": [
+    { "label": "string", "detail": "string", "evidence": "string" }
+  ]
+}`,
+      },
+      {
+        key: 'observed_moves',
+        schema: `{
+  "observed_moves": [
+    { "actor": "string", "action": "string", "implication": "string" }
+  ]
+}`,
+      },
+      {
+        key: 'sections',
+        schema: `{
+  "sections": [
+    { "id": "whats_coming", "label": "What's Shifting", "pillar": "whats_coming", "signal": "string", "tension": "optional string" },
+    { "id": "how_companies_win", "label": "Who Captures It", "pillar": "how_companies_win", "signal": "string", "tension": "optional string" },
+    { "id": "money_game", "label": "Where Value Pools", "pillar": "money_game", "signal": "string", "tension": "optional string" },
+    { "id": "think_sharper", "label": "How Hard To Believe", "pillar": "think_sharper", "signal": "string", "tension": "optional string" }
+  ]
+}`,
+      },
+      {
+        key: 'forecast',
+        schema: `{
+  "forecast": {
+    "now": { "label": "Now", "value": 0, "note": "string" },
+    "next_12_months": { "label": "12 months", "value": 0, "note": "string" },
+    "next_3_years": { "label": "3 years", "value": 0, "note": "string" }
+  }
+}`,
+      },
+      {
+        key: 'frameworks',
+        schema: `{
+  "frameworks": [
+    {
+      "name": "string",
+      "kind": "cycle|stack|spectrum|pyramid|curve|wave",
+      "explanation": "string",
+      "items": ["string"],
+      "position": 0.5,
+      "left_label": "optional string",
+      "right_label": "optional string",
+      "curve_label": "optional string",
+      "peak_label": "optional string"
+    }
+  ]
+}`,
+      },
+      {
+        key: 'confidence',
+        schema: `{
+  "confidence": {
+    "level": "low|medium|high",
+    "why": "string"
+  }
+}`,
+      },
+      {
+        key: 'watch_points',
+        schema: `{
+  "watch_points": ["string"],
+  "counterforces": ["string"],
+  "for_this_user": "string"
+}`,
+      },
+    ],
     isComplete(data) {
       return Boolean(
         data.core_shift &&
