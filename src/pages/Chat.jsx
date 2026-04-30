@@ -474,19 +474,6 @@ export default function Chat() {
         routeQuestionMode(text, session, nodeContext),
         searchPersonalMemory(session.user_id, text, 5),
       ])
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantMsgId
-            ? {
-                ...m,
-                artifactPendingType:
-                  route?.artifactStrategy && route.artifactStrategy !== 'none'
-                    ? route.artifactStrategy
-                    : null,
-              }
-            : m
-        )
-      )
       const { chunks, sources, confidence: retrievalConfidence, pillarResults } = await searchWikiForRoute(text, route, 3)
       const wikiContext = await formatWikiContext(chunks, sources)
       const routeContext = formatRouteContext(route, pillarResults)
@@ -516,15 +503,58 @@ export default function Chat() {
         routeContext
       )
 
-      // Stream response
-      const abort = new AbortController()
-      abortControllerRef.current = abort
+      const runAbort = new AbortController()
+      abortControllerRef.current = runAbort
 
+      const requiredArtifactType = getRequiredArtifactType(route)
+      let artifact = null
+      let cleanText = ''
+      let experiment = null
+      let textDone = false
+      let latestArtifact = null
+
+      const artifactBuildPromise = requiredArtifactType
+        ? buildArtifactForResponse({
+            artifactType: requiredArtifactType,
+            query: text,
+            session,
+            routeContext,
+            wikiContext,
+            personalMemoryContext,
+            namedPatternsContext,
+            answerDraft: text,
+            signal: runAbort.signal,
+            onProgress: (progressiveData) => {
+              latestArtifact = { type: requiredArtifactType, data: progressiveData }
+              if (!textDone) return
+
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMsgId
+                    ? {
+                        ...m,
+                        content: cleanText,
+                        streaming: false,
+                        artifact: latestArtifact,
+                        experiment: null,
+                        artifactPendingType: null,
+                      }
+                    : m
+                )
+              )
+            },
+          }).then((result) => {
+            latestArtifact = result || latestArtifact
+            return latestArtifact
+          })
+        : Promise.resolve(null)
+
+      // Stream response
       const stream = await openai.chat.completions.create({
         model: CHAT_MODEL,
         messages: [{ role: 'system', content: systemPrompt }, ...history],
         stream: true,
-      }, { signal: abort.signal })
+      }, { signal: runAbort.signal })
 
       let fullContent = ''
       let streamDone = false
@@ -568,62 +598,45 @@ export default function Chat() {
       }
 
       // Parse artifact and experiment tags — done exactly once after stream ends
-      let parsed = parseMessage(fullContent)
-      let artifact = parsed.artifact
-      let cleanText = parsed.cleanText
-      const experiment = parsed.experiment
+      const parsed = parseMessage(fullContent)
+      artifact = parsed.artifact
+      cleanText = parsed.cleanText
+      experiment = parsed.experiment
+      textDone = true
 
-      const requiredArtifactType = getRequiredArtifactType(route)
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMsgId
+            ? {
+                ...m,
+                content: cleanText,
+                streaming: false,
+                artifact: latestArtifact,
+                experiment: null,
+                artifactPendingType: requiredArtifactType && !latestArtifact ? requiredArtifactType : null,
+              }
+            : m
+        )
+      )
 
       if (requiredArtifactType) {
-        artifact = null
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantMsgId
-              ? { ...m, content: cleanText, streaming: false, artifact: null, experiment, artifactPendingType: requiredArtifactType }
-              : m
-          )
-        )
-
         try {
-          const artifactAbort = new AbortController()
-          abortControllerRef.current = artifactAbort
-          artifact = await buildArtifactForResponse({
-            artifactType: requiredArtifactType,
-            query: text,
-            session,
-            routeContext,
-            wikiContext,
-            personalMemoryContext,
-            namedPatternsContext,
-            answerDraft: cleanText,
-            signal: artifactAbort.signal,
-            onProgress: (progressiveData) => {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantMsgId
-                    ? {
-                        ...m,
-                        content: cleanText,
-                        streaming: false,
-                        artifact: { type: requiredArtifactType, data: progressiveData },
-                        experiment,
-                        artifactPendingType: requiredArtifactType,
-                      }
-                    : m
-                )
-              )
-            },
-          })
-
-          abortControllerRef.current = null
-
+          artifact = await artifactBuildPromise
           if (artifact?.data) {
             fullContent = `${cleanText}\n\n<artifact type="${requiredArtifactType}">\n${JSON.stringify(artifact.data)}\n</artifact>`
+          } else {
+            fullContent = cleanText
           }
         } catch (artifactErr) {
           console.warn(`Structured artifact generation failed for ${requiredArtifactType}:`, artifactErr?.message || artifactErr)
+          fullContent = cleanText
         }
+      } else {
+        artifact = parsed.artifact
+      }
+
+      if (experiment) {
+        fullContent = `${fullContent}\n\n<experiment>\n${JSON.stringify(experiment)}\n</experiment>`
       }
 
       auditArtifact(text, fullContent, artifact)
@@ -798,7 +811,11 @@ export default function Chat() {
 function MessageGroup({ msg, onAnswer, onSubmit, onUserPlot }) {
   const showArtifact   = msg.role === 'assistant' && msg.artifact && !msg.streaming
   const showExperiment = msg.role === 'assistant' && msg.experiment && !msg.streaming
-  const showArtifactPending = msg.role === 'assistant' && !msg.artifact && !!msg.artifactPendingType
+  const showArtifactPending =
+    msg.role === 'assistant' &&
+    !msg.artifact &&
+    !!msg.artifactPendingType &&
+    msg.artifactPendingType !== 'signal_map'
 
   // If Axiom placed <artifact_here/> inside the text, inject the artifact inline
   // at that position instead of appending it below the bubble.

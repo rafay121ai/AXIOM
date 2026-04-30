@@ -993,6 +993,10 @@ function visualReasoningGridStyle() {
   }
 }
 
+function delayStyle(ms) {
+  return { animationDelay: `${ms}ms` }
+}
+
 function ReasoningCurve({ data }) {
   const stages = asArray(data.stages).map(normalizeVisualNode)
   const markers = stages.length ? stages : [
@@ -1012,13 +1016,13 @@ function ReasoningCurve({ data }) {
               <stop offset="100%" stopColor="var(--gold-highlight)" />
             </linearGradient>
           </defs>
-          <line x1="52" y1="226" x2="670" y2="226" stroke={BORDER} strokeWidth="1.25" />
-          <line x1="52" y1="24" x2="52" y2="226" stroke={BORDER} strokeWidth="1.25" />
-          <path d="M56 206 C 184 206, 250 172, 332 128 S 496 34, 660 46" fill="none" stroke="url(#axiomCurveStroke)" strokeLinecap="round" strokeWidth="6" />
+          <line className="axiom-draw-stroke" pathLength="1" x1="52" y1="226" x2="670" y2="226" stroke={BORDER} strokeWidth="1.25" style={delayStyle(40)} />
+          <line className="axiom-draw-stroke" pathLength="1" x1="52" y1="24" x2="52" y2="226" stroke={BORDER} strokeWidth="1.25" style={delayStyle(100)} />
+          <path className="axiom-draw-stroke axiom-draw-stroke--bold" d="M56 206 C 184 206, 250 172, 332 128 S 496 34, 660 46" fill="none" pathLength="1" stroke="url(#axiomCurveStroke)" strokeLinecap="round" strokeWidth="6" style={delayStyle(220)} />
           {data.peak_label && (
             <>
-              <line x1="520" y1="42" x2="520" y2="226" stroke="rgba(212,168,67,0.22)" strokeDasharray="6 7" strokeWidth="1.5" />
-              <text x="528" y="36" fill={ACCENT} fontSize="11" fontWeight="800">{data.peak_label}</text>
+              <line className="axiom-draw-stroke" pathLength="1" x1="520" y1="42" x2="520" y2="226" stroke="rgba(212,168,67,0.22)" strokeDasharray="6 7" strokeWidth="1.5" style={delayStyle(420)} />
+              <text className="axiom-ink-text" x="528" y="36" fill={ACCENT} fontSize="11" fontWeight="800" style={delayStyle(520)}>{data.peak_label}</text>
             </>
           )}
           {markers.map((stage, index) => {
@@ -1026,10 +1030,10 @@ function ReasoningCurve({ data }) {
             const py = 206 - Math.sin(clamp01(stage.position ?? 0.5) * Math.PI * 0.84) * 150
             return (
               <g key={index}>
-                <circle cx={px} cy={py} fill={ACCENT} r="6" />
-                <circle cx={px} cy={py} fill="none" opacity="0.24" r="14" stroke={ACCENT} />
-                <line x1={px} y1={py + 10} x2={px} y2="226" stroke="rgba(255,255,255,0.08)" strokeDasharray="4 6" />
-                <text x={px} y={250} fill={TEXT} fontSize="11" fontWeight="700" textAnchor="middle">{stage.label}</text>
+                <circle className="axiom-node-pop" cx={px} cy={py} fill={ACCENT} r="6" style={delayStyle(540 + index * 90)} />
+                <circle className="axiom-node-pop axiom-node-pop--ring" cx={px} cy={py} fill="none" opacity="0.24" r="14" stroke={ACCENT} style={delayStyle(580 + index * 90)} />
+                <line className="axiom-draw-stroke" pathLength="1" x1={px} y1={py + 10} x2={px} y2="226" stroke="rgba(255,255,255,0.08)" strokeDasharray="4 6" style={delayStyle(620 + index * 90)} />
+                <text className="axiom-ink-text" x={px} y={250} fill={TEXT} fontSize="11" fontWeight="700" textAnchor="middle" style={delayStyle(700 + index * 90)}>{stage.label}</text>
               </g>
             )
           })}
@@ -1068,20 +1072,20 @@ function ReasoningCycle({ data }) {
                 <stop offset="100%" stopColor="var(--gold-core)" />
               </linearGradient>
             </defs>
-            <circle cx="210" cy="160" fill="none" opacity="0.18" r="92" stroke={ACCENT} strokeDasharray="8 11" strokeWidth="2" />
+            <circle className="axiom-draw-stroke" cx="210" cy="160" fill="none" opacity="0.18" pathLength="1" r="92" stroke={ACCENT} strokeDasharray="8 11" strokeWidth="2" style={delayStyle(60)} />
             {steps.map((step, index) => {
               const angle = (-Math.PI / 2) + (index / total) * Math.PI * 2
               const x = 210 + Math.cos(angle) * 112
               const y = 160 + Math.sin(angle) * 112
               return (
                 <g key={index}>
-                  <circle cx={x} cy={y} fill="rgba(18,18,18,0.98)" r="28" stroke={ACCENT} strokeWidth="1.5" />
-                  <text x={x} y={y + 4} fill={TEXT} fontSize="11" fontWeight="800" textAnchor="middle">{index + 1}</text>
-                  <text x={x} y={y + 48} fill={TEXT} fontSize="11" fontWeight="700" textAnchor="middle">{step.label}</text>
+                  <circle className="axiom-node-pop" cx={x} cy={y} fill="rgba(18,18,18,0.98)" r="28" stroke={ACCENT} strokeWidth="1.5" style={delayStyle(180 + index * 110)} />
+                  <text className="axiom-ink-text" x={x} y={y + 4} fill={TEXT} fontSize="11" fontWeight="800" textAnchor="middle" style={delayStyle(230 + index * 110)}>{index + 1}</text>
+                  <text className="axiom-ink-text" x={x} y={y + 48} fill={TEXT} fontSize="11" fontWeight="700" textAnchor="middle" style={delayStyle(300 + index * 110)}>{step.label}</text>
                 </g>
               )
             })}
-            <path d="M210 52 C 290 58, 346 118, 334 194" fill="none" markerEnd="url(#cycleArrow)" stroke="url(#axiomCycleArc)" strokeLinecap="round" strokeWidth="4" />
+            <path className="axiom-draw-stroke axiom-draw-stroke--bold" d="M210 52 C 290 58, 346 118, 334 194" fill="none" markerEnd="url(#cycleArrow)" pathLength="1" stroke="url(#axiomCycleArc)" strokeLinecap="round" strokeWidth="4" style={delayStyle(680)} />
             <defs>
               <marker id="cycleArrow" markerHeight="8" markerWidth="8" orient="auto" refX="4" refY="4">
                 <path d="M0,0 L8,4 L0,8 z" fill={ACCENT} />
@@ -1091,10 +1095,10 @@ function ReasoningCycle({ data }) {
         </div>
         <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', marginTop: 10 }}>
           {steps.map((step, index) => (
-            <div key={index} style={{ ...glassSurfaceStyle(false), display: 'grid', gap: 5, padding: 10 }}>
-              <div style={{ color: ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Step {index + 1}</div>
-              <div style={{ color: TEXT, fontSize: 12, fontWeight: 800 }}>{step.label}</div>
-              {step.description && <div style={{ color: MUTED, fontSize: 11, lineHeight: 1.5 }}>{step.description}</div>}
+            <div key={index} className="axiom-assemble-card" style={{ ...glassSurfaceStyle(false), display: 'grid', gap: 5, padding: 10, ...delayStyle(760 + index * 90) }}>
+              <div className="axiom-ink-text" style={{ color: ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', ...delayStyle(820 + index * 90) }}>Step {index + 1}</div>
+              <div className="axiom-ink-text" style={{ color: TEXT, fontSize: 12, fontWeight: 800, ...delayStyle(860 + index * 90) }}>{step.label}</div>
+              {step.description && <div className="axiom-ink-text" style={{ color: MUTED, fontSize: 11, lineHeight: 1.5, ...delayStyle(900 + index * 90) }}>{step.description}</div>}
             </div>
           ))}
         </div>
@@ -1117,6 +1121,7 @@ function ReasoningPyramid({ data }) {
               return (
                 <div
                   key={index}
+                  className="axiom-rise-layer"
                   style={{
                     ...glassSurfaceStyle(index === reversed.length - 1),
                     display: 'grid',
@@ -1124,10 +1129,11 @@ function ReasoningPyramid({ data }) {
                     justifySelf: 'center',
                     padding: '12px 14px',
                     width,
+                    ...delayStyle(160 + index * 90),
                   }}
                 >
-                  <div style={{ color: TEXT, fontSize: 12, fontWeight: 800 }}>{layer.label}</div>
-                  {layer.detail && <div style={{ color: MUTED, fontSize: 11, lineHeight: 1.5 }}>{layer.detail}</div>}
+                  <div className="axiom-ink-text" style={{ color: TEXT, fontSize: 12, fontWeight: 800, ...delayStyle(220 + index * 90) }}>{layer.label}</div>
+                  {layer.detail && <div className="axiom-ink-text" style={{ color: MUTED, fontSize: 11, lineHeight: 1.5, ...delayStyle(260 + index * 90) }}>{layer.detail}</div>}
                 </div>
               )
             })}
@@ -1143,18 +1149,34 @@ function ReasoningStack({ data }) {
   return (
     <VisualReasoningShell title={data.title}>
       <div style={visualReasoningGridStyle()}>
-        <div style={{ display: 'grid', gap: 10 }}>
-          {layers.map((layer, index) => (
-            <div key={index} style={{ ...glassSurfaceStyle(layer.emphasis === 'high'), display: 'grid', gap: 6, gridTemplateColumns: '30px 1fr', padding: 12 }}>
-              <div style={{ alignItems: 'center', background: layer.emphasis === 'high' ? GOLD_GRADIENT : 'rgba(255,255,255,0.06)', borderRadius: 999, color: layer.emphasis === 'high' ? 'var(--bg)' : TEXT, display: 'flex', fontSize: 11, fontWeight: 800, height: 24, justifyContent: 'center', width: 24 }}>
-                {index + 1}
+        <div style={{ display: 'grid', gap: 8, margin: '0 auto', maxWidth: 440 }}>
+          {layers.map((layer, index) => {
+            const width = `${100 - index * 7}%`
+            return (
+              <div
+                key={index}
+                className="axiom-rise-layer"
+                style={{
+                  ...glassSurfaceStyle(layer.emphasis === 'high'),
+                  display: 'grid',
+                  gap: 6,
+                  justifySelf: 'center',
+                  padding: '12px 14px',
+                  position: 'relative',
+                  width,
+                  ...delayStyle(140 + index * 90),
+                }}
+              >
+                <div style={{ alignItems: 'center', display: 'flex', gap: 10 }}>
+                  <div className="axiom-node-pop" style={{ alignItems: 'center', background: layer.emphasis === 'high' ? GOLD_GRADIENT : 'rgba(255,255,255,0.06)', borderRadius: 999, color: layer.emphasis === 'high' ? 'var(--bg)' : TEXT, display: 'flex', fontSize: 11, fontWeight: 800, height: 24, justifyContent: 'center', width: 24, ...delayStyle(200 + index * 90) }}>
+                    {index + 1}
+                  </div>
+                  <div className="axiom-ink-text" style={{ color: TEXT, fontSize: 12, fontWeight: 800, ...delayStyle(240 + index * 90) }}>{layer.label}</div>
+                </div>
+                {layer.detail && <div className="axiom-ink-text" style={{ color: MUTED, fontSize: 11, lineHeight: 1.5, ...delayStyle(280 + index * 90) }}>{layer.detail}</div>}
               </div>
-              <div style={{ display: 'grid', gap: 4 }}>
-                <div style={{ color: TEXT, fontSize: 12, fontWeight: 800 }}>{layer.label}</div>
-                {layer.detail && <div style={{ color: MUTED, fontSize: 11, lineHeight: 1.5 }}>{layer.detail}</div>}
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
     </VisualReasoningShell>
@@ -1174,16 +1196,16 @@ function ReasoningWave({ data }) {
               <stop offset="100%" stopColor="var(--gold-highlight)" />
             </linearGradient>
           </defs>
-          <line x1="52" y1="198" x2="670" y2="198" stroke={BORDER} strokeWidth="1.25" />
-          <path d="M56 196 C 154 190, 206 144, 288 122 S 458 24, 540 68 S 632 172, 666 178" fill="none" stroke="url(#axiomWaveStroke)" strokeLinecap="round" strokeWidth="6" />
+          <line className="axiom-draw-stroke" pathLength="1" x1="52" y1="198" x2="670" y2="198" stroke={BORDER} strokeWidth="1.25" style={delayStyle(40)} />
+          <path className="axiom-draw-stroke axiom-draw-stroke--bold" d="M56 196 C 154 190, 206 144, 288 122 S 458 24, 540 68 S 632 172, 666 178" fill="none" pathLength="1" stroke="url(#axiomWaveStroke)" strokeLinecap="round" strokeWidth="6" style={delayStyle(180)} />
           {drivers.map((driver, index) => {
             const px = 60 + clamp01(driver.position ?? (index + 1) / (drivers.length + 1)) * 590
             const py = 196 - Math.sin(clamp01(driver.position ?? 0.5) * Math.PI) * 124
             return (
               <g key={index}>
-                <circle cx={px} cy={py} fill={ACCENT} r="5" />
-                <line x1={px} y1={py + 8} x2={px} y2="198" stroke="rgba(255,255,255,0.08)" strokeDasharray="4 6" />
-                <text x={px} y={220} fill={TEXT} fontSize="11" fontWeight="700" textAnchor="middle">{driver.label}</text>
+                <circle className="axiom-node-pop" cx={px} cy={py} fill={ACCENT} r="5" style={delayStyle(360 + index * 90)} />
+                <line className="axiom-draw-stroke" pathLength="1" x1={px} y1={py + 8} x2={px} y2="198" stroke="rgba(255,255,255,0.08)" strokeDasharray="4 6" style={delayStyle(420 + index * 90)} />
+                <text className="axiom-ink-text" x={px} y={220} fill={TEXT} fontSize="11" fontWeight="700" textAnchor="middle" style={delayStyle(500 + index * 90)}>{driver.label}</text>
               </g>
             )
           })}
@@ -1195,12 +1217,12 @@ function ReasoningWave({ data }) {
         {drivers.some((driver) => driver.detail) && (
           <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', marginTop: 12 }}>
             {drivers.map((driver, index) => (
-              <div key={index} style={{ ...glassSurfaceStyle(false), display: 'grid', gap: 5, padding: 10 }}>
-                <div style={{ color: TEXT, fontSize: 12, fontWeight: 800 }}>{driver.label}</div>
-                {driver.detail && <div style={{ color: MUTED, fontSize: 11, lineHeight: 1.5 }}>{driver.detail}</div>}
-              </div>
-            ))}
-          </div>
+                <div key={index} className="axiom-assemble-card" style={{ ...glassSurfaceStyle(false), display: 'grid', gap: 5, padding: 10, ...delayStyle(620 + index * 90) }}>
+                  <div className="axiom-ink-text" style={{ color: TEXT, fontSize: 12, fontWeight: 800, ...delayStyle(680 + index * 90) }}>{driver.label}</div>
+                  {driver.detail && <div className="axiom-ink-text" style={{ color: MUTED, fontSize: 11, lineHeight: 1.5, ...delayStyle(720 + index * 90) }}>{driver.detail}</div>}
+                </div>
+              ))}
+            </div>
         )}
       </div>
     </VisualReasoningShell>
@@ -1236,20 +1258,20 @@ function renderFrameworkVisual(framework) {
                 <path d="M0,0 L8,4 L0,8 z" fill={ACCENT} />
               </marker>
             </defs>
-            <circle cx="210" cy="160" fill="none" opacity="0.18" r="92" stroke={ACCENT} strokeDasharray="8 11" strokeWidth="2" />
+            <circle className="axiom-draw-stroke" cx="210" cy="160" fill="none" opacity="0.18" pathLength="1" r="92" stroke={ACCENT} strokeDasharray="8 11" strokeWidth="2" style={delayStyle(60)} />
             {steps.map((step, index) => {
               const angle = (-Math.PI / 2) + (index / total) * Math.PI * 2
               const x = 210 + Math.cos(angle) * 112
               const y = 160 + Math.sin(angle) * 112
               return (
                 <g key={index}>
-                  <circle cx={x} cy={y} fill="rgba(18,18,18,0.98)" r="28" stroke={ACCENT} strokeWidth="1.5" />
-                  <text x={x} y={y + 4} fill={TEXT} fontSize="11" fontWeight="800" textAnchor="middle">{index + 1}</text>
-                  <text x={x} y={y + 48} fill={TEXT} fontSize="11" fontWeight="700" textAnchor="middle">{step.label}</text>
+                  <circle className="axiom-node-pop" cx={x} cy={y} fill="rgba(18,18,18,0.98)" r="28" stroke={ACCENT} strokeWidth="1.5" style={delayStyle(180 + index * 110)} />
+                  <text className="axiom-ink-text" x={x} y={y + 4} fill={TEXT} fontSize="11" fontWeight="800" textAnchor="middle" style={delayStyle(230 + index * 110)}>{index + 1}</text>
+                  <text className="axiom-ink-text" x={x} y={y + 48} fill={TEXT} fontSize="11" fontWeight="700" textAnchor="middle" style={delayStyle(300 + index * 110)}>{step.label}</text>
                 </g>
               )
             })}
-            <path d="M210 52 C 290 58, 346 118, 334 194" fill="none" markerEnd="url(#cycleArrowInline)" stroke="url(#axiomCycleArcInline)" strokeLinecap="round" strokeWidth="4" />
+            <path className="axiom-draw-stroke axiom-draw-stroke--bold" d="M210 52 C 290 58, 346 118, 334 194" fill="none" markerEnd="url(#cycleArrowInline)" pathLength="1" stroke="url(#axiomCycleArcInline)" strokeLinecap="round" strokeWidth="4" style={delayStyle(680)} />
           </svg>
         </div>
       </div>
@@ -1264,9 +1286,9 @@ function renderFrameworkVisual(framework) {
           {reversed.map((layer, index) => {
             const width = `${34 + ((index + 1) / reversed.length) * 66}%`
             return (
-              <div key={index} style={{ ...glassSurfaceStyle(index === reversed.length - 1), display: 'grid', gap: 5, justifySelf: 'center', padding: '12px 14px', width }}>
-                <div style={{ color: TEXT, fontSize: 12, fontWeight: 800 }}>{layer.label}</div>
-                {layer.detail && <div style={{ color: MUTED, fontSize: 11, lineHeight: 1.5 }}>{layer.detail}</div>}
+              <div key={index} className="axiom-rise-layer" style={{ ...glassSurfaceStyle(index === reversed.length - 1), display: 'grid', gap: 5, justifySelf: 'center', padding: '12px 14px', width, ...delayStyle(140 + index * 90) }}>
+                <div className="axiom-ink-text" style={{ color: TEXT, fontSize: 12, fontWeight: 800, ...delayStyle(200 + index * 90) }}>{layer.label}</div>
+                {layer.detail && <div className="axiom-ink-text" style={{ color: MUTED, fontSize: 11, lineHeight: 1.5, ...delayStyle(240 + index * 90) }}>{layer.detail}</div>}
               </div>
             )
           })}
@@ -1291,13 +1313,13 @@ function renderFrameworkVisual(framework) {
               <stop offset="100%" stopColor="var(--gold-highlight)" />
             </linearGradient>
           </defs>
-          <line x1="52" y1="226" x2="670" y2="226" stroke={BORDER} strokeWidth="1.25" />
-          <line x1="52" y1="24" x2="52" y2="226" stroke={BORDER} strokeWidth="1.25" />
-          <path d="M56 206 C 184 206, 250 172, 332 128 S 496 34, 660 46" fill="none" stroke="url(#axiomCurveStrokeInline)" strokeLinecap="round" strokeWidth="6" />
+          <line className="axiom-draw-stroke" pathLength="1" x1="52" y1="226" x2="670" y2="226" stroke={BORDER} strokeWidth="1.25" style={delayStyle(40)} />
+          <line className="axiom-draw-stroke" pathLength="1" x1="52" y1="24" x2="52" y2="226" stroke={BORDER} strokeWidth="1.25" style={delayStyle(100)} />
+          <path className="axiom-draw-stroke axiom-draw-stroke--bold" d="M56 206 C 184 206, 250 172, 332 128 S 496 34, 660 46" fill="none" pathLength="1" stroke="url(#axiomCurveStrokeInline)" strokeLinecap="round" strokeWidth="6" style={delayStyle(220)} />
           {framework.peak_label && (
             <>
-              <line x1="520" y1="42" x2="520" y2="226" stroke="rgba(212,168,67,0.22)" strokeDasharray="6 7" strokeWidth="1.5" />
-              <text x="528" y="36" fill={ACCENT} fontSize="11" fontWeight="800">{framework.peak_label}</text>
+              <line className="axiom-draw-stroke" pathLength="1" x1="520" y1="42" x2="520" y2="226" stroke="rgba(212,168,67,0.22)" strokeDasharray="6 7" strokeWidth="1.5" style={delayStyle(420)} />
+              <text className="axiom-ink-text" x="528" y="36" fill={ACCENT} fontSize="11" fontWeight="800" style={delayStyle(520)}>{framework.peak_label}</text>
             </>
           )}
           {stages.map((stage, index) => {
@@ -1305,9 +1327,9 @@ function renderFrameworkVisual(framework) {
             const py = 206 - Math.sin(clamp01(stage.position ?? 0.5) * Math.PI * 0.84) * 150
             return (
               <g key={index}>
-                <circle cx={px} cy={py} fill={ACCENT} r="6" />
-                <line x1={px} y1={py + 10} x2={px} y2="226" stroke="rgba(255,255,255,0.08)" strokeDasharray="4 6" />
-                <text x={px} y={250} fill={TEXT} fontSize="11" fontWeight="700" textAnchor="middle">{stage.label}</text>
+                <circle className="axiom-node-pop" cx={px} cy={py} fill={ACCENT} r="6" style={delayStyle(540 + index * 90)} />
+                <line className="axiom-draw-stroke" pathLength="1" x1={px} y1={py + 10} x2={px} y2="226" stroke="rgba(255,255,255,0.08)" strokeDasharray="4 6" style={delayStyle(620 + index * 90)} />
+                <text className="axiom-ink-text" x={px} y={250} fill={TEXT} fontSize="11" fontWeight="700" textAnchor="middle" style={delayStyle(700 + index * 90)}>{stage.label}</text>
               </g>
             )
           })}
@@ -1361,7 +1383,7 @@ function renderFrameworkVisual(framework) {
     return (
       <div style={{ display: 'grid', gap: 8 }}>
         <div style={{ background: 'rgba(255,255,255,0.035)', borderRadius: 999, height: 8, position: 'relative' }}>
-          <div style={{ background: GOLD_GRADIENT, borderRadius: 999, boxShadow: GOLD_GLOW, height: 14, left: `${position * 100}%`, position: 'absolute', top: '50%', transform: 'translate(-50%, -50%)', width: 14 }} />
+          <div className="axiom-node-pop" style={{ background: GOLD_GRADIENT, borderRadius: 999, boxShadow: GOLD_GLOW, height: 14, left: `${position * 100}%`, position: 'absolute', top: '50%', transform: 'translate(-50%, -50%)', width: 14, ...delayStyle(200) }} />
         </div>
         <div style={{ color: MUTED, display: 'flex', fontSize: 11, justifyContent: 'space-between' }}>
           <span>{framework.left_label || 'low'}</span>
@@ -1375,13 +1397,13 @@ function renderFrameworkVisual(framework) {
     <div style={visualReasoningGridStyle()}>
       <div style={{ display: 'grid', gap: 10 }}>
         {items.map((layer, index) => (
-          <div key={index} style={{ ...glassSurfaceStyle(layer.emphasis === 'high'), display: 'grid', gap: 6, gridTemplateColumns: '30px 1fr', padding: 12 }}>
-            <div style={{ alignItems: 'center', background: layer.emphasis === 'high' ? GOLD_GRADIENT : 'rgba(255,255,255,0.06)', borderRadius: 999, color: layer.emphasis === 'high' ? 'var(--bg)' : TEXT, display: 'flex', fontSize: 11, fontWeight: 800, height: 24, justifyContent: 'center', width: 24 }}>
+          <div key={index} className="axiom-rise-layer" style={{ ...glassSurfaceStyle(layer.emphasis === 'high'), display: 'grid', gap: 6, gridTemplateColumns: '30px 1fr', padding: 12, ...delayStyle(120 + index * 80) }}>
+            <div className="axiom-node-pop" style={{ alignItems: 'center', background: layer.emphasis === 'high' ? GOLD_GRADIENT : 'rgba(255,255,255,0.06)', borderRadius: 999, color: layer.emphasis === 'high' ? 'var(--bg)' : TEXT, display: 'flex', fontSize: 11, fontWeight: 800, height: 24, justifyContent: 'center', width: 24, ...delayStyle(180 + index * 80) }}>
               {index + 1}
             </div>
             <div style={{ display: 'grid', gap: 4 }}>
-              <div style={{ color: TEXT, fontSize: 12, fontWeight: 800 }}>{layer.label}</div>
-              {layer.detail && <div style={{ color: MUTED, fontSize: 11, lineHeight: 1.5 }}>{layer.detail}</div>}
+              <div className="axiom-ink-text" style={{ color: TEXT, fontSize: 12, fontWeight: 800, ...delayStyle(220 + index * 80) }}>{layer.label}</div>
+              {layer.detail && <div className="axiom-ink-text" style={{ color: MUTED, fontSize: 11, lineHeight: 1.5, ...delayStyle(260 + index * 80) }}>{layer.detail}</div>}
             </div>
           </div>
         ))}
@@ -1400,7 +1422,7 @@ function SignalMap({ data }) {
       stage += 1
       setRevealStage((prev) => (prev < 5 ? prev + 1 : prev))
       if (stage >= 5) window.clearInterval(interval)
-    }, 120)
+    }, 240)
 
     return () => window.clearInterval(interval)
   }, [data.title, data.topic, data.core_shift])
@@ -1553,10 +1575,10 @@ function SignalMap({ data }) {
             </div>
             <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
               {currentSignals.map((signal, index) => (
-                <div key={index} className={data.animate !== false ? `axiom-animate-fade ${stagger(index + 1)}` : ''} style={{ ...glassSurfaceStyle(false), display: 'grid', gap: 8, padding: 12 }}>
-                  <div style={{ color: TEXT, fontSize: 13, fontWeight: 800 }}>{signal.label}</div>
-                  {signal.detail && <div style={{ color: TEXT, fontSize: 12, lineHeight: 1.5, ...clampText(3) }}>{signal.detail}</div>}
-                  {signal.evidence && <div style={{ color: MUTED, fontSize: 11, lineHeight: 1.45, ...clampText(2) }}><span style={{ color: ACCENT }}>Visible signal:</span> {signal.evidence}</div>}
+                <div key={index} className="axiom-assemble-card" style={{ ...glassSurfaceStyle(false), display: 'grid', gap: 8, padding: 12, ...delayStyle(index * 120) }}>
+                  <div className="axiom-ink-text" style={{ color: TEXT, fontSize: 13, fontWeight: 800, ...delayStyle(80 + index * 120) }}>{signal.label}</div>
+                  {signal.detail && <div className="axiom-ink-text" style={{ color: TEXT, fontSize: 12, lineHeight: 1.5, ...clampText(3), ...delayStyle(120 + index * 120) }}>{signal.detail}</div>}
+                  {signal.evidence && <div className="axiom-ink-text" style={{ color: MUTED, fontSize: 11, lineHeight: 1.45, ...clampText(2), ...delayStyle(160 + index * 120) }}><span style={{ color: ACCENT }}>Visible signal:</span> {signal.evidence}</div>}
                 </div>
               ))}
             </div>
@@ -1570,13 +1592,13 @@ function SignalMap({ data }) {
             </div>
             <div style={{ display: 'grid', gap: 8 }}>
               {observedMoves.map((move, index) => (
-                <div key={index} className={data.animate !== false ? `axiom-animate-fade ${stagger(index + 1)}` : ''} style={{ ...glassSurfaceStyle(false), display: 'grid', gap: 6, gridTemplateColumns: '112px 1fr', padding: 12 }}>
-                  <div style={{ color: ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                <div key={index} className="axiom-assemble-card" style={{ ...glassSurfaceStyle(false), display: 'grid', gap: 6, gridTemplateColumns: '112px 1fr', padding: 12, ...delayStyle(index * 100) }}>
+                  <div className="axiom-ink-text" style={{ color: ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', ...delayStyle(60 + index * 100) }}>
                     {move.actor}
                   </div>
                   <div style={{ display: 'grid', gap: 5 }}>
-                    <div style={{ color: TEXT, fontSize: 12, fontWeight: 700, ...clampText(2) }}>{move.action}</div>
-                    {move.implication && <div style={{ color: MUTED, fontSize: 12, lineHeight: 1.45, ...clampText(2) }}>{move.implication}</div>}
+                    <div className="axiom-ink-text" style={{ color: TEXT, fontSize: 12, fontWeight: 700, ...clampText(2), ...delayStyle(100 + index * 100) }}>{move.action}</div>
+                    {move.implication && <div className="axiom-ink-text" style={{ color: MUTED, fontSize: 12, lineHeight: 1.45, ...clampText(2), ...delayStyle(140 + index * 100) }}>{move.implication}</div>}
                   </div>
                 </div>
               ))}
@@ -1597,7 +1619,7 @@ function SignalMap({ data }) {
             return (
               <div
                 key={section.id || index}
-                className={data.animate !== false ? `axiom-animate-fade ${stagger(index)}` : ''}
+                className="axiom-assemble-card"
                 style={{
                   background: `linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.005)), radial-gradient(circle at top left, ${pillar.highlight}14, transparent 38%)`,
                   ...GLASS_BORDER,
@@ -1605,19 +1627,21 @@ function SignalMap({ data }) {
                   minHeight: 174,
                   padding: 14,
                   position: 'relative',
+                  ...delayStyle(index * 100),
                 }}
               >
                 <div style={{ alignItems: 'center', display: 'flex', gap: 8, marginBottom: 10 }}>
-                  <span style={{ background: getGradient(section.pillar), borderRadius: 999, boxShadow: GOLD_GLOW, height: 9, width: 9 }} />
-                  <span style={{ color: pillar.highlight, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                  <span className="axiom-node-pop" style={{ background: getGradient(section.pillar), borderRadius: 999, boxShadow: GOLD_GLOW, height: 9, width: 9, ...delayStyle(70 + index * 100) }} />
+                  <span className="axiom-ink-text" style={{ color: pillar.highlight, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', ...delayStyle(100 + index * 100) }}>
                     {section.label || section.id}
                   </span>
                 </div>
-                <div style={{ color: TEXT, fontSize: 13, fontWeight: 700, lineHeight: 1.45, ...clampText(4) }}>
+                <div className="axiom-ink-text" style={{ color: TEXT, fontSize: 13, fontWeight: 700, lineHeight: 1.45, ...clampText(4), ...delayStyle(140 + index * 100) }}>
                   {section.signal}
                 </div>
                 {section.tension && (
                   <div
+                    className="axiom-ink-text"
                     style={{
                       borderTop: `1px solid ${BORDER}`,
                       color: MUTED,
@@ -1626,6 +1650,7 @@ function SignalMap({ data }) {
                       marginTop: 12,
                       paddingTop: 10,
                       ...clampText(3),
+                      ...delayStyle(190 + index * 100),
                     }}
                   >
                     <span style={{ color: pillar.core, fontWeight: 700 }}>Tension:</span> {section.tension}
@@ -1648,15 +1673,15 @@ function SignalMap({ data }) {
                   {forecastBars.map((item, index) => {
                     const value = Math.max(0, Math.min(100, Number(item.value) || 0))
                     return (
-                      <div key={index} className={data.animate !== false ? `axiom-animate-fade ${stagger(index + 2)}` : ''} style={{ display: 'grid', gap: 8, height: '100%' }}>
+                      <div key={index} className="axiom-assemble-card" style={{ display: 'grid', gap: 8, height: '100%', ...delayStyle(index * 110) }}>
                         <div style={{ alignItems: 'end', background: 'linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.005))', border: `1px solid ${BORDER}`, borderRadius: 4, display: 'flex', minHeight: 96, overflow: 'hidden', padding: 6 }}>
-                          <div style={{ background: GOLD_GRADIENT, borderRadius: 4, boxShadow: GOLD_GLOW, height: `${Math.max(10, value)}%`, minHeight: 18, width: '100%' }} />
+                          <div className="axiom-fill-bar" style={{ background: GOLD_GRADIENT, borderRadius: 4, boxShadow: GOLD_GLOW, height: `${Math.max(10, value)}%`, minHeight: 18, width: '100%', ...delayStyle(90 + index * 110) }} />
                         </div>
                         <div style={{ alignItems: 'center', display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: TEXT, fontSize: 11, fontWeight: 700 }}>{item.label}</span>
-                          <span style={{ color: ACCENT, fontSize: 11, fontWeight: 800 }}>{value}</span>
+                          <span className="axiom-ink-text" style={{ color: TEXT, fontSize: 11, fontWeight: 700, ...delayStyle(140 + index * 110) }}>{item.label}</span>
+                          <span className="axiom-ink-text" style={{ color: ACCENT, fontSize: 11, fontWeight: 800, ...delayStyle(170 + index * 110) }}>{value}</span>
                         </div>
-                        {item.note && <div style={{ color: MUTED, fontSize: 11, lineHeight: 1.4, ...clampText(2) }}>{item.note}</div>}
+                        {item.note && <div className="axiom-ink-text" style={{ color: MUTED, fontSize: 11, lineHeight: 1.4, ...clampText(2), ...delayStyle(200 + index * 110) }}>{item.note}</div>}
                       </div>
                     )
                   })}
@@ -1671,10 +1696,10 @@ function SignalMap({ data }) {
                 </div>
                 <div style={{ display: 'grid', gap: 10 }}>
                   {frameworks.map((framework, index) => (
-                    <div key={index} className={data.animate !== false ? `axiom-animate-fade ${stagger(index + 2)}` : ''} style={{ ...glassSurfaceStyle(false), display: 'grid', gap: 10, padding: 14 }}>
-                      <div style={{ color: TEXT, fontSize: 13, fontWeight: 800 }}>{framework.name}</div>
+                    <div key={index} className="axiom-assemble-card" style={{ ...glassSurfaceStyle(false), display: 'grid', gap: 10, padding: 14, ...delayStyle(index * 120) }}>
+                      <div className="axiom-ink-text" style={{ color: TEXT, fontSize: 13, fontWeight: 800, ...delayStyle(70 + index * 120) }}>{framework.name}</div>
                       {renderFrameworkVisual(framework)}
-                      {framework.explanation && <div style={{ color: MUTED, fontSize: 12, lineHeight: 1.55 }}>{framework.explanation}</div>}
+                      {framework.explanation && <div className="axiom-ink-text" style={{ color: MUTED, fontSize: 12, lineHeight: 1.55, ...delayStyle(140 + index * 120) }}>{framework.explanation}</div>}
                     </div>
                   ))}
                 </div>
@@ -1708,7 +1733,7 @@ function SignalMap({ data }) {
                   </div>
                   <div style={{ display: 'grid', gap: 8 }}>
                     {watchPoints.map((item, index) => (
-                      <div key={index} style={{ color: MUTED, fontSize: 12, lineHeight: 1.45, ...clampText(2) }}>
+                      <div key={index} className="axiom-ink-text" style={{ color: MUTED, fontSize: 12, lineHeight: 1.45, ...clampText(2), ...delayStyle(index * 90) }}>
                         <span style={{ color: ACCENT, fontWeight: 800, marginRight: 6 }}>•</span>
                         {item}
                       </div>
@@ -1733,7 +1758,7 @@ function SignalMap({ data }) {
                 <div style={{ color: ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
                   What this means for you
                 </div>
-                <div style={{ color: TEXT, fontSize: 17, fontWeight: 700, lineHeight: 1.3, ...clampText(8) }}>
+                <div className="axiom-ink-text" style={{ color: TEXT, fontSize: 17, fontWeight: 700, lineHeight: 1.3, ...clampText(8), ...delayStyle(80) }}>
                   {forThisUser}
                 </div>
               </div>
