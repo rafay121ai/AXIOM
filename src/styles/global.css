@@ -1582,26 +1582,16 @@ h1, h2, h3 {
 .artifact-loading__shape--reasoning_pyramid::before { width: 36%; height: 24px; }
 .artifact-loading__shape--reasoning_pyramid::after { width: 74%; height: 34px; }
 
-.artifact-loading__steps {
-  display: grid;
-  gap: 7px;
-}
-
-.artifact-loading__step {
+.artifact-loading__status {
   display: flex;
   align-items: center;
   gap: 8px;
   color: var(--text-muted);
   font-size: 12px;
-  transition: color 0.2s ease, transform 0.2s ease;
 }
 
-.artifact-loading__step.is-active {
+.artifact-loading__status-text {
   color: var(--text-primary);
-}
-
-.artifact-loading__step.is-current {
-  transform: translateX(2px);
 }
 
 .artifact-loading__dot {
@@ -1613,9 +1603,10 @@ h1, h2, h3 {
   transition: background 0.2s ease, box-shadow 0.2s ease;
 }
 
-.artifact-loading__step.is-active .artifact-loading__dot {
+.artifact-loading__dot--live {
   background: var(--gold-core);
   box-shadow: 0 0 0 4px rgba(212,168,67,0.08);
+  animation: artifactLiveDot 1.2s ease-in-out infinite;
 }
 
 @keyframes artifactScan {
@@ -1636,4 +1627,9 @@ h1, h2, h3 {
 @keyframes artifactSwell {
   from { transform: scaleX(0.9) translateY(8px); opacity: 0.45; }
   to { transform: scaleX(1) translateY(0); opacity: 1; }
+}
+
+@keyframes artifactLiveDot {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.18); opacity: 1; }
 }

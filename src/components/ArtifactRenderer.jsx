@@ -205,6 +205,62 @@ function normalizeRows(row) {
   return [String(row ?? '')]
 }
 
+function stringifyRenderable(value) {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string' || typeof value === 'number') return String(value)
+  if (Array.isArray(value)) return value.map(stringifyRenderable).filter(Boolean).join(' · ')
+  if (typeof value === 'object') {
+    const preferred = [
+      value.label,
+      value.title,
+      value.name,
+      value.layer,
+      value.role,
+      value.value,
+      value.ownership,
+      value.example,
+      value.signal,
+      value.action,
+    ].find((item) => item !== undefined && item !== null && String(item).trim())
+
+    if (preferred !== undefined) return stringifyRenderable(preferred)
+
+    const firstPrimitive = Object.values(value).find((item) => typeof item === 'string' || typeof item === 'number')
+    if (firstPrimitive !== undefined) return String(firstPrimitive)
+  }
+  return ''
+}
+
+function normalizeVisualNode(item, index = 0) {
+  if (typeof item === 'string' || typeof item === 'number') {
+    return { label: String(item), detail: '', emphasis: undefined, position: undefined }
+  }
+
+  const label = stringifyRenderable(item?.label)
+    || stringifyRenderable(item?.title)
+    || stringifyRenderable(item?.name)
+    || stringifyRenderable(item?.layer)
+    || stringifyRenderable(item?.role)
+    || stringifyRenderable(item?.value)
+    || stringifyRenderable(item?.ownership)
+    || stringifyRenderable(item?.example)
+    || `Stage ${index + 1}`
+
+  const detail = stringifyRenderable(item?.detail)
+    || stringifyRenderable(item?.description)
+    || stringifyRenderable(item?.content)
+    || stringifyRenderable(item?.explanation)
+    || ''
+
+  return {
+    ...item,
+    label,
+    detail,
+    emphasis: item?.emphasis,
+    position: typeof item?.position === 'number' ? item.position : undefined,
+  }
+}
+
 function usePercentDrag(initialValue, onRelease) {
   const ref = useRef(null)
   const [value, setValue] = useState(clamp01(initialValue ?? 0.5))
@@ -929,7 +985,7 @@ function visualReasoningGridStyle() {
 }
 
 function ReasoningCurve({ data }) {
-  const stages = asArray(data.stages)
+  const stages = asArray(data.stages).map(normalizeVisualNode)
   const markers = stages.length ? stages : [
     { label: 'Start', position: 0.14, detail: '' },
     { label: 'Inflection', position: 0.48, detail: '' },
@@ -1039,7 +1095,7 @@ function ReasoningCycle({ data }) {
 }
 
 function ReasoningPyramid({ data }) {
-  const layers = asArray(data.layers)
+  const layers = asArray(data.layers).map(normalizeVisualNode)
   const reversed = [...layers].reverse()
 
   return (
@@ -1061,7 +1117,7 @@ function ReasoningPyramid({ data }) {
                     width,
                   }}
                 >
-                  <div style={{ color: TEXT, fontSize: 12, fontWeight: 800 }}>{layer.label || layer}</div>
+                  <div style={{ color: TEXT, fontSize: 12, fontWeight: 800 }}>{layer.label}</div>
                   {layer.detail && <div style={{ color: MUTED, fontSize: 11, lineHeight: 1.5 }}>{layer.detail}</div>}
                 </div>
               )
@@ -1074,7 +1130,7 @@ function ReasoningPyramid({ data }) {
 }
 
 function ReasoningStack({ data }) {
-  const layers = asArray(data.layers)
+  const layers = asArray(data.layers).map(normalizeVisualNode)
   return (
     <VisualReasoningShell title={data.title}>
       <div style={visualReasoningGridStyle()}>
@@ -1085,7 +1141,7 @@ function ReasoningStack({ data }) {
                 {index + 1}
               </div>
               <div style={{ display: 'grid', gap: 4 }}>
-                <div style={{ color: TEXT, fontSize: 12, fontWeight: 800 }}>{layer.label || layer}</div>
+                <div style={{ color: TEXT, fontSize: 12, fontWeight: 800 }}>{layer.label}</div>
                 {layer.detail && <div style={{ color: MUTED, fontSize: 11, lineHeight: 1.5 }}>{layer.detail}</div>}
               </div>
             </div>
@@ -1097,7 +1153,7 @@ function ReasoningStack({ data }) {
 }
 
 function ReasoningWave({ data }) {
-  const drivers = asArray(data.drivers)
+  const drivers = asArray(data.drivers).map(normalizeVisualNode)
   return (
     <VisualReasoningShell title={data.title} subtitle={data.crest_label}>
       <div style={visualReasoningGridStyle()}>
@@ -1152,7 +1208,7 @@ function BookRef({ data }) {
 }
 
 function renderFrameworkVisual(framework) {
-  const items = asArray(framework.items).map((item) => (typeof item === 'string' ? { label: item } : item))
+  const items = asArray(framework.items).map(normalizeVisualNode)
   const kind = framework.kind || 'stack'
 
   if (kind === 'cycle') {
@@ -1200,7 +1256,7 @@ function renderFrameworkVisual(framework) {
             const width = `${34 + ((index + 1) / reversed.length) * 66}%`
             return (
               <div key={index} style={{ ...glassSurfaceStyle(index === reversed.length - 1), display: 'grid', gap: 5, justifySelf: 'center', padding: '12px 14px', width }}>
-                <div style={{ color: TEXT, fontSize: 12, fontWeight: 800 }}>{layer.label || layer}</div>
+                <div style={{ color: TEXT, fontSize: 12, fontWeight: 800 }}>{layer.label}</div>
                 {layer.detail && <div style={{ color: MUTED, fontSize: 11, lineHeight: 1.5 }}>{layer.detail}</div>}
               </div>
             )
@@ -1315,7 +1371,7 @@ function renderFrameworkVisual(framework) {
               {index + 1}
             </div>
             <div style={{ display: 'grid', gap: 4 }}>
-              <div style={{ color: TEXT, fontSize: 12, fontWeight: 800 }}>{layer.label || layer}</div>
+              <div style={{ color: TEXT, fontSize: 12, fontWeight: 800 }}>{layer.label}</div>
               {layer.detail && <div style={{ color: MUTED, fontSize: 11, lineHeight: 1.5 }}>{layer.detail}</div>}
             </div>
           </div>

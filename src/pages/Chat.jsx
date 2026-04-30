@@ -883,16 +883,9 @@ function ArtifactLoadingPreview({ artifactType }) {
         <div className="artifact-loading__scanline" />
         <div className={`artifact-loading__shape artifact-loading__shape--${artifactType}`} />
       </div>
-      <div className="artifact-loading__steps">
-        {steps.map((step, index) => (
-          <div
-            key={step}
-            className={`artifact-loading__step${index <= stepIndex ? ' is-active' : ''}${index === stepIndex ? ' is-current' : ''}`}
-          >
-            <span className="artifact-loading__dot" />
-            <span>{step}</span>
-          </div>
-        ))}
+      <div className="artifact-loading__status">
+        <span className="artifact-loading__dot artifact-loading__dot--live" />
+        <span className="artifact-loading__status-text">{steps[Math.min(stepIndex, steps.length - 1)]}</span>
       </div>
     </div>
   )
