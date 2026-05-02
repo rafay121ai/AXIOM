@@ -811,11 +811,7 @@ export default function Chat() {
 function MessageGroup({ msg, onAnswer, onSubmit, onUserPlot }) {
   const showArtifact   = msg.role === 'assistant' && msg.artifact && !msg.streaming
   const showExperiment = msg.role === 'assistant' && msg.experiment && !msg.streaming
-  const showArtifactPending =
-    msg.role === 'assistant' &&
-    !msg.artifact &&
-    !!msg.artifactPendingType &&
-    msg.artifactPendingType !== 'signal_map'
+  const showArtifactPending = false
 
   // If Axiom placed <artifact_here/> inside the text, inject the artifact inline
   // at that position instead of appending it below the bubble.

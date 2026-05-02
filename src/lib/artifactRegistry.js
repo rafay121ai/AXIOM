@@ -257,7 +257,7 @@ export const ARTIFACT_PROFILES = {
     { "label": "string", "detail": "string", "emphasis": "optional" }
   ],
   "animate": true,
-  "interactive": true
+  "interactive": false
 }`,
     rules: [
       'Use 3-6 layers.',
@@ -282,7 +282,7 @@ export const ARTIFACT_PROFILES = {
     { "label": "string", "position": 0.2, "detail": "string" }
   ],
   "animate": true,
-  "interactive": true
+  "interactive": false
 }`,
     rules: [
       'Use 3-5 stages.',
@@ -306,7 +306,7 @@ export const ARTIFACT_PROFILES = {
     { "label": "string", "position": 0.2, "detail": "string" }
   ],
   "animate": true,
-  "interactive": true
+  "interactive": false
 }`,
     rules: [
       'Use 3-5 drivers.',
@@ -327,7 +327,7 @@ export const ARTIFACT_PROFILES = {
     { "label": "string", "detail": "string" }
   ],
   "animate": true,
-  "interactive": true
+  "interactive": false
 }`,
     rules: [
       'Use 3-5 layers.',

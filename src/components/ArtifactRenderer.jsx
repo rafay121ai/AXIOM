@@ -261,6 +261,15 @@ function normalizeVisualNode(item, index = 0) {
   }
 }
 
+function humanizeVisualLabel(label = '') {
+  const raw = String(label || '').trim()
+  if (!raw) return ''
+  return raw
+    .replace(/_/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+}
+
 function clampText(lines) {
   return {
     display: '-webkit-box',
@@ -1149,7 +1158,19 @@ function ReasoningStack({ data }) {
   return (
     <VisualReasoningShell title={data.title}>
       <div style={visualReasoningGridStyle()}>
-        <div style={{ display: 'grid', gap: 8, margin: '0 auto', maxWidth: 440 }}>
+        <div style={{ display: 'grid', gap: 8, margin: '0 auto', maxWidth: 440, position: 'relative' }}>
+          <div
+            aria-hidden="true"
+            style={{
+              background: 'linear-gradient(180deg, rgba(212,168,67,0.08), rgba(212,168,67,0.22), rgba(212,168,67,0.08))',
+              borderRadius: 999,
+              bottom: 18,
+              left: 28,
+              position: 'absolute',
+              top: 18,
+              width: 2,
+            }}
+          />
           {layers.map((layer, index) => {
             const width = `${100 - index * 7}%`
             return (
@@ -1157,21 +1178,40 @@ function ReasoningStack({ data }) {
                 key={index}
                 className="axiom-rise-layer"
                 style={{
-                  ...glassSurfaceStyle(layer.emphasis === 'high'),
+                  ...glassSurfaceStyle(false),
+                  background: layer.emphasis === 'high'
+                    ? 'linear-gradient(90deg, rgba(212,168,67,0.18), rgba(212,168,67,0.12) 32%, rgba(255,255,255,0.03) 100%)'
+                    : SURFACE_GRADIENT,
                   display: 'grid',
                   gap: 6,
                   justifySelf: 'center',
                   padding: '12px 14px',
                   position: 'relative',
+                  cursor: 'default',
+                  userSelect: 'none',
                   width,
                   ...delayStyle(140 + index * 90),
                 }}
               >
+                <div
+                  aria-hidden="true"
+                  style={{
+                    background: layer.emphasis === 'high' ? GOLD_GRADIENT : 'rgba(255,255,255,0.08)',
+                    borderRadius: 999,
+                    bottom: 10,
+                    left: 10,
+                    position: 'absolute',
+                    top: 10,
+                    width: 3,
+                  }}
+                />
                 <div style={{ alignItems: 'center', display: 'flex', gap: 10 }}>
                   <div className="axiom-node-pop" style={{ alignItems: 'center', background: layer.emphasis === 'high' ? GOLD_GRADIENT : 'rgba(255,255,255,0.06)', borderRadius: 999, color: layer.emphasis === 'high' ? 'var(--bg)' : TEXT, display: 'flex', fontSize: 11, fontWeight: 800, height: 24, justifyContent: 'center', width: 24, ...delayStyle(200 + index * 90) }}>
                     {index + 1}
                   </div>
-                  <div className="axiom-ink-text" style={{ color: TEXT, fontSize: 12, fontWeight: 800, ...delayStyle(240 + index * 90) }}>{layer.label}</div>
+                  <div className="axiom-ink-text" style={{ color: TEXT, fontSize: 12, fontWeight: 800, ...delayStyle(240 + index * 90) }}>
+                    {humanizeVisualLabel(layer.label)}
+                  </div>
                 </div>
                 {layer.detail && <div className="axiom-ink-text" style={{ color: MUTED, fontSize: 11, lineHeight: 1.5, ...delayStyle(280 + index * 90) }}>{layer.detail}</div>}
               </div>
