@@ -43,7 +43,7 @@ const PILLAR_DISPLAY_NAMES = {
 }
 
 const NODE_TYPE_BASE_RADIUS = {
-  pillar:     0.015,
+  pillar:     0.018,
   goal:       0.016,
   experiment: 0.015,
   pattern:    0.013,
