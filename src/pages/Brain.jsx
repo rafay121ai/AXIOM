@@ -534,8 +534,8 @@ function igniteNode(mesh) {
   const lit = isNodeLit(node)
   const radius = getNodeRadius(node)
   const muted = isNodeMuted(node, mesh.userData.connected)
-  const targetOpacity = pillar ? PILLAR_NODE_OPACITY : lit ? 0.92 : 0.42
   const pillar = node.type === 'pillar'
+  const targetOpacity = pillar ? PILLAR_NODE_OPACITY : lit ? 0.92 : 0.42
   const targetSpriteScale = radius * (muted ? 1.35 : pillar ? PILLAR_SPRITE_SCALE : lit ? 2.35 : 1.65)
   const targetSpriteOpacity = muted ? 0.035 : pillar ? PILLAR_SPRITE_OPACITY : lit ? 0.22 : 0.08
   const targetHaloScale = muted ? 0 : radius * (pillar ? PILLAR_HALO_SCALE : lit ? 3.0 : 2.4)
