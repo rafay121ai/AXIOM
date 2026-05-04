@@ -28,7 +28,7 @@ const PILLAR_COLORS = {
   how_companies_win: 0x2E86C1,
   whats_coming:      0x27AE60,
   think_sharper:     0xEDEDEC,
-  move_people:       0x9B2335,
+  move_people:       0xC93A52,
 }
 
 const PILLAR_DISPLAY_NAMES = {
