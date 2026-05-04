@@ -1,5 +1,82 @@
 import { supabase } from './supabase'
 
+const DISPLAY_PILLARS = [
+  'human_mind',
+  'money_game',
+  'how_companies_win',
+  'whats_coming',
+  'think_sharper',
+  'move_people',
+]
+
+const LEGACY_TO_DISPLAY_PILLAR = {
+  psychology: 'human_mind',
+  economics: 'money_game',
+}
+
+const DISPLAY_ROOT_NODES = [
+  {
+    id: 'virtual-pillar-human_mind',
+    label: 'The Human Mind',
+    type: 'pillar',
+    pillar: 'human_mind',
+    summary: 'Identity, fear, behavior, avoidance, resilience, and the inner mechanics of action.',
+    status: 'seed',
+    importance: 5,
+    confidence: 0.9,
+  },
+  {
+    id: 'virtual-pillar-money_game',
+    label: 'The Money Game',
+    type: 'pillar',
+    pillar: 'money_game',
+    summary: 'Incentives, value capture, capital, buyers, pricing, and economic reality.',
+    status: 'seed',
+    importance: 5,
+    confidence: 0.9,
+  },
+  {
+    id: 'virtual-pillar-how_companies_win',
+    label: 'How Companies Win',
+    type: 'pillar',
+    pillar: 'how_companies_win',
+    summary: 'Strategy, distribution, moats, product leverage, management, and execution.',
+    status: 'seed',
+    importance: 5,
+    confidence: 0.9,
+  },
+  {
+    id: 'virtual-pillar-whats_coming',
+    label: "What's Coming",
+    type: 'pillar',
+    pillar: 'whats_coming',
+    summary: 'Technology shifts, macro change, geopolitics, energy, and future-facing pressure.',
+    status: 'seed',
+    importance: 5,
+    confidence: 0.9,
+  },
+  {
+    id: 'virtual-pillar-think_sharper',
+    label: 'Think Sharper',
+    type: 'pillar',
+    pillar: 'think_sharper',
+    summary: 'Reasoning quality, mental models, uncertainty, truth-seeking, and decision clarity.',
+    status: 'seed',
+    importance: 5,
+    confidence: 0.9,
+  },
+  {
+    id: 'virtual-pillar-move_people',
+    label: 'Move People',
+    type: 'pillar',
+    pillar: 'move_people',
+    summary: 'Persuasion, writing, narrative, negotiation, speaking, and influence.',
+    status: 'seed',
+    importance: 5,
+    confidence: 0.9,
+  },
+]
+
 const ROOT_NODES = [
   {
     label: 'Psychology',
@@ -184,14 +261,40 @@ const MEMORY_TYPE_TO_NODE_TYPE = {
   fact: 'concept',
 }
 
-function inferPillar(text = '', fallback = null) {
+const DISPLAY_PILLAR_KEYWORDS = {
+  human_mind: /\b(fear|avoid|identity|stress|confidence|rejection|procrastinat|anxiety|status|self|emotion|habit|motivation|discipline|shame|trauma|resilience)\b/g,
+  money_game: /\b(money|price|pricing|buyer|market|revenue|cost|capital|profit|wealth|invest|valuation|incentive|demand|customer|cashflow|offer|sales|outreach)\b/g,
+  how_companies_win: /\b(company|startup|distribution|moat|strategy|product|growth|retention|network|platform|management|culture|hiring|execution|competition|founder)\b/g,
+  whats_coming: /\b(ai|automation|geopolitic|macro|future|energy|climate|demographic|population|technology|trend|china|war|currency|inflation|reshoring)\b/g,
+  think_sharper: /\b(reason|reasoning|belief|model|models|bayes|forecast|prediction|disagree|evidence|truth|clarity|judgment|decision|think)\b/g,
+  move_people: /\b(persuade|persuasion|write|writing|speak|speaking|narrative|story|influence|negotiat|audience|rhetoric|presentation|pitch)\b/g,
+}
+
+function countMatches(regex, text) {
+  const matches = text.match(regex)
+  return matches ? matches.length : 0
+}
+
+function inferDisplayPillar(text = '', fallback = null) {
   const lower = text.toLowerCase()
-  if (/\b(money|price|pricing|buyer|market|offer|sales|revenue|cost|incentive|demand|outreach|customer)\b/.test(lower)) {
-    return 'economics'
+  let best = fallback
+  let bestScore = 0
+
+  for (const [pillar, regex] of Object.entries(DISPLAY_PILLAR_KEYWORDS)) {
+    const score = countMatches(regex, lower)
+    if (score > bestScore) {
+      best = pillar
+      bestScore = score
+    }
   }
-  if (/\b(fear|avoid|identity|stress|confidence|rejection|procrastinat|anxiety|status|self|mind|emotion)\b/.test(lower)) {
-    return 'psychology'
-  }
+
+  return bestScore > 0 ? best : fallback
+}
+
+function inferStoragePillar(text = '', fallback = null) {
+  const display = inferDisplayPillar(text, null)
+  if (['money_game', 'how_companies_win', 'whats_coming'].includes(display)) return 'economics'
+  if (['human_mind', 'think_sharper', 'move_people'].includes(display)) return 'psychology'
   return fallback
 }
 
@@ -210,7 +313,7 @@ function normalizeNode(rawNode, index = 0) {
   const label = typeof rawNode?.label === 'string' ? rawNode.label.trim() : ''
   if (!label) return null
 
-  const pillar = rawNode.pillar || inferPillar(`${label} ${rawNode.summary || ''}`, 'psychology')
+  const pillar = rawNode.pillar ?? inferStoragePillar(`${label} ${rawNode.summary || ''}`, null)
   const pos = rawNode.x == null ? nodePosition(index, pillar) : rawNode
 
   return {
@@ -323,15 +426,86 @@ async function upsertEdge(sessionId, source, target, relationship = 'related_to'
   if (error) console.warn('[Wiki] Edge insert skipped:', error.message)
 }
 
+function buildDisplayRoots(sessionId = null) {
+  return DISPLAY_ROOT_NODES.map((node) => ({
+    ...node,
+    session_id: sessionId,
+  }))
+}
+
+function remapLegacyPillar(pillar) {
+  return LEGACY_TO_DISPLAY_PILLAR[pillar] || null
+}
+
+function deriveDisplayPillar(node) {
+  if (DISPLAY_PILLARS.includes(node?.pillar)) {
+    return { pillar: node.pillar, pillar_source: 'user_confirmed' }
+  }
+
+  const inferred = inferDisplayPillar(`${node?.label || ''} ${node?.summary || ''}`, null)
+  if (inferred) {
+    return { pillar: inferred, pillar_source: 'inferred' }
+  }
+
+  const remapped = remapLegacyPillar(node?.pillar)
+  if (remapped) {
+    return { pillar: remapped, pillar_source: 'legacy_remapped' }
+  }
+
+  return { pillar: null, pillar_source: 'unclassified' }
+}
+
+function buildDisplayGraph(graph, sessionId = null) {
+  const rawNodes = Array.isArray(graph?.nodes) ? graph.nodes : []
+  const rawEdges = Array.isArray(graph?.edges) ? graph.edges : []
+  const displayRoots = buildDisplayRoots(sessionId)
+
+  const transformedNodes = rawNodes
+    .filter((node) => node.type !== 'pillar')
+    .map((node) => {
+      const { pillar, pillar_source } = deriveDisplayPillar(node)
+      return {
+        ...node,
+        pillar,
+        pillar_source,
+      }
+    })
+
+  const rootByPillar = new Map(displayRoots.map((node) => [node.pillar, node]))
+  const virtualBelongsToEdges = transformedNodes
+    .filter((node) => node.pillar && rootByPillar.has(node.pillar))
+    .map((node) => ({
+      id: `virtual-edge-${node.id}-${node.pillar}`,
+      session_id: sessionId,
+      source_node_id: node.id,
+      target_node_id: rootByPillar.get(node.pillar).id,
+      relationship: 'belongs_to',
+      weight: 0.5,
+      confidence: node.confidence ?? 0.7,
+    }))
+
+  const preservedEdges = rawEdges.filter((edge) => edge.relationship !== 'belongs_to')
+
+  return {
+    nodes: [...displayRoots, ...transformedNodes],
+    edges: [...preservedEdges, ...virtualBelongsToEdges],
+  }
+}
+
 function seedNodesFromSession(session) {
   const nodes = [...ROOT_NODES, ...CONCEPT_NODES]
   const answers = session?.onboarding_answers || []
   const profile = session?.axiom_profile || ''
 
-  const profilePillar = inferPillar(profile, 'psychology')
+  const profilePillar = inferStoragePillar(profile, null)
   if (profile) {
     nodes.push({
-      label: profilePillar === 'economics' ? 'Market Behavior Pattern' : 'Identity Protection Pattern',
+      label:
+        profilePillar === 'economics'
+          ? 'Market Behavior Pattern'
+          : profilePillar === 'psychology'
+            ? 'Identity Protection Pattern'
+            : 'Emerging Pattern',
       type: 'pattern',
       pillar: profilePillar,
       summary: profile,
@@ -343,7 +517,7 @@ function seedNodesFromSession(session) {
 
   for (const qa of answers.slice(0, 4)) {
     const text = `${qa.question || ''} ${qa.answer || ''}`
-    const pillar = inferPillar(text, qa.pillar === 'money_game' ? 'economics' : 'psychology')
+    const pillar = inferStoragePillar(text, qa.pillar === 'money_game' ? 'economics' : null)
     nodes.push({
       label: qa.answer || qa.question,
       type: 'concept',
@@ -359,7 +533,7 @@ function seedNodesFromSession(session) {
 }
 
 function nodeFromMemory(memory, index) {
-  const pillar = inferPillar(memory.content, null)
+  const pillar = inferStoragePillar(memory.content, null)
   return normalizeNode({
     label: memory.content.length > 54 ? `${memory.content.slice(0, 51)}...` : memory.content,
     type: MEMORY_TYPE_TO_NODE_TYPE[memory.type] || 'concept',
@@ -375,7 +549,7 @@ function nodeFromExperiment(experiment, index) {
   return normalizeNode({
     label: experiment.description.length > 54 ? `${experiment.description.slice(0, 51)}...` : experiment.description,
     type: 'experiment',
-    pillar: inferPillar(experiment.description, 'psychology'),
+    pillar: inferStoragePillar(experiment.description, null),
     summary: `${experiment.description} (${experiment.window_hours}h window)`,
     status: experiment.status === 'ghosted' ? 'ghosted' : 'active',
     importance: 4,
@@ -430,7 +604,7 @@ export async function syncPersonalWiki(session) {
 }
 
 export async function markWikiNodeAccessed(nodeId) {
-  if (!nodeId || String(nodeId).startsWith('fallback-')) return
+  if (!nodeId || String(nodeId).startsWith('fallback-') || String(nodeId).startsWith('virtual-pillar-')) return
 
   const { error } = await supabase
     .from('personal_wiki_nodes')
@@ -457,10 +631,10 @@ export async function getPersonalWikiGraph(sessionId) {
       return { nodes: [], edges: [] }
     }
 
-    return {
+    return buildDisplayGraph({
       nodes: data?.nodes || [],
       edges: data?.edges || [],
-    }
+    }, sessionId)
   } catch (err) {
     console.warn('[Wiki] Graph fetch failed:', err?.message || err)
     return { nodes: [], edges: [] }
@@ -468,27 +642,10 @@ export async function getPersonalWikiGraph(sessionId) {
 }
 
 export function fallbackGraph(session) {
-  const nodes = seedNodesFromSession(session).map((node, index) => ({
+  const rawNodes = seedNodesFromSession(session).map((node, index) => ({
     id: `fallback-${index}`,
     session_id: session?.id,
     ...normalizeNode(node, index),
   }))
-
-  const edges = nodes
-    .filter((node) => node.type !== 'pillar')
-    .map((node, index) => {
-      const target = nodes.find((n) => n.type === 'pillar' && n.pillar === node.pillar)
-      return target
-        ? {
-            id: `fallback-edge-${index}`,
-            source_node_id: node.id,
-            target_node_id: target.id,
-            relationship: 'belongs_to',
-            weight: 0.4,
-          }
-        : null
-    })
-    .filter(Boolean)
-
-  return { nodes, edges }
+  return buildDisplayGraph({ nodes: rawNodes, edges: [] }, session?.id)
 }

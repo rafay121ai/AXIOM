@@ -53,6 +53,18 @@ const NODE_TYPE_BASE_RADIUS = {
 const MAX_VISIBLE_NODES = 80
 const MAX_PILLAR_EDGES = 24
 
+const PILLAR_POSITIONS = {
+  human_mind: { x: -0.50, y: 0.22, z: 0.08 },
+  think_sharper: { x: -0.12, y: 0.52, z: 0.08 },
+  move_people: { x: -0.56, y: -0.34, z: 0.08 },
+  money_game: { x: 0.50, y: 0.22, z: 0.08 },
+  how_companies_win: { x: 0.12, y: 0.52, z: 0.08 },
+  whats_coming: { x: 0.56, y: -0.34, z: 0.08 },
+  psychology: { x: -0.50, y: 0.22, z: 0.08 },
+  economics: { x: 0.50, y: 0.22, z: 0.08 },
+  unknown: { x: 0, y: -0.48, z: 0.02 },
+}
+
 // ─── Preserved helpers ───────────────────────────────────────────────────────
 
 function isTouchDevice() {
@@ -102,14 +114,11 @@ function hashString(value = '') {
 
 function brainPoint(node, index, total) {
   if (node.type === 'pillar') {
-    return {
-      x: ['psychology', 'human_mind'].includes(node.pillar) ? -0.42 : 0.42,
-      y: -0.02,
-      z: 0.06,
-    }
+    return PILLAR_POSITIONS[node.pillar] || PILLAR_POSITIONS.unknown
   }
   const hash = hashString(`${node.label}-${node.type}-${index}`)
-  const sideBias = ['economics', 'money_game'].includes(node.pillar) ? 0.22 : -0.22
+  const anchor = PILLAR_POSITIONS[node.pillar] || PILLAR_POSITIONS.unknown
+  const sideBias = anchor.x * 0.45
   const t = total <= 1 ? 0 : index / Math.max(1, total - 1)
   const angle = t * Math.PI * 9.2 + (hash % 100) / 100
   const layer = ((hash % 7) - 3) / 3
@@ -118,9 +127,9 @@ function brainPoint(node, index, total) {
   const lobe = Math.sin(angle) * (0.48 + (hash % 4) * 0.055)
   const notch = Math.max(0, 0.22 - Math.abs(vertical + 0.1)) * 0.55
   return {
-    x: sideBias + lobe - notch * Math.sign(lobe || sideBias || 1),
-    y: vertical,
-    z: frontBack + layer * 0.06,
+    x: anchor.x * 0.42 + sideBias + lobe * 0.68 - notch * Math.sign(lobe || sideBias || 1),
+    y: anchor.y * 0.35 + vertical * 0.82,
+    z: anchor.z + frontBack + layer * 0.06,
   }
 }
 
@@ -210,7 +219,7 @@ function visibleGraph(graph) {
   })
 
   // Drop non-pillar nodes with no edges — they carry no relational context
-  const selectedNodes = candidateNodes.filter(n => connectedIds.has(n.id))
+  const selectedNodes = candidateNodes.filter(n => connectedIds.has(n.id) || !n.pillar)
   const nodes = [...pillarNodes, ...selectedNodes]
   const nodeById = new Map(nodes.map(node => [node.id, node]))
   const visibleIds = new Set(nodes.map(node => node.id))

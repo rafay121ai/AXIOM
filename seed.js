@@ -16,7 +16,7 @@
 import 'dotenv/config'
 import fs from 'fs'
 import path from 'path'
-import { fileURLToPath } from 'url'
+import { fileURLToPath, pathToFileURL } from 'url'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import axios from 'axios'
@@ -42,6 +42,7 @@ const SIGNAL_TYPES = new Set([
   'infrastructure_bottleneck',
   'market_structure',
 ])
+const JINA_READER_BASE_URL = process.env.JINA_READER_BASE_URL || 'https://r.jina.ai/http://'
 
 // ─── Clients ─────────────────────────────────────────────────────────────────
 const supabase = createClient(
@@ -274,6 +275,30 @@ const SOURCES = [
     title: 'Stripe Payment API Design', author: 'Stripe',
     url: 'https://stripe.com/blog/payment-api-design',
   },
+  {
+    pillar: 'money_game', content_type: 'academic_paper',
+    title: 'Efficient Capital Markets: A Review of Theory and Empirical Work',
+    author: 'Eugene Fama',
+    url: 'https://datagolf.com/static/blogs/fl_bias/fama_1970.pdf',
+  },
+  {
+    pillar: 'money_game', content_type: 'academic_paper',
+    title: 'The Fall of the Labor Share and the Rise of Superstar Firms',
+    author: 'Autor, Dorn, Katz, Patterson & Van Reenen',
+    url: 'https://www.nber.org/system/files/working_papers/w23396/w23396.pdf',
+  },
+  {
+    pillar: 'money_game', content_type: 'academic_paper',
+    title: 'Corporate Culture: Evidence from the Field',
+    author: 'Graham, Harvey, Popadak & Rajgopal',
+    url: 'https://www.nber.org/system/files/working_papers/w23255/w23255.pdf',
+  },
+  {
+    pillar: 'money_game', content_type: 'academic_paper',
+    title: 'Measuring Corporate Culture Using Machine Learning',
+    author: 'Li, Mai, Shen & Yan',
+    url: 'https://www.fengmai.net/download/manuscripts/LiMaiShenYan2021_Measuring%20Corporate%20Culture%20Using%20Machine%20Learning-RFS.pdf',
+  },
 
   // ══════════════════════════════════════════════════════════════════════════
   // HUMAN MIND — Books
@@ -495,27 +520,27 @@ const SOURCES = [
   {
     pillar: 'money_game', content_type: 'book',
     title: 'Security Analysis', author: 'Benjamin Graham',
-    needs_pdf: true, url: null,
+    filePath: 'money_game/books/Security Analysis.pdf',
   },
   {
     pillar: 'money_game', content_type: 'book',
     title: 'Common Stocks and Uncommon Profits', author: 'Philip Fisher',
-    needs_pdf: true, url: null,
+    filePath: 'money_game/books/Common Stocks and Uncommon Profits.pdf',
   },
   {
     pillar: 'money_game', content_type: 'book',
     title: "Where Are the Customers' Yachts", author: 'Fred Schwed',
-    needs_pdf: true, url: null,
+    filePath: "money_game/books/Where Are the Customers' Yachts.pdf",
   },
   {
     pillar: 'money_game', content_type: 'book',
     title: 'Money Masters of Our Time', author: 'John Train',
-    needs_pdf: true, url: null,
+    filePath: 'money_game/books/Money Masters of Our Time.pdf',
   },
   {
     pillar: 'money_game', content_type: 'book',
     title: 'Business Adventures', author: 'John Brooks',
-    needs_pdf: true, url: null,
+    filePath: 'money_game/books/Business Adventures.pdf',
   },
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -524,12 +549,12 @@ const SOURCES = [
   {
     pillar: 'human_mind', content_type: 'book',
     title: 'The Laws Of Human Nature', author: 'Robert Greene',
-    needs_pdf: true, url: null,
+    filePath: 'move_people/books/The Laws Of Human Nature.pdf',
   },
   {
     pillar: 'human_mind', content_type: 'book',
     title: 'The Art Of Seduction', author: 'Robert Greene',
-    needs_pdf: true, url: null,
+    filePath: 'move_people/books/The Art Of Seduction.pdf',
   },
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -538,84 +563,84 @@ const SOURCES = [
   {
     pillar: 'how_companies_win', content_type: 'book',
     title: 'High Output Management', author: 'Andrew Grove',
-    needs_pdf: true, url: null,
+    filePath: 'how_companies_win/books/High Output Management.pdf',
   },
   {
     pillar: 'how_companies_win', content_type: 'book',
     title: 'Crossing the Chasm', author: 'Geoffrey Moore',
-    needs_pdf: true, url: null,
+    filePath: 'how_companies_win/books/Crossing the Chasm.pdf',
   },
   {
     pillar: 'how_companies_win', content_type: 'book',
     title: 'The Lean Startup', author: 'Eric Ries',
-    needs_pdf: true, url: null,
+    filePath: 'how_companies_win/books/The Lean Startup.pdf',
   },
   {
     pillar: 'how_companies_win', content_type: 'book',
     title: 'High Growth Handbook', author: 'Elad Gil',
-    needs_pdf: true, url: null,
+    filePath: 'how_companies_win/books/High Growth Handbook.pdf',
   },
   {
     pillar: 'how_companies_win', content_type: 'book',
     title: 'Good to Great', author: 'Jim Collins',
-    needs_pdf: true, url: null,
+    filePath: 'how_companies_win/books/Good to Great.pdf',
   },
   {
     pillar: 'how_companies_win', content_type: 'book',
     title: "The Innovator's Dilemma", author: 'Clayton Christensen',
-    needs_pdf: true, url: null,
+    filePath: 'how_companies_win/books/The Innovators Dillema.pdf',
   },
   {
     pillar: 'how_companies_win', content_type: 'book',
     title: '7 Powers: The Foundations of Business Strategy', author: 'Hamilton Helmer',
-    needs_pdf: true, url: null,
+    filePath: 'how_companies_win/books/7 Powers - The Foundations of Business Strategy.pdf',
   },
   {
     pillar: 'how_companies_win', content_type: 'book',
     title: 'No Rules Rules', author: 'Reed Hastings and Erin Meyer',
-    needs_pdf: true, url: null,
+    filePath: 'how_companies_win/books/No Rules Rules.pdf',
   },
   {
     pillar: 'how_companies_win', content_type: 'book',
     title: 'Scaling Up', author: 'Verne Harnish',
-    needs_pdf: true, url: null,
+    filePath: 'how_companies_win/books/Scaling Up.pdf',
   },
   {
     pillar: 'how_companies_win', content_type: 'book',
     title: 'The E-Myth Revisited', author: 'Michael Gerber',
-    needs_pdf: true, url: null,
+    filePath: 'how_companies_win/books/The E-Myth Revisited.pdf',
   },
   {
     pillar: 'how_companies_win', content_type: 'book',
     title: 'The Hard Thing About Hard Things', author: 'Ben Horowitz',
-    needs_pdf: true, url: null,
+    filePath: 'how_companies_win/books/The Hard Thing About Hard Things.pdf',
   },
   {
     pillar: 'how_companies_win', content_type: 'book',
     title: 'Play Bigger', author: 'Al Ramadan, Dave Peterson, Christopher Lochhead, Kevin Maney',
-    needs_pdf: true, url: null,
+    filePath: 'how_companies_win/books/Play Bigger.pdf',
   },
   {
     pillar: 'how_companies_win', content_type: 'book',
     title: 'The Cold Start Problem', author: 'Andrew Chen',
-    needs_pdf: true, url: null,
+    filePath: 'how_companies_win/books/The Cold Start Problem.pdf',
   },
   {
     pillar: 'how_companies_win', content_type: 'book',
     title: 'Blitzscaling', author: 'Reid Hoffman',
-    needs_pdf: true, url: null,
+    filePath: 'how_companies_win/books/Blitzscaling.pdf',
   },
 
   // HOW COMPANIES WIN — Biographies
   {
     pillar: 'how_companies_win', content_type: 'biography',
     title: 'Steve Jobs', author: 'Walter Isaacson',
-    needs_pdf: true, url: null,
+    filePath: 'how_companies_win/biographies/Steve Jobs.pdf',
   },
   {
     pillar: 'how_companies_win', content_type: 'biography',
     title: 'Elon Musk', author: 'Walter Isaacson',
-    needs_pdf: true, url: null,
+    filePath: 'how_companies_win/biographies/Elon Musk.pdf',
   },
 
   // HOW COMPANIES WIN — Articles
@@ -640,32 +665,97 @@ const SOURCES = [
   {
     pillar: 'how_companies_win', content_type: 'podcast',
     title: 'Acquired — Apple Episode', author: 'Ben Gilbert & David Rosenthal',
-    youtubeUrl: 'https://www.youtube.com/watch?v=jQ_lFMqGFgo',
+    youtubeUrl: 'https://www.youtube.com/watch?v=zGEOQ6I2Sv4',
   },
   {
     pillar: 'how_companies_win', content_type: 'podcast',
     title: 'Acquired — Nvidia Episode', author: 'Ben Gilbert & David Rosenthal',
-    youtubeUrl: 'https://www.youtube.com/watch?v=oRBDQaqnYHM',
+    youtubeUrl: 'https://www.youtube.com/watch?v=nFB-AILkamw',
   },
   {
     pillar: 'how_companies_win', content_type: 'podcast',
-    title: 'Acquired — Standard Oil Episode', author: 'Ben Gilbert & David Rosenthal',
-    youtubeUrl: 'https://www.youtube.com/watch?v=1ioFp1sSrMM',
+    title: 'Acquired — Standard Oil(1) Episode', author: 'Ben Gilbert & David Rosenthal',
+    youtubeUrl: 'https://www.youtube.com/watch?v=h_jVQZgiP1A',
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'podcast',
+    title: 'Acquired — Standard Oil(2) Episode', author: 'Ben Gilbert & David Rosenthal',
+    youtubeUrl: 'https://www.youtube.com/watch?v=tPNBVGPWSfc',
   },
   {
     pillar: 'how_companies_win', content_type: 'podcast',
     title: 'Masters of Scale — Reid Hoffman on Distribution', author: 'Reid Hoffman',
-    youtubeUrl: 'https://www.youtube.com/watch?v=orSFt6y0wEE',
+    youtubeUrl: 'https://www.youtube.com/watch?v=ysz1xLMd37Y',
   },
   {
     pillar: 'how_companies_win', content_type: 'podcast',
     title: "Lenny's Podcast — Brian Balfour on Growth", author: 'Lenny Rachitsky',
-    youtubeUrl: 'https://www.youtube.com/watch?v=DLZP1LQwn8k',
+    youtubeUrl: 'https://www.youtube.com/watch?v=ZG3iNH4vvMA',
   },
   {
     pillar: 'how_companies_win', content_type: 'podcast',
     title: 'How I Built This — Airbnb Brian Chesky', author: 'Guy Raz',
     youtubeUrl: 'https://www.youtube.com/watch?v=W608u6sBFpo',
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'academic_paper',
+    title: 'Platform Competition in Two-Sided Markets',
+    author: 'Rochet & Tirole',
+    url: 'https://www.tse-fr.eu/sites/default/files/medias/doc/wp/2002/platform.pdf',
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'academic_paper',
+    title: 'The Fall of the Labor Share and the Rise of Superstar Firms',
+    author: 'Autor, Dorn, Katz, Patterson & Van Reenen',
+    url: 'https://www.nber.org/system/files/working_papers/w23396/w23396.pdf',
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'academic_paper',
+    title: 'Assessing the Strength of Network Effects in Social Network Platforms',
+    author: 'Harvard Business School',
+    url: 'https://www.hbs.edu/ris/Publication%20Files/21-086_a5189999-6335-4890-b050-a59a4b665198.pdf',
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'academic_paper',
+    title: 'Why Do Startups Fail? A Core Competency Deficit Model',
+    author: 'Szathmári et al.',
+    url: 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC10881814/',
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'academic_paper',
+    title: 'Measuring Corporate Culture Using Machine Learning',
+    author: 'Li, Mai, Shen & Yan',
+    url: 'https://www.fengmai.net/download/manuscripts/LiMaiShenYan2021_Measuring%20Corporate%20Culture%20Using%20Machine%20Learning-RFS.pdf',
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'academic_paper',
+    title: 'Generative AI at Work',
+    author: 'Brynjolfsson, Li & Raymond',
+    url: 'https://www.nber.org/system/files/working_papers/w31161/w31161.pdf',
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'academic_paper',
+    title: 'The Complexity of Corporate Culture as a Potential Source of Competitive Advantage',
+    author: 'Various',
+    url: 'https://arxiv.org/pdf/2305.14029',
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'academic_paper',
+    title: 'Private Equity and Industry Performance',
+    author: 'Bernstein & Lerner',
+    url: 'https://www.nber.org/system/files/working_papers/w26371/w26371.pdf',
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'academic_paper',
+    title: 'GPTs Are GPTs: An Early Look at the Labor Market Impact Potential of Large Language Models',
+    author: 'Eloundou, Manning, Mishkin & Rock',
+    url: 'https://arxiv.org/pdf/2303.10130',
+  },
+  {
+    pillar: 'how_companies_win', content_type: 'academic_paper',
+    title: 'Winners and Losers in the Platform Revolution',
+    author: 'Parker & Van Alstyne',
+    url: 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC12890110/',
   },
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -674,57 +764,97 @@ const SOURCES = [
   {
     pillar: 'whats_coming', content_type: 'book',
     title: 'Technological Revolutions and Financial Capital', author: 'Carlota Perez',
-    needs_pdf: true, url: null,
+    filePath: 'whats_coming/books/Technological Revolutions and Financial Capital.pdf',
   },
   {
     pillar: 'whats_coming', content_type: 'book',
     title: 'The Sovereign Individual', author: 'James Dale Davidson and William Rees-Mogg',
-    needs_pdf: true, url: null,
+    filePath: 'whats_coming/books/The Sovereign Individual.pdf',
   },
   {
     pillar: 'whats_coming', content_type: 'book',
     title: 'Hot Commodities', author: 'Jim Rogers',
-    needs_pdf: true, url: null,
+    filePath: 'whats_coming/books/Hot Commodities.pdf',
   },
   {
     pillar: 'whats_coming', content_type: 'book',
     title: 'The World for Sale', author: 'Javier Blas and Jack Farchy',
-    needs_pdf: true, url: null,
+    filePath: 'whats_coming/books/The World for Sale.pdf',
   },
   {
     pillar: 'whats_coming', content_type: 'book',
     title: 'The Fourth Turning', author: 'William Strauss and Neil Howe',
-    needs_pdf: true, url: null,
+    filePath: 'whats_coming/books/The Fourth Turning.pdf',
   },
   {
     pillar: 'whats_coming', content_type: 'book',
     title: 'The Second Machine Age', author: 'Erik Brynjolfsson and Andrew McAfee',
-    needs_pdf: true, url: null,
+    filePath: 'whats_coming/books/The Second Machine Age.pdf',
   },
   {
     pillar: 'whats_coming', content_type: 'book',
     title: 'Power and Progress', author: 'Daron Acemoglu and Simon Johnson',
-    needs_pdf: true, url: null,
+    filePath: 'whats_coming/books/Power and Progress.pdf',
   },
   {
     pillar: 'whats_coming', content_type: 'book',
     title: 'The New Map', author: 'Daniel Yergin',
-    needs_pdf: true, url: null,
+    filePath: 'whats_coming/books/The New Map.pdf',
   },
   {
     pillar: 'whats_coming', content_type: 'book',
     title: 'The Inevitable', author: 'Kevin Kelly',
-    needs_pdf: true, url: null,
+    filePath: 'whats_coming/books/The Inevitable.pdf',
   },
   {
     pillar: 'whats_coming', content_type: 'book',
     title: 'Superintelligence', author: 'Nick Bostrom',
-    needs_pdf: true, url: null,
+    filePath: 'whats_coming/books/Superintelligence.pdf',
   },
   {
     pillar: 'whats_coming', content_type: 'book',
     title: 'Life 3.0', author: 'Max Tegmark',
-    needs_pdf: true, url: null,
+    filePath: 'whats_coming/books/Life 3.0.pdf',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'book',
+    title: 'The End of the World Is Just the Beginning', author: 'Peter Zeihan',
+    filePath: 'whats_coming/books/The End of the World Is Just the Beginning.pdf',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'book',
+    title: 'Prisoners of Geography', author: 'Tim Marshall',
+    filePath: 'whats_coming/books/Prisoners of Geography.pdf',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'book',
+    title: 'Factfulness', author: 'Hans Rosling',
+    filePath: 'whats_coming/books/Factfulness.pdf',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'book',
+    title: 'The Code Breaker', author: 'Walter Isaacson',
+    filePath: 'whats_coming/books/The Code Breaker.pdf',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'book',
+    title: 'Lifespan', author: 'David Sinclair',
+    filePath: 'whats_coming/books/Lifespan.pdf',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'book',
+    title: 'The Dollar Trap', author: 'Eswar Prasad',
+    filePath: 'whats_coming/books/The Dollar Trap.pdf',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'book',
+    title: 'Currency Wars', author: 'James Rickards',
+    filePath: 'whats_coming/books/Currency Wars.pdf',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'book',
+    title: 'How the World Really Works', author: 'Vaclav Smil',
+    filePath: 'whats_coming/books/How the World Really Works.pdf',
   },
 
   // WHAT'S COMING — Articles
@@ -735,18 +865,116 @@ const SOURCES = [
   },
   {
     pillar: 'whats_coming', content_type: 'article',
-    title: 'Machines of Loving Grace', author: 'Dario Amodei',
-    url: 'https://dario.ai/machines-of-loving-grace',
+    title: 'The Changing World Order', author: 'Ray Dalio',
+    url: 'https://www.economicprinciples.org/DalioChangingWorldOrderCharts.pdf',
   },
   {
     pillar: 'whats_coming', content_type: 'article',
-    title: 'The Urgency of Interpretability', author: 'Dario Amodei',
-    url: 'https://dario.ai/the-urgency-of-interpretability',
+    title: 'Is War Between China and the US Inevitable?', author: 'Graham Allison',
+    url: 'https://www.belfercenter.org/research-analysis/managing-dangers-irans-remaining-nuclear-capabilities',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'article',
+    title: 'The Fraying of the US Global Currency Reserve System', author: 'Lyn Alden',
+    url: 'https://www.lynalden.com/fraying-petrodollar-system/',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'article',
+    title: 'A Century of Fiscal and Monetary Policy', author: 'Lyn Alden',
+    url: 'https://www.lynalden.com/fiscal-and-monetary-policy/',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'article',
+    title: 'Why Trade Deficits Matter', author: 'Lyn Alden',
+    url: 'https://www.lynalden.com/trade-deficit/',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'article',
+    title: 'How to Win a Currency War', author: 'Lyn Alden',
+    url: 'https://www.lynalden.com/currency-war/',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'article',
+    title: 'The Hidden Costs of Reshoring', author: 'Lyn Alden',
+    url: 'https://www.lynalden.com/reshoring/',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'article',
+    title: 'Energy: The Area Under the Curve', author: 'Lyn Alden',
+    url: 'https://www.lynalden.com/the-area-under-the-curve/',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'article',
+    title: 'World Population Prospects 2024 Summary', author: 'United Nations',
+    url: 'https://population.un.org/wpp/publications/',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'article',
+    title: 'Energy Transitions: How Long Do They Really Take?', author: 'Vaclav Smil',
+    url: 'https://vaclavsmil.com/wp-content/uploads/2014/01/smil-article-2014-energy-transitions-history-requirements-prospects.pdf',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'article',
+    title: 'Halfway Between Kyoto and 2050: Zero Carbon Is a Highly Unlikely Outcome', author: 'Vaclav Smil',
+    url: 'https://www.fraserinstitute.org/sites/default/files/halfway-between-kyoto-and-2050.pdf',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'article',
+    title: 'The Hyperloop: A 200-Year History of Hype and Failure', author: 'Vaclav Smil',
+    url: 'https://thereader.mitpress.mit.edu/the-hyperloop-a-200-year-history-of-hype-and-failure/',
   },
   {
     pillar: 'whats_coming', content_type: 'academic_paper',
     title: 'Technological Revolutions and Techno-Economic Paradigms', author: 'Carlota Perez',
     url: 'https://carlotaperez.org/wp-content/downloads/publications/organizational-change/TRs_TEP_shifts_and_SIF_ch.pdf',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'academic_paper',
+    title: 'Geoeconomic Fragmentation and the Future of Multilateralism',
+    author: 'Aiyar, Ilyina et al. (IMF)',
+    url: 'https://www.imf.org/-/media/files/publications/sdn/2023/english/sdnea2023001.pdf',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'academic_paper',
+    title: 'Institutions, Technology and Prosperity',
+    author: 'Daron Acemoglu',
+    url: 'https://www.nber.org/system/files/working_papers/w33442/w33442.pdf',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'academic_paper',
+    title: 'Changing Global Linkages: A New Cold War?',
+    author: 'IMF Working Paper 2024',
+    url: 'https://www.imf.org/-/media/files/publications/wp/2024/english/wpiea2024076-print-pdf.pdf',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'academic_paper',
+    title: 'The Rapid Adoption of Generative AI',
+    author: 'Bick, Blandin & Deming',
+    url: 'https://www.nber.org/system/files/working_papers/w32966/w32966.pdf',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'academic_paper',
+    title: 'GPTs Are GPTs: An Early Look at the Labor Market Impact Potential of Large Language Models',
+    author: 'Eloundou, Manning, Mishkin & Rock',
+    url: 'https://arxiv.org/pdf/2303.10130',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'academic_paper',
+    title: 'Measuring Geopolitical Risk',
+    author: 'Caldara & Iacoviello',
+    url: 'https://www.matteoiacoviello.com/gpr_files/GPR_PAPER.pdf',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'academic_paper',
+    title: 'Halfway Between Kyoto and 2050: Zero Carbon Is a Highly Unlikely Outcome',
+    author: 'Vaclav Smil',
+    url: 'https://www.fraserinstitute.org/sites/default/files/halfway-between-kyoto-and-2050.pdf',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'academic_paper',
+    title: 'Shifting Work Patterns with Generative AI',
+    author: 'Brynjolfsson et al.',
+    url: 'https://www.nber.org/system/files/working_papers/w33795/w33795.pdf',
   },
 
   // WHAT'S COMING — Podcasts
@@ -772,8 +1000,28 @@ const SOURCES = [
   },
   {
     pillar: 'whats_coming', content_type: 'podcast',
-    title: 'All-In Podcast — AI and the Economy', author: 'All-In Podcast',
-    youtubeUrl: 'https://www.youtube.com/watch?v=vX9k-QJKuKU',
+    title: 'Peter Zeihan — Collapse of Globalization', author: 'Peter Zeihan',
+    youtubeUrl: 'https://www.youtube.com/watch?v=wRT7P-VKM0k',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'podcast',
+    title: 'Peter Zeihan — Mapping the Collapse of Globalization', author: 'Technovation Podcast',
+    youtubeUrl: 'https://www.youtube.com/watch?v=gMJyhsZ7Ryw',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'podcast',
+    title: 'Niall Ferguson — History of Money, Power, War and Truth', author: 'Lex Fridman',
+    youtubeUrl: 'https://www.youtube.com/watch?v=xF6x1ftN-H4',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'podcast',
+    title: 'Lyn Alden — The Collapse Has Already Started', author: 'Lyn Alden',
+    youtubeUrl: 'https://www.youtube.com/watch?v=NUaNrRBvKHQ',
+  },
+  {
+    pillar: 'whats_coming', content_type: 'podcast',
+    title: 'Lyn Alden — Macro Investment Portfolio', author: 'MacroVoices',
+    youtubeUrl: 'https://www.youtube.com/watch?v=iYcz9I7Zwwc',
   },
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -782,52 +1030,52 @@ const SOURCES = [
   {
     pillar: 'think_sharper', content_type: 'book',
     title: 'The Great Mental Models Volume 1', author: 'Shane Parrish',
-    needs_pdf: true, url: null,
+    filePath: 'think_sharper/books/The Great Mental Models Volume 1.pdf',
   },
   {
     pillar: 'think_sharper', content_type: 'book',
     title: 'The Great Mental Models Volume 2', author: 'Shane Parrish',
-    needs_pdf: true, url: null,
+    filePath: 'think_sharper/books/The Great Mental Models Volume 2.pdf',
   },
   {
     pillar: 'think_sharper', content_type: 'book',
     title: 'Thinking in Bets', author: 'Annie Duke',
-    needs_pdf: true, url: null,
+    filePath: 'think_sharper/books/Thinking in Bets.pdf',
   },
   {
     pillar: 'think_sharper', content_type: 'book',
     title: 'Superforecasting', author: 'Philip Tetlock',
-    needs_pdf: true, url: null,
+    filePath: 'think_sharper/books/Superforecasting.pdf',
   },
   {
     pillar: 'think_sharper', content_type: 'book',
     title: 'The Signal and the Noise', author: 'Nate Silver',
-    needs_pdf: true, url: null,
+    filePath: 'think_sharper/books/The Signal and the Noise.pdf',
   },
   {
     pillar: 'think_sharper', content_type: 'book',
     title: 'Seeking Wisdom', author: 'Peter Bevelin',
-    needs_pdf: true, url: null,
+    filePath: 'think_sharper/books/Seeking Wisdom.pdf',
   },
   {
     pillar: 'think_sharper', content_type: 'book',
     title: 'Fooled by Randomness', author: 'Nassim Taleb',
-    needs_pdf: true, url: null,
+    filePath: 'think_sharper/books/Fooled by Randomness.pdf',
   },
   {
     pillar: 'think_sharper', content_type: 'book',
     title: 'The Black Swan', author: 'Nassim Taleb',
-    needs_pdf: true, url: null,
+    filePath: 'think_sharper/books/The Black Swan.pdf',
   },
   {
     pillar: 'think_sharper', content_type: 'book',
     title: 'Antifragile', author: 'Nassim Taleb',
-    needs_pdf: true, url: null,
+    filePath: 'think_sharper/books/Antifragile.pdf',
   },
   {
     pillar: 'think_sharper', content_type: 'book',
     title: 'Being Wrong', author: 'Kathryn Schulz',
-    needs_pdf: true, url: null,
+    filePath: 'think_sharper/books/Being Wrong.pdf',
   },
 
   // THINK SHARPER — Articles
@@ -851,6 +1099,56 @@ const SOURCES = [
     title: 'Mental Models: How to Train Your Brain', author: 'fs.blog',
     url: 'https://fs.blog/mental-models/',
   },
+  {
+    pillar: 'think_sharper', content_type: 'article',
+    title: 'How to Think for Yourself', author: 'Paul Graham',
+    url: 'https://paulgraham.com/think.html',
+  },
+  {
+    pillar: 'think_sharper', content_type: 'article',
+    title: 'Putting Ideas into Words', author: 'Paul Graham',
+    url: 'https://paulgraham.com/words.html',
+  },
+  {
+    pillar: 'think_sharper', content_type: 'article',
+    title: 'Keep Your Identity Small', author: 'Paul Graham',
+    url: 'https://paulgraham.com/identity.html',
+  },
+  {
+    pillar: 'think_sharper', content_type: 'article',
+    title: 'What You Cannot Say', author: 'Paul Graham',
+    url: 'https://paulgraham.com/say.html',
+  },
+  {
+    pillar: 'think_sharper', content_type: 'article',
+    title: 'The Top Idea in Your Mind', author: 'Paul Graham',
+    url: 'https://paulgraham.com/top.html',
+  },
+  {
+    pillar: 'think_sharper', content_type: 'article',
+    title: 'How to Disagree', author: 'Paul Graham',
+    url: 'https://paulgraham.com/disagree.html',
+  },
+  {
+    pillar: 'think_sharper', content_type: 'article',
+    title: 'Solitude and Leadership', author: 'William Deresiewicz',
+    url: 'https://theamericanscholar.org/solitude-and-leadership/',
+  },
+  {
+    pillar: 'think_sharper', content_type: 'article',
+    title: 'You and Your Research', author: 'Richard Hamming',
+    url: 'https://www.cs.virginia.edu/~robins/YouAndYourResearch.html',
+  },
+  {
+    pillar: 'think_sharper', content_type: 'article',
+    title: 'The Strength of Weak Ties', author: 'fs.blog',
+    url: 'https://fs.blog/the-strength-of-weak-ties/',
+  },
+  {
+    pillar: 'think_sharper', content_type: 'article',
+    title: 'Bayesian Thinking', author: 'fs.blog',
+    url: 'https://fs.blog/bayes-theorem/',
+  },
 
   // THINK SHARPER — Podcasts
   {
@@ -861,12 +1159,12 @@ const SOURCES = [
   {
     pillar: 'think_sharper', content_type: 'podcast',
     title: 'The Knowledge Project — Annie Duke', author: 'Shane Parrish',
-    youtubeUrl: 'https://www.youtube.com/watch?v=wnDnCbgG6Yk',
+    youtubeUrl: 'https://www.youtube.com/watch?v=uYNsSeYjkp4&t=10s',
   },
   {
     pillar: 'think_sharper', content_type: 'podcast',
     title: 'Lex Fridman — Daniel Kahneman', author: 'Lex Fridman',
-    youtubeUrl: 'https://www.youtube.com/watch?v=UwwR7gSV7zc',
+    youtubeUrl: 'https://www.youtube.com/watch?v=UwwBG-MbniY',
   },
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -875,87 +1173,128 @@ const SOURCES = [
   {
     pillar: 'move_people', content_type: 'book',
     title: 'The Art Of Seduction', author: 'Robert Greene',
-    needs_pdf: true, url: null,
+    filePath: 'move_people/books/The Art Of Seduction.pdf',
   },
   {
     pillar: 'move_people', content_type: 'book',
     title: 'The Laws Of Human Nature', author: 'Robert Greene',
-    needs_pdf: true, url: null,
+    filePath: 'move_people/books/The Laws Of Human Nature.pdf',
   },
   {
     pillar: 'move_people', content_type: 'book',
     title: 'The 48 Laws Of Power', author: 'Robert Greene',
-    needs_pdf: true, url: null,
+    filePath: 'move_people/books/The 48 Laws Of Power.pdf',
   },
   {
     pillar: 'move_people', content_type: 'book',
     title: 'Pre-Suasion', author: 'Robert Cialdini',
-    needs_pdf: true, url: null,
+    filePath: 'move_people/books/Pre-Suasion.pdf',
   },
   {
     pillar: 'move_people', content_type: 'book',
     title: 'Made to Stick', author: 'Chip Heath and Dan Heath',
-    needs_pdf: true, url: null,
+    filePath: 'move_people/books/Made to Stick.pdf',
   },
   {
     pillar: 'move_people', content_type: 'book',
     title: 'Never Split the Difference', author: 'Chris Voss',
-    needs_pdf: true, url: null,
+    filePath: 'move_people/books/Never Split the Difference.pdf',
   },
   {
     pillar: 'move_people', content_type: 'book',
     title: 'Pitch Anything', author: 'Oren Klaff',
-    needs_pdf: true, url: null,
+    filePath: 'move_people/books/Pitch Anything.pdf',
   },
   {
     pillar: 'move_people', content_type: 'book',
     title: 'The Storytelling Animal', author: 'Jonathan Gottschall',
-    needs_pdf: true, url: null,
+    filePath: 'move_people/books/The Storytelling Animal.pdf',
   },
   {
     pillar: 'move_people', content_type: 'book',
     title: 'Talk Like TED', author: 'Carmine Gallo',
-    needs_pdf: true, url: null,
+    filePath: 'move_people/books/Talk Like TED.pdf',
   },
   {
     pillar: 'move_people', content_type: 'book',
     title: 'On Writing Well', author: 'William Zinsser',
-    needs_pdf: true, url: null,
+    filePath: 'move_people/books/On Writing Well.pdf',
   },
   {
     pillar: 'move_people', content_type: 'book',
     title: 'Simply Said', author: 'Jay Sullivan',
-    needs_pdf: true, url: null,
+    filePath: 'move_people/books/Simply Said.pdf',
   },
   {
     pillar: 'move_people', content_type: 'book',
     title: 'To Sell Is Human', author: 'Daniel Pink',
-    needs_pdf: true, url: null,
+    filePath: 'move_people/books/To Sell Is Human.pdf',
   },
 
   // MOVE PEOPLE — Articles
   {
     pillar: 'move_people', content_type: 'article',
-    title: 'How to Write Usefully', author: 'Paul Graham',
-    url: 'http://paulgraham.com/useful.html',
+    title: 'Write Like You Talk', author: 'Paul Graham',
+    url: 'https://paulgraham.com/talk.html',
   },
   {
     pillar: 'move_people', content_type: 'article',
-    title: 'The Anatomy of a Pitch', author: 'Sequoia Capital',
-    url: 'https://articles.sequoiacap.com/writing-a-business-plan',
+    title: 'Write Simply', author: 'Paul Graham',
+    url: 'https://paulgraham.com/simply.html',
   },
+  {
+    pillar: 'move_people', content_type: 'article',
+    title: 'Writing and Speaking', author: 'Paul Graham',
+    url: 'https://paulgraham.com/speak.html',
+  },
+  {
+    pillar: 'move_people', content_type: 'article',
+    title: 'The Age of the Essay', author: 'Paul Graham',
+    url: 'https://paulgraham.com/essay.html',
+  },
+  {
+    pillar: 'move_people', content_type: 'article',
+    title: 'How to Write Usefully', author: 'Paul Graham',
+    url: 'https://paulgraham.com/useful.html',
+  },
+  {
+    pillar: 'move_people', content_type: 'article',
+    title: 'David Ogilvy\'s 1982 Memo: How to Write', author: 'David Ogilvy',
+    url: 'https://fs.blog/david-ogilvy-10-tips-on-writing/',
+  },
+  {
+    pillar: 'move_people', content_type: 'article',
+    title: 'The Secret Structure of Great Talks', author: 'Nancy Duarte',
+    url: 'https://www.ted.com/talks/nancy_duarte_the_secret_structure_of_great_talks',
+  },
+  {
+    pillar: 'move_people', content_type: 'article',
+    title: 'Solitude and Leadership', author: 'William Deresiewicz',
+    url: 'https://theamericanscholar.org/solitude-and-leadership/',
+  },
+  {
+    pillar: 'move_people', content_type: 'article',
+    title: 'The Maker\'s Schedule, Manager\'s Schedule', author: 'Paul Graham',
+    url: 'https://paulgraham.com/makerschedule.html',
+  },
+  {
+    pillar: 'move_people', content_type: 'article',
+    title: 'Persuade xor Discover', author: 'Paul Graham',
+    url: 'https://paulgraham.com/discover.html',
+  },
+
 
   // MOVE PEOPLE — Podcasts
   {
     pillar: 'move_people', content_type: 'podcast',
     title: 'Masters of Scale — Storytelling with Reid Hoffman', author: 'Reid Hoffman',
-    youtubeUrl: 'https://www.youtube.com/watch?v=MGSV-VuCjPo',
+    youtubeUrl: 'https://www.youtube.com/watch?v=PB64IQrkID8',
   },
   // SKIPPED — already in DB: "How I Built This — Sara Blakely Spanx"
   {
     pillar: 'move_people', content_type: 'podcast',
     title: 'The Tim Ferriss Show — Matthew McConaughey on Narrative Identity', author: 'Tim Ferriss',
-    youtubeUrl: 'https://www.youtube.com/watch?v=DMl7_UEsYpg',
+    youtubeUrl: 'https://www.youtube.com/watch?v=H_3Bfj99xYU',
   },
 ]
 
@@ -1000,7 +1339,10 @@ function buildSourceKey(source) {
 }
 
 function sourceUrlForRecord(source) {
-  return source.url || source.youtubeUrl || null
+  if (source.url) return source.url
+  if (source.youtubeUrl) return source.youtubeUrl
+  if (source.arxivId) return `https://arxiv.org/abs/${extractArxivId(source.arxivId)}`
+  return null
 }
 
 function clampConfidence(value, fallback = 0.5) {
@@ -1296,7 +1638,38 @@ async function processLocalPDF(filePath) {
   return data.text
 }
 
-async function processURL(url) {
+function buildJinaReaderUrl(url) {
+  return `${JINA_READER_BASE_URL}${url.replace(/^https?:\/\//i, '')}`
+}
+
+async function fetchJinaReadableText(url) {
+  const jinaUrl = buildJinaReaderUrl(url)
+  const response = await axios.get(jinaUrl, {
+    responseType: 'text',
+    timeout: 30000,
+    validateStatus: () => true,
+    headers: {
+      Accept: 'text/plain, text/markdown;q=0.9, */*;q=0.8',
+      'X-Return-Format': 'markdown',
+      'User-Agent':
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    },
+    maxRedirects: 5,
+  })
+
+  if (response.status < 200 || response.status >= 300) {
+    throw new Error(`Jina Reader HTTP ${response.status}`)
+  }
+
+  const text = sanitizeText(String(response.data || ''))
+  if (text.length < 400) {
+    throw new Error('Jina Reader returned too little text')
+  }
+
+  return text
+}
+
+async function fetchRemoteBinary(url) {
   let response
   try {
     response = await axios.get(url, {
@@ -1318,6 +1691,10 @@ async function processURL(url) {
     throw new Error(`HTTP ${response.status} for ${url}`)
   }
 
+  return response
+}
+
+async function processHtmlWithCheerio(url, response) {
   const contentType = (response.headers['content-type'] || '').toLowerCase()
   const isPDF =
     contentType.includes('application/pdf') ||
@@ -1329,7 +1706,6 @@ async function processURL(url) {
     return data.text
   }
 
-  // HTML — parse with cheerio
   const html = Buffer.from(response.data).toString('utf-8')
   const $ = cheerio.load(html)
 
@@ -1364,6 +1740,110 @@ async function processURL(url) {
   }
 
   return text
+}
+
+function extractArxivId(value) {
+  const input = String(value || '').trim()
+  if (!input) return null
+
+  try {
+    const parsed = new URL(input)
+    const match = parsed.pathname.match(/\/(?:abs|pdf)\/([^/]+?)(?:\.pdf)?$/i)
+    return match?.[1] || null
+  } catch {
+    return input.replace(/^arxiv:/i, '').replace(/\.pdf$/i, '').trim() || null
+  }
+}
+
+function parseArxivMetadata(xml) {
+  const entryMatch = xml.match(/<entry>([\s\S]*?)<\/entry>/i)
+  if (!entryMatch) return null
+  const entry = entryMatch[1]
+  const readTag = (tag) => {
+    const match = entry.match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'i'))
+    return match ? sanitizeText(match[1].replace(/<!\\[CDATA\\[|\\]\\]>/g, '')) : ''
+  }
+  const authors = [...entry.matchAll(/<name>([\s\S]*?)<\/name>/gi)]
+    .map((match) => sanitizeText(match[1]))
+    .filter(Boolean)
+  const pdfLinkMatch = entry.match(/<link[^>]+title="pdf"[^>]+href="([^"]+)"/i)
+  const id = sanitizeText(readTag('id')).replace(/^https?:\/\/arxiv\.org\/abs\//i, '')
+
+  return {
+    id,
+    title: readTag('title'),
+    summary: readTag('summary'),
+    published: readTag('published'),
+    updated: readTag('updated'),
+    authors,
+    pdfUrl: pdfLinkMatch?.[1] || (id ? `https://arxiv.org/pdf/${id}.pdf` : null),
+  }
+}
+
+async function processArxivPaper(source) {
+  const rawId = source.arxivId || source.url
+  const arxivId = extractArxivId(rawId)
+  if (!arxivId) {
+    throw new Error(`Could not extract arXiv ID from: ${rawId}`)
+  }
+
+  const metadataResponse = await axios.get(
+    `https://export.arxiv.org/api/query?id_list=${encodeURIComponent(arxivId)}`,
+    {
+      responseType: 'text',
+      timeout: 30000,
+      validateStatus: () => true,
+    }
+  )
+
+  if (metadataResponse.status < 200 || metadataResponse.status >= 300) {
+    throw new Error(`arXiv metadata HTTP ${metadataResponse.status} for ${arxivId}`)
+  }
+
+  const metadata = parseArxivMetadata(String(metadataResponse.data || ''))
+  if (!metadata) {
+    throw new Error(`Could not parse arXiv metadata for ${arxivId}`)
+  }
+
+  const pdfUrl = metadata.pdfUrl
+  if (pdfUrl) {
+    try {
+      const pdfResponse = await fetchRemoteBinary(pdfUrl)
+      const pdfText = await processHtmlWithCheerio(pdfUrl, pdfResponse)
+      if (sanitizeText(pdfText).length >= 1200) {
+        return pdfText
+      }
+    } catch (err) {
+      console.warn(`    arXiv PDF fallback triggered for "${source.title}": ${err.message}`)
+    }
+  }
+
+  const abstractText = [
+    metadata.title ? `Title: ${metadata.title}` : null,
+    metadata.authors.length ? `Authors: ${metadata.authors.join(', ')}` : null,
+    metadata.published ? `Published: ${metadata.published}` : null,
+    metadata.summary ? `Abstract: ${metadata.summary}` : null,
+  ].filter(Boolean).join('\n\n')
+
+  if (sanitizeText(abstractText).length < 300) {
+    throw new Error(`arXiv fallback abstract too short for ${arxivId}`)
+  }
+
+  return abstractText
+}
+
+async function processURL(url) {
+  const isPdfUrl = url.toLowerCase().endsWith('.pdf')
+  if (!isPdfUrl) {
+    try {
+      return await fetchJinaReadableText(url)
+    } catch (err) {
+      console.warn(`    Jina Reader fallback for ${url}: ${err.message}`)
+    }
+  }
+
+  const response = await fetchRemoteBinary(url)
+  return processHtmlWithCheerio(url, response)
 }
 
 function extractYouTubeVideoId(youtubeUrl) {
@@ -1509,10 +1989,12 @@ async function processSource(source, processedTitles) {
     rawText = processTranscript(source.transcriptPath)
   } else if (source.youtubeUrl) {
     rawText = await processYouTube(source.youtubeUrl)
+  } else if (source.arxivId) {
+    rawText = await processArxivPaper(source)
   } else if (source.url) {
     rawText = await processURL(source.url)
   } else {
-    throw new Error('Source has no filePath, transcriptPath, youtubeUrl, or url')
+    throw new Error('Source has no filePath, transcriptPath, youtubeUrl, arxivId, or url')
   }
 
   if (!rawText || rawText.trim().length < 500) {
@@ -1525,6 +2007,40 @@ async function processSource(source, processedTitles) {
 
   const inserted = await embedAndInsert(source, sourceRecord, chunks)
   return { chunks: chunks.length, inserted }
+}
+
+async function ensureSeedDirectories() {
+  const transcriptsDir = path.join(SOURCES_DIR, 'transcripts')
+  for (const dir of [SOURCES_DIR, transcriptsDir]) {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true })
+      console.log(`Created ${dir}\n`)
+    }
+  }
+
+  return { transcriptsDir }
+}
+
+async function fetchProcessedTitles() {
+  const processedTitles = new Set()
+  const PAGE = 1000
+  let offset = 0
+
+  while (true) {
+    const { data: page, error: fetchError } = await supabase
+      .from('wiki_chunks')
+      .select('title')
+      .range(offset, offset + PAGE - 1)
+    if (fetchError) {
+      throw new Error(`Could not fetch existing titles: ${fetchError.message}`)
+    }
+    if (!page || page.length === 0) break
+    page.forEach((record) => processedTitles.add(record.title))
+    if (page.length < PAGE) break
+    offset += PAGE
+  }
+
+  return processedTitles
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -1546,34 +2062,11 @@ async function main() {
     process.exit(1)
   }
 
-  // Ensure /sources/ and /sources/transcripts/ exist
-  const TRANSCRIPTS_DIR = path.join(SOURCES_DIR, 'transcripts')
-  for (const dir of [SOURCES_DIR, TRANSCRIPTS_DIR]) {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true })
-      console.log(`Created ${dir}\n`)
-    }
-  }
+  await ensureSeedDirectories()
 
   // Fetch all titles already in DB — used to skip re-processing on re-runs
   // Paginate through all existing titles — Supabase default cap is 1000 rows per query
-  const processedTitles = new Set()
-  const PAGE = 1000
-  let offset = 0
-  while (true) {
-    const { data: page, error: fetchError } = await supabase
-      .from('wiki_chunks')
-      .select('title')
-      .range(offset, offset + PAGE - 1)
-    if (fetchError) {
-      console.error('ERROR: Could not fetch existing titles:', fetchError.message)
-      process.exit(1)
-    }
-    if (!page || page.length === 0) break
-    page.forEach((r) => processedTitles.add(r.title))
-    if (page.length < PAGE) break
-    offset += PAGE
-  }
+  const processedTitles = await fetchProcessedTitles()
   console.log(`Found ${processedTitles.size} unique title(s) already in DB.\n`)
 
   // Order: pillars follow Axiom's six-pillar sequence
@@ -1635,7 +2128,22 @@ async function main() {
   console.log('─────────────────────────────────────────────────────────────')
 }
 
-main().catch((err) => {
-  console.error('Fatal error:', err)
-  process.exit(1)
-})
+export {
+  SOURCES_DIR,
+  chunkText,
+  processURL,
+  processYouTube,
+  processArxivPaper,
+  upsertWikiSource,
+  embedAndInsert,
+  processSource,
+  fetchProcessedTitles,
+  ensureSeedDirectories,
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    console.error('Fatal error:', err)
+    process.exit(1)
+  })
+}
