@@ -43,7 +43,7 @@ const PILLAR_DISPLAY_NAMES = {
 }
 
 const NODE_TYPE_BASE_RADIUS = {
-  pillar:     0.012,
+  pillar:     0.015,
   goal:       0.016,
   experiment: 0.015,
   pattern:    0.013,
@@ -52,6 +52,15 @@ const NODE_TYPE_BASE_RADIUS = {
 
 const MAX_VISIBLE_NODES = 80
 const MAX_PILLAR_EDGES = 24
+const PILLAR_NODE_OPACITY = 0.84
+const PILLAR_SPRITE_SCALE = 3.4
+const PILLAR_SPRITE_OPACITY = 0.18
+const PILLAR_SPRITE_ACTIVE_SCALE = 3.9
+const PILLAR_SPRITE_ACTIVE_OPACITY = 0.30
+const PILLAR_HALO_SCALE = 4.4
+const PILLAR_HALO_OPACITY = 0.28
+const PILLAR_HALO_ACTIVE_SCALE = 5.1
+const PILLAR_HALO_ACTIVE_OPACITY = 0.36
 
 const PILLAR_POSITIONS = {
   human_mind: { x: -0.50, y: 0.22, z: 0.08 },
@@ -415,7 +424,7 @@ function createNodeMesh(node, connected = false) {
   const color = renderNodeColor(node, muted)
   const lit = isNodeLit(node)
   const pillar = node.type === 'pillar'
-  const opacity = muted ? 0.20 : pillar ? 0.72 : lit ? 0.95 : 0.42
+  const opacity = muted ? 0.20 : pillar ? PILLAR_NODE_OPACITY : lit ? 0.95 : 0.42
 
   const geometry = new THREE.SphereGeometry(radius, 16, 16)
   const material = createGradientNodeMaterial(color, opacity, muted)
@@ -427,10 +436,10 @@ function createNodeMesh(node, connected = false) {
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
-    opacity: muted ? 0.035 : pillar ? 0.11 : lit ? 0.20 : 0.075,
+    opacity: muted ? 0.035 : pillar ? PILLAR_SPRITE_OPACITY : lit ? 0.20 : 0.075,
   })
   const sprite = new THREE.Sprite(spriteMat)
-  const spriteScale = radius * (muted ? 1.35 : pillar ? 2.8 : lit ? 2.35 : 1.65)
+  const spriteScale = radius * (muted ? 1.35 : pillar ? PILLAR_SPRITE_SCALE : lit ? 2.35 : 1.65)
   sprite.scale.set(spriteScale, spriteScale, 1)
   mesh.add(sprite)
 
@@ -440,10 +449,10 @@ function createNodeMesh(node, connected = false) {
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
-    opacity: muted ? 0 : pillar ? 0.18 : lit ? 0.22 : 0.12,
+    opacity: muted ? 0 : pillar ? PILLAR_HALO_OPACITY : lit ? 0.22 : 0.12,
   })
   const halo = new THREE.Sprite(haloMat)
-  const haloScale = muted ? 0 : radius * (pillar ? 3.5 : lit ? 3.0 : 2.4)
+  const haloScale = muted ? 0 : radius * (pillar ? PILLAR_HALO_SCALE : lit ? 3.0 : 2.4)
   halo.scale.set(haloScale, haloScale, 1)
   mesh.add(halo)
 
@@ -525,12 +534,12 @@ function igniteNode(mesh) {
   const lit = isNodeLit(node)
   const radius = getNodeRadius(node)
   const muted = isNodeMuted(node, mesh.userData.connected)
-  const targetOpacity = lit ? 0.92 : 0.42
+  const targetOpacity = pillar ? PILLAR_NODE_OPACITY : lit ? 0.92 : 0.42
   const pillar = node.type === 'pillar'
-  const targetSpriteScale = radius * (muted ? 1.35 : pillar ? 2.8 : lit ? 2.35 : 1.65)
-  const targetSpriteOpacity = muted ? 0.035 : pillar ? 0.13 : lit ? 0.22 : 0.08
-  const targetHaloScale = muted ? 0 : radius * (pillar ? 3.5 : lit ? 3.0 : 2.4)
-  const targetHaloOpacity = muted ? 0 : pillar ? 0.18 : lit ? 0.22 : 0.12
+  const targetSpriteScale = radius * (muted ? 1.35 : pillar ? PILLAR_SPRITE_SCALE : lit ? 2.35 : 1.65)
+  const targetSpriteOpacity = muted ? 0.035 : pillar ? PILLAR_SPRITE_OPACITY : lit ? 0.22 : 0.08
+  const targetHaloScale = muted ? 0 : radius * (pillar ? PILLAR_HALO_SCALE : lit ? 3.0 : 2.4)
+  const targetHaloOpacity = muted ? 0 : pillar ? PILLAR_HALO_OPACITY : lit ? 0.22 : 0.12
   const sprite = mesh.userData.sprite
   const halo = mesh.userData.halo
 
@@ -635,15 +644,15 @@ function buildScene(th, graph) {
         if (sprite) {
           const pillar = latest.type === 'pillar'
           sprite.material.color.set(renderColor)
-          sprite.scale.setScalar(radius * (muted ? 1.35 : pillar ? 2.8 : lit ? 2.35 : 1.65))
-          sprite.material.opacity = muted ? 0.035 : pillar ? 0.11 : lit ? 0.20 : 0.075
+          sprite.scale.setScalar(radius * (muted ? 1.35 : pillar ? PILLAR_SPRITE_SCALE : lit ? 2.35 : 1.65))
+          sprite.material.opacity = muted ? 0.035 : pillar ? PILLAR_SPRITE_OPACITY : lit ? 0.20 : 0.075
         }
         const halo = mesh.userData.halo
         if (halo) {
           const pillar = latest.type === 'pillar'
           halo.material.color.set(renderColor)
-          halo.scale.setScalar(muted ? 0 : radius * (pillar ? 3.5 : lit ? 3.0 : 2.4))
-          halo.material.opacity = muted ? 0 : pillar ? 0.18 : lit ? 0.22 : 0.12
+          halo.scale.setScalar(muted ? 0 : radius * (pillar ? PILLAR_HALO_SCALE : lit ? 3.0 : 2.4))
+          halo.material.opacity = muted ? 0 : pillar ? PILLAR_HALO_OPACITY : lit ? 0.22 : 0.12
         }
       }
     })
@@ -1058,28 +1067,28 @@ export default function Brain() {
         setNodeOpacity(mesh, 1.0)
         if (sprite) {
           sprite.material.color.set(renderColor)
-          sprite.scale.setScalar(radius * 3.1)
-          sprite.material.opacity = 0.26
+          sprite.scale.setScalar(radius * (node.type === 'pillar' ? PILLAR_SPRITE_ACTIVE_SCALE : 3.1))
+          sprite.material.opacity = node.type === 'pillar' ? PILLAR_SPRITE_ACTIVE_OPACITY : 0.26
         }
         if (halo) {
           const pillar = node.type === 'pillar'
           halo.material.color.set(renderColor)
-          halo.scale.setScalar(radius * (pillar ? 4.2 : 3.8))
-          halo.material.opacity = pillar ? 0.30 : 0.34
+          halo.scale.setScalar(radius * (pillar ? PILLAR_HALO_ACTIVE_SCALE : 3.8))
+          halo.material.opacity = pillar ? PILLAR_HALO_ACTIVE_OPACITY : 0.34
         }
       } else {
-        setNodeOpacity(mesh, muted ? 0.20 : lit ? 0.92 : 0.42)
+        setNodeOpacity(mesh, muted ? 0.20 : node.type === 'pillar' ? PILLAR_NODE_OPACITY : lit ? 0.92 : 0.42)
         if (sprite) {
           const pillar = node.type === 'pillar'
           sprite.material.color.set(renderColor)
-          sprite.scale.setScalar(radius * (muted ? 1.35 : pillar ? 2.8 : lit ? 2.35 : 1.65))
-          sprite.material.opacity = muted ? 0.035 : pillar ? 0.11 : lit ? 0.20 : 0.075
+          sprite.scale.setScalar(radius * (muted ? 1.35 : pillar ? PILLAR_SPRITE_SCALE : lit ? 2.35 : 1.65))
+          sprite.material.opacity = muted ? 0.035 : pillar ? PILLAR_SPRITE_OPACITY : lit ? 0.20 : 0.075
         }
         if (halo) {
           const pillar = node.type === 'pillar'
           halo.material.color.set(renderColor)
-          halo.scale.setScalar(muted ? 0 : radius * (pillar ? 3.5 : lit ? 3.0 : 2.4))
-          halo.material.opacity = muted ? 0 : pillar ? 0.18 : lit ? 0.22 : 0.12
+          halo.scale.setScalar(muted ? 0 : radius * (pillar ? PILLAR_HALO_SCALE : lit ? 3.0 : 2.4))
+          halo.material.opacity = muted ? 0 : pillar ? PILLAR_HALO_OPACITY : lit ? 0.22 : 0.12
         }
       }
     })
