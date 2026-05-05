@@ -28,9 +28,9 @@ export const ARTIFACT_PROFILES = {
     { "id": "think_sharper", "label": "How Hard To Believe", "pillar": "think_sharper", "signal": "one short sentence", "tension": "optional short sentence" }
   ],
   "forecast": {
-    "now": { "label": "Now", "value": 0, "note": "short phrase" },
-    "next_12_months": { "label": "12 months", "value": 0, "note": "short phrase" },
-    "next_3_years": { "label": "3 years", "value": 0, "note": "short phrase" }
+    "now": { "label": "Now", "value": 28, "note": "short phrase" },
+    "next_12_months": { "label": "12 months", "value": 54, "note": "short phrase" },
+    "next_3_years": { "label": "3 years", "value": 78, "note": "short phrase" }
   },
   "frameworks": [
     {
@@ -60,6 +60,7 @@ export const ARTIFACT_PROFILES = {
       'Ground the map in concrete present-tense signals first, then interpretation, then forecast.',
       'Prefer factual observations over abstraction.',
       'Use qualitative estimates sparingly and only when exact counts are unavailable.',
+      'Forecast values are 0-100 stage estimates. Use 0 only when there is no visible signal at all.',
       'Treat signal maps as terrain tools: show movement, herd behavior, gaps, possible wedges, and live signals.',
       'Only include for_this_user when concrete user context exists. Leave it empty for broad terrain questions.',
       'Include real tension across pillars when it exists.',
@@ -132,9 +133,9 @@ export const ARTIFACT_PROFILES = {
         key: 'forecast',
         schema: `{
   "forecast": {
-    "now": { "label": "Now", "value": 0, "note": "string" },
-    "next_12_months": { "label": "12 months", "value": 0, "note": "string" },
-    "next_3_years": { "label": "3 years", "value": 0, "note": "string" }
+    "now": { "label": "Now", "value": 28, "note": "string" },
+    "next_12_months": { "label": "12 months", "value": 54, "note": "string" },
+    "next_3_years": { "label": "3 years", "value": 78, "note": "string" }
   }
 }`,
       },

@@ -58,7 +58,23 @@ const ARTIFACT_STRATEGIES = new Set([
   'reasoning_pyramid',
 ])
 
+function wantsSignalMap(lower = '') {
+  return /\b(signal map|map the signals|map this terrain|forecast|prediction|predict|where is .* moving|where are .* moving|what'?s coming|future effects?|future shift|future shifts|next \d+ (months?|years?)|next \d+-\d+ years?|next decade|10-15 years|2030|2035|202[7-9]|where will .* accrue|where does .* accrue|what happens if)\b/.test(lower)
+}
+
 const QUESTION_SHAPE_RULES = [
+  {
+    matches: (lower) =>
+      /\b(what is changing|what'?s changing|how is .* changing|what changes)\b/.test(lower) &&
+      /\b(bottleneck|constraint|less obvious|people are missing|hidden constraint|hidden bottleneck)\b/.test(lower) &&
+      !/\b(show me|map|visuali[sz]e|signal map|landscape|terrain)\b/.test(lower),
+    build: () => ({
+      mode: 'single_pillar',
+      pillars: ['whats_coming'],
+      artifactStrategy: 'none',
+      rationale: 'Focused future-mechanism question. Explain the specific bottleneck in prose; do not force a signal map.',
+    }),
+  },
   {
     matches: (lower) =>
       /\b(value stack|stack of value|capture stack|value ladder|layer cake|stack in)\b/.test(lower) ||
@@ -112,12 +128,13 @@ const QUESTION_SHAPE_RULES = [
   },
   {
     matches: (lower) =>
-      /\b(what'?s coming|where will the real value accrue|where does the real value accrue|what are people missing|who wins|where does value accrue|what happens if)\b/.test(lower),
+      wantsSignalMap(lower) &&
+      /\b(what'?s coming|where will the real value accrue|where does the real value accrue|where does value accrue|what happens if|future|forecast|prediction|predict|signals?|next \d+|next decade|2030|2035|202[7-9])\b/.test(lower),
     build: () => ({
       mode: 'four_pillar_synthesis',
       pillars: FOUR_PILLAR_STACK,
       artifactStrategy: 'signal_map',
-      rationale: 'Broad landscape / value-accrual question. Use a full signal map.',
+      rationale: 'Explicit future / signal / prediction question. Use a full signal map.',
     }),
   },
   {
@@ -212,7 +229,9 @@ function describeSourceWeight(source = {}) {
   return `${kind} weight: ${weight}`
 }
 
-function normalizeRouterPayload(payload = {}) {
+function normalizeRouterPayload(payload = {}, query = '') {
+  const lower = String(query || '').toLowerCase()
+  const signalMapAllowed = wantsSignalMap(lower)
   const requestedMode = ROUTER_MODES.has(payload.mode) ? payload.mode : 'single_pillar'
   let pillars = Array.isArray(payload.pillars)
     ? payload.pillars.filter((pillar) => ALL_PILLARS.includes(pillar))
@@ -228,10 +247,14 @@ function normalizeRouterPayload(payload = {}) {
     if (artifactStrategy === 'none') artifactStrategy = 'comparison_table'
   } else if (requestedMode === 'four_pillar_synthesis') {
     pillars = FOUR_PILLAR_STACK
-    if (artifactStrategy === 'none') artifactStrategy = 'signal_map'
+    if (artifactStrategy === 'none') artifactStrategy = signalMapAllowed ? 'signal_map' : 'none'
   } else if (requestedMode === 'all_pillar_synthesis') {
     pillars = ALL_PILLARS
-    if (artifactStrategy === 'none') artifactStrategy = 'signal_map'
+    if (artifactStrategy === 'none') artifactStrategy = signalMapAllowed ? 'signal_map' : 'none'
+  }
+
+  if (artifactStrategy === 'signal_map' && !signalMapAllowed) {
+    artifactStrategy = 'none'
   }
 
   return {
@@ -286,6 +309,8 @@ Rules:
 - two_pillar: exactly 2 pillars
 - four_pillar_synthesis: always use ["whats_coming","how_companies_win","money_game","think_sharper"]
 - all_pillar_synthesis: always use all six pillars
+- Use signal_map only when the user explicitly asks about signals, forecasts, predictions, future effects, what's coming, where things are moving, or a named future horizon.
+- For focused "tell me about this specific thing" questions, choose single_pillar or two_pillar with artifact_strategy "none" unless the user asks for a visual/map.
 - User context must influence the mode and pillar choice.
 - Choose the smallest mode that can answer the question well.`,
         },
@@ -299,7 +324,7 @@ Selected node: ${nodeContext ? `${nodeContext.label} | pillar: ${nodeContext.pil
         },
       ],
     })
-    return normalizeRouterPayload(parsed)
+    return normalizeRouterPayload(parsed, query)
   } catch (err) {
     console.warn('[RAG] Question routing failed (falling back):', err?.message || err)
     return fallbackRouteQuestionMode(query, session, nodeContext)
