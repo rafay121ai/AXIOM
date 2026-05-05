@@ -138,6 +138,13 @@ function asksForExperimentOrApplication(text = '') {
   return /\b(experiment|practical|apply|application|next step|next move|what should i do|what do i do|do today|try today|test this|real[- ]world)\b/i.test(text)
 }
 
+function needsCurrentSourceGrounding(text = '') {
+  const lower = String(text || '').toLowerCase()
+  const currentAffairs = /\b(geopolitics|geopolitical|us[- ]china|china|united states|america|beijing|washington|tariff|sanction|export control|semiconductor controls|taiwan|war|military|election|policy|regulation|diplomacy)\b/.test(lower)
+  const liveFrame = /\b(doing|now|today|current|currently|recent|recently|latest|this year|next 12 months|next year)\b/.test(lower)
+  return currentAffairs && liveFrame
+}
+
 function looksLikeExperimentCompletion(text = '') {
   return /\b(i did it|i completed|completed it|finished it|i finished|ran the experiment|did the experiment|reporting back|here'?s what happened|i tested it)\b/i.test(text)
 }
@@ -750,7 +757,19 @@ export default function Chat() {
       ])
       const { chunks, sources, confidence: retrievalConfidence, pillarResults } = await searchWikiForRoute(text, route, 3)
       const wikiContext = await formatWikiContext(chunks, sources)
-      const routeContext = formatRouteContext(route, pillarResults)
+      const routedArtifactType = getRequiredArtifactType(route)
+      const suppressUngroundedSignalMap =
+        routedArtifactType === 'signal_map' &&
+        needsCurrentSourceGrounding(text) &&
+        sources.length === 0
+      const effectiveRoute = suppressUngroundedSignalMap
+        ? {
+            ...route,
+            artifactStrategy: 'none',
+            rationale: `${route.rationale || 'Current-affairs query.'} Source-thin current affairs should stay prose-first.`,
+          }
+        : route
+      const routeContext = formatRouteContext(effectiveRoute, pillarResults)
       const graphContext = nodeContext
         ? `Selected Founder Brain node: ${nodeContext.label} | type: ${nodeContext.type} | pillar: ${nodeContext.pillar || 'unmapped'} | read: ${nodeContext.summary || 'No node summary yet.'}`
         : ''
@@ -782,7 +801,7 @@ export default function Chat() {
 
       const activeExperimentCount = (sessionForTurn.active_experiments || []).filter((e) => e.status === 'active').length
       const shouldHoldExperiment = activeExperimentCount >= 2 && asksForExperimentOrApplication(text)
-      const requiredArtifactType = shouldHoldExperiment ? null : getRequiredArtifactType(route)
+      const requiredArtifactType = shouldHoldExperiment ? null : getRequiredArtifactType(effectiveRoute)
       let artifact = null
       let cleanText = ''
       let experiment = null
