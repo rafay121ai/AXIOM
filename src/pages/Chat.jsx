@@ -193,6 +193,7 @@ async function checkAndUpdateGhosting(session) {
   const now = Date.now()
   const experiments = session.active_experiments || []
   let ghost_count = session.ghost_count || 0
+  let consecutive_miss_count = session.consecutive_miss_count || 0
   let warning_level = session.warning_level || 0
   let changed = false
 
@@ -214,12 +215,12 @@ async function checkAndUpdateGhosting(session) {
 
     if (refs >= 2 && exp.status === 'active') {
       // Ghost — no response after 2 references
-      ghost_count++
+      ghost_count++           // lifetime total, kept for analytics
+      consecutive_miss_count++ // consecutive streak, drives warning thresholds
       changed = true
 
-      // Warning thresholds: miss 2 consecutive → warning 1, miss 2 more → warning 2
-      if (ghost_count >= 4 && warning_level < 2) { warning_level = 2; changed = true }
-      else if (ghost_count >= 2 && warning_level < 1) { warning_level = 1; changed = true }
+      if (consecutive_miss_count >= 4 && warning_level < 2) { warning_level = 2; changed = true }
+      else if (consecutive_miss_count >= 2 && warning_level < 1) { warning_level = 1; changed = true }
 
       return { ...exp, status: 'ghosted' }
     }
@@ -232,6 +233,7 @@ async function checkAndUpdateGhosting(session) {
   const updates = {
     active_experiments: updatedExperiments,
     ghost_count,
+    consecutive_miss_count,
     warning_level,
   }
 
@@ -491,18 +493,6 @@ export default function Chat() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // ── Jailbreak Counter ────────────────────────────────────────────────────
-  async function incrementJailbreakCounter(sessionId) {
-    try {
-      const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
-      const res = await fetch(`${API_BASE}/api/session/${sessionId}/jailbreak`, { method: 'POST' })
-      if (!res.ok) return null
-      const data = await res.json()
-      return data.jailbreak_attempts ?? null
-    } catch {
-      return null
-    }
-  }
 
   // ── Send Message ──────────────────────────────────────────────────────────
   async function sendMessage(overrideText = null) {
@@ -647,6 +637,7 @@ export default function Chat() {
         model: CHAT_MODEL,
         messages: [{ role: 'system', content: systemPrompt }, ...history],
         stream: true,
+        session_id: session.id,
       }, { signal: runAbort.signal })
 
       let fullContent = ''
@@ -673,21 +664,18 @@ export default function Chat() {
 
       abortControllerRef.current = null
 
-      // Jailbreak: termination
+      // Jailbreak: termination — server auto-increments via session_id in the request
       if (fullContent.trim() === 'AXIOM_SESSION_TERMINATED') {
         setMessages((prev) => prev.filter((m) => m.id !== assistantMsgId))
-        await incrementJailbreakCounter(session.id)
         navigate('/brain')
         return
       }
 
-      // Jailbreak: redirect (attempts 1 & 2) — strip signal, increment counter
+      // Jailbreak: redirect (attempts 1 & 2) — server auto-increments; update local state optimistically
       const isJailbreakRedirect = fullContent.includes('[JAILBREAK_REDIRECT]')
       if (isJailbreakRedirect) {
         fullContent = fullContent.replace(/\[JAILBREAK_REDIRECT\]\s*$/, '').trimEnd()
-        incrementJailbreakCounter(session.id).then((next) => {
-          if (next !== null) setSession((prev) => ({ ...prev, jailbreak_attempts: next }))
-        })
+        setSession((prev) => ({ ...prev, jailbreak_attempts: (prev.jailbreak_attempts || 0) + 1 }))
       }
 
       // Parse artifact and experiment tags — done exactly once after stream ends
