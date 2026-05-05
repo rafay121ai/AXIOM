@@ -81,7 +81,10 @@ async function requireAuth(req, res, next) {
 
 const chatRateLimit = rateLimit({
   windowMs: 60 * 1000,
-  max: 20,
+  // One user message can fan out into query expansion, artifact generation,
+  // final answer streaming, and memory updates. Keep abuse protection without
+  // throttling normal Axiom turns.
+  max: 120,
   message: { error: 'Too many requests, please slow down.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -89,7 +92,7 @@ const chatRateLimit = rateLimit({
 
 const embeddingsRateLimit = rateLimit({
   windowMs: 60 * 1000,
-  max: 60,
+  max: 180,
   message: { error: 'Too many requests, please slow down.' },
   standardHeaders: true,
   legacyHeaders: false,
