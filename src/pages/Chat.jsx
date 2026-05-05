@@ -153,6 +153,22 @@ function looksLikeExperimentCancel(text = '') {
   return /\b(cancel this experiment|cancel the experiment|drop this experiment|skip this experiment|remove this experiment|i'?m not doing this)\b/i.test(text)
 }
 
+function isLowSignalMemoryTurn(userText = '', assistantText = '') {
+  const user = String(userText || '').trim().toLowerCase()
+  const assistant = String(assistantText || '').trim()
+  if (!user || !assistant) return true
+
+  if (user.length <= 4 && /^(ok|k|yes|yeah|yep|no|nah|hm|hmm|lol|cool|nice|fine|sure)$/.test(user)) {
+    return true
+  }
+
+  if (/^(ok|okay|yes|yeah|yep|no|nah|continue|go on|keep going|next|more|again|regenerate|give another|another one|try again|make it shorter|make it longer|explain more|elaborate)$/i.test(user)) {
+    return true
+  }
+
+  return user.length < 18 && !/\b(i|me|my|we|our|did|tried|built|launched|sold|failed|decided|feel|think|want|need)\b/i.test(user)
+}
+
 function artifactLooksLikeExperiment(artifact) {
   if (!artifact?.data) return false
   const title = String(artifact.data.title || artifact.data.label || '').toLowerCase()
@@ -778,10 +794,11 @@ export default function Chat() {
         .join('\n')
       const namedPatternsContext = formatNamedPatternsContext(personalMemories)
 
-      // Build conversation history for OpenAI (last 20 msgs, exclude the placeholder)
+      // Build conversation history for OpenAI (last 10 msgs, exclude the placeholder).
+      // Session notes carry the longer memory, so this keeps routine turns cheaper.
       const history = baseMessages
         .filter((m) => !m.streaming && m.content && m.id !== userMsgId)
-        .slice(-20)
+        .slice(-10)
         .map((m) => ({ role: m.role, content: m.content }))
 
       history.push({ role: 'user', content: text })
@@ -1003,8 +1020,12 @@ export default function Chat() {
         }
       }
 
-      const updatedSession = await updatePersonalMemory(sessionForMemory, baseMessages, text, cleanText)
-      setSession(updatedSession)
+      if (isLowSignalMemoryTurn(text, cleanText)) {
+        setSession(sessionForMemory)
+      } else {
+        const updatedSession = await updatePersonalMemory(sessionForMemory, baseMessages, text, cleanText)
+        setSession(updatedSession)
+      }
     } catch (err) {
       // AbortError is intentional (pagehide or component unmount) — don't show an error
       if (err.name === 'AbortError') {

@@ -28,6 +28,18 @@ create table if not exists personal_memories (
     )
   ),
   content text not null,
+  primary_pillar text check (
+    primary_pillar in (
+      'human_mind',
+      'money_game',
+      'how_companies_win',
+      'whats_coming',
+      'think_sharper',
+      'move_people'
+    )
+  ),
+  secondary_pillars text[] not null default '{}'::text[],
+  pillar_confidence float not null default 0.7 check (pillar_confidence >= 0 and pillar_confidence <= 1),
   importance int not null default 3 check (importance between 1 and 5),
   embedding vector(1536) not null,
   confidence float not null default 0.7 check (confidence >= 0 and confidence <= 1),
@@ -49,6 +61,24 @@ where pm.session_id = s.id
 
 alter table personal_memories
 add column if not exists confidence float not null default 0.7 check (confidence >= 0 and confidence <= 1);
+
+alter table personal_memories
+add column if not exists primary_pillar text check (
+  primary_pillar in (
+    'human_mind',
+    'money_game',
+    'how_companies_win',
+    'whats_coming',
+    'think_sharper',
+    'move_people'
+  )
+);
+
+alter table personal_memories
+add column if not exists secondary_pillars text[] not null default '{}'::text[];
+
+alter table personal_memories
+add column if not exists pillar_confidence float not null default 0.7 check (pillar_confidence >= 0 and pillar_confidence <= 1);
 
 alter table personal_memories
 add column if not exists use_count int not null default 0;
@@ -85,6 +115,9 @@ returns table (
   user_id uuid,
   type text,
   content text,
+  primary_pillar text,
+  secondary_pillars text[],
+  pillar_confidence float,
   importance int,
   confidence float,
   use_count int,
@@ -99,6 +132,9 @@ as $$
     pm.user_id,
     pm.type,
     pm.content,
+    pm.primary_pillar,
+    pm.secondary_pillars,
+    pm.pillar_confidence,
     pm.importance,
     pm.confidence,
     pm.use_count,
@@ -129,6 +165,9 @@ returns table (
   content text,
   importance int,
   confidence float,
+  primary_pillar text,
+  secondary_pillars text[],
+  pillar_confidence float,
   similarity float
 )
 language sql stable
@@ -138,6 +177,9 @@ as $$
     pm.content,
     pm.importance,
     pm.confidence,
+    pm.primary_pillar,
+    pm.secondary_pillars,
+    pm.pillar_confidence,
     1 - (pm.embedding <=> query_embedding) as similarity
   from personal_memories pm
   where pm.user_id = match_user_id

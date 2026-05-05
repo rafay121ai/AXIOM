@@ -57,6 +57,44 @@ const ARTIFACT_STRATEGIES = new Set([
   'reasoning_wave',
   'reasoning_pyramid',
 ])
+const CACHE_TTL_MS = 5 * 60 * 1000
+const MAX_CACHE_ENTRIES = 120
+const queryExpansionCache = new Map()
+const searchCache = new Map()
+const routerCache = new Map()
+const priorSynthesisCache = new Map()
+
+function stableStringify(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value)
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`
+  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(',')}}`
+}
+
+function trimCache(cache) {
+  while (cache.size > MAX_CACHE_ENTRIES) {
+    const oldestKey = cache.keys().next().value
+    cache.delete(oldestKey)
+  }
+}
+
+async function cachedAsync(cache, key, loader) {
+  const now = Date.now()
+  const cached = cache.get(key)
+  if (cached && now - cached.time < CACHE_TTL_MS) {
+    return cached.value
+  }
+
+  const promise = Promise.resolve()
+    .then(loader)
+    .catch((error) => {
+      cache.delete(key)
+      throw error
+    })
+
+  cache.set(key, { time: now, value: promise })
+  trimCache(cache)
+  return promise
+}
 
 function wantsSignalMap(lower = '') {
   return /\b(signal map|map the signals|map this terrain|forecast|prediction|predict|where is .* moving|where are .* moving|what'?s coming|future effects?|future shift|future shifts|next \d+ (months?|years?)|next \d+-\d+ years?|next decade|10-15 years|2030|2035|202[7-9]|where will .* accrue|where does .* accrue|what happens if)\b/.test(lower)
@@ -287,7 +325,22 @@ export async function routeQuestionMode(query, session, nodeContext = null) {
   const explicit = explicitQuestionShapeRoute(query, session, nodeContext)
   if (explicit) return explicit
 
-  try {
+  const cacheKey = stableStringify({
+    query,
+    profile: session?.axiom_profile || '',
+    notes: session?.session_notes || '',
+    weights: session?.pillar_weights || {},
+    node: nodeContext
+      ? {
+          id: nodeContext.id,
+          label: nodeContext.label,
+          type: nodeContext.type,
+          pillar: nodeContext.pillar,
+        }
+      : null,
+  })
+
+  return cachedAsync(routerCache, cacheKey, async () => {
     const parsed = await requestJsonObject({
       label: 'question router payload',
       maxCompletionTokens: 220,
@@ -325,10 +378,10 @@ Selected node: ${nodeContext ? `${nodeContext.label} | pillar: ${nodeContext.pil
       ],
     })
     return normalizeRouterPayload(parsed, query)
-  } catch (err) {
+  }).catch((err) => {
     console.warn('[RAG] Question routing failed (falling back):', err?.message || err)
     return fallbackRouteQuestionMode(query, session, nodeContext)
-  }
+  })
 }
 
 export async function searchWikiForRoute(query, route, matchCount = 3) {
@@ -425,7 +478,10 @@ ${evidenceLines || 'No per-pillar evidence summary available.'}`
 
 // ─── Query Expansion ─────────────────────────────────────────────────────────
 async function expandQuery(query) {
-  try {
+  const cacheKey = String(query || '').trim().toLowerCase()
+  if (!cacheKey) return []
+
+  return cachedAsync(queryExpansionCache, cacheKey, async () => {
     const response = await openai.chat.completions.create({
       model: CHAT_MODEL,
       messages: [
@@ -445,25 +501,34 @@ Example output: ["procrastination vs genuine disinterest", "resistance to finish
     const raw = response.choices[0].message.content.trim()
     const alternatives = JSON.parse(raw)
     if (Array.isArray(alternatives)) return alternatives.slice(0, 3)
-  } catch (err) {
+    return []
+  }).catch((err) => {
     console.warn('[RAG] Query expansion failed (falling back to original query only):', err?.message || err)
-  }
-  return []
+    return []
+  })
 }
 
 // ─── Search Against One Query ─────────────────────────────────────────────────
 async function searchSingleQuery(query, matchCount, filterPillar) {
-  const embedding = await generateEmbedding(query)
-  const { data, error } = await supabase.rpc('match_wiki_chunks', {
-    query_embedding: embedding,
-    match_count: matchCount,
-    filter_pillar: filterPillar,
+  const cacheKey = stableStringify({
+    query: String(query || '').trim(),
+    matchCount,
+    filterPillar: filterPillar || null,
   })
-  if (error) {
-    console.error(`RAG search error for query "${query}":`, error)
-    return []
-  }
-  return data || []
+
+  return cachedAsync(searchCache, cacheKey, async () => {
+    const embedding = await generateEmbedding(query)
+    const { data, error } = await supabase.rpc('match_wiki_chunks', {
+      query_embedding: embedding,
+      match_count: matchCount,
+      filter_pillar: filterPillar,
+    })
+    if (error) {
+      console.error(`RAG search error for query "${query}":`, error)
+      return []
+    }
+    return data || []
+  })
 }
 
 async function fetchSourcesForChunks(chunks) {
@@ -613,7 +678,9 @@ export async function formatWikiContext(chunks, sources = []) {
 }
 
 async function synthesizePrior(author, title, combinedText) {
-  try {
+  const cacheKey = stableStringify({ author, title, combinedText })
+
+  return cachedAsync(priorSynthesisCache, cacheKey, async () => {
     const response = await openai.chat.completions.create({
       model: CHAT_MODEL,
       messages: [
@@ -637,10 +704,10 @@ Source: ${title}`,
       max_completion_tokens: 120,
     })
     return response.choices[0].message.content.trim()
-  } catch (err) {
+  }).catch((err) => {
     console.warn(`[RAG] Prior synthesis failed for "${title}":`, err?.message || err)
     // Fallback: reformat raw text without LLM — take first sentence only
     const firstSentence = combinedText.split(/[.!?]/)[0].trim()
     return `Axiom knows from ${author}, ${title}: ${firstSentence}.`
-  }
+  })
 }

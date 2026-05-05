@@ -2,8 +2,44 @@ import { generateStructuredArtifact, requestJsonObject, streamStructuredArtifact
 import { getArtifactBuildSteps, getArtifactProfile, humanizeArtifactType } from './artifactRegistry'
 export { getArtifactBuildSteps, humanizeArtifactType } from './artifactRegistry'
 
+const ARTIFACT_CACHE_TTL_MS = 5 * 60 * 1000
+const MAX_ARTIFACT_CACHE_ENTRIES = 60
+const artifactBuildCache = new Map()
+
 function isPlainObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function stableStringify(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value)
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`
+  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(',')}}`
+}
+
+function trimArtifactCache() {
+  while (artifactBuildCache.size > MAX_ARTIFACT_CACHE_ENTRIES) {
+    const oldestKey = artifactBuildCache.keys().next().value
+    artifactBuildCache.delete(oldestKey)
+  }
+}
+
+async function cachedArtifact(key, loader) {
+  const now = Date.now()
+  const cached = artifactBuildCache.get(key)
+  if (cached && now - cached.time < ARTIFACT_CACHE_TTL_MS) {
+    return cached.value
+  }
+
+  const promise = Promise.resolve()
+    .then(loader)
+    .catch((error) => {
+      artifactBuildCache.delete(key)
+      throw error
+    })
+
+  artifactBuildCache.set(key, { time: now, value: promise })
+  trimArtifactCache()
+  return promise
 }
 
 export function deepMergeArtifactData(base, patch) {
@@ -125,28 +161,25 @@ export async function buildArtifactForResponse({
   const profile = getArtifactProfile(artifactType)
   if (!profile) return null
 
-  let progressiveData = null
+  const cacheKey = stableStringify({
+    artifactType,
+    query,
+    routeContext,
+    wikiContext,
+    personalMemoryContext,
+    namedPatternsContext,
+    answerDraft,
+    session: {
+      id: session?.id,
+      profile: session?.axiom_profile || '',
+      notes: session?.session_notes || '',
+      experiments: session?.active_experiments || [],
+    },
+  })
 
-  if (artifactType === 'signal_map' && Array.isArray(profile.progressiveSections)) {
-    try {
-      progressiveData = await buildSignalMapProgressively({
-        profile,
-        query,
-        session,
-        routeContext,
-        wikiContext,
-        personalMemoryContext,
-        namedPatternsContext,
-        answerDraft,
-        onProgress,
-      })
-    } catch (error) {
-      if (error?.name === 'AbortError') throw error
-      console.warn(`Progressive signal_map build failed:`, error?.message || error)
-    }
-  } else {
-    try {
-      for await (const merge of streamStructuredArtifact({
+  if (artifactType === 'signal_map') {
+    const artifactData = await cachedArtifact(cacheKey, () =>
+      generateStructuredArtifact({
         artifactType,
         query,
         session,
@@ -155,15 +188,36 @@ export async function buildArtifactForResponse({
         personalMemoryContext,
         namedPatternsContext,
         answerDraft,
-        signal,
-      })) {
-        progressiveData = deepMergeArtifactData(progressiveData || {}, merge)
-        onProgress?.(progressiveData)
-      }
-    } catch (error) {
-      if (error?.name === 'AbortError') throw error
-      console.warn(`Artifact stream failed for ${artifactType}:`, error?.message || error)
+      })
+    )
+
+    if (artifactData && Object.keys(artifactData).length > 0) {
+      onProgress?.(artifactData)
+      return { type: artifactType, data: artifactData }
     }
+    return null
+  }
+
+  let progressiveData = null
+
+  try {
+    for await (const merge of streamStructuredArtifact({
+      artifactType,
+      query,
+      session,
+      routeContext,
+      wikiContext,
+      personalMemoryContext,
+      namedPatternsContext,
+      answerDraft,
+      signal,
+    })) {
+      progressiveData = deepMergeArtifactData(progressiveData || {}, merge)
+      onProgress?.(progressiveData)
+    }
+  } catch (error) {
+    if (error?.name === 'AbortError') throw error
+    console.warn(`Artifact stream failed for ${artifactType}:`, error?.message || error)
   }
 
   if (!progressiveData || Object.keys(progressiveData).length === 0 || !artifactLooksComplete(artifactType, progressiveData)) {

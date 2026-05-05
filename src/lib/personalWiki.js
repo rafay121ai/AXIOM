@@ -77,38 +77,11 @@ const DISPLAY_ROOT_NODES = [
   },
 ]
 
-const ROOT_NODES = [
-  {
-    label: 'Psychology',
-    type: 'pillar',
-    pillar: 'psychology',
-    summary: 'How the user protects identity, handles fear, avoids action, and reacts under pressure.',
-    status: 'seed',
-    importance: 5,
-    confidence: 0.9,
-    x: -0.7,
-    y: 0,
-    z: 0.15,
-  },
-  {
-    label: 'Economics',
-    type: 'pillar',
-    pillar: 'economics',
-    summary: 'How the user thinks about incentives, opportunity cost, demand, money, and market feedback.',
-    status: 'seed',
-    importance: 5,
-    confidence: 0.9,
-    x: 0.7,
-    y: 0,
-    z: 0.15,
-  },
-]
-
 const CONCEPT_NODES = [
   {
     label: 'Choice Architecture',
     type: 'concept',
-    pillar: 'psychology',
+    pillar: 'human_mind',
     summary: 'How framing, defaults, and visible options shape the next decision.',
     status: 'dim',
     importance: 3,
@@ -117,7 +90,7 @@ const CONCEPT_NODES = [
   {
     label: 'Identity Protection',
     type: 'concept',
-    pillar: 'psychology',
+    pillar: 'human_mind',
     summary: 'The ways a person protects self-image from market feedback, rejection, or visible failure.',
     status: 'dim',
     importance: 4,
@@ -126,7 +99,7 @@ const CONCEPT_NODES = [
   {
     label: 'Rejection Avoidance',
     type: 'concept',
-    pillar: 'psychology',
+    pillar: 'human_mind',
     summary: 'Avoiding contact with buyers or peers because the answer may expose a weak assumption.',
     status: 'dim',
     importance: 4,
@@ -135,7 +108,7 @@ const CONCEPT_NODES = [
   {
     label: 'Procrastination',
     type: 'concept',
-    pillar: 'psychology',
+    pillar: 'human_mind',
     summary: 'Delay that hides inside preparation, refinement, and standards.',
     status: 'dim',
     importance: 4,
@@ -144,7 +117,7 @@ const CONCEPT_NODES = [
   {
     label: 'Status Anxiety',
     type: 'concept',
-    pillar: 'psychology',
+    pillar: 'human_mind',
     summary: 'Fear that a visible attempt will lower how others rank or interpret you.',
     status: 'dim',
     importance: 3,
@@ -153,7 +126,7 @@ const CONCEPT_NODES = [
   {
     label: 'Self-Deception',
     type: 'concept',
-    pillar: 'psychology',
+    pillar: 'human_mind',
     summary: 'A private story that makes avoidance feel intelligent or principled.',
     status: 'dim',
     importance: 4,
@@ -162,7 +135,7 @@ const CONCEPT_NODES = [
   {
     label: 'Feedback Loops',
     type: 'concept',
-    pillar: 'psychology',
+    pillar: 'human_mind',
     summary: 'The cycle where action creates data, data changes behavior, and behavior changes outcomes.',
     status: 'dim',
     importance: 3,
@@ -171,7 +144,7 @@ const CONCEPT_NODES = [
   {
     label: 'Commitment',
     type: 'concept',
-    pillar: 'psychology',
+    pillar: 'human_mind',
     summary: 'A chosen constraint that forces behavior to become visible.',
     status: 'dim',
     importance: 3,
@@ -180,7 +153,7 @@ const CONCEPT_NODES = [
   {
     label: 'Offer Sharpness',
     type: 'concept',
-    pillar: 'economics',
+    pillar: 'money_game',
     summary: 'How clearly a buyer understands the problem, promise, proof, and next step.',
     status: 'dim',
     importance: 4,
@@ -189,7 +162,7 @@ const CONCEPT_NODES = [
   {
     label: 'Market Demand',
     type: 'concept',
-    pillar: 'economics',
+    pillar: 'money_game',
     summary: 'Evidence that a real buyer cares enough to spend attention, time, money, or reputation.',
     status: 'dim',
     importance: 4,
@@ -198,7 +171,7 @@ const CONCEPT_NODES = [
   {
     label: 'Opportunity Cost',
     type: 'concept',
-    pillar: 'economics',
+    pillar: 'money_game',
     summary: 'The hidden price of spending effort on one path instead of the highest-leverage alternative.',
     status: 'dim',
     importance: 4,
@@ -207,7 +180,7 @@ const CONCEPT_NODES = [
   {
     label: 'Incentives',
     type: 'concept',
-    pillar: 'economics',
+    pillar: 'money_game',
     summary: 'The rewards, penalties, and pressures that explain what people actually do.',
     status: 'dim',
     importance: 3,
@@ -216,7 +189,7 @@ const CONCEPT_NODES = [
   {
     label: 'Pricing',
     type: 'concept',
-    pillar: 'economics',
+    pillar: 'money_game',
     summary: 'The signal that connects value, willingness to pay, positioning, and buyer seriousness.',
     status: 'dim',
     importance: 3,
@@ -225,7 +198,7 @@ const CONCEPT_NODES = [
   {
     label: 'Buyer Objections',
     type: 'concept',
-    pillar: 'economics',
+    pillar: 'money_game',
     summary: 'The reasons buyers hesitate, delay, compare, or reject an offer.',
     status: 'dim',
     importance: 4,
@@ -234,7 +207,7 @@ const CONCEPT_NODES = [
   {
     label: 'Sales Friction',
     type: 'concept',
-    pillar: 'economics',
+    pillar: 'money_game',
     summary: 'Anything that makes the buyer slower, less certain, or less willing to act.',
     status: 'dim',
     importance: 3,
@@ -243,7 +216,7 @@ const CONCEPT_NODES = [
   {
     label: 'Demand Testing',
     type: 'concept',
-    pillar: 'economics',
+    pillar: 'money_game',
     summary: 'Putting an offer in front of buyers before polishing it in private.',
     status: 'dim',
     importance: 4,
@@ -292,14 +265,15 @@ function inferDisplayPillar(text = '', fallback = null) {
 }
 
 function inferStoragePillar(text = '', fallback = null) {
+  if (DISPLAY_PILLARS.includes(fallback)) return fallback
+  if (LEGACY_TO_DISPLAY_PILLAR[fallback]) return LEGACY_TO_DISPLAY_PILLAR[fallback]
   const display = inferDisplayPillar(text, null)
-  if (['money_game', 'how_companies_win', 'whats_coming'].includes(display)) return 'economics'
-  if (['human_mind', 'think_sharper', 'move_people'].includes(display)) return 'psychology'
+  if (display) return display
   return fallback
 }
 
 function nodePosition(index, pillar) {
-  const side = pillar === 'economics' ? 1 : -1
+  const side = ['money_game', 'how_companies_win', 'whats_coming', 'economics'].includes(pillar) ? 1 : -1
   const ring = 0.44 + (index % 4) * 0.11
   const angle = -1.2 + (index % 7) * 0.42
   return {
@@ -493,7 +467,7 @@ function buildDisplayGraph(graph, sessionId = null) {
 }
 
 function seedNodesFromSession(session) {
-  const nodes = [...ROOT_NODES, ...CONCEPT_NODES]
+  const nodes = [...CONCEPT_NODES]
   const answers = session?.onboarding_answers || []
   const profile = session?.axiom_profile || ''
 
@@ -501,9 +475,9 @@ function seedNodesFromSession(session) {
   if (profile) {
     nodes.push({
       label:
-        profilePillar === 'economics'
+        profilePillar === 'money_game'
           ? 'Market Behavior Pattern'
-          : profilePillar === 'psychology'
+          : profilePillar === 'human_mind'
             ? 'Identity Protection Pattern'
             : 'Emerging Pattern',
       type: 'pattern',
@@ -517,7 +491,7 @@ function seedNodesFromSession(session) {
 
   for (const qa of answers.slice(0, 4)) {
     const text = `${qa.question || ''} ${qa.answer || ''}`
-    const pillar = inferStoragePillar(text, qa.pillar === 'money_game' ? 'economics' : null)
+    const pillar = inferStoragePillar(text, qa.pillar || null)
     nodes.push({
       label: qa.answer || qa.question,
       type: 'concept',
@@ -533,7 +507,7 @@ function seedNodesFromSession(session) {
 }
 
 function nodeFromMemory(memory, index) {
-  const pillar = inferStoragePillar(memory.content, null)
+  const pillar = inferStoragePillar(memory.content, memory.primary_pillar || null)
   return normalizeNode({
     label: memory.content.length > 54 ? `${memory.content.slice(0, 51)}...` : memory.content,
     type: MEMORY_TYPE_TO_NODE_TYPE[memory.type] || 'concept',
@@ -549,7 +523,7 @@ function nodeFromExperiment(experiment, index) {
   return normalizeNode({
     label: experiment.description.length > 54 ? `${experiment.description.slice(0, 51)}...` : experiment.description,
     type: 'experiment',
-    pillar: inferStoragePillar(experiment.description, null),
+    pillar: inferStoragePillar(experiment.description, experiment.pillar || null),
     summary: `${experiment.description} (${experiment.window_hours}h window)`,
     status: experiment.status === 'ghosted' ? 'ghosted' : 'active',
     importance: 4,
@@ -578,24 +552,35 @@ export async function syncPersonalWiki(session) {
 
   try {
     const roots = []
-    for (let i = 0; i < ROOT_NODES.length; i++) {
-      const root = await upsertNode(session.id, ROOT_NODES[i], i)
+    for (let i = 0; i < DISPLAY_ROOT_NODES.length; i++) {
+      const root = await upsertNode(session.id, DISPLAY_ROOT_NODES[i], i)
       if (root) roots.push(root)
     }
 
-    const seedNodes = seedNodesFromSession(session).slice(ROOT_NODES.length)
+    const seedNodes = seedNodesFromSession(session)
     for (let i = 0; i < seedNodes.length; i++) {
       const node = await upsertNode(session.id, seedNodes[i], i + 2)
       const root = roots.find((r) => r.pillar === node?.pillar)
       await upsertEdge(session.id, node, root, 'belongs_to', 0.45)
     }
 
-    const { data: memories, error: memoriesError } = await supabase
+    let { data: memories, error: memoriesError } = await supabase
       .from('personal_memories')
-      .select('type, content, importance, confidence, updated_at')
+      .select('type, content, importance, confidence, primary_pillar, secondary_pillars, pillar_confidence, updated_at')
       .eq('user_id', session.user_id)
       .order('updated_at', { ascending: false })
       .limit(10)
+
+    if (memoriesError && /primary_pillar|secondary_pillars|pillar_confidence/.test(memoriesError.message || '')) {
+      const fallback = await supabase
+        .from('personal_memories')
+        .select('type, content, importance, confidence, updated_at')
+        .eq('user_id', session.user_id)
+        .order('updated_at', { ascending: false })
+        .limit(10)
+      memories = fallback.data
+      memoriesError = fallback.error
+    }
 
     if (!memoriesError) {
       for (let i = 0; i < (memories || []).length; i++) {

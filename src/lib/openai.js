@@ -658,6 +658,9 @@ Schema:
     {
       "type": "goal|pattern|belief|experiment_result|preference|decision|fact",
       "content": "One durable, specific memory in third person.",
+      "primary_pillar": "human_mind|money_game|how_companies_win|whats_coming|think_sharper|move_people",
+      "secondary_pillars": ["human_mind|money_game|how_companies_win|whats_coming|think_sharper|move_people"],
+      "pillar_confidence": 0.7,
       "importance": 1,
       "confidence": 0.7
     }
@@ -672,6 +675,10 @@ Rules:
 - Do not store sensitive personal data unless the user explicitly volunteered it and it matters for mentoring.
 - Keep session_notes under 900 characters.
 - Return at most 3 memories.
+- For each memory, classify the primary_pillar by meaning, not keywords. Use the whole recent conversation and the latest response.
+- primary_pillar is the real subject of the memory. Example: "fear of market feedback" is human_mind with money_game secondary, not money_game primary.
+- secondary_pillars should include only genuinely relevant nearby pillars, maximum 2.
+- pillar_confidence must be 0-1 based on how clear the pillar ownership is.
 - importance must be an integer from 1 to 5.
 - confidence must be a number from 0 to 1 based on how directly the user revealed it.
 - concept_progress: only populate entries if the conversation was in LEARNING MODE with an active roadmap. List each topic the user has been taught. concepts_completed must only include concepts where Axiom confirmed understanding via a transition message. concepts_remaining are the roadmap concepts not yet confirmed. If no learning roadmap is active, return an empty array.
