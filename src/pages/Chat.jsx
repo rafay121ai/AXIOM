@@ -33,9 +33,38 @@ function safeParseJsonText(text) {
   }
 }
 
+function inferArtifactTypeFromData(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return null
+  if (
+    data.core_shift ||
+    data.trend_state ||
+    data.what_is_happening_now ||
+    data.observed_moves ||
+    data.forecast ||
+    data.watch_points
+  ) return 'signal_map'
+  if (Array.isArray(data.headers) && Array.isArray(data.rows)) return 'comparison_table'
+  if (Array.isArray(data.steps)) return 'reasoning_cycle'
+  if (Array.isArray(data.layers)) return 'reasoning_stack'
+  if (Array.isArray(data.quadrants)) return 'quadrant'
+  return null
+}
+
+function looksLikeArtifactJson(text = '') {
+  const clean = String(text || '').trim()
+  if (!clean.startsWith('{')) return false
+  return /"(title|topic|core_shift|trend_state|what_is_happening_now|observed_moves|sections|forecast|frameworks|watch_points)"\s*:/.test(clean)
+}
+
 function parseArtifact(text) {
   const match = text.match(/<artifact[^>]*type="([^"]+)"[^>]*>([\s\S]*?)<\/artifact>/)
   if (!match) {
+    const standalone = safeParseJsonText(text)
+    const inferredType = inferArtifactTypeFromData(standalone)
+    if (inferredType) {
+      return { cleanText: '', artifact: { type: inferredType, data: standalone } }
+    }
+
     return {
       cleanText: text.replace(/<book_ref>[\s\S]*?<\/book_ref>/g, '').trim(),
       artifact: null,
@@ -79,6 +108,12 @@ function stripLeakedStructuredPayload(text = '') {
   if (!clean) return ''
 
   const fencedJson = clean.replace(/```json[\s\S]*?```/gi, '').trim()
+  if (looksLikeArtifactJson(fencedJson)) {
+    const parsed = safeParseJsonText(fencedJson)
+    const inferredType = inferArtifactTypeFromData(parsed)
+    if (inferredType || !parsed) return ''
+  }
+
   const jsonStart = fencedJson.indexOf('{')
   const jsonEnd = fencedJson.lastIndexOf('}')
 
@@ -205,7 +240,7 @@ function estimateNodeContextLevel(node) {
 // Strip tag blocks from streaming display — tags are invisible while generating,
 // then resolved into rendered components once the stream ends.
 function stripForDisplay(text) {
-  return text
+  return stripLeakedStructuredPayload(text)
     .replace(/<artifact[^>]*>[\s\S]*?<\/artifact>/g, '')
     .replace(/<artifact[^>]*>[\s\S]*/g, '')   // partial opening tag mid-stream
     .replace(/<book_ref>[\s\S]*?<\/book_ref>/g, '')
@@ -839,7 +874,7 @@ export default function Chat() {
       const parsed = parseMessage(fullContent)
       artifact = parsed.artifact
       cleanText = stripLeakedStructuredPayload(parsed.cleanText)
-      if (!cleanText && requiredArtifactType && !artifact) {
+      if (!cleanText && requiredArtifactType && !artifact && !latestArtifact) {
         cleanText = 'The structured map did not build cleanly. Try again in a moment.'
       }
       experiment = parsed.experiment
@@ -862,7 +897,8 @@ export default function Chat() {
 
       if (requiredArtifactType) {
         try {
-          artifact = await artifactBuildPromise
+          const builtArtifact = await artifactBuildPromise
+          artifact = builtArtifact || artifact || latestArtifact
           if (artifact?.data) {
             fullContent = `${cleanText}\n\n<artifact type="${requiredArtifactType}">\n${JSON.stringify(artifact.data)}\n</artifact>`
           } else {
