@@ -20,7 +20,10 @@ import { generateEmbedding, openai, CHAT_MODEL, requestJsonObject } from './open
 //   limit match_count;
 // $$;
 
-const CONFIDENCE_THRESHOLD = 0.75
+// pgvector cosine similarity for OpenAI embeddings is useful at lower absolute
+// values than a classifier-style confidence score. Empirical source-specific
+// tests in this corpus put strong hits around 0.35-0.45.
+const CONFIDENCE_THRESHOLD = 0.30
 const ROUTER_MODES = new Set([
   'single_pillar',
   'two_pillar',
