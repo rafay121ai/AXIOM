@@ -1563,6 +1563,7 @@ async function upsertWikiSource(source, rawText) {
     author: source.author || null,
     source_url: sourceUrlForRecord(source),
     source_key: buildSourceKey(source),
+    published_at: source.published_at || source.published || source.updated || null,
     summary_for_retrieval: sanitizeText(rawText).slice(0, 1200) || null,
     enrichment_status: 'raw',
     enrichment_version: SOURCE_ENRICHMENT_VERSION,
@@ -2032,6 +2033,33 @@ async function fetchChunkCountForSource(sourceId) {
   return count || 0
 }
 
+async function fetchProcessedTitles() {
+  const titles = new Set()
+  const pageSize = 1000
+  let offset = 0
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('wiki_sources')
+      .select('title')
+      .range(offset, offset + pageSize - 1)
+
+    if (error) {
+      throw new Error(`Could not fetch processed source titles: ${error.message}`)
+    }
+
+    if (!data || data.length === 0) break
+    data.forEach((row) => {
+      if (row.title) titles.add(row.title)
+    })
+
+    if (data.length < pageSize) break
+    offset += pageSize
+  }
+
+  return titles
+}
+
 async function deleteChunksForSource(sourceId, title) {
   const { error } = await supabase
     .from('wiki_chunks')
@@ -2194,6 +2222,7 @@ export {
   embedAndInsert,
   processSource,
   ensureSeedDirectories,
+  fetchProcessedTitles,
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

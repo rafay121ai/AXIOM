@@ -455,6 +455,8 @@ async function fetchSourcesForChunks(chunks) {
       content_type,
       title,
       author,
+      source_url,
+      published_at,
       source_claims,
       axiom_interpretation,
       source_claims_confidence,
@@ -519,6 +521,9 @@ function formatSourceInterpretation(source) {
   const claims = source?.source_claims || {}
   const interpretation = source?.axiom_interpretation || {}
   const thesis = claims.core_thesis || source.summary_for_retrieval || ''
+  const sourceDate = source?.published_at
+    ? new Date(source.published_at).toISOString().slice(0, 10)
+    : ''
   const themes = Array.isArray(claims.main_themes) ? claims.main_themes.slice(0, 3).join(', ') : ''
   const builderImplications = Array.isArray(interpretation?.practical_implications?.builders)
     ? interpretation.practical_implications.builders.slice(0, 2).join(' ')
@@ -533,6 +538,8 @@ function formatSourceInterpretation(source) {
   return [
     thesis,
     `Source weighting: ${describeSourceWeight(source)}.`,
+    sourceDate ? `Source date: ${sourceDate}.` : 'Source date: unknown in library metadata.',
+    source?.source_url ? `Source URL: ${source.source_url}.` : '',
     themes ? `Themes: ${themes}.` : '',
     builderImplications ? `Builders: ${builderImplications}` : '',
     capitalImplications ? `Capital: ${capitalImplications}` : '',

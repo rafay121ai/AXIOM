@@ -74,12 +74,41 @@ function parseMessage(text) {
   return { cleanText, artifact, experiment }
 }
 
+function stripLeakedStructuredPayload(text = '') {
+  const clean = String(text || '').trim()
+  if (!clean) return ''
+
+  const fencedJson = clean.replace(/```json[\s\S]*?```/gi, '').trim()
+  const jsonStart = fencedJson.indexOf('{')
+  const jsonEnd = fencedJson.lastIndexOf('}')
+
+  if (jsonStart !== -1 && jsonEnd > jsonStart) {
+    const before = fencedJson.slice(0, jsonStart).trim()
+    const after = fencedJson.slice(jsonEnd + 1).trim()
+    const candidate = fencedJson.slice(jsonStart, jsonEnd + 1)
+    const parsed = safeParseJsonText(candidate)
+    if (parsed && typeof parsed === 'object') {
+      return [before, after].filter(Boolean).join('\n\n').trim()
+    }
+  }
+
+  return fencedJson
+}
+
 function shouldHaveArtifact(text) {
   return /\b(example|examples|framework|steps|process|compare|comparison|breakdown|checklist|matrix|timeline|how does|how do|how should|what should be in|walk me through)\b/i.test(text)
 }
 
 function asksForExperimentOrApplication(text = '') {
   return /\b(experiment|practical|apply|application|next step|next move|what should i do|what do i do|do today|try today|test this|real[- ]world)\b/i.test(text)
+}
+
+function looksLikeExperimentCompletion(text = '') {
+  return /\b(i did it|i completed|completed it|finished it|i finished|ran the experiment|did the experiment|reporting back|here'?s what happened|i tested it)\b/i.test(text)
+}
+
+function looksLikeExperimentCancel(text = '') {
+  return /\b(cancel this experiment|cancel the experiment|drop this experiment|skip this experiment|remove this experiment|i'?m not doing this)\b/i.test(text)
 }
 
 function artifactLooksLikeExperiment(artifact) {
@@ -206,6 +235,9 @@ function normalizeExperiment(row) {
     assigned_at: row.assigned_at,
     due_at: row.due_at,
     completed_at: row.completed_at,
+    cancelled_at: row.cancelled_at,
+    ghosted_at: row.ghosted_at,
+    outcome: row.outcome,
   }
 }
 
@@ -308,6 +340,8 @@ export default function Chat() {
   const [messages, setMessages] = useState([])  // { id, role, content, streaming, experiment, artifactPendingType }
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [editingMessageId, setEditingMessageId] = useState(null)
+  const [editText, setEditText] = useState('')
   const [loading, setLoading] = useState(true)
   const [aiMessageCount, setAiMessageCount] = useState(0) // assistant messages saved to DB this session
 
@@ -551,9 +585,14 @@ export default function Chat() {
 
 
   // ── Send Message ──────────────────────────────────────────────────────────
-  async function sendMessage(overrideText = null) {
+  async function sendMessage(overrideText = null, options = {}) {
     const text = (overrideText ?? input).trim()
     if (!text || sendingRef.current || !session) return
+    const {
+      reuseUserMessage = null,
+      historyMessages = null,
+      replaceAssistantId = null,
+    } = options
 
     sendingRef.current = true
     setInput('')
@@ -562,33 +601,73 @@ export default function Chat() {
     }
     setSending(true)
 
-    const userMsgId = crypto.randomUUID()
-    const assistantMsgId = crypto.randomUUID()
+    let userMsgId = reuseUserMessage?.id || crypto.randomUUID()
+    let assistantMsgId = replaceAssistantId || crypto.randomUUID()
+    const baseMessages = historyMessages || messages
+    let fullContent = ''
 
-    // Append user message optimistically
-    setMessages((prev) => [
-      ...prev,
-      { id: userMsgId, role: 'user', content: text, artifact: null, experiment: null },
-      { id: assistantMsgId, role: 'assistant', content: '', streaming: true, artifact: null, experiment: null, artifactPendingType: null },
-    ])
+    setMessages((prev) => {
+      const withoutReplacement = replaceAssistantId
+        ? prev.filter((m) => m.id !== replaceAssistantId)
+        : prev
+      const assistantPlaceholder = {
+        id: assistantMsgId,
+        role: 'assistant',
+        content: '',
+        streaming: true,
+        status: null,
+        artifact: null,
+        experiment: null,
+        artifactPendingType: null,
+      }
+
+      if (reuseUserMessage) return [...withoutReplacement, assistantPlaceholder]
+
+      return [
+        ...withoutReplacement,
+        { id: userMsgId, role: 'user', content: text, artifact: null, experiment: null },
+        assistantPlaceholder,
+      ]
+    })
 
     try {
-      // Save user message
-      await supabase.from('messages').insert({
-        session_id: session.id,
-        thread_id: threadId,
-        role: 'user',
-        content: text,
-      })
+      if (!reuseUserMessage) {
+        const { data: savedUser, error: userInsertError } = await supabase
+          .from('messages')
+          .insert({
+            session_id: session.id,
+            thread_id: threadId,
+            role: 'user',
+            content: text,
+          })
+          .select('id, created_at')
+          .single()
+
+        if (userInsertError) throw userInsertError
+
+        if (savedUser?.id) {
+          const optimisticUserId = userMsgId
+          userMsgId = savedUser.id
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === optimisticUserId
+                ? { ...m, id: savedUser.id, created_at: savedUser.created_at }
+                : m
+            )
+          )
+        }
+      }
 
       const latestExperiments = await fetchSessionExperiments(session.id)
-      const sessionForTurn = {
+      let sessionForTurn = {
         ...session,
         active_experiments: latestExperiments || session.active_experiments || [],
       }
       if (latestExperiments) setSession(sessionForTurn)
 
-      const incidentQuestion = isAwaitingConcreteIncident(messages)
+      sessionForTurn = await maybeCaptureExperimentReport(text, sessionForTurn)
+
+      const incidentQuestion = isAwaitingConcreteIncident(baseMessages)
         ? followUpIncidentQuestion(text)
         : firstPersonIncidentQuestion(text)
       if (incidentQuestion) {
@@ -600,12 +679,28 @@ export default function Chat() {
           )
         )
 
-        await supabase.from('messages').insert({
-          session_id: session.id,
-          thread_id: threadId,
-          role: 'assistant',
-          content: incidentQuestion,
-        })
+        const { data: savedIncidentAssistant, error: incidentInsertError } = await supabase
+          .from('messages')
+          .insert({
+            session_id: session.id,
+            thread_id: threadId,
+            role: 'assistant',
+            content: incidentQuestion,
+          })
+          .select('id, created_at')
+          .single()
+
+        if (incidentInsertError) throw incidentInsertError
+
+        if (savedIncidentAssistant?.id) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId
+                ? { ...m, id: savedIncidentAssistant.id, created_at: savedIncidentAssistant.created_at }
+                : m
+            )
+          )
+        }
 
         setAiMessageCount((prev) => prev + 1)
         sendingRef.current = false
@@ -630,8 +725,8 @@ export default function Chat() {
       const namedPatternsContext = formatNamedPatternsContext(personalMemories)
 
       // Build conversation history for OpenAI (last 20 msgs, exclude the placeholder)
-      const history = messages
-        .filter((m) => !m.streaming && m.content)
+      const history = baseMessages
+        .filter((m) => !m.streaming && m.content && m.id !== userMsgId)
         .slice(-20)
         .map((m) => ({ role: m.role, content: m.content }))
 
@@ -703,7 +798,6 @@ export default function Chat() {
         session_id: sessionForTurn.id,
       }, { signal: runAbort.signal })
 
-      let fullContent = ''
       let streamDone = false
 
       for await (const chunk of stream) {
@@ -744,7 +838,10 @@ export default function Chat() {
       // Parse artifact and experiment tags — done exactly once after stream ends
       const parsed = parseMessage(fullContent)
       artifact = parsed.artifact
-      cleanText = parsed.cleanText
+      cleanText = stripLeakedStructuredPayload(parsed.cleanText)
+      if (!cleanText && requiredArtifactType && !artifact) {
+        cleanText = 'The structured map did not build cleanly. Try again in a moment.'
+      }
       experiment = parsed.experiment
       textDone = true
 
@@ -777,6 +874,9 @@ export default function Chat() {
         }
       } else {
         artifact = parsed.artifact
+        if (!artifact && parsed.cleanText !== cleanText) {
+          fullContent = cleanText
+        }
       }
 
       if (shouldHoldExperiment && artifactLooksLikeExperiment(artifact)) {
@@ -805,12 +905,30 @@ export default function Chat() {
       )
 
       // Save assistant message (raw content with experiment tag intact for audit)
-      await supabase.from('messages').insert({
-        session_id: sessionForTurn.id,
-        thread_id: threadId,
-        role: 'assistant',
-        content: fullContent,
-      })
+      const { data: savedAssistant, error: assistantInsertError } = await supabase
+        .from('messages')
+        .insert({
+          session_id: sessionForTurn.id,
+          thread_id: threadId,
+          role: 'assistant',
+          content: fullContent,
+        })
+        .select('id, created_at')
+        .single()
+
+      if (assistantInsertError) throw assistantInsertError
+
+      if (savedAssistant?.id) {
+        const optimisticAssistantId = assistantMsgId
+        assistantMsgId = savedAssistant.id
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === optimisticAssistantId
+              ? { ...m, id: savedAssistant.id, created_at: savedAssistant.created_at }
+              : m
+          )
+        )
+      }
 
       setAiMessageCount((prev) => prev + 1)
 
@@ -818,14 +936,39 @@ export default function Chat() {
       let sessionForMemory = sessionForTurn
       if (experiment) {
         sessionForMemory = await assignExperiment(experiment, sessionForTurn)
+        const assigned = findMatchingExperiment(sessionForMemory.active_experiments, experiment)
+        if (assigned) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId
+                ? { ...m, experiment: assigned }
+                : m
+            )
+          )
+        }
       }
 
-      const updatedSession = await updatePersonalMemory(sessionForMemory, messages, text, cleanText)
+      const updatedSession = await updatePersonalMemory(sessionForMemory, baseMessages, text, cleanText)
       setSession(updatedSession)
     } catch (err) {
       // AbortError is intentional (pagehide or component unmount) — don't show an error
       if (err.name === 'AbortError') {
         console.log('Stream aborted.')
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId
+              ? {
+                  ...m,
+                  content: m.content || stripForDisplay(fullContent) || 'Response stopped.',
+                  streaming: false,
+                  status: 'interrupted',
+                  artifact: null,
+                  experiment: null,
+                  artifactPendingType: null,
+                }
+              : m
+          )
+        )
       } else {
         console.error('Send error:', err)
         setMessages((prev) =>
@@ -837,6 +980,7 @@ export default function Chat() {
         )
       }
     } finally {
+      abortControllerRef.current = null
       sendingRef.current = false
       setSending(false)
     }
@@ -905,6 +1049,209 @@ export default function Chat() {
     return updatedSession
   }
 
+  function findMatchingExperiment(experiments = [], experiment = {}) {
+    if (!experiment) return null
+    return [...experiments]
+      .reverse()
+      .find((item) =>
+        item.status === 'active' &&
+        item.description === experiment.description &&
+        Number(item.window_hours) === Number(experiment.window_hours || 48)
+      ) || null
+  }
+
+  async function updateExperimentStatus(experimentId, status, outcome = '') {
+    if (!session || !experimentId) return null
+
+    const now = new Date().toISOString()
+    const updates = { status }
+    if (status === 'completed') {
+      updates.completed_at = now
+      if (outcome) updates.outcome = outcome
+    }
+    if (status === 'cancelled') updates.cancelled_at = now
+    if (status === 'ghosted') updates.ghosted_at = now
+
+    const { data, error } = await supabase
+      .from('experiments')
+      .update(updates)
+      .eq('id', experimentId)
+      .select('*')
+      .single()
+
+    if (error) {
+      console.warn('[experiments] Status update failed:', error.message)
+      return null
+    }
+
+    const normalized = normalizeExperiment(data)
+    const sessionUpdates = status === 'completed' ? { consecutive_miss_count: 0 } : {}
+    if (Object.keys(sessionUpdates).length > 0) {
+      await supabase
+        .from('sessions')
+        .update(sessionUpdates)
+        .eq('id', session.id)
+    }
+
+    setSession((prev) => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        ...sessionUpdates,
+        active_experiments: (prev.active_experiments || []).map((exp) =>
+          exp.id === experimentId ? normalized : exp
+        ),
+      }
+    })
+
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.experiment?.id === experimentId
+          ? { ...msg, experiment: normalized }
+          : msg
+      )
+    )
+
+    return normalized
+  }
+
+  async function maybeCaptureExperimentReport(text, baseSession) {
+    const activeExperiments = (baseSession.active_experiments || []).filter((exp) => exp.status === 'active')
+    if (activeExperiments.length === 0) return baseSession
+
+    const target = activeExperiments[0]
+    const nextStatus = looksLikeExperimentCancel(text)
+      ? 'cancelled'
+      : looksLikeExperimentCompletion(text)
+        ? 'completed'
+        : null
+
+    if (!nextStatus) return baseSession
+
+    const updatedExperiment = await updateExperimentStatus(target.id, nextStatus, text)
+    if (!updatedExperiment) return baseSession
+
+    return {
+      ...baseSession,
+      ...(nextStatus === 'completed' ? { consecutive_miss_count: 0 } : {}),
+      active_experiments: (baseSession.active_experiments || []).map((exp) =>
+        exp.id === target.id ? updatedExperiment : exp
+      ),
+    }
+  }
+
+  function stopGeneration() {
+    abortControllerRef.current?.abort()
+  }
+
+  function followingAssistantFor(userMessage, list = messages) {
+    const index = list.findIndex((msg) => msg.id === userMessage?.id)
+    if (index === -1) return null
+    return list.slice(index + 1).find((msg) => msg.role === 'assistant') || null
+  }
+
+  async function retireAssistantExperiment(assistantMessage, reason) {
+    const experiment = assistantMessage?.experiment
+    if (!experiment?.id || experiment.status !== 'active') return
+    await updateExperimentStatus(experiment.id, 'cancelled', reason)
+  }
+
+  async function regenerateAssistant(userMessage, assistantMessage = null) {
+    if (!userMessage || sendingRef.current) return
+    const targetAssistant = assistantMessage || followingAssistantFor(userMessage)
+
+    abortControllerRef.current?.abort()
+    const historyMessages = messages.filter((msg) =>
+      msg.id !== targetAssistant?.id &&
+      !msg.streaming &&
+      (!userMessage.created_at || !msg.created_at || msg.created_at <= userMessage.created_at)
+    )
+
+    await retireAssistantExperiment(targetAssistant, 'Cancelled by assistant regeneration.')
+
+    if (targetAssistant?.id) {
+      await supabase.from('messages').delete().eq('id', targetAssistant.id)
+    }
+
+    setMessages((prev) => prev.filter((msg) => msg.id !== targetAssistant?.id))
+    sendMessage(userMessage.content, {
+      reuseUserMessage: userMessage,
+      historyMessages,
+    })
+  }
+
+  function startEditingMessage(message) {
+    if (!message || sendingRef.current) return
+    setEditingMessageId(message.id)
+    setEditText(message.content || '')
+  }
+
+  function cancelEditingMessage() {
+    setEditingMessageId(null)
+    setEditText('')
+  }
+
+  async function saveEditedMessage(message) {
+    const text = editText.trim()
+    if (!message || !text || text === message.content || sendingRef.current) {
+      cancelEditingMessage()
+      return
+    }
+
+    const targetAssistant = followingAssistantFor(message)
+    abortControllerRef.current?.abort()
+
+    const { error } = await supabase
+      .from('messages')
+      .update({ content: text })
+      .eq('id', message.id)
+
+    if (error) {
+      console.warn('[messages] Edit failed:', error.message)
+      return
+    }
+
+    await retireAssistantExperiment(targetAssistant, 'Cancelled by user message edit.')
+
+    if (targetAssistant?.id) {
+      await supabase.from('messages').delete().eq('id', targetAssistant.id)
+    }
+
+    const editedMessage = { ...message, content: text }
+    const historyMessages = messages
+      .map((msg) => (msg.id === message.id ? editedMessage : msg))
+      .filter((msg) =>
+        msg.id !== targetAssistant?.id &&
+        !msg.streaming &&
+        (!message.created_at || !msg.created_at || msg.created_at <= message.created_at)
+      )
+
+    setMessages((prev) =>
+      prev
+        .map((msg) => (msg.id === message.id ? editedMessage : msg))
+        .filter((msg) => msg.id !== targetAssistant?.id)
+    )
+    cancelEditingMessage()
+    sendMessage(text, {
+      reuseUserMessage: editedMessage,
+      historyMessages,
+    })
+  }
+
+  function reportExperiment(experiment) {
+    if (!experiment) return
+    setInput(`Reporting back on "${experiment.description}": `)
+    requestAnimationFrame(() => textareaRef.current?.focus())
+  }
+
+  async function completeExperiment(experiment) {
+    await updateExperimentStatus(experiment.id, 'completed', 'Marked done from experiment card.')
+  }
+
+  async function cancelExperiment(experiment) {
+    await updateExperimentStatus(experiment.id, 'cancelled', 'Cancelled from experiment card.')
+  }
+
   // ── Textarea auto-grow ────────────────────────────────────────────────────
   function handleTextareaInput(e) {
     setInput(e.target.value)
@@ -943,6 +1290,13 @@ export default function Chat() {
     )
   }
 
+  const latestUserMessage = [...messages]
+    .reverse()
+    .find((msg) => msg.role === 'user' && !msg.streaming)
+  const latestAssistantMessage = [...messages]
+    .reverse()
+    .find((msg) => msg.role === 'assistant')
+
   return (
     <div className="chat">
       {/* Header */}
@@ -960,6 +1314,19 @@ export default function Chat() {
             <MessageGroup
               key={msg.id}
               msg={msg}
+              isLatestUser={msg.id === latestUserMessage?.id}
+              isLatestAssistant={msg.id === latestAssistantMessage?.id}
+              editingMessageId={editingMessageId}
+              editText={editText}
+              setEditText={setEditText}
+              onStartEdit={startEditingMessage}
+              onCancelEdit={cancelEditingMessage}
+              onSaveEdit={saveEditedMessage}
+              onRegenerate={latestUserMessage ? () => regenerateAssistant(latestUserMessage, msg) : null}
+              onExperimentReport={reportExperiment}
+              onExperimentDone={completeExperiment}
+              onExperimentCancel={cancelExperiment}
+              sending={sending}
               onAnswer={handleAnswer}
               onSubmit={handleArtifactSubmit}
               onUserPlot={handleUserPlot}
@@ -980,18 +1347,21 @@ export default function Chat() {
             rows={1}
             onChange={handleTextareaInput}
             onKeyDown={handleKeyDown}
-            disabled={sending}
           />
           <button
-            className="chat__send"
+            className={`chat__send${sending ? ' chat__send--stop' : ''}`}
             onMouseDown={(e) => e.preventDefault()}
-            onClick={() => sendMessage()}
-            disabled={!input.trim() || sending}
-            aria-label="Send"
+            onClick={() => (sending ? stopGeneration() : sendMessage())}
+            disabled={!sending && !input.trim()}
+            aria-label={sending ? 'Stop response' : 'Send'}
           >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M2 8L14 8M14 8L9 3M14 8L9 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
+            {sending ? (
+              <span className="chat__stop-icon" />
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M2 8L14 8M14 8L9 3M14 8L9 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
           </button>
         </div>
       </div>
@@ -1001,10 +1371,35 @@ export default function Chat() {
 
 // ── Message Group ─────────────────────────────────────────────────────────────
 // Renders a message + optional experiment/warning card below it
-function MessageGroup({ msg, onAnswer, onSubmit, onUserPlot }) {
+function MessageGroup({
+  msg,
+  isLatestUser,
+  isLatestAssistant,
+  editingMessageId,
+  editText,
+  setEditText,
+  onStartEdit,
+  onCancelEdit,
+  onSaveEdit,
+  onRegenerate,
+  onExperimentReport,
+  onExperimentDone,
+  onExperimentCancel,
+  sending,
+  onAnswer,
+  onSubmit,
+  onUserPlot,
+}) {
   const showArtifact   = msg.role === 'assistant' && msg.artifact && !msg.streaming
   const showExperiment = msg.role === 'assistant' && msg.experiment && !msg.streaming
   const showArtifactPending = false
+  const isEditing = msg.role === 'user' && editingMessageId === msg.id
+  const canEdit = msg.role === 'user' && isLatestUser && !sending && !isEditing
+  const canRegenerate = msg.role === 'assistant' && isLatestAssistant && !sending && !msg.streaming && typeof onRegenerate === 'function'
+  const messageActions = [
+    canEdit && { label: 'Edit', onClick: () => onStartEdit(msg) },
+    canRegenerate && { label: 'Regenerate', onClick: onRegenerate },
+  ]
 
   // If Axiom placed <artifact_here/> inside the text, inject the artifact inline
   // at that position instead of appending it below the bubble.
@@ -1022,12 +1417,36 @@ function MessageGroup({ msg, onAnswer, onSubmit, onUserPlot }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-      <MessageBubble
-        role={msg.role}
-        content={msg.content}
-        streaming={msg.streaming}
-        artifactNode={inlineArtifact ? artifactElement : null}
-      />
+      {isEditing ? (
+        <div className="msg-group msg-group--user">
+          <div className="msg-edit">
+            <textarea
+              className="msg-edit__textarea"
+              value={editText}
+              rows={3}
+              onChange={(e) => setEditText(e.target.value)}
+              autoFocus
+            />
+            <div className="msg-edit__actions">
+              <button type="button" className="msg__action" onClick={onCancelEdit}>
+                Cancel
+              </button>
+              <button type="button" className="msg__action msg__action--primary" onClick={() => onSaveEdit(msg)}>
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <MessageBubble
+          role={msg.role}
+          content={msg.content}
+          streaming={msg.streaming}
+          status={msg.status}
+          actions={messageActions}
+          artifactNode={inlineArtifact ? artifactElement : null}
+        />
+      )}
       {showArtifactPending && (
         <ArtifactLoadingPreview artifactType={msg.artifactPendingType} />
       )}
@@ -1040,6 +1459,10 @@ function MessageGroup({ msg, onAnswer, onSubmit, onUserPlot }) {
           realWorldExample={msg.experiment.real_world_example}
           whatToNotice={msg.experiment.what_to_notice}
           successCondition={msg.experiment.success_condition}
+          status={msg.experiment.status}
+          onReport={msg.experiment.id && msg.experiment.status === 'active' ? () => onExperimentReport(msg.experiment) : null}
+          onDone={msg.experiment.id && msg.experiment.status === 'active' ? () => onExperimentDone(msg.experiment) : null}
+          onCancel={msg.experiment.id && msg.experiment.status === 'active' ? () => onExperimentCancel(msg.experiment) : null}
         />
       )}
     </div>

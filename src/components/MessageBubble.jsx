@@ -125,14 +125,40 @@ function renderContent(raw, artifactNode = null) {
   })
 }
 
-export default function MessageBubble({ role, content, streaming, artifactNode }) {
+export default function MessageBubble({
+  role,
+  content,
+  streaming,
+  artifactNode,
+  status,
+  actions = [],
+}) {
   if (!content && !streaming) return null
+  const visibleActions = actions.filter(Boolean)
 
   return (
     <div className={`msg-group msg-group--${role}`}>
-      <div className={`msg msg--${role}${streaming ? ' msg--streaming' : ''}`}>
+      <div className={`msg msg--${role}${streaming ? ' msg--streaming' : ''}${status === 'interrupted' ? ' msg--interrupted' : ''}`}>
         {renderContent(content, artifactNode)}
       </div>
+      {status === 'interrupted' && (
+        <div className="msg__status">Stopped</div>
+      )}
+      {visibleActions.length > 0 && (
+        <div className={`msg__actions msg__actions--${role}`}>
+          {visibleActions.map((action) => (
+            <button
+              key={action.label}
+              type="button"
+              className="msg__action"
+              onClick={action.onClick}
+              disabled={action.disabled}
+            >
+              {action.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

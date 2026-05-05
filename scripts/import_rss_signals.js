@@ -43,6 +43,15 @@ function unique(values) {
   return [...new Set(values.filter(Boolean))]
 }
 
+function normalizeDate(value) {
+  const raw = cleanText(value)
+  if (!raw) return null
+
+  const parsed = new Date(raw)
+  if (Number.isNaN(parsed.getTime())) return null
+  return parsed.toISOString()
+}
+
 function buildSourceFromRssItem(feed, item) {
   const title = cleanText(item.title || item.summary || 'Untitled RSS item')
   const link = cleanText(item.link)
@@ -54,6 +63,7 @@ function buildSourceFromRssItem(feed, item) {
     title,
     author: cleanText(item.author || feed.author, feed.author),
     url: link,
+    published_at: normalizeDate(item.published || item.updated),
   }
 }
 
@@ -93,6 +103,7 @@ function parseFeedItems(xml) {
       link: extractTag(item, ['link']),
       author: extractTag(item, ['dc:creator', 'author']),
       summary: extractTag(item, ['description', 'content:encoded']),
+      published: extractTag(item, ['pubDate', 'dc:date', 'published', 'updated']),
     }))
   }
 
@@ -104,6 +115,7 @@ function parseFeedItems(xml) {
       link: cleanText(decodeXmlEntities(linkMatch?.[1] || '')),
       author: extractTag(entry, ['name', 'author']),
       summary: extractTag(entry, ['summary', 'content']),
+      published: extractTag(entry, ['published', 'updated']),
     }
   })
 }

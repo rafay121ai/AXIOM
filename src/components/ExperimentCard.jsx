@@ -28,12 +28,16 @@ function CollapsibleSection({ label, content }) {
 }
 
 export default function ExperimentCard({
+  status = 'active',
   description,
   windowHours,
   howToDoIt,
   realWorldExample,
   whatToNotice,
   successCondition,
+  onReport,
+  onDone,
+  onCancel,
 }) {
   const windowLabel =
     windowHours <= 24
@@ -49,9 +53,35 @@ export default function ExperimentCard({
 
   return (
     <div className="experiment-card">
-      <span className="experiment-card__label">Experiment</span>
+      <div className="experiment-card__topline">
+        <span className="experiment-card__label">Experiment</span>
+        {status && status !== 'active' && (
+          <span className={`experiment-card__status experiment-card__status--${status}`}>
+            {status}
+          </span>
+        )}
+      </div>
       <p className="experiment-card__description">{description}</p>
       <span className="experiment-card__window">{windowLabel}</span>
+      {(onReport || onDone || onCancel) && (
+        <div className="experiment-card__actions">
+          {onReport && (
+            <button type="button" className="experiment-card__action" onClick={onReport}>
+              Report
+            </button>
+          )}
+          {onDone && (
+            <button type="button" className="experiment-card__action" onClick={onDone}>
+              Done
+            </button>
+          )}
+          {onCancel && (
+            <button type="button" className="experiment-card__action experiment-card__action--muted" onClick={onCancel}>
+              Cancel
+            </button>
+          )}
+        </div>
+      )}
       {sections.length > 0 && (
         <div className="experiment-card__sections">
           {sections.map((s) => (

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as THREE from 'three'
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js'
@@ -161,6 +161,64 @@ function previewText(content = '') {
   return text.length > 88 ? `${text.slice(0, 85)}...` : text
 }
 
+function recentMessageText(messages = []) {
+  return messages
+    .filter(message => message.role === 'user' || message.role === 'assistant')
+    .slice(0, 8)
+    .map(message => message.content || '')
+    .join(' ')
+    .toLowerCase()
+}
+
+function recencyScore(value) {
+  if (!value) return 0
+  const time = new Date(value).getTime()
+  if (!Number.isFinite(time)) return 0
+  const ageHours = Math.max(0, (Date.now() - time) / 36e5)
+  return Math.max(0, 24 - Math.min(24, ageHours))
+}
+
+function recommendBrainNodes(graph, messages = []) {
+  const nodes = (graph.nodes || []).filter(node => node.type !== 'pillar')
+  const text = recentMessageText(messages)
+
+  return nodes
+    .filter(node => !['resolved', 'cancelled', 'completed'].includes(node.status))
+    .map(node => {
+      const label = `${node.label || ''} ${node.summary || ''}`.toLowerCase()
+      const words = label.split(/\W+/).filter(word => word.length > 4)
+      const overlap = words.filter(word => text.includes(word)).length
+      const activeExperiment = node.type === 'experiment' && node.status === 'active'
+      const ghostedExperiment = node.type === 'experiment' && node.status === 'ghosted'
+      const score =
+        (activeExperiment ? 1000 : 0) +
+        (ghostedExperiment ? 800 : 0) +
+        (overlap * 70) +
+        (isNodeLit(node) ? 80 : 0) +
+        ((node.importance || 0) * 12) +
+        (recencyScore(node.last_activated_at) * 3) +
+        ((node.confidence || 0) * 10)
+
+      return { node, score }
+    })
+    .filter(item => item.score > 50)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map(item => item.node.id)
+}
+
+function decorateRecommendedGraph(graph, recommendedNodeIds = []) {
+  if (!recommendedNodeIds.length) return graph
+  const levels = new Map(recommendedNodeIds.map((id, index) => [id, index === 0 ? 2 : 1]))
+  return {
+    ...graph,
+    nodes: (graph.nodes || []).map(node => ({
+      ...node,
+      recommendation_level: levels.get(node.id) || 0,
+    })),
+  }
+}
+
 function labelForThread(threadId) {
   return threadId ? 'Branch thread' : 'Main thread'
 }
@@ -205,12 +263,16 @@ function nodeVisualScore(node) {
   )
 }
 
+function recommendationLevel(node) {
+  return Number(node.recommendation_level || 0)
+}
+
 function visibleGraph(graph) {
   const rawNodes = graph.nodes || []
   const pillarNodes = rawNodes.filter(node => node.type === 'pillar')
   const candidateNodes = rawNodes
     .filter(node => node.type !== 'pillar')
-    .filter(node => isNodeLit(node) || node.type === 'experiment' || (node.importance || 0) >= 4)
+    .filter(node => recommendationLevel(node) > 0 || isNodeLit(node) || node.type === 'experiment' || (node.importance || 0) >= 4)
     .sort((a, b) => nodeVisualScore(b) - nodeVisualScore(a))
     .slice(0, MAX_VISIBLE_NODES)
 
@@ -249,7 +311,7 @@ function visibleGraph(graph) {
 }
 
 function isNodeMuted(node, connected) {
-  return node.type !== 'pillar' && !connected
+  return node.type !== 'pillar' && !connected && recommendationLevel(node) === 0
 }
 
 function renderNodeColor(node, muted = false) {
@@ -423,8 +485,9 @@ function createNodeMesh(node, connected = false) {
   const muted = isNodeMuted(node, connected)
   const color = renderNodeColor(node, muted)
   const lit = isNodeLit(node)
+  const recommended = recommendationLevel(node)
   const pillar = node.type === 'pillar'
-  const opacity = muted ? 0.20 : pillar ? PILLAR_NODE_OPACITY : lit ? 0.95 : 0.42
+  const opacity = muted ? 0.20 : pillar ? PILLAR_NODE_OPACITY : recommended ? 0.82 : lit ? 0.95 : 0.42
 
   const geometry = new THREE.SphereGeometry(radius, 16, 16)
   const material = createGradientNodeMaterial(color, opacity, muted)
@@ -436,10 +499,10 @@ function createNodeMesh(node, connected = false) {
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
-    opacity: muted ? 0.035 : pillar ? PILLAR_SPRITE_OPACITY : lit ? 0.20 : 0.075,
+    opacity: muted ? 0.035 : pillar ? PILLAR_SPRITE_OPACITY : recommended ? (recommended > 1 ? 0.28 : 0.18) : lit ? 0.20 : 0.075,
   })
   const sprite = new THREE.Sprite(spriteMat)
-  const spriteScale = radius * (muted ? 1.35 : pillar ? PILLAR_SPRITE_SCALE : lit ? 2.35 : 1.65)
+  const spriteScale = radius * (muted ? 1.35 : pillar ? PILLAR_SPRITE_SCALE : recommended ? (recommended > 1 ? 3.0 : 2.55) : lit ? 2.35 : 1.65)
   sprite.scale.set(spriteScale, spriteScale, 1)
   mesh.add(sprite)
 
@@ -449,10 +512,10 @@ function createNodeMesh(node, connected = false) {
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
-    opacity: muted ? 0 : pillar ? PILLAR_HALO_OPACITY : lit ? 0.22 : 0.12,
+    opacity: muted ? 0 : pillar ? PILLAR_HALO_OPACITY : recommended ? (recommended > 1 ? 0.30 : 0.20) : lit ? 0.22 : 0.12,
   })
   const halo = new THREE.Sprite(haloMat)
-  const haloScale = muted ? 0 : radius * (pillar ? PILLAR_HALO_SCALE : lit ? 3.0 : 2.4)
+  const haloScale = muted ? 0 : radius * (pillar ? PILLAR_HALO_SCALE : recommended ? (recommended > 1 ? 3.7 : 3.15) : lit ? 3.0 : 2.4)
   halo.scale.set(haloScale, haloScale, 1)
   mesh.add(halo)
 
@@ -635,24 +698,25 @@ function buildScene(th, graph) {
       mesh.userData.connected = connectedIds.has(latest.id)
       if (mesh.userData.node.id !== th.activeIdRef?.current) {
         const lit = isNodeLit(latest)
+        const recommended = recommendationLevel(latest)
         const radius = getNodeRadius(latest)
         const muted = isNodeMuted(latest, mesh.userData.connected)
         const renderColor = renderNodeColor(latest, muted)
         setNodeGradientColors(mesh, renderColor, muted)
-        setNodeOpacity(mesh, muted ? 0.20 : lit ? 0.95 : 0.42)
+        setNodeOpacity(mesh, muted ? 0.20 : recommended ? 0.82 : lit ? 0.95 : 0.42)
         const sprite = mesh.userData.sprite
         if (sprite) {
           const pillar = latest.type === 'pillar'
           sprite.material.color.set(renderColor)
-          sprite.scale.setScalar(radius * (muted ? 1.35 : pillar ? PILLAR_SPRITE_SCALE : lit ? 2.35 : 1.65))
-          sprite.material.opacity = muted ? 0.035 : pillar ? PILLAR_SPRITE_OPACITY : lit ? 0.20 : 0.075
+          sprite.scale.setScalar(radius * (muted ? 1.35 : pillar ? PILLAR_SPRITE_SCALE : recommended ? (recommended > 1 ? 3.0 : 2.55) : lit ? 2.35 : 1.65))
+          sprite.material.opacity = muted ? 0.035 : pillar ? PILLAR_SPRITE_OPACITY : recommended ? (recommended > 1 ? 0.28 : 0.18) : lit ? 0.20 : 0.075
         }
         const halo = mesh.userData.halo
         if (halo) {
           const pillar = latest.type === 'pillar'
           halo.material.color.set(renderColor)
-          halo.scale.setScalar(muted ? 0 : radius * (pillar ? PILLAR_HALO_SCALE : lit ? 3.0 : 2.4))
-          halo.material.opacity = muted ? 0 : pillar ? PILLAR_HALO_OPACITY : lit ? 0.22 : 0.12
+          halo.scale.setScalar(muted ? 0 : radius * (pillar ? PILLAR_HALO_SCALE : recommended ? (recommended > 1 ? 3.7 : 3.15) : lit ? 3.0 : 2.4))
+          halo.material.opacity = muted ? 0 : pillar ? PILLAR_HALO_OPACITY : recommended ? (recommended > 1 ? 0.30 : 0.20) : lit ? 0.22 : 0.12
         }
       }
     })
@@ -719,6 +783,7 @@ export default function Brain() {
   const [session, setSession] = useState(null)
   const [authUser, setAuthUser] = useState(null)
   const [graph, setGraph] = useState({ nodes: [], edges: [] })
+  const [recentMessages, setRecentMessages] = useState([])
   const [conversationItems, setConversationItems] = useState([])
   const [activeId, setActiveId] = useState(null)
   const [hoveredId, setHoveredId] = useState(null)
@@ -737,6 +802,10 @@ export default function Brain() {
   const threeRef = useRef(null)
   const activeIdRef = useRef(null)
   const touch = isTouchDevice()
+  const recommendedNodeIds = useMemo(
+    () => recommendBrainNodes(graph, recentMessages),
+    [graph, recentMessages]
+  )
 
   // ─── Data fetching (unchanged) ──────────────────────────────────────────────
 
@@ -788,6 +857,7 @@ export default function Brain() {
         .order('created_at', { ascending: false })
 
       if (!cancelled && !messagesError) {
+        setRecentMessages(rawMessages || [])
         const byThread = new Map()
         for (const message of rawMessages || []) {
           const key = message.thread_id || '__main__'
@@ -1038,8 +1108,8 @@ export default function Brain() {
   useEffect(() => {
     const th = threeRef.current
     if (!th || !graph.nodes?.length) return
-    buildScene(th, graph)
-  }, [graph])
+    buildScene(th, decorateRecommendedGraph(graph, recommendedNodeIds))
+  }, [graph, recommendedNodeIds])
 
   // ─── Active ID → labels + materials ────────────────────────────────────────
 
@@ -1057,6 +1127,7 @@ export default function Brain() {
       const node = mesh.userData.node
       const isActive = node.id === activeId
       const lit = isNodeLit(node)
+      const recommended = recommendationLevel(node)
       const radius = getNodeRadius(node)
       const sprite = mesh.userData.sprite
       const halo = mesh.userData.halo
@@ -1077,18 +1148,18 @@ export default function Brain() {
           halo.material.opacity = pillar ? PILLAR_HALO_ACTIVE_OPACITY : 0.34
         }
       } else {
-        setNodeOpacity(mesh, muted ? 0.20 : node.type === 'pillar' ? PILLAR_NODE_OPACITY : lit ? 0.92 : 0.42)
+        setNodeOpacity(mesh, muted ? 0.20 : node.type === 'pillar' ? PILLAR_NODE_OPACITY : recommended ? 0.82 : lit ? 0.92 : 0.42)
         if (sprite) {
           const pillar = node.type === 'pillar'
           sprite.material.color.set(renderColor)
-          sprite.scale.setScalar(radius * (muted ? 1.35 : pillar ? PILLAR_SPRITE_SCALE : lit ? 2.35 : 1.65))
-          sprite.material.opacity = muted ? 0.035 : pillar ? PILLAR_SPRITE_OPACITY : lit ? 0.20 : 0.075
+          sprite.scale.setScalar(radius * (muted ? 1.35 : pillar ? PILLAR_SPRITE_SCALE : recommended ? (recommended > 1 ? 3.0 : 2.55) : lit ? 2.35 : 1.65))
+          sprite.material.opacity = muted ? 0.035 : pillar ? PILLAR_SPRITE_OPACITY : recommended ? (recommended > 1 ? 0.28 : 0.18) : lit ? 0.20 : 0.075
         }
         if (halo) {
           const pillar = node.type === 'pillar'
           halo.material.color.set(renderColor)
-          halo.scale.setScalar(muted ? 0 : radius * (pillar ? PILLAR_HALO_SCALE : lit ? 3.0 : 2.4))
-          halo.material.opacity = muted ? 0 : pillar ? PILLAR_HALO_OPACITY : lit ? 0.22 : 0.12
+          halo.scale.setScalar(muted ? 0 : radius * (pillar ? PILLAR_HALO_SCALE : recommended ? (recommended > 1 ? 3.7 : 3.15) : lit ? 3.0 : 2.4))
+          halo.material.opacity = muted ? 0 : pillar ? PILLAR_HALO_OPACITY : recommended ? (recommended > 1 ? 0.30 : 0.20) : lit ? 0.22 : 0.12
         }
       }
     })
@@ -1152,13 +1223,14 @@ export default function Brain() {
     setShowOverlayMessage(true)
   }
 
-  function startFreshThread(initialInput = '') {
+  function startFreshThread(initialInput = '', extra = {}) {
     enterChat({
       freshThread: true,
       threadId: crypto.randomUUID(),
       initialInput,
       autoSend: Boolean(initialInput),
       skipOpening: Boolean(initialInput),
+      ...extra,
     })
   }
 
@@ -1184,7 +1256,20 @@ export default function Brain() {
     e.preventDefault()
     const text = input.trim()
     if (!text) return
-    startFreshThread(text)
+    const context = activeNode ? {
+      nodeContext: {
+        id: activeNode.id,
+        label: activeNode.label,
+        type: activeNode.type,
+        pillar: activeNode.pillar,
+        summary: activeNode.summary,
+        status: activeNode.status,
+        importance: activeNode.importance,
+        confidence: activeNode.confidence,
+        last_activated_at: activeNode.last_activated_at,
+      },
+    } : { brainIntent: true }
+    startFreshThread(text, context)
   }
 
   async function selectNode(node) {
