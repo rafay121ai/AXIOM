@@ -90,16 +90,29 @@ function artifactLooksLikeExperiment(artifact) {
     /\b(today'?s experiment|window_hours|bring back|what to notice|success condition)\b/.test(serialized)
 }
 
+function hasConcreteIncident(text = '') {
+  const lower = text.toLowerCase()
+  return /\b(yesterday|last night|last week|this week|this month|after i|because i|i did|i tried|i launched|i sold|i posted|i shipped|i invested|i traded|i spent|i lost|i made \$|we did|we tried|we launched|we sold|we shipped)\b/.test(lower) ||
+    /\b\d+[%$]?\b/.test(lower)
+}
+
+function isAwaitingConcreteIncident(messages = []) {
+  const lastAssistant = [...messages].reverse().find((message) => message.role === 'assistant' && message.content && !message.streaming)
+  if (!lastAssistant) return false
+  return /\b(actual win first|actual situation first|actual moment|actual decision|actual situation|actual scene|what was the choice|what happened recently|name one recent choice)\b/i.test(lastAssistant.content)
+}
+
+function followUpIncidentQuestion(text = '') {
+  if (hasConcreteIncident(text)) return null
+  return 'That still is not the actual event. Name the concrete win, choice, or moment first, then I can work with it.'
+}
+
 function firstPersonIncidentQuestion(text = '') {
   const lower = text.toLowerCase()
   const hasFirstPersonPattern = /\b(i keep|i always|i tend to|i feel like|i feel|i'm|i am|i can't|i cannot|i struggle|i avoid|i procrastinate|i overthink|why do i|how do i)\b/.test(lower)
   if (!hasFirstPersonPattern) return null
 
-  const hasConcreteIncident =
-    /\b(yesterday|last night|last week|this week|this month|after i|because i|i did|i tried|i launched|i sold|i posted|i shipped|i invested|i traded|i spent|i lost|i made \$|we did|we tried|we launched|we sold|we shipped)\b/.test(lower) ||
-    /\b\d+[%$]?\b/.test(lower)
-
-  if (hasConcreteIncident) return null
+  if (hasConcreteIncident(text)) return null
 
   if (/\b(short[- ]term win|short[- ]term wins|edge|luck|lucky|proof that i'?m good|proof i'?m good|good at the game)\b/.test(lower)) {
     return 'What happened recently that made you suspect you are overreading a short-term win? Give me the actual win first, not the lesson yet.'
@@ -522,7 +535,9 @@ export default function Chat() {
         content: text,
       })
 
-      const incidentQuestion = firstPersonIncidentQuestion(text)
+      const incidentQuestion = isAwaitingConcreteIncident(messages)
+        ? followUpIncidentQuestion(text)
+        : firstPersonIncidentQuestion(text)
       if (incidentQuestion) {
         setMessages((prev) =>
           prev.map((m) =>
