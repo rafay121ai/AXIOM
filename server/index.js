@@ -15,10 +15,25 @@ import rateLimit from 'express-rate-limit'
 const app = express()
 const port = process.env.PORT || 3001
 
-const frontendUrl = process.env.FRONTEND_URL
+const frontendUrl = process.env.FRONTEND_URL?.trim().replace(/\/$/, '')
 if (!frontendUrl) {
   console.error('FATAL: FRONTEND_URL environment variable is not set')
   process.exit(1)
+}
+
+const allowedOrigins = new Set([
+  frontendUrl,
+  'https://axiom-delta-pied.vercel.app',
+])
+
+function corsOrigin(origin, callback) {
+  // Allow non-browser requests like Railway health checks or server-to-server probes.
+  if (!origin) return callback(null, true)
+
+  const normalizedOrigin = origin.trim().replace(/\/$/, '')
+  if (allowedOrigins.has(normalizedOrigin)) return callback(null, true)
+
+  return callback(new Error(`CORS blocked origin: ${origin}`))
 }
 
 // Exact model IDs the client is allowed to request. Anything else is rejected.
@@ -82,10 +97,13 @@ const embeddingsRateLimit = rateLimit({
 
 // ─── Global middleware ────────────────────────────────────────────────────────
 
-app.use(cors({
-  origin: frontendUrl,
+const corsOptions = {
+  origin: corsOrigin,
   credentials: true,
-}))
+}
+
+app.use(cors(corsOptions))
+app.options('*', cors(corsOptions))
 app.use(express.json({ limit: '1mb' }))
 
 app.use('/api/openai', requireAuth)
