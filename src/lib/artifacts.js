@@ -64,6 +64,94 @@ export function artifactLooksComplete(type, data) {
   return true
 }
 
+function cleanText(value, fallback = '') {
+  if (value === null || value === undefined) return fallback
+  return String(value).replace(/\s+/g, ' ').trim() || fallback
+}
+
+function cleanArray(value, limit = 3) {
+  return Array.isArray(value) ? value.filter(Boolean).slice(0, limit) : []
+}
+
+function boundedValue(value, fallback) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return fallback
+  return Math.max(1, Math.min(100, Math.round(number)))
+}
+
+function normalizeSignalMap(data) {
+  if (!isPlainObject(data)) return null
+
+  const whatIsHappeningNow = cleanArray(data.what_is_happening_now, 2)
+    .map((item, index) => ({
+      label: cleanText(item?.label, `Signal ${index + 1}`),
+      detail: cleanText(item?.detail),
+      evidence: cleanText(item?.evidence),
+    }))
+    .filter(item => item.detail || item.evidence)
+
+  const observedMoves = cleanArray(data.observed_moves, 3)
+    .map((item, index) => ({
+      actor: cleanText(item?.actor, `Actor ${index + 1}`),
+      action: cleanText(item?.action),
+      implication: cleanText(item?.implication),
+    }))
+    .filter(item => item.action || item.implication)
+
+  const sections = cleanArray(data.sections, 4)
+    .map((item, index) => ({
+      id: cleanText(item?.id, `section_${index + 1}`),
+      label: cleanText(item?.label, `Section ${index + 1}`),
+      pillar: cleanText(item?.pillar, 'think_sharper'),
+      signal: cleanText(item?.signal),
+      tension: cleanText(item?.tension),
+    }))
+    .filter(item => item.signal)
+
+  const forecast = isPlainObject(data.forecast) ? data.forecast : {}
+  const normalized = {
+    ...data,
+    title: cleanText(data.title, 'Signal Map'),
+    topic: cleanText(data.topic, 'live terrain'),
+    core_shift: cleanText(data.core_shift),
+    trend_state: {
+      current_phase: cleanText(data.trend_state?.current_phase, 'unclear'),
+      current_read: cleanText(data.trend_state?.current_read),
+      signal_strength: cleanText(data.trend_state?.signal_strength, 'medium'),
+      estimate_note: cleanText(data.trend_state?.estimate_note),
+    },
+    what_is_happening_now: whatIsHappeningNow,
+    observed_moves: observedMoves,
+    sections,
+    forecast: {
+      now: {
+        label: cleanText(forecast.now?.label, 'Now'),
+        value: boundedValue(forecast.now?.value, 28),
+        note: cleanText(forecast.now?.note),
+      },
+      next_12_months: {
+        label: cleanText(forecast.next_12_months?.label, '12 months'),
+        value: boundedValue(forecast.next_12_months?.value, 54),
+        note: cleanText(forecast.next_12_months?.note),
+      },
+      next_3_years: {
+        label: cleanText(forecast.next_3_years?.label, '3 years'),
+        value: boundedValue(forecast.next_3_years?.value, 78),
+        note: cleanText(forecast.next_3_years?.note),
+      },
+    },
+    frameworks: cleanArray(data.frameworks, 1),
+    watch_points: cleanArray(data.watch_points, 3).map(item => cleanText(item)).filter(Boolean),
+  }
+
+  return artifactLooksComplete('signal_map', normalized) ? normalized : null
+}
+
+function normalizeArtifactData(type, data) {
+  if (type === 'signal_map') return normalizeSignalMap(data)
+  return data
+}
+
 export function getRequiredArtifactType(route) {
   return route?.artifactStrategy && route.artifactStrategy !== 'none'
     ? route.artifactStrategy
@@ -190,10 +278,11 @@ export async function buildArtifactForResponse({
         answerDraft,
       })
     )
+    const normalizedArtifactData = normalizeArtifactData(artifactType, artifactData)
 
-    if (artifactData && Object.keys(artifactData).length > 0) {
-      onProgress?.(artifactData)
-      return { type: artifactType, data: artifactData }
+    if (normalizedArtifactData && Object.keys(normalizedArtifactData).length > 0) {
+      onProgress?.(normalizedArtifactData)
+      return { type: artifactType, data: normalizedArtifactData }
     }
     return null
   }
@@ -240,7 +329,9 @@ export async function buildArtifactForResponse({
     }
   }
 
-  return progressiveData && Object.keys(progressiveData).length > 0
-    ? { type: artifactType, data: progressiveData }
+  const normalizedData = normalizeArtifactData(artifactType, progressiveData)
+
+  return normalizedData && Object.keys(normalizedData).length > 0
+    ? { type: artifactType, data: normalizedData }
     : null
 }

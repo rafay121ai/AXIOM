@@ -103,14 +103,31 @@ function readBrainCache(sessionToken) {
     const cached = localStorage.getItem(brainCacheKey(sessionToken))
     if (!cached) return null
     const graph = JSON.parse(cached)
-    return Array.isArray(graph?.nodes) && Array.isArray(graph?.edges) ? graph : null
+    return Array.isArray(graph?.nodes) && Array.isArray(graph?.edges) ? normalizeBrainGraph(graph) : null
   } catch { return null }
 }
 
 function writeBrainCache(sessionToken, graph) {
   if (!sessionToken || !graph?.nodes?.length) return
-  try { localStorage.setItem(brainCacheKey(sessionToken), JSON.stringify(graph)) }
+  try { localStorage.setItem(brainCacheKey(sessionToken), JSON.stringify(normalizeBrainGraph(graph))) }
   catch { /* cache is speed layer only */ }
+}
+
+function normalizeBrainGraph(graph = {}) {
+  const nodes = (graph.nodes || [])
+    .filter(node => node?.id)
+    .map(node => ({
+      ...node,
+      type: node.type || 'concept',
+      status: node.status || 'dim',
+      importance: Number.isFinite(Number(node.importance)) ? Number(node.importance) : 3,
+      confidence: Number.isFinite(Number(node.confidence)) ? Number(node.confidence) : 0.7,
+    }))
+  const ids = new Set(nodes.map(node => node.id))
+  const edges = (graph.edges || [])
+    .filter(edge => edge?.source_node_id && edge?.target_node_id)
+    .filter(edge => ids.has(edge.source_node_id) && ids.has(edge.target_node_id))
+  return { nodes, edges }
 }
 
 function hashString(value = '') {
@@ -179,7 +196,7 @@ function recencyScore(value) {
 }
 
 function recommendBrainNodes(graph, messages = []) {
-  const nodes = (graph.nodes || []).filter(node => node.type !== 'pillar')
+  const nodes = (graph.nodes || []).filter(node => node?.id && node.type !== 'pillar')
   const text = recentMessageText(messages)
 
   return nodes
@@ -204,15 +221,17 @@ function recommendBrainNodes(graph, messages = []) {
     .filter(item => item.score > 50)
     .sort((a, b) => b.score - a.score)
     .slice(0, 3)
-    .map(item => item.node.id)
+    .map(item => item.node?.id)
+    .filter(Boolean)
 }
 
 function decorateRecommendedGraph(graph, recommendedNodeIds = []) {
-  if (!recommendedNodeIds.length) return graph
+  const normalizedGraph = normalizeBrainGraph(graph)
+  if (!recommendedNodeIds.length) return normalizedGraph
   const levels = new Map(recommendedNodeIds.map((id, index) => [id, index === 0 ? 2 : 1]))
   return {
-    ...graph,
-    nodes: (graph.nodes || []).map(node => ({
+    ...normalizedGraph,
+    nodes: (normalizedGraph.nodes || []).map(node => ({
       ...node,
       recommendation_level: levels.get(node.id) || 0,
     })),
@@ -249,10 +268,12 @@ function getNodeRadius(node) {
 }
 
 function isNodeLit(node) {
+  if (!node) return false
   return ['active', 'bright', 'ghosted'].includes(node.status)
 }
 
 function nodeVisualScore(node) {
+  if (!node) return 0
   return (
     (isNodeLit(node) ? 100 : 0) +
     (node.type === 'experiment' ? 36 : 0) +
@@ -268,7 +289,8 @@ function recommendationLevel(node) {
 }
 
 function visibleGraph(graph) {
-  const rawNodes = graph.nodes || []
+  const rawNodes = (graph.nodes || []).filter(node => node?.id)
+  const rawEdges = (graph.edges || []).filter(edge => edge?.source_node_id && edge?.target_node_id)
   const pillarNodes = rawNodes.filter(node => node.type === 'pillar')
   const candidateNodes = rawNodes
     .filter(node => node.type !== 'pillar')
@@ -282,7 +304,7 @@ function visibleGraph(graph) {
     ...candidateNodes.map(n => n.id),
   ])
   const connectedIds = new Set()
-  ;(graph.edges || []).forEach(edge => {
+  rawEdges.forEach(edge => {
     if (candidateIds.has(edge.source_node_id) && candidateIds.has(edge.target_node_id)) {
       connectedIds.add(edge.source_node_id)
       connectedIds.add(edge.target_node_id)
@@ -295,11 +317,11 @@ function visibleGraph(graph) {
   const nodeById = new Map(nodes.map(node => [node.id, node]))
   const visibleIds = new Set(nodes.map(node => node.id))
 
-  const nonPillarEdges = (graph.edges || [])
+  const nonPillarEdges = rawEdges
     .filter(edge => edge.relationship !== 'belongs_to')
     .filter(edge => visibleIds.has(edge.source_node_id) && visibleIds.has(edge.target_node_id))
 
-  const pillarEdges = (graph.edges || [])
+  const pillarEdges = rawEdges
     .filter(edge => edge.relationship === 'belongs_to')
     .filter(edge => visibleIds.has(edge.source_node_id) && visibleIds.has(edge.target_node_id))
     .sort((a, b) => nodeVisualScore(nodeById.get(b.source_node_id)) - nodeVisualScore(nodeById.get(a.source_node_id)))
@@ -682,7 +704,7 @@ function buildScene(th, graph) {
   const { scene } = th
   const { nodes, edges, connectedIds } = visibleGraph(graph)
 
-  const existingIds = new Set(th.nodeMeshes.map(m => m.userData.node.id))
+  const existingIds = new Set(th.nodeMeshes.map(m => m.userData?.node?.id).filter(Boolean))
   const newIds = new Set(nodes.map(n => n.id))
   const needsRebuild = th.nodeMeshes.length === 0
     || existingIds.size !== newIds.size
@@ -692,11 +714,11 @@ function buildScene(th, graph) {
   if (!needsRebuild) {
     const nodeMap = new Map(nodes.map(n => [n.id, n]))
     th.nodeMeshes.forEach(mesh => {
-      const latest = nodeMap.get(mesh.userData.node.id)
+      const latest = nodeMap.get(mesh.userData?.node?.id)
       if (!latest) return
       mesh.userData.node = latest
       mesh.userData.connected = connectedIds.has(latest.id)
-      if (mesh.userData.node.id !== th.activeIdRef?.current) {
+      if (mesh.userData?.node?.id !== th.activeIdRef?.current) {
         const lit = isNodeLit(latest)
         const recommended = recommendationLevel(latest)
         const radius = getNodeRadius(latest)
@@ -844,7 +866,7 @@ export default function Brain() {
 
       if (!cancelled) {
         setSession(sessionData)
-        setGraph(fallback)
+        setGraph(normalizeBrainGraph(fallback))
         setActiveId(null)
         setLoading(false)
         writeBrainCache(sessionToken, fallback)
@@ -905,13 +927,13 @@ export default function Brain() {
 
       const existingGraph = await getPersonalWikiGraph(sessionData.id)
       if (!cancelled && existingGraph.nodes.length > 0) {
-        setGraph(existingGraph)
+        setGraph(normalizeBrainGraph(existingGraph))
         writeBrainCache(sessionToken, existingGraph)
       }
 
       syncPersonalWiki(sessionData).then((synced) => {
         if (!cancelled && synced.nodes.length > 0) {
-          setGraph(synced)
+          setGraph(normalizeBrainGraph(synced))
           writeBrainCache(sessionToken, synced)
         }
       })
@@ -1037,7 +1059,8 @@ export default function Brain() {
       if (!th) return
       const intersects = raycaster.intersectObjects(th.nodeMeshes)
       if (intersects.length > 0) {
-        th.onSelectNode?.(intersects[0].object.userData.node)
+        const node = intersects[0]?.object?.userData?.node
+        if (node?.id) th.onSelectNode?.(node)
       } else {
         th.onDeselectNode?.()
       }
@@ -1124,7 +1147,8 @@ export default function Brain() {
     })
 
     th.nodeMeshes.forEach(mesh => {
-      const node = mesh.userData.node
+      const node = mesh.userData?.node
+      if (!node?.id) return
       const isActive = node.id === activeId
       const lit = isNodeLit(node)
       const recommended = recommendationLevel(node)
@@ -1273,6 +1297,7 @@ export default function Brain() {
   }
 
   async function selectNode(node) {
+    if (!node?.id) return
     setActiveId(node.id)
     if (!['active', 'bright', 'ghosted', 'resolved'].includes(node.status)) {
       setGraph(prev => ({

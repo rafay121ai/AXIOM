@@ -11,6 +11,10 @@ import { routeQuestionMode, searchWikiForRoute, formatRouteContext, formatWikiCo
 import { searchPersonalMemory, formatNamedPatternsContext, formatPersonalMemoryContext, updatePersonalMemory } from '../lib/personalMemory'
 
 // ─── Message Tag Parsing ─────────────────────────────────────────────────────
+const ARTIFACT_JSON_KEY_RE = /"(title|topic|core_shift|trend_state|what_is_happening_now|observed_moves|sections|forecast|frameworks|watch_points|source_weighting|confidence|counterforces|for_this_user)"\s*:/
+const SIGNAL_MAP_HEADING_RE = /^(WHAT[’']?S COMING|HOW COMPANIES WIN|THE MONEY GAME|THINK SHARPER)\s*$/gim
+const MAX_SIGNAL_MAP_PROSE_CHARS = 760
+
 function extractJsonCandidate(text = '') {
   const raw = String(text || '')
     .trim()
@@ -53,7 +57,14 @@ function inferArtifactTypeFromData(data) {
 function looksLikeArtifactJson(text = '') {
   const clean = String(text || '').trim()
   if (!clean.startsWith('{')) return false
-  return /"(title|topic|core_shift|trend_state|what_is_happening_now|observed_moves|sections|forecast|frameworks|watch_points)"\s*:/.test(clean)
+  return ARTIFACT_JSON_KEY_RE.test(clean)
+}
+
+function findArtifactJsonStart(text = '') {
+  const source = String(text || '')
+  const keyMatch = source.match(ARTIFACT_JSON_KEY_RE)
+  if (!keyMatch || keyMatch.index == null) return -1
+  return source.slice(0, keyMatch.index).lastIndexOf('{')
 }
 
 function parseArtifact(text) {
@@ -76,7 +87,9 @@ function parseArtifact(text) {
   const cleanText = text.replace(/<artifact[^>]*>[\s\S]*?<\/artifact>/, '').trim()
 
   if (!data || typeof data !== 'object') {
-    console.warn('[parseArtifact] JSON parse failed or returned non-object', { type, raw: match[2]?.slice(0, 200) })
+    if (import.meta.env.DEV) {
+      console.warn('[parseArtifact] JSON parse failed or returned non-object', { type, raw: match[2]?.slice(0, 200) })
+    }
     return { cleanText, artifact: null }
   }
 
@@ -107,11 +120,26 @@ function stripLeakedStructuredPayload(text = '') {
   const clean = String(text || '').trim()
   if (!clean) return ''
 
-  const fencedJson = clean.replace(/```json[\s\S]*?```/gi, '').trim()
+  const fencedJson = clean
+    .replace(/```json[\s\S]*?```/gi, '')
+    .replace(/<artifact[^>]*>[\s\S]*/gi, '')
+    .trim()
+
   if (looksLikeArtifactJson(fencedJson)) {
     const parsed = safeParseJsonText(fencedJson)
     const inferredType = inferArtifactTypeFromData(parsed)
     if (inferredType || !parsed) return ''
+  }
+
+  const artifactJsonStart = findArtifactJsonStart(fencedJson)
+  if (artifactJsonStart >= 0) {
+    const before = fencedJson.slice(0, artifactJsonStart).trim()
+    const candidate = fencedJson.slice(artifactJsonStart).trim()
+    const parsed = safeParseJsonText(candidate)
+    const inferredType = inferArtifactTypeFromData(parsed)
+    if (inferredType || !parsed) {
+      return before
+    }
   }
 
   const jsonStart = fencedJson.indexOf('{')
@@ -128,6 +156,61 @@ function stripLeakedStructuredPayload(text = '') {
   }
 
   return fencedJson
+}
+
+function tidyProseForArtifact(text = '', artifactType = null) {
+  const clean = String(text || '').trim()
+  if (artifactType !== 'signal_map' || !clean) return clean
+
+  const hadSignalMapHeadings = SIGNAL_MAP_HEADING_RE.test(clean)
+  SIGNAL_MAP_HEADING_RE.lastIndex = 0
+
+  const withoutHeadings = clean
+    .replace(SIGNAL_MAP_HEADING_RE, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+
+  if (!hadSignalMapHeadings && withoutHeadings.length <= MAX_SIGNAL_MAP_PROSE_CHARS) {
+    return withoutHeadings
+  }
+
+  const paragraphs = withoutHeadings
+    .split(/\n{2,}/)
+    .map(paragraph => paragraph.trim())
+    .filter(Boolean)
+
+  const compact = paragraphs.slice(0, 2).join('\n\n')
+  return compact.length > MAX_SIGNAL_MAP_PROSE_CHARS
+    ? `${compact.slice(0, MAX_SIGNAL_MAP_PROSE_CHARS).replace(/\s+\S*$/, '')}.`
+    : compact
+}
+
+function sanitizeVisibleAssistantText(text = '', artifactType = null) {
+  return tidyProseForArtifact(stripLeakedStructuredPayload(text), artifactType)
+}
+
+function visibleResponseContract(route, artifactType = null, shouldHoldExperiment = false) {
+  const lines = [
+    'VISIBLE RESPONSE CONTRACT:',
+    '- The visible chat answer must be prose only. Never output raw JSON, schemas, artifact payloads, or internal route labels.',
+  ]
+
+  if (artifactType) {
+    lines.push(`- A separate ${artifactType} artifact is being built by the app. Do not write the artifact yourself.`)
+    lines.push('- Do not duplicate artifact sections in prose. The prose should set up the artifact, not repeat it.')
+  }
+
+  if (artifactType === 'signal_map') {
+    lines.push('- For signal_map turns, write 1-2 compact paragraphs only.')
+    lines.push('- Do not print the headings WHAT\'S COMING, HOW COMPANIES WIN, THE MONEY GAME, or THINK SHARPER in the visible answer.')
+    lines.push('- Do not list the forecast, framework, watch points, observed moves, or pillar cards in prose.')
+  }
+
+  if (shouldHoldExperiment) {
+    lines.push('- The user already has two active experiments. Do not assign another experiment or experiment-shaped checklist.')
+  }
+
+  return lines.join('\n')
 }
 
 function shouldHaveArtifact(text) {
@@ -262,8 +345,8 @@ function estimateNodeContextLevel(node) {
 
 // Strip tag blocks from streaming display — tags are invisible while generating,
 // then resolved into rendered components once the stream ends.
-function stripForDisplay(text) {
-  return stripLeakedStructuredPayload(text)
+function stripForDisplay(text, artifactType = null) {
+  return sanitizeVisibleAssistantText(text, artifactType)
     .replace(/<artifact[^>]*>[\s\S]*?<\/artifact>/g, '')
     .replace(/<artifact[^>]*>[\s\S]*/g, '')   // partial opening tag mid-stream
     .replace(/<book_ref>[\s\S]*?<\/book_ref>/g, '')
@@ -785,7 +868,14 @@ export default function Chat() {
             rationale: `${route.rationale || 'Current-affairs query.'} Source-thin current affairs should stay prose-first.`,
           }
         : route
-      const routeContext = formatRouteContext(effectiveRoute, pillarResults)
+      const activeExperimentCount = (sessionForTurn.active_experiments || []).filter((e) => e.status === 'active').length
+      const shouldHoldExperiment = activeExperimentCount >= 2 && asksForExperimentOrApplication(text)
+      const requiredArtifactType = shouldHoldExperiment ? null : getRequiredArtifactType(effectiveRoute)
+      const artifactRouteContext = formatRouteContext(effectiveRoute, pillarResults)
+      const routeContext = [
+        artifactRouteContext,
+        visibleResponseContract(effectiveRoute, requiredArtifactType, shouldHoldExperiment),
+      ].filter(Boolean).join('\n\n')
       const graphContext = nodeContext
         ? `Selected Founder Brain node: ${nodeContext.label} | type: ${nodeContext.type} | pillar: ${nodeContext.pillar || 'unmapped'} | read: ${nodeContext.summary || 'No node summary yet.'}`
         : ''
@@ -816,9 +906,6 @@ export default function Chat() {
       const runAbort = new AbortController()
       abortControllerRef.current = runAbort
 
-      const activeExperimentCount = (sessionForTurn.active_experiments || []).filter((e) => e.status === 'active').length
-      const shouldHoldExperiment = activeExperimentCount >= 2 && asksForExperimentOrApplication(text)
-      const requiredArtifactType = shouldHoldExperiment ? null : getRequiredArtifactType(effectiveRoute)
       let artifact = null
       let cleanText = ''
       let experiment = null
@@ -830,7 +917,7 @@ export default function Chat() {
             artifactType: requiredArtifactType,
             query: text,
             session: sessionForTurn,
-            routeContext,
+            routeContext: artifactRouteContext,
             wikiContext,
             personalMemoryContext,
             namedPatternsContext,
@@ -883,7 +970,7 @@ export default function Chat() {
 
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === assistantMsgId ? { ...m, content: stripForDisplay(fullContent) } : m
+            m.id === assistantMsgId ? { ...m, content: stripForDisplay(fullContent, requiredArtifactType) } : m
           )
         )
 
@@ -909,7 +996,7 @@ export default function Chat() {
       // Parse artifact and experiment tags — done exactly once after stream ends
       const parsed = parseMessage(fullContent)
       artifact = parsed.artifact
-      cleanText = stripLeakedStructuredPayload(parsed.cleanText)
+      cleanText = sanitizeVisibleAssistantText(parsed.cleanText, requiredArtifactType)
       if (!cleanText && requiredArtifactType && !artifact && !latestArtifact) {
         cleanText = 'The structured map did not build cleanly. Try again in a moment.'
       }

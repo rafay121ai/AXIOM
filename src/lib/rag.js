@@ -188,11 +188,13 @@ const QUESTION_SHAPE_RULES = [
   {
     matches: (lower) =>
       /\b(life|career|next 5 years|next five years|who should i become|what should i do with my)\b/.test(lower),
-    build: () => ({
+    build: ({ lower }) => ({
       mode: 'all_pillar_synthesis',
       pillars: ALL_PILLARS,
-      artifactStrategy: 'signal_map',
-      rationale: 'Major orientation question. Use all pillars and a full synthesis artifact.',
+      artifactStrategy: wantsSignalMap(lower) ? 'signal_map' : 'none',
+      rationale: wantsSignalMap(lower)
+        ? 'Major future orientation question. Use all pillars and a full synthesis artifact.'
+        : 'Major orientation question. Use all pillars in prose without forcing a future artifact.',
     }),
   },
 ]
@@ -457,7 +459,9 @@ export function formatRouteContext(route, pillarResults = {}) {
   const modeInstructions = {
     single_pillar: 'Answer through one pillar only. Keep the response tight and local. The user layer still applies fully.',
     two_pillar: 'Answer through two pillars. Surface the tension between them, then reconcile it into one judgment. The user layer applies inside both pillars.',
-    four_pillar_synthesis: 'Answer through WHAT\'S COMING, HOW COMPANIES WIN, THE MONEY GAME, and THINK SHARPER. Each pillar must be filtered through the user before the synthesis.',
+    four_pillar_synthesis: route.artifactStrategy === 'signal_map'
+      ? 'Use WHAT\'S COMING, HOW COMPANIES WIN, THE MONEY GAME, and THINK SHARPER internally. Keep prose short and integrated; do not print pillar headings because the signal map carries the structure.'
+      : 'Answer through WHAT\'S COMING, HOW COMPANIES WIN, THE MONEY GAME, and THINK SHARPER. Each pillar must be filtered through the user before the synthesis.',
     all_pillar_synthesis: 'Answer through all six pillars, but weight them by relevance. Do not force equal coverage. Every pillar is filtered through the user.',
   }
   const artifactInstruction = route.artifactStrategy && route.artifactStrategy !== 'none'
