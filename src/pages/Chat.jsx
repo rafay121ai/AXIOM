@@ -78,6 +78,18 @@ function shouldHaveArtifact(text) {
   return /\b(example|examples|framework|steps|process|compare|comparison|breakdown|checklist|matrix|timeline|how does|how do|how should|what should be in|walk me through)\b/i.test(text)
 }
 
+function asksForExperimentOrApplication(text = '') {
+  return /\b(experiment|practical|apply|application|next step|next move|what should i do|what do i do|do today|try today|test this|real[- ]world)\b/i.test(text)
+}
+
+function artifactLooksLikeExperiment(artifact) {
+  if (!artifact?.data) return false
+  const title = String(artifact.data.title || artifact.data.label || '').toLowerCase()
+  const serialized = JSON.stringify(artifact.data).toLowerCase()
+  return /\b(today'?s experiment|experiment|real-world application|apply this today)\b/.test(title) ||
+    /\b(today'?s experiment|window_hours|bring back|what to notice|success condition)\b/.test(serialized)
+}
+
 function firstPersonIncidentQuestion(text = '') {
   const lower = text.toLowerCase()
   const hasFirstPersonPattern = /\b(i keep|i always|i tend to|i feel like|i feel|i'm|i am|i can't|i cannot|i struggle|i avoid|i procrastinate|i overthink|why do i|how do i)\b/.test(lower)
@@ -570,7 +582,9 @@ export default function Chat() {
       const runAbort = new AbortController()
       abortControllerRef.current = runAbort
 
-      const requiredArtifactType = getRequiredArtifactType(route)
+      const activeExperimentCount = (session.active_experiments || []).filter((e) => e.status === 'active').length
+      const shouldHoldExperiment = activeExperimentCount >= 2 && asksForExperimentOrApplication(text)
+      const requiredArtifactType = shouldHoldExperiment ? null : getRequiredArtifactType(route)
       let artifact = null
       let cleanText = ''
       let experiment = null
@@ -699,7 +713,13 @@ export default function Chat() {
         artifact = parsed.artifact
       }
 
-      if (experiment && (session.active_experiments || []).filter((e) => e.status === 'active').length >= 2) {
+      if (shouldHoldExperiment && artifactLooksLikeExperiment(artifact)) {
+        console.warn('[experiments] Suppressed experiment-shaped artifact because two are already active.')
+        artifact = null
+        fullContent = cleanText
+      }
+
+      if (experiment && activeExperimentCount >= 2) {
         console.warn('[experiments] Suppressed experiment because two are already active.')
         experiment = null
       }
