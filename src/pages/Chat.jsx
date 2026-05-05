@@ -35,7 +35,12 @@ function safeParseJsonText(text) {
 
 function parseArtifact(text) {
   const match = text.match(/<artifact[^>]*type="([^"]+)"[^>]*>([\s\S]*?)<\/artifact>/)
-  if (!match) return { cleanText: text, artifact: null }
+  if (!match) {
+    return {
+      cleanText: text.replace(/<book_ref>[\s\S]*?<\/book_ref>/g, '').trim(),
+      artifact: null,
+    }
+  }
 
   const type = match[1]
   const data = safeParseJsonText(match[2])
@@ -115,6 +120,8 @@ function stripForDisplay(text) {
   return text
     .replace(/<artifact[^>]*>[\s\S]*?<\/artifact>/g, '')
     .replace(/<artifact[^>]*>[\s\S]*/g, '')   // partial opening tag mid-stream
+    .replace(/<book_ref>[\s\S]*?<\/book_ref>/g, '')
+    .replace(/<book_ref>[\s\S]*/g, '')         // legacy partial citation tag mid-stream
     .replace(/<experiment>[\s\S]*?<\/experiment>/g, '')
     .replace(/<experiment>[\s\S]*/g, '')        // partial opening tag mid-stream
     .replace(/\[JAILBREAK_REDIRECT\]\s*$/g, '')
