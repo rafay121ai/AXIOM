@@ -642,6 +642,11 @@ export default function Chat() {
         artifact = parsed.artifact
       }
 
+      if (experiment && (session.active_experiments || []).filter((e) => e.status === 'active').length >= 2) {
+        console.warn('[experiments] Suppressed experiment because two are already active.')
+        experiment = null
+      }
+
       if (experiment) {
         fullContent = `${fullContent}\n\n<experiment>\n${JSON.stringify(experiment)}\n</experiment>`
       }

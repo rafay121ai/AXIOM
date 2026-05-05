@@ -53,14 +53,15 @@ export const ARTIFACT_PROFILES = {
     "why": "short sentence"
   },
   "watch_points": ["string"],
-  "for_this_user": "string"
+  "for_this_user": "optional string, only when concrete user context exists"
 }`,
     rules: [
       'Return a compact read, not a report.',
       'Ground the map in concrete present-tense signals first, then interpretation, then forecast.',
       'Prefer factual observations over abstraction.',
       'Use qualitative estimates sparingly and only when exact counts are unavailable.',
-      'Keep the artifact specific to the user when possible.',
+      'Treat signal maps as terrain tools: show movement, herd behavior, gaps, possible wedges, and live signals.',
+      'Only include for_this_user when concrete user context exists. Leave it empty for broad terrain questions.',
       'Include real tension across pillars when it exists.',
       'Keep every field tight: one sharp sentence or phrase unless a list is explicitly requested.',
       'Use exactly 2 current signals, up to 3 observed moves, 1 framework, and up to 3 watch points.',
@@ -181,8 +182,7 @@ export const ARTIFACT_PROFILES = {
         Array.isArray(data.sections) && data.sections.length >= 4 &&
         data.forecast &&
         Array.isArray(data.frameworks) && data.frameworks.length > 0 &&
-        Array.isArray(data.watch_points) && data.watch_points.length > 0 &&
-        data.for_this_user
+        Array.isArray(data.watch_points) && data.watch_points.length > 0
       )
     },
   },
