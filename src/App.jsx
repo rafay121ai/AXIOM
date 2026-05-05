@@ -35,7 +35,7 @@ function RequireSession({ children }) {
   const { loading, user } = useAuthUser()
   const token = getStoredSessionToken()
 
-  if (loading) return null
+  if (loading) return <div className="onboarding"><div className="pulse-dot" /></div>
   if (!user || !token) return <Navigate to="/" replace />
   return children
 }
@@ -45,7 +45,7 @@ function RequireChatEntry({ children }) {
   const token = getStoredSessionToken()
   const location = useLocation()
 
-  if (loading) return null
+  if (loading) return <div className="onboarding"><div className="pulse-dot" /></div>
   if (!user || !token) return <Navigate to="/" replace />
   if (!location.state?.fromBrain) return <Navigate to="/brain" replace />
   return children

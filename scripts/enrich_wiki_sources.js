@@ -21,7 +21,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
-const openai = new OpenAI({ apiKey: process.env.VITE_OPENAI_API_KEY })
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
 function sanitizeText(text) {
   return String(text || '')
@@ -287,8 +287,8 @@ async function main() {
     console.error('ERROR: VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in .env')
     process.exit(1)
   }
-  if (!process.env.VITE_OPENAI_API_KEY) {
-    console.error('ERROR: VITE_OPENAI_API_KEY must be set in .env')
+  if (!process.env.OPENAI_API_KEY) {
+    console.error('ERROR: OPENAI_API_KEY must be set in .env')
     process.exit(1)
   }
 

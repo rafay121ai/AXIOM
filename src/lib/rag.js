@@ -483,8 +483,6 @@ export async function searchWiki(query, matchCount = 3, filterPillar = null) {
   const alternatives = await expandQuery(query)
   const allQueries = [query, ...alternatives]
 
-  console.log(`[RAG] Expanded to ${allQueries.length} queries:`, allQueries)
-
   const resultSets = await Promise.all(
     allQueries.map((q) => searchSingleQuery(q, matchCount * 3, filterPillar))
   )
@@ -504,17 +502,12 @@ export async function searchWiki(query, matchCount = 3, filterPillar = null) {
   const aboveThreshold = deduped.filter((c) => c.similarity >= CONFIDENCE_THRESHOLD)
 
   if (aboveThreshold.length === 0) {
-    console.log(`[RAG] Top similarity ${deduped[0]?.similarity?.toFixed(3) ?? 'n/a'} — below threshold (${CONFIDENCE_THRESHOLD}). Returning empty context.`)
     return { chunks: [], sources: [], confidence: 0 }
   }
 
   const results = aboveThreshold.slice(0, matchCount)
   const confidence = results[0].similarity
   const sources = await fetchSourcesForChunks(results)
-
-  console.log(
-    `[RAG] Confidence: ${confidence.toFixed(3)} | chunks: ${results.map((c) => `"${c.title}" (${c.similarity.toFixed(3)})`).join(', ')} | sources: ${sources.length}`
-  )
 
   return { chunks: results, sources, confidence }
 }

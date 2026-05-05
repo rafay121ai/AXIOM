@@ -26,7 +26,18 @@ create table if not exists personal_wiki_nodes (
       'contradiction'
     )
   ),
-  pillar text check (pillar in ('psychology', 'economics')),
+  pillar text check (
+    pillar in (
+      'psychology',
+      'economics',
+      'human_mind',
+      'money_game',
+      'how_companies_win',
+      'whats_coming',
+      'think_sharper',
+      'move_people'
+    )
+  ),
   summary text,
   status text not null default 'dim' check (
     status in ('seed', 'dim', 'active', 'bright', 'ghosted', 'resolved')

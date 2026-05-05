@@ -438,7 +438,11 @@ export default function Onboarding() {
     try {
       const { data: userData, error: userError } = await supabase.auth.getUser()
       const activeUser = userData.user
-      if (userError || !activeUser) throw new Error('Sign in with Google before starting onboarding.')
+      if (userError || !activeUser) {
+        // Auth expired mid-onboarding — show sign-in with answers preserved in state
+        setIsProcessing(false)
+        return
+      }
 
       // Upsert user record so sessions can be queried by email
       const firstName =
@@ -450,6 +454,18 @@ export default function Onboarding() {
         { id: activeUser.id, email: activeUser.email, first_name: firstName },
         { onConflict: 'id' }
       )
+
+      const { data: existingSession, error: existingError } = await supabase
+        .from('sessions')
+        .select('id, session_token')
+        .eq('user_id', activeUser.id)
+        .maybeSingle()
+      if (existingError) throw existingError
+      if (existingSession?.session_token) {
+        setStoredSessionToken(existingSession.session_token)
+        navigate('/brain')
+        return
+      }
 
       const pillarWeights = derivePillarWeights(finalAnswered)
       const qaPairs = finalAnswered.map(({ question, answer }) => ({ question, answer }))
@@ -464,34 +480,40 @@ export default function Onboarding() {
         axiom_profile: axiomProfile,
         active_experiments: [],
         ghost_count: 0,
+        consecutive_miss_count: 0,
         warning_level: 0,
       }
 
-      const { error: insertError } = await supabase.from('sessions').insert(sessionPayload)
+      const { error: insertError } = await supabase
+        .from('sessions')
+        .insert(sessionPayload)
       if (insertError) throw insertError
 
       setStoredSessionToken(sessionToken)
       navigate('/brain')
     } catch (err) {
       console.error('Onboarding error:', err)
-      setError(err?.message || 'Something went wrong. Check your API keys and Supabase connection.')
+      setError('Something went wrong. Try again.')
       setIsProcessing(false)
     }
   }
 
-  if (!questions.length || authLoading) {
-    return (
-      <div className="onboarding">
-        <div className="onboarding__processing">
-          <div className="pulse-dot" />
-          <span className="onboarding__processing-text">Checking account</span>
+  // Questions only render after auth is confirmed.
+  // During loading or when unauthenticated, show sign-in (or spinner while determining).
+  if (!questions.length || authLoading || !user) {
+    if (authLoading || !questions.length) {
+      return (
+        <div className="onboarding">
+          <div className="onboarding__processing">
+            <div className="pulse-dot" />
+            <span className="onboarding__processing-text">Checking account</span>
+          </div>
         </div>
-      </div>
-    )
-  }
+      )
+    }
 
-  const currentQ = questions[currentIndex]
-  const progress = Array.from({ length: 10 }, (_, i) => i < currentIndex)
+    // !user — fall through to sign-in UI below
+  }
 
   if (!user) {
     return (
@@ -516,6 +538,9 @@ export default function Onboarding() {
       </div>
     )
   }
+
+  const currentQ = questions[currentIndex]
+  const progress = Array.from({ length: 10 }, (_, i) => i < currentIndex)
 
   if (isProcessing) {
     return (

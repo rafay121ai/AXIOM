@@ -557,6 +557,22 @@ function nodeFromExperiment(experiment, index) {
   }, index)
 }
 
+async function fetchSessionExperiments(sessionId) {
+  const { data, error } = await supabase
+    .from('experiments')
+    .select('description, status, pillar, window_hours, assigned_at')
+    .eq('session_id', sessionId)
+    .order('assigned_at', { ascending: false })
+    .limit(10)
+
+  if (error) {
+    console.warn('[Wiki] Experiment fetch failed:', error.message)
+    return null
+  }
+
+  return data || []
+}
+
 export async function syncPersonalWiki(session) {
   if (!session?.id) return { nodes: [], edges: [] }
 
@@ -589,7 +605,8 @@ export async function syncPersonalWiki(session) {
       }
     }
 
-    const experiments = session.active_experiments || []
+    const tableExperiments = await fetchSessionExperiments(session.id)
+    const experiments = tableExperiments || session.active_experiments || []
     for (let i = 0; i < experiments.length; i++) {
       const node = await upsertNode(session.id, nodeFromExperiment(experiments[i], i + 20), i + 20)
       const root = roots.find((r) => r.pillar === node?.pillar)

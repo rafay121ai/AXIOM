@@ -189,6 +189,41 @@ function stripForDisplay(text) {
 
 // ─── Ghosting Check ──────────────────────────────────────────────────────────
 // Returns updated session if warning_level needs to change, otherwise null.
+function normalizeExperiment(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    status: row.status,
+    pillar: row.pillar,
+    topic: row.topic,
+    window_hours: row.window_hours,
+    reference_count: row.reference_count || 0,
+    how_to_do_it: row.how_to_do_it,
+    real_world_example: row.real_world_example,
+    what_to_notice: row.what_to_notice,
+    success_condition: row.success_condition,
+    assigned_at: row.assigned_at,
+    due_at: row.due_at,
+    completed_at: row.completed_at,
+  }
+}
+
+async function fetchSessionExperiments(sessionId) {
+  const { data, error } = await supabase
+    .from('experiments')
+    .select('*')
+    .eq('session_id', sessionId)
+    .order('assigned_at', { ascending: true })
+
+  if (error) {
+    console.warn('[experiments] Fetch failed, falling back to session JSON:', error.message)
+    return null
+  }
+
+  return (data || []).map(normalizeExperiment)
+}
+
 async function checkAndUpdateGhosting(session) {
   const now = Date.now()
   const experiments = session.active_experiments || []
@@ -196,6 +231,7 @@ async function checkAndUpdateGhosting(session) {
   let consecutive_miss_count = session.consecutive_miss_count || 0
   let warning_level = session.warning_level || 0
   let changed = false
+  const rowUpdates = []
 
   const updatedExperiments = experiments.map((exp) => {
     if (exp.status !== 'active') return exp
@@ -210,7 +246,9 @@ async function checkAndUpdateGhosting(session) {
     if (refs < 2) {
       // Increment reference count (this session is a reference)
       changed = true
-      return { ...exp, reference_count: refs + 1 }
+      const updated = { ...exp, reference_count: refs + 1 }
+      rowUpdates.push({ id: exp.id, reference_count: updated.reference_count })
+      return updated
     }
 
     if (refs >= 2 && exp.status === 'active') {
@@ -222,7 +260,9 @@ async function checkAndUpdateGhosting(session) {
       if (consecutive_miss_count >= 4 && warning_level < 2) { warning_level = 2; changed = true }
       else if (consecutive_miss_count >= 2 && warning_level < 1) { warning_level = 1; changed = true }
 
-      return { ...exp, status: 'ghosted' }
+      const updated = { ...exp, status: 'ghosted' }
+      rowUpdates.push({ id: exp.id, status: updated.status })
+      return updated
     }
 
     return exp
@@ -230,8 +270,18 @@ async function checkAndUpdateGhosting(session) {
 
   if (!changed) return session
 
+  await Promise.all(
+    rowUpdates
+      .filter((update) => update.id)
+      .map(({ id, ...updates }) =>
+        supabase
+          .from('experiments')
+          .update(updates)
+          .eq('id', id)
+      )
+  )
+
   const updates = {
-    active_experiments: updatedExperiments,
     ghost_count,
     consecutive_miss_count,
     warning_level,
@@ -239,7 +289,7 @@ async function checkAndUpdateGhosting(session) {
 
   await supabase.from('sessions').update(updates).eq('id', session.id)
 
-  return { ...session, ...updates }
+  return { ...session, ...updates, active_experiments: updatedExperiments }
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -347,8 +397,14 @@ export default function Chat() {
       return
     }
 
+    const tableExperiments = await fetchSessionExperiments(sessionData.id)
+    const hydratedSession = {
+      ...sessionData,
+      active_experiments: tableExperiments || sessionData.active_experiments || [],
+    }
+
     // Check and update ghosting state
-    const updatedSession = await checkAndUpdateGhosting(sessionData)
+    const updatedSession = await checkAndUpdateGhosting(hydratedSession)
     setSession(updatedSession)
 
     // Fetch only the active thread. Default chat uses null thread_id; node taps
@@ -525,6 +581,13 @@ export default function Chat() {
         content: text,
       })
 
+      const latestExperiments = await fetchSessionExperiments(session.id)
+      const sessionForTurn = {
+        ...session,
+        active_experiments: latestExperiments || session.active_experiments || [],
+      }
+      if (latestExperiments) setSession(sessionForTurn)
+
       const incidentQuestion = isAwaitingConcreteIncident(messages)
         ? followUpIncidentQuestion(text)
         : firstPersonIncidentQuestion(text)
@@ -552,8 +615,8 @@ export default function Chat() {
 
       // RAG: retrieve source knowledge and personal memory for this turn.
       const [route, personalMemories] = await Promise.all([
-        routeQuestionMode(text, session, nodeContext),
-        searchPersonalMemory(session.user_id, text, 5),
+        routeQuestionMode(text, sessionForTurn, nodeContext),
+        searchPersonalMemory(sessionForTurn.user_id, text, 5),
       ])
       const { chunks, sources, confidence: retrievalConfidence, pillarResults } = await searchWikiForRoute(text, route, 3)
       const wikiContext = await formatWikiContext(chunks, sources)
@@ -575,7 +638,7 @@ export default function Chat() {
       history.push({ role: 'user', content: text })
 
       const systemPrompt = buildSystemPrompt(
-        session,
+        sessionForTurn,
         wikiContext,
         personalMemoryContext,
         aiMessageCount + 1,
@@ -587,7 +650,7 @@ export default function Chat() {
       const runAbort = new AbortController()
       abortControllerRef.current = runAbort
 
-      const activeExperimentCount = (session.active_experiments || []).filter((e) => e.status === 'active').length
+      const activeExperimentCount = (sessionForTurn.active_experiments || []).filter((e) => e.status === 'active').length
       const shouldHoldExperiment = activeExperimentCount >= 2 && asksForExperimentOrApplication(text)
       const requiredArtifactType = shouldHoldExperiment ? null : getRequiredArtifactType(route)
       let artifact = null
@@ -600,7 +663,7 @@ export default function Chat() {
         ? buildArtifactForResponse({
             artifactType: requiredArtifactType,
             query: text,
-            session,
+            session: sessionForTurn,
             routeContext,
             wikiContext,
             personalMemoryContext,
@@ -637,7 +700,7 @@ export default function Chat() {
         model: CHAT_MODEL,
         messages: [{ role: 'system', content: systemPrompt }, ...history],
         stream: true,
-        session_id: session.id,
+        session_id: sessionForTurn.id,
       }, { signal: runAbort.signal })
 
       let fullContent = ''
@@ -743,7 +806,7 @@ export default function Chat() {
 
       // Save assistant message (raw content with experiment tag intact for audit)
       await supabase.from('messages').insert({
-        session_id: session.id,
+        session_id: sessionForTurn.id,
         thread_id: threadId,
         role: 'assistant',
         content: fullContent,
@@ -752,9 +815,9 @@ export default function Chat() {
       setAiMessageCount((prev) => prev + 1)
 
       // Handle experiment assignment
-      let sessionForMemory = session
+      let sessionForMemory = sessionForTurn
       if (experiment) {
-        sessionForMemory = await assignExperiment(experiment)
+        sessionForMemory = await assignExperiment(experiment, sessionForTurn)
       }
 
       const updatedSession = await updatePersonalMemory(sessionForMemory, messages, text, cleanText)
@@ -780,26 +843,64 @@ export default function Chat() {
   }
 
   // ── Experiment Assignment ─────────────────────────────────────────────────
-  async function assignExperiment(experiment) {
-    if (!session) return session
-    const activeExps = session.active_experiments || []
+  async function assignExperiment(experiment, baseSession = session) {
+    if (!baseSession) return baseSession
+    const activeExps = baseSession.active_experiments || []
 
-    if (activeExps.filter((e) => e.status === 'active').length >= 2) return session
+    if (activeExps.filter((e) => e.status === 'active').length >= 2) return baseSession
+    const shouldResetMissStreak = activeExps.some((e) => e.status === 'ghosted')
 
+    const assignedAt = new Date()
+    const windowHours = Number(experiment.window_hours) > 0 ? Number(experiment.window_hours) : 48
+    const dueAt = new Date(assignedAt.getTime() + windowHours * 3600 * 1000)
     const newExp = {
       ...experiment,
-      assigned_at: new Date().toISOString(),
+      window_hours: windowHours,
+      assigned_at: assignedAt.toISOString(),
+      due_at: dueAt.toISOString(),
       status: 'active',
       reference_count: 0,
     }
 
-    const updated = [...activeExps, newExp]
-    await supabase
-      .from('sessions')
-      .update({ active_experiments: updated })
-      .eq('id', session.id)
+    const { data, error } = await supabase
+      .from('experiments')
+      .insert({
+        session_id: baseSession.id,
+        user_id: baseSession.user_id,
+        title: experiment.title || null,
+        description: experiment.description,
+        status: 'active',
+        pillar: experiment.pillar || null,
+        topic: experiment.topic || null,
+        window_hours: windowHours,
+        reference_count: 0,
+        how_to_do_it: experiment.how_to_do_it || null,
+        real_world_example: experiment.real_world_example || null,
+        what_to_notice: experiment.what_to_notice || null,
+        success_condition: experiment.success_condition || null,
+        assigned_at: assignedAt.toISOString(),
+        due_at: dueAt.toISOString(),
+        metadata: experiment,
+      })
+      .select('*')
+      .single()
 
-    const updatedSession = { ...session, active_experiments: updated }
+    if (error) {
+      console.warn('[experiments] Insert failed:', error.message)
+      return baseSession
+    }
+
+    const updated = [...activeExps, normalizeExperiment(data || newExp)]
+    const sessionUpdates = shouldResetMissStreak ? { consecutive_miss_count: 0 } : {}
+
+    if (Object.keys(sessionUpdates).length > 0) {
+      await supabase
+        .from('sessions')
+        .update(sessionUpdates)
+        .eq('id', baseSession.id)
+    }
+
+    const updatedSession = { ...baseSession, ...sessionUpdates, active_experiments: updated }
     setSession(updatedSession)
     return updatedSession
   }

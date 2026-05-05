@@ -7,7 +7,7 @@
  * Run: node seed.js
  *
  * Requirements:
- *   - .env must have VITE_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, VITE_OPENAI_API_KEY
+ *   - .env must have VITE_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, OPENAI_API_KEY
  *   - Service role key is required (anon key won't have insert rights)
  *   - /sources/books/ directory with your PDFs
  *   - pgvector enabled and wiki_chunks table created
@@ -50,7 +50,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
-const openai = new OpenAI({ apiKey: process.env.VITE_OPENAI_API_KEY })
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
 // ─── Sources ─────────────────────────────────────────────────────────────────
 // content_type ordering for processing: book → article → podcast →
@@ -404,23 +404,18 @@ const SOURCES = [
   },
   {
     pillar: 'human_mind', content_type: 'podcast',
-    title: 'Hidden Brain — You 2.0 Reframing', author: 'Shankar Vedantam',
-    youtubeUrl: 'https://www.youtube.com/watch?v=rcp5UPFin_Q',
+    title: 'Hidden Brain — How to Rewrite the Story of Your Life', author: 'Shankar Vedantam',
+    youtubeUrl: 'https://www.youtube.com/watch?v=SL67olM_mu4',
   },
   {
     pillar: 'human_mind', content_type: 'podcast',
-    title: 'Tim Ferriss — Matt Mullenweg on Solitude', author: 'Tim Ferriss',
-    youtubeUrl: 'https://www.youtube.com/watch?v=sf5fMooyBGU',
+    title: 'Ten Percent Happier — Dan Harris on Meditation', author: 'Tim Ferriss',
+    youtubeUrl: 'https://www.youtube.com/watch?v=yvV4jlmLofk',
   },
   {
     pillar: 'human_mind', content_type: 'podcast',
     title: 'The Diary of a CEO — James Clear on Atomic Habits', author: 'Steven Bartlett',
     youtubeUrl: 'https://www.youtube.com/watch?v=PZ7lDrwYdZc',
-  },
-  {
-    pillar: 'human_mind', content_type: 'podcast',
-    title: 'Ten Percent Happier — Dan Harris on Meditation', author: 'Dan Harris',
-    youtubeUrl: 'https://www.youtube.com/watch?v=nYuKqbfCEGY',
   },
   {
     pillar: 'human_mind', content_type: 'podcast',
@@ -491,7 +486,7 @@ const SOURCES = [
   {
     pillar: 'human_mind', content_type: 'academic_paper',
     title: 'Growth Mindset Research', author: 'Carol Dweck',
-    url: 'https://www.mindsetworks.com/science/',
+    url: 'https://fs.blog/carol-dweck-mindset/',
   },
   {
     pillar: 'human_mind', content_type: 'academic_paper',
@@ -911,12 +906,12 @@ const SOURCES = [
   {
     pillar: 'whats_coming', content_type: 'article',
     title: 'Energy Transitions: How Long Do They Really Take?', author: 'Vaclav Smil',
-    url: 'https://vaclavsmil.com/wp-content/uploads/2014/01/smil-article-2014-energy-transitions-history-requirements-prospects.pdf',
+    url: 'https://vaclavsmil.com/2019/11/06/energy-transitions-history-requirements-prospects/',
   },
   {
     pillar: 'whats_coming', content_type: 'article',
     title: 'Halfway Between Kyoto and 2050: Zero Carbon Is a Highly Unlikely Outcome', author: 'Vaclav Smil',
-    url: 'https://www.fraserinstitute.org/sites/default/files/halfway-between-kyoto-and-2050.pdf',
+    url: 'https://www.fraserinstitute.org/studies/halfway-between-kyoto-and-2050-zero-carbon-is-a-highly-unlikely-outcome',
   },
   {
     pillar: 'whats_coming', content_type: 'article',
@@ -932,7 +927,7 @@ const SOURCES = [
     pillar: 'whats_coming', content_type: 'academic_paper',
     title: 'Geoeconomic Fragmentation and the Future of Multilateralism',
     author: 'Aiyar, Ilyina et al. (IMF)',
-    url: 'https://www.imf.org/-/media/files/publications/sdn/2023/english/sdnea2023001.pdf',
+    url: 'https://www.imf.org/en/Publications/staff-discussion-notes/Issues/2023/01/11/Geoeconomic-Fragmentation-and-the-Future-of-Multilateralism-527266',
   },
   {
     pillar: 'whats_coming', content_type: 'academic_paper',
@@ -944,7 +939,7 @@ const SOURCES = [
     pillar: 'whats_coming', content_type: 'academic_paper',
     title: 'Changing Global Linkages: A New Cold War?',
     author: 'IMF Working Paper 2024',
-    url: 'https://www.imf.org/-/media/files/publications/wp/2024/english/wpiea2024076-print-pdf.pdf',
+    url: 'https://www.imf.org/en/Publications/WP/Issues/2024/03/08/Changing-Global-Linkages-A-New-Cold-War-546881',
   },
   {
     pillar: 'whats_coming', content_type: 'academic_paper',
@@ -968,7 +963,7 @@ const SOURCES = [
     pillar: 'whats_coming', content_type: 'academic_paper',
     title: 'Halfway Between Kyoto and 2050: Zero Carbon Is a Highly Unlikely Outcome',
     author: 'Vaclav Smil',
-    url: 'https://www.fraserinstitute.org/sites/default/files/halfway-between-kyoto-and-2050.pdf',
+    url: 'https://www.fraserinstitute.org/studies/halfway-between-kyoto-and-2050-zero-carbon-is-a-highly-unlikely-outcome',
   },
   {
     pillar: 'whats_coming', content_type: 'academic_paper',
@@ -1378,14 +1373,26 @@ function parseJsonContent(content) {
     .replace(/^```\s*/i, '')
     .replace(/\s*```$/i, '')
     .trim()
-  return JSON.parse(withoutFence)
+  try {
+    return JSON.parse(withoutFence)
+  } catch (err) {
+    const firstBrace = withoutFence.indexOf('{')
+    const lastBrace = withoutFence.lastIndexOf('}')
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      const extracted = withoutFence.slice(firstBrace, lastBrace + 1)
+      return JSON.parse(extracted)
+    }
+    throw err
+  }
 }
 
-function buildEnrichmentExcerpt(rawText) {
+function buildEnrichmentExcerpt(rawText, options = {}) {
+  const maxLength = Number.isFinite(options.maxLength) ? options.maxLength : 18000
+  const segmentLength = Number.isFinite(options.segmentLength) ? options.segmentLength : 6000
   const cleaned = sanitizeText(rawText).replace(/\s+/g, ' ').trim()
-  if (cleaned.length <= 18000) return cleaned
+  if (cleaned.length <= maxLength) return cleaned
 
-  const segment = 6000
+  const segment = segmentLength
   const middleStart = Math.max(0, Math.floor(cleaned.length / 2) - Math.floor(segment / 2))
   const endStart = Math.max(0, cleaned.length - segment)
 
@@ -1394,6 +1401,53 @@ function buildEnrichmentExcerpt(rawText) {
     cleaned.slice(middleStart, middleStart + segment),
     cleaned.slice(endStart),
   ].join('\n\n[...]\n\n')
+}
+
+function buildCompactEnrichmentExcerpt(rawText) {
+  return buildEnrichmentExcerpt(rawText, { maxLength: 9000, segmentLength: 3000 })
+}
+
+async function requestStructuredEnrichment({
+  rawText,
+  systemPrompt,
+  buildUserContent,
+  maxCompletionTokens = 700,
+}) {
+  let lastError = null
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const excerpt =
+      attempt === 0 ? buildEnrichmentExcerpt(rawText) : buildCompactEnrichmentExcerpt(rawText)
+
+    try {
+      const response = await openai.chat.completions.create({
+        model: SOURCE_ENRICHMENT_MODEL,
+        response_format: { type: 'json_object' },
+        max_completion_tokens: maxCompletionTokens,
+        messages: [
+          {
+            role: 'system',
+            content:
+              attempt === 0
+                ? systemPrompt
+                : `${systemPrompt}
+
+Your previous response was invalid JSON. Return a smaller, strictly valid JSON object with properly escaped strings and no trailing commentary.`,
+          },
+          {
+            role: 'user',
+            content: buildUserContent(excerpt),
+          },
+        ],
+      })
+
+      return parseJsonContent(response.choices[0]?.message?.content)
+    } catch (err) {
+      lastError = err
+    }
+  }
+
+  throw lastError || new Error('Structured enrichment failed')
 }
 
 function normalizeSourceClaims(payload) {
@@ -1420,15 +1474,10 @@ function normalizeAxiomInterpretation(payload) {
 }
 
 async function extractSourceClaims(rawText, source) {
-  const excerpt = buildEnrichmentExcerpt(rawText)
-  const response = await openai.chat.completions.create({
-    model: SOURCE_ENRICHMENT_MODEL,
-    response_format: { type: 'json_object' },
-    max_completion_tokens: 700,
-    messages: [
-      {
-        role: 'system',
-        content: `You extract grounded claims from a source for Axiom's canonical knowledge layer.
+  const parsed = await requestStructuredEnrichment({
+    rawText,
+    maxCompletionTokens: 700,
+    systemPrompt: `You extract grounded claims from a source for Axiom's canonical knowledge layer.
 
 Return valid JSON only with this exact shape:
 {
@@ -1447,21 +1496,15 @@ Rules:
 - main_themes should be 2 to 6 items.
 - representative_claims should be concrete claims the source itself makes.
 - confidence must be between 0 and 1.`,
-      },
-      {
-        role: 'user',
-        content: `Title: ${source.title}
+    buildUserContent: (excerpt) => `Title: ${source.title}
 Author: ${source.author || 'Unknown'}
 Pillar: ${source.pillar}
 Content type: ${source.content_type}
 
 Source excerpt:
 ${excerpt}`,
-      },
-    ],
   })
 
-  const parsed = parseJsonContent(response.choices[0]?.message?.content)
   return {
     claims: normalizeSourceClaims(parsed),
     confidence: clampConfidence(parsed.confidence, 0.55),
@@ -1469,15 +1512,10 @@ ${excerpt}`,
 }
 
 async function interpretSourceForAxiom(rawText, source, sourceClaims) {
-  const excerpt = buildEnrichmentExcerpt(rawText)
-  const response = await openai.chat.completions.create({
-    model: SOURCE_ENRICHMENT_MODEL,
-    response_format: { type: 'json_object' },
-    max_completion_tokens: 700,
-    messages: [
-      {
-        role: 'system',
-        content: `You interpret a source through Axiom's lens without pretending the source literally said these implications.
+  const parsed = await requestStructuredEnrichment({
+    rawText,
+    maxCompletionTokens: 1200,
+    systemPrompt: `You interpret a source through Axiom's lens without pretending the source literally said these implications.
 
 Return valid JSON only with this exact shape:
 {
@@ -1499,10 +1537,7 @@ Rules:
 - Be specific, not generic.
 - Include only implications that plausibly follow from the source claims.
 - confidence must be between 0 and 1.`,
-      },
-      {
-        role: 'user',
-        content: `Title: ${source.title}
+    buildUserContent: (excerpt) => `Title: ${source.title}
 Author: ${source.author || 'Unknown'}
 Pillar: ${source.pillar}
 Content type: ${source.content_type}
@@ -1512,11 +1547,8 @@ ${JSON.stringify(sourceClaims, null, 2)}
 
 Source excerpt:
 ${excerpt}`,
-      },
-    ],
   })
 
-  const parsed = parseJsonContent(response.choices[0]?.message?.content)
   return {
     interpretation: normalizeAxiomInterpretation(parsed),
     confidence: clampConfidence(parsed.confidence, 0.5),
@@ -1587,7 +1619,9 @@ async function upsertWikiSource(source, rawText) {
       const { error: failError } = await supabase
         .from('wiki_sources')
         .update({
-          enrichment_status: 'failed',
+          enrichment_status: 'claims_extracted',
+          axiom_interpretation: null,
+          axiom_interpretation_confidence: null,
           enrichment_version: SOURCE_ENRICHMENT_VERSION,
           enriched_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -1971,12 +2005,45 @@ async function embedAndInsert(source, sourceRecord, chunks) {
 
 // ─── Process Single Source ────────────────────────────────────────────────────
 
-async function processSource(source, processedTitles) {
-  if (processedTitles.has(source.title)) {
-    console.log(`    SKIPPING — already in DB: "${source.title}"`)
-    return { chunks: 0, inserted: 0, skipped: true }
+async function fetchExistingSourceRecord(sourceKey) {
+  const { data, error } = await supabase
+    .from('wiki_sources')
+    .select('id')
+    .eq('source_key', sourceKey)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(`Could not fetch existing source record for "${sourceKey}": ${error.message}`)
   }
 
+  return data
+}
+
+async function fetchChunkCountForSource(sourceId) {
+  const { count, error } = await supabase
+    .from('wiki_chunks')
+    .select('*', { count: 'exact', head: true })
+    .eq('source_id', sourceId)
+
+  if (error) {
+    throw new Error(`Could not count existing chunks for source "${sourceId}": ${error.message}`)
+  }
+
+  return count || 0
+}
+
+async function deleteChunksForSource(sourceId, title) {
+  const { error } = await supabase
+    .from('wiki_chunks')
+    .delete()
+    .eq('source_id', sourceId)
+
+  if (error) {
+    throw new Error(`Could not clear partial chunks for "${title}": ${error.message}`)
+  }
+}
+
+async function processSource(source) {
   let rawText
 
   if (source.needs_pdf && !source.filePath) {
@@ -2001,9 +2068,25 @@ async function processSource(source, processedTitles) {
     throw new Error(`Extracted text too short (${rawText?.trim().length ?? 0} chars) — likely a paywall, redirect, or empty page`)
   }
 
-  const sourceRecord = await upsertWikiSource(source, rawText)
   const chunks = chunkText(rawText)
   if (chunks.length === 0) throw new Error('No usable chunks extracted')
+  const sourceKey = buildSourceKey(source)
+  const existingSource = await fetchExistingSourceRecord(sourceKey)
+
+  if (existingSource?.id) {
+    const existingChunkCount = await fetchChunkCountForSource(existingSource.id)
+    if (existingChunkCount === chunks.length) {
+      console.log(`    SKIPPING — already complete in DB: "${source.title}"`)
+      return { chunks: chunks.length, inserted: existingChunkCount, skipped: true }
+    }
+
+    if (existingChunkCount > 0) {
+      console.log(`    RESETTING — partial source found (${existingChunkCount}/${chunks.length} chunks): "${source.title}"`)
+      await deleteChunksForSource(existingSource.id, source.title)
+    }
+  }
+
+  const sourceRecord = await upsertWikiSource(source, rawText)
 
   const inserted = await embedAndInsert(source, sourceRecord, chunks)
   return { chunks: chunks.length, inserted }
@@ -2021,28 +2104,6 @@ async function ensureSeedDirectories() {
   return { transcriptsDir }
 }
 
-async function fetchProcessedTitles() {
-  const processedTitles = new Set()
-  const PAGE = 1000
-  let offset = 0
-
-  while (true) {
-    const { data: page, error: fetchError } = await supabase
-      .from('wiki_chunks')
-      .select('title')
-      .range(offset, offset + PAGE - 1)
-    if (fetchError) {
-      throw new Error(`Could not fetch existing titles: ${fetchError.message}`)
-    }
-    if (!page || page.length === 0) break
-    page.forEach((record) => processedTitles.add(record.title))
-    if (page.length < PAGE) break
-    offset += PAGE
-  }
-
-  return processedTitles
-}
-
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -2057,17 +2118,12 @@ async function main() {
     console.error('ERROR: VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in .env')
     process.exit(1)
   }
-  if (!process.env.VITE_OPENAI_API_KEY) {
-    console.error('ERROR: VITE_OPENAI_API_KEY must be set in .env')
+  if (!process.env.OPENAI_API_KEY) {
+    console.error('ERROR: OPENAI_API_KEY must be set in .env')
     process.exit(1)
   }
 
   await ensureSeedDirectories()
-
-  // Fetch all titles already in DB — used to skip re-processing on re-runs
-  // Paginate through all existing titles — Supabase default cap is 1000 rows per query
-  const processedTitles = await fetchProcessedTitles()
-  console.log(`Found ${processedTitles.size} unique title(s) already in DB.\n`)
 
   // Order: pillars follow Axiom's six-pillar sequence
   // Within each pillar: book → article → podcast → financial_doc → biography → company_profile → academic_paper
@@ -2107,7 +2163,7 @@ async function main() {
     console.log(`[${i + 1}/${total}] Processing: ${source.title} (${source.content_type}) [${sourceType}]`)
 
     try {
-      const { chunks, inserted, skipped } = await processSource(source, processedTitles)
+      const { chunks, inserted, skipped } = await processSource(source)
       if (!skipped) {
         console.log(`    Done. ${inserted}/${chunks} chunks inserted.\n`)
         sourcesSucceeded++
@@ -2137,7 +2193,6 @@ export {
   upsertWikiSource,
   embedAndInsert,
   processSource,
-  fetchProcessedTitles,
   ensureSeedDirectories,
 }
 

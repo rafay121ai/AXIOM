@@ -64,6 +64,8 @@ Rules:
 - Keep this section compact and specific.
 - Prefer factual observations over abstraction.
 - Do not add extra sections or wrapper keys.
+- Keep this artifact to terrain, framework, or signal structure only.
+- Do not include an experiment task, operational steps, watch-fors, reporting instructions, or success conditions.
 
 Full signal_map rules:
 ${profile.rules.map((rule) => `- ${rule}`).join('\n')}

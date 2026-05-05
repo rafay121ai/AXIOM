@@ -1,4 +1,5 @@
 import { getArtifactProfile } from './artifactRegistry'
+import { supabase } from './supabase'
 
 export const PROFILE_MODEL = 'gpt-5.2-2025-12-11'
 export const CHAT_MODEL = 'gpt-5.4-mini-2026-03-17'
@@ -11,6 +12,12 @@ function apiUrl(path) {
   return `${API_BASE}${path}`
 }
 
+async function getAuthHeaders() {
+  const { data } = await supabase.auth.getSession()
+  const token = data.session?.access_token
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 async function readError(response) {
   try {
     const data = await response.json()
@@ -21,9 +28,10 @@ async function readError(response) {
 }
 
 async function postJson(path, body, options = {}) {
+  const authHeaders = await getAuthHeaders()
   const response = await fetch(apiUrl(path), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders },
     body: JSON.stringify(body),
     signal: options.signal,
   })
@@ -36,9 +44,10 @@ async function postJson(path, body, options = {}) {
 }
 
 async function createChatStream(payload, options = {}) {
+  const authHeaders = await getAuthHeaders()
   const response = await fetch(apiUrl('/api/openai/chat'), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders },
     body: JSON.stringify(payload),
     signal: options.signal,
   })
@@ -232,7 +241,7 @@ Rules:
 
 // ─── Opening Message ─────────────────────────────────────────────────────────
 export async function generateOpeningMessage(session, isNew) {
-  const activeExps = session.active_experiments || []
+  const activeExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'active')
   const hasExperiment = activeExps.length > 0
   const recentExp = hasExperiment ? activeExps[activeExps.length - 1] : null
 
@@ -279,6 +288,7 @@ Never use emoji.`,
 }
 
 export async function generateBrainOverlayMessage(session) {
+  const activeExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'active')
   const response = await openai.chat.completions.create({
     model: CHAT_MODEL,
     messages: [
@@ -302,7 +312,7 @@ Rules:
         role: 'user',
         content: `Private theory: ${session.axiom_profile || 'None'}
 Session notes: ${session.session_notes || 'None'}
-Active experiments: ${JSON.stringify(session.active_experiments || [])}
+Active experiments: ${JSON.stringify(activeExps)}
 Warning level: ${session.warning_level || 0}`,
       },
     ],
@@ -340,6 +350,8 @@ Rules:
 - Make the structure concrete, tight, and visually intelligible.
 - Keep it specific to the user's situation when possible.
 - Do not turn a focused structural question into a broad landscape map.
+- If the main response may include an experiment, keep this artifact to the framework, loop, terrain, or decision structure only.
+- Do not include the exact experiment task, operational steps, watch-fors, reporting instructions, or success conditions in the artifact.
 
 Required JSON shape:
 ${spec.schema}
@@ -406,7 +418,9 @@ Rules:
 ${spec.streamOrder.map((item, index) => `  ${index + 1}. ${item}`).join('\n')}
 - Ground the map in concrete present-tense signals first, then interpretation, then forecast.
 - Keep it specific to the user's situation when possible.
-- Make the framework genuinely visual, not list-like.`
+- Make the framework genuinely visual, not list-like.
+- If the main response may include an experiment, keep this artifact to terrain and framework only.
+- Do not include the exact experiment task, operational steps, watch-fors, reporting instructions, or success conditions in the artifact.`
       : `You stream JSON merge events for Axiom's ${artifactType} artifact.
 
 Return newline-delimited JSON only. Each line must be a complete valid JSON object with this exact shape:
@@ -418,6 +432,8 @@ Rules:
 - The artifact must answer the user's actual question shape, not a broader neighboring question.
 - Emit one meaningful section per line until the artifact is complete.
 - Keep the structure tight, concrete, and visually intelligible.
+- If the main response may include an experiment, keep this artifact to the framework, loop, terrain, or decision structure only.
+- Do not include the exact experiment task, operational steps, watch-fors, reporting instructions, or success conditions in the artifact.
 ${spec ? spec.rules.map((rule) => `- ${rule}`).join('\n') : ''}`
 
   const response = await openai.chat.completions.create({
@@ -491,6 +507,7 @@ ${answerDraft || 'None'}`,
 }
 
 export async function generateWeeklyRead(session, recentMessages = []) {
+  const activeExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'active')
   const history = recentMessages
     .filter((message) => message?.content)
     .slice(-24)
@@ -523,7 +540,7 @@ Rules:
         role: 'user',
         content: `Private theory: ${session.axiom_profile || 'None'}
 Session notes: ${session.session_notes || 'None'}
-Active experiments: ${JSON.stringify(session.active_experiments || [])}
+Active experiments: ${JSON.stringify(activeExps)}
 Warning level: ${session.warning_level || 0}
 
 Recent conversation history:
@@ -540,6 +557,7 @@ export async function generateNodeOpeningMessage(session, nodeContext, contextLe
   const level = Number.isFinite(contextLevel) ? Math.max(0, Math.min(1, contextLevel)) : 0
   const percent = Math.round(level * 100)
   const nodeType = nodeContext.type || 'concept'
+  const activeExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'active')
 
   let directive
 
@@ -588,7 +606,7 @@ This is a brand-new thread opened from a private Founder Brain node. The user ta
         content: `Private theory: ${session.axiom_profile || 'None'}
 Session notes: ${session.session_notes || 'None'}
 Pillar weights: ${session.pillar_weights ? JSON.stringify(session.pillar_weights) : 'balanced'}
-Active experiments: ${JSON.stringify(session.active_experiments || [])}
+Active experiments: ${JSON.stringify(activeExps)}
 
 Founder Brain node:
 Label: ${nodeContext.label}
@@ -693,8 +711,8 @@ Update memory now.`,
 
 // ─── System Prompt Builder ───────────────────────────────────────────────────
 export function buildSystemPrompt(session, wikiContext, personalMemoryContext = '', assistantMessageNumber = 0, retrievalConfidence = null, namedPatternsContext = '', routeContext = '') {
-  const activeExps = session.active_experiments || []
-  const activeExperimentCount = activeExps.filter((experiment) => experiment.status === 'active').length
+  const activeExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'active')
+  const activeExperimentCount = activeExps.length
   const expsText =
     activeExps.length > 0
       ? activeExps
@@ -1630,6 +1648,14 @@ MOVE PEOPLE → one real conversation where you deploy the concept. Name the per
 
 EXPERIMENT QUALITY STANDARD
 Every experiment must be executable within 10 minutes of reading it. If the user would need to ask "but how do I actually do this?" — the experiment is too abstract. Rewrite it until that question disappears.
+
+ANSWER / ARTIFACT / EXPERIMENT SEPARATION
+When an experiment is assigned, each layer has a different job:
+- Main answer: short judgment and why this test matters. Do not restate the operational steps.
+- Artifact: framework, loop, terrain, or decision structure only. Do not include the exact experiment task inside the artifact.
+- Experiment card: the concrete assignment only. Put the operational steps, example, watch-fors, and success condition inside the <experiment> JSON.
+Never repeat the same instruction across all three layers.
+Before assigning a new experiment, compare it to active experiments. If it tests the same behavior with the same method, do not assign it. Either hold it if the active limit is full, or make the new test meaningfully different.
 
 WHEN 2 EXPERIMENTS ARE ALREADY ACTIVE
 Do not assign a third. If the user is asking unrelated terrain or learning questions, answer normally without a new experiment. If the moment calls for application, hold the new experiment and ask for a report on one active experiment first.

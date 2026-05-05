@@ -8,13 +8,19 @@
     "build": "vite build",
     "preview": "vite preview",
     "seed": "node seed.js",
-    "enrich-sources": "node scripts/enrich_wiki_sources.js"
+    "enrich-sources": "node scripts/enrich_wiki_sources.js",
+    "import-rss": "node scripts/import_rss_signals.js",
+    "import-sources": "node scripts/import_sources_from_json.js",
+    "start": "node server/index.js",
+    "dev:server": "node --watch server/index.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
     "@types/three": "^0.184.0",
     "axios": "^1.15.1",
     "cheerio": "^1.2.0",
+    "expo": "^55.0.19",
+    "express-rate-limit": "^8.5.0",
     "openai": "^4.67.0",
     "pdf-parse": "^1.1.1",
     "postprocessing": "^6.39.1",
