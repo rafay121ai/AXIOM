@@ -96,7 +96,7 @@ function firstPersonIncidentQuestion(text = '') {
   if (!hasFirstPersonPattern) return null
 
   const hasConcreteIncident =
-    /\b(yesterday|today|last night|last week|this week|this month|after i|because i|i did|i tried|i launched|i sold|i posted|i shipped|i invested|i traded|i spent|i lost|i made \$|we did|we tried|we launched|we sold|we shipped)\b/.test(lower) ||
+    /\b(yesterday|last night|last week|this week|this month|after i|because i|i did|i tried|i launched|i sold|i posted|i shipped|i invested|i traded|i spent|i lost|i made \$|we did|we tried|we launched|we sold|we shipped)\b/.test(lower) ||
     /\b\d+[%$]?\b/.test(lower)
 
   if (hasConcreteIncident) return null
