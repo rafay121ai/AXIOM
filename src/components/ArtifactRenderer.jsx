@@ -191,10 +191,14 @@ function normalizePoint(item, index = 0) {
   return item || {}
 }
 
+function stripStepPrefix(label = '') {
+  return String(label || '').trim().replace(/^(?:step\s*)?\d+[.)]\s*/i, '')
+}
+
 function normalizeStep(item) {
-  if (typeof item === 'string') return { label: item, description: '' }
+  if (typeof item === 'string') return { label: stripStepPrefix(item), description: '' }
   return {
-    label: item?.label || item?.title || '',
+    label: stripStepPrefix(item?.label || item?.title || ''),
     description: item?.description || item?.detail || item?.content || '',
   }
 }
@@ -233,7 +237,7 @@ function stringifyRenderable(value) {
 
 function normalizeVisualNode(item, index = 0) {
   if (typeof item === 'string' || typeof item === 'number') {
-    return { label: String(item), detail: '', emphasis: undefined, position: undefined }
+    return { label: stripStepPrefix(String(item)), detail: '', emphasis: undefined, position: undefined }
   }
 
   const label = stringifyRenderable(item?.label)
@@ -254,7 +258,7 @@ function normalizeVisualNode(item, index = 0) {
 
   return {
     ...item,
-    label,
+    label: stripStepPrefix(label),
     detail,
     emphasis: item?.emphasis,
     position: typeof item?.position === 'number' ? item.position : undefined,
@@ -502,11 +506,11 @@ function BehaviorLoop({ data }) {
   const [selected, setSelected] = useState(null)
   const stages = asArray(data.stages || data.steps || data.items).map(normalizeStep)
   const interactive = data.interactive === true
-  const radius = 118
-  const size = 340
+  const radius = 144
+  const size = 420
   const center = size / 2
-  const nodeWidth = 96
-  const nodeHeight = 48
+  const nodeWidth = 118
+  const nodeHeight = 56
 
   return (
     <ArtifactShell title={data.title}>
@@ -549,6 +553,7 @@ function BehaviorLoop({ data }) {
                       height: '100%',
                       justifyContent: 'center',
                       lineHeight: 1.15,
+                      overflow: 'hidden',
                       overflowWrap: 'anywhere',
                       textAlign: 'center',
                       whiteSpace: 'normal',
@@ -1081,16 +1086,15 @@ function ReasoningCycle({ data }) {
                 <stop offset="100%" stopColor="var(--gold-core)" />
               </linearGradient>
             </defs>
-            <circle className="axiom-draw-stroke" cx="210" cy="160" fill="none" opacity="0.18" pathLength="1" r="92" stroke={ACCENT} strokeDasharray="8 11" strokeWidth="2" style={delayStyle(60)} />
+            <circle className="axiom-draw-stroke" cx="210" cy="160" fill="none" opacity="0.18" pathLength="1" r="88" stroke={ACCENT} strokeDasharray="8 11" strokeWidth="2" style={delayStyle(60)} />
             {steps.map((step, index) => {
               const angle = (-Math.PI / 2) + (index / total) * Math.PI * 2
-              const x = 210 + Math.cos(angle) * 112
-              const y = 160 + Math.sin(angle) * 112
+              const x = 210 + Math.cos(angle) * 108
+              const y = 160 + Math.sin(angle) * 108
               return (
                 <g key={index}>
-                  <circle className="axiom-node-pop" cx={x} cy={y} fill="rgba(18,18,18,0.98)" r="28" stroke={ACCENT} strokeWidth="1.5" style={delayStyle(180 + index * 110)} />
-                  <text className="axiom-ink-text" x={x} y={y + 4} fill={TEXT} fontSize="11" fontWeight="800" textAnchor="middle" style={delayStyle(230 + index * 110)}>{index + 1}</text>
-                  <text className="axiom-ink-text" x={x} y={y + 48} fill={TEXT} fontSize="11" fontWeight="700" textAnchor="middle" style={delayStyle(300 + index * 110)}>{step.label}</text>
+                  <circle className="axiom-node-pop" cx={x} cy={y} fill="rgba(18,18,18,0.98)" r="27" stroke={ACCENT} strokeWidth="1.5" style={delayStyle(180 + index * 110)} />
+                  <text className="axiom-ink-text" x={x} y={y + 4} fill={TEXT} fontSize="12" fontWeight="800" textAnchor="middle" style={delayStyle(230 + index * 110)}>{index + 1}</text>
                 </g>
               )
             })}
@@ -1102,12 +1106,12 @@ function ReasoningCycle({ data }) {
             </defs>
           </svg>
         </div>
-        <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', marginTop: 10 }}>
+        <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', marginTop: 10 }}>
           {steps.map((step, index) => (
-            <div key={index} className="axiom-assemble-card" style={{ ...glassSurfaceStyle(false), display: 'grid', gap: 5, padding: 10, ...delayStyle(760 + index * 90) }}>
+            <div key={index} className="axiom-assemble-card" style={{ ...glassSurfaceStyle(false), alignContent: 'start', display: 'grid', gap: 7, minHeight: 118, padding: 12, ...delayStyle(760 + index * 90) }}>
               <div className="axiom-ink-text" style={{ color: ACCENT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', ...delayStyle(820 + index * 90) }}>Step {index + 1}</div>
-              <div className="axiom-ink-text" style={{ color: TEXT, fontSize: 12, fontWeight: 800, ...delayStyle(860 + index * 90) }}>{step.label}</div>
-              {step.description && <div className="axiom-ink-text" style={{ color: MUTED, fontSize: 11, lineHeight: 1.5, ...delayStyle(900 + index * 90) }}>{step.description}</div>}
+              <div className="axiom-ink-text" style={{ color: TEXT, fontSize: 13, fontWeight: 800, lineHeight: 1.35, overflowWrap: 'anywhere', ...delayStyle(860 + index * 90) }}>{step.label}</div>
+              {step.description && <div className="axiom-ink-text" style={{ color: MUTED, fontSize: 12, lineHeight: 1.45, overflowWrap: 'anywhere', ...delayStyle(900 + index * 90) }}>{step.description}</div>}
             </div>
           ))}
         </div>
@@ -1298,16 +1302,15 @@ function renderFrameworkVisual(framework) {
                 <path d="M0,0 L8,4 L0,8 z" fill={ACCENT} />
               </marker>
             </defs>
-            <circle className="axiom-draw-stroke" cx="210" cy="160" fill="none" opacity="0.18" pathLength="1" r="92" stroke={ACCENT} strokeDasharray="8 11" strokeWidth="2" style={delayStyle(60)} />
+            <circle className="axiom-draw-stroke" cx="210" cy="160" fill="none" opacity="0.18" pathLength="1" r="88" stroke={ACCENT} strokeDasharray="8 11" strokeWidth="2" style={delayStyle(60)} />
             {steps.map((step, index) => {
               const angle = (-Math.PI / 2) + (index / total) * Math.PI * 2
-              const x = 210 + Math.cos(angle) * 112
-              const y = 160 + Math.sin(angle) * 112
+              const x = 210 + Math.cos(angle) * 108
+              const y = 160 + Math.sin(angle) * 108
               return (
                 <g key={index}>
-                  <circle className="axiom-node-pop" cx={x} cy={y} fill="rgba(18,18,18,0.98)" r="28" stroke={ACCENT} strokeWidth="1.5" style={delayStyle(180 + index * 110)} />
-                  <text className="axiom-ink-text" x={x} y={y + 4} fill={TEXT} fontSize="11" fontWeight="800" textAnchor="middle" style={delayStyle(230 + index * 110)}>{index + 1}</text>
-                  <text className="axiom-ink-text" x={x} y={y + 48} fill={TEXT} fontSize="11" fontWeight="700" textAnchor="middle" style={delayStyle(300 + index * 110)}>{step.label}</text>
+                  <circle className="axiom-node-pop" cx={x} cy={y} fill="rgba(18,18,18,0.98)" r="27" stroke={ACCENT} strokeWidth="1.5" style={delayStyle(180 + index * 110)} />
+                  <text className="axiom-ink-text" x={x} y={y + 4} fill={TEXT} fontSize="12" fontWeight="800" textAnchor="middle" style={delayStyle(230 + index * 110)}>{index + 1}</text>
                 </g>
               )
             })}

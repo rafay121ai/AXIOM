@@ -78,6 +78,36 @@ function shouldHaveArtifact(text) {
   return /\b(example|examples|framework|steps|process|compare|comparison|breakdown|checklist|matrix|timeline|how does|how do|how should|what should be in|walk me through)\b/i.test(text)
 }
 
+function firstPersonIncidentQuestion(text = '') {
+  const lower = text.toLowerCase()
+  const hasFirstPersonPattern = /\b(i keep|i always|i tend to|i feel like|i feel|i'm|i am|i can't|i cannot|i struggle|i avoid|i procrastinate|i overthink|why do i|how do i)\b/.test(lower)
+  if (!hasFirstPersonPattern) return null
+
+  const hasConcreteIncident =
+    /\b(yesterday|today|last night|last week|this week|this month|after i|when i|because i|i did|i tried|i launched|i sold|i posted|i shipped|i invested|i traded|i spent|i lost|i made \$|we did|we tried|we launched|we sold|we shipped)\b/.test(lower) ||
+    /\b\d+[%$]?\b/.test(lower)
+
+  if (hasConcreteIncident) return null
+
+  if (/\b(short[- ]term win|short[- ]term wins|edge|luck|lucky|proof that i'?m good|proof i'?m good|good at the game)\b/.test(lower)) {
+    return 'What happened recently that made you suspect you are overreading a short-term win? Give me the actual win first, not the lesson yet.'
+  }
+
+  if (/\b(identity|who i am|smaller|protecting|defending|outgrow|outgrown)\b/.test(lower)) {
+    return 'Where did this identity show up most recently? Give me the actual moment, not the theory of it yet.'
+  }
+
+  if (/\b(decision|decide|choice|choose|high[- ]stakes|incomplete information)\b/.test(lower)) {
+    return 'What is the actual decision in front of you, and what makes it high-stakes right now?'
+  }
+
+  if (/\b(stuck|avoid|avoiding|procrastinat|resistance|repeat|same pattern)\b/.test(lower)) {
+    return 'What is the most recent moment where this pattern showed up? Give me the scene, not the diagnosis yet.'
+  }
+
+  return 'What happened recently that made you ask this? Give me the actual situation first.'
+}
+
 function auditArtifact(userText, assistantText, artifact) {
   if (!import.meta.env.DEV) return
   if (!shouldHaveArtifact(userText)) return
@@ -475,6 +505,29 @@ export default function Chat() {
         role: 'user',
         content: text,
       })
+
+      const incidentQuestion = firstPersonIncidentQuestion(text)
+      if (incidentQuestion) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId
+              ? { ...m, content: incidentQuestion, streaming: false, artifact: null, experiment: null, artifactPendingType: null }
+              : m
+          )
+        )
+
+        await supabase.from('messages').insert({
+          session_id: session.id,
+          thread_id: threadId,
+          role: 'assistant',
+          content: incidentQuestion,
+        })
+
+        setAiMessageCount((prev) => prev + 1)
+        sendingRef.current = false
+        setSending(false)
+        return
+      }
 
       // RAG: retrieve source knowledge and personal memory for this turn.
       const [route, personalMemories] = await Promise.all([
