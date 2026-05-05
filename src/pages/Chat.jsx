@@ -84,7 +84,7 @@ function firstPersonIncidentQuestion(text = '') {
   if (!hasFirstPersonPattern) return null
 
   const hasConcreteIncident =
-    /\b(yesterday|today|last night|last week|this week|this month|after i|when i|because i|i did|i tried|i launched|i sold|i posted|i shipped|i invested|i traded|i spent|i lost|i made \$|we did|we tried|we launched|we sold|we shipped)\b/.test(lower) ||
+    /\b(yesterday|today|last night|last week|this week|this month|after i|because i|i did|i tried|i launched|i sold|i posted|i shipped|i invested|i traded|i spent|i lost|i made \$|we did|we tried|we launched|we sold|we shipped)\b/.test(lower) ||
     /\b\d+[%$]?\b/.test(lower)
 
   if (hasConcreteIncident) return null
@@ -95,6 +95,10 @@ function firstPersonIncidentQuestion(text = '') {
 
   if (/\b(identity|who i am|smaller|protecting|defending|outgrow|outgrown)\b/.test(lower)) {
     return 'Where did this identity show up most recently? Give me the actual moment, not the theory of it yet.'
+  }
+
+  if (/\b(safe option|safe choice|playing safe|play it safe|comfort zone|smaller|shrinking|shrink)\b/.test(lower)) {
+    return 'Name one recent choice where you picked safe and then watched your life get smaller. What was the choice?'
   }
 
   if (/\b(decision|decide|choice|choose|high[- ]stakes|incomplete information)\b/.test(lower)) {
