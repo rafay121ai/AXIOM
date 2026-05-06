@@ -1,4 +1,10 @@
 import { supabase } from './supabase'
+import {
+  isCurrentFactualLiveQuestion,
+  isForecastAsk,
+  isLiveSearchDomain,
+  wantsLiveSearchForText,
+} from './liveSearchTriggers'
 
 const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
 
@@ -22,27 +28,15 @@ async function readError(response) {
 }
 
 export function wantsLiveSearch(text = '') {
-  return wantsFreshFacts(text) || wantsFreshForecast(text)
+  return wantsLiveSearchForText(text)
 }
 
 export function wantsFreshFacts(text = '') {
-  const lower = String(text || '').toLowerCase()
-  const freshnessAsk =
-    /\b(now|today|current|currently|latest|recent|recently|this week|this month|this year|live|news|update|updates|what happened|what are .* doing)\b/.test(lower)
-  const unstableDomain =
-    /\b(geopolitics|war|election|regulation|policy|tariff|sanction|market|markets|stock|rates|company|earnings|ceo|funding|china|us[- ]china|united states|beijing|washington|ai demand|grid|energy|semiconductor|export controls?)\b/.test(lower)
-
-  return freshnessAsk && unstableDomain
+  return isCurrentFactualLiveQuestion(text)
 }
 
 export function wantsFreshForecast(text = '') {
-  const lower = String(text || '').toLowerCase()
-  const unstableDomain =
-    /\b(geopolitics|war|election|regulation|policy|tariff|sanction|market|markets|stock|rates|company|earnings|ceo|funding|china|us[- ]china|united states|beijing|washington|ai demand|grid|energy|semiconductor|export controls?)\b/.test(lower)
-  const forecastAsk =
-    /\b(signal|signals|forecast|prediction|predict|next \d+|next \d+-\d+ years?|next decade|202[7-9]|2030|2035|future effects?|what'?s coming)\b/.test(lower)
-
-  return forecastAsk && unstableDomain
+  return isForecastAsk(text) && isLiveSearchDomain(text)
 }
 
 export function shouldUseLiveSearch({ text, retrievalConfidence = 0, sourceCount = 0, requiredArtifactType = null }) {

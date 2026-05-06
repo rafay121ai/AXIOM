@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { generateEmbedding, openai, CHAT_MODEL, requestJsonObject } from './openai'
+import { isCurrentFactualLiveQuestion } from './liveSearchTriggers'
 
 // ─── Similarity Search ───────────────────────────────────────────────────────
 // Requires the match_wiki_chunks function in Supabase:
@@ -105,9 +106,10 @@ function wantsExplicitArtifact(lower = '') {
 }
 
 function isCurrentFactualQuestion(lower = '') {
-  const freshnessAsk = /\b(now|today|current|currently|latest|recent|recently|this week|this month|this year|live|news|update|updates|what happened|what are .* doing|what should i watch next|watch next)\b/.test(lower)
-  const unstableDomain = /\b(geopolitics|geopolitical|war|election|regulation|policy|tariff|sanction|market|markets|stock|rates|company|earnings|ceo|funding|china|us[- ]china|united states|america|beijing|washington|taiwan|diplomacy|ai demand|grid|energy|semiconductor|export controls?|chip controls?)\b/.test(lower)
-  return freshnessAsk && unstableDomain
+  return isCurrentFactualLiveQuestion(lower) || (
+    /\b(what should i watch next|watch next)\b/.test(lower) &&
+    /\b(geopolitics|geopolitical|war|military|escalation|market|markets|company|china|us[- ]china|u\.s\.[- ]china|iran|israel|semiconductor|chip|energy|grid)\b/.test(lower)
+  )
 }
 
 const QUESTION_SHAPE_RULES = [
