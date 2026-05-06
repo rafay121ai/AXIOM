@@ -628,14 +628,17 @@ export default function Chat() {
       await streamOpeningMessage(updatedSession)
     }
 
-    clearTransientRouteState()
+    if (!initialInput) {
+      clearTransientRouteState()
+    }
   }
 
   useEffect(() => {
     if (loading || initialInputAppliedRef.current || !initialInput) return
     initialInputAppliedRef.current = true
     setInput(initialInput)
-  }, [loading, initialInput])
+    if (!autoSend) clearTransientRouteState()
+  }, [autoSend, clearTransientRouteState, loading, initialInput])
 
   useEffect(() => {
     if (
@@ -651,7 +654,8 @@ export default function Chat() {
 
     initialInputSentRef.current = true
     sendMessage(initialInput)
-  }, [autoSend, initialInput, loading, messages.length, session])
+    clearTransientRouteState()
+  }, [autoSend, clearTransientRouteState, initialInput, loading, messages.length, session])
 
   function normalizeMsg(m) {
     const { cleanText, artifact, experiment } = parseMessage(m.content || '')
