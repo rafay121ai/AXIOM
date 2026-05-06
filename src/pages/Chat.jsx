@@ -239,8 +239,114 @@ function shouldHaveArtifact(text) {
   return /\b(example|examples|framework|steps|process|compare|comparison|breakdown|checklist|matrix|timeline|how does|how do|how should|what should be in|walk me through)\b/i.test(text)
 }
 
+const EXPLICIT_ARTIFACT_REQUEST_RE =
+  /\b(signal map|map this|artifact|visual|diagram|chart|graph|table|compare|comparison|matrix|framework|watchlist|checklist|timeline|quadrant)\b/i
+
+const EXPLICIT_SIGNAL_MAP_REQUEST_RE =
+  /\b(signal map|map this|forecast|prediction|predict|what(?:'s| is) coming|future|2027|2028|2030|next \d+|opportunit(?:y|ies)|where .* moving|current signals|watch points|trend)\b/i
+
 function asksForExperimentOrApplication(text = '') {
   return /\b(experiment|practical|apply|application|next step|next move|what should i do|what do i do|do today|try today|test this|real[- ]world)\b/i.test(text)
+}
+
+function explicitArtifactTypeForText(text = '') {
+  const clean = String(text || '').toLowerCase()
+  if (EXPLICIT_SIGNAL_MAP_REQUEST_RE.test(clean)) return 'signal_map'
+  if (/\b(table|compare|comparison|matrix)\b/.test(clean)) return 'comparison_table'
+  if (/\b(loop|cycle)\b/.test(clean)) return 'reasoning_cycle'
+  if (/\b(stack|layer|layers|ladder)\b/.test(clean)) return 'reasoning_stack'
+  if (/\b(pyramid|hierarchy|hierarchical)\b/.test(clean)) return 'reasoning_pyramid'
+  if (/\b(curve|s-curve|adoption curve|phase shift|inflection)\b/.test(clean)) return 'reasoning_curve'
+  if (/\b(wave|hype cycle|swell|crest)\b/.test(clean)) return 'reasoning_wave'
+  return null
+}
+
+function withRouteArtifactStrategy(route, artifactStrategy, reason) {
+  const baseRoute = route || {
+    mode: 'single_pillar',
+    pillars: ['human_mind'],
+    artifactStrategy: 'none',
+    rationale: '',
+  }
+
+  return {
+    ...baseRoute,
+    artifactStrategy,
+    rationale: [baseRoute.rationale, reason].filter(Boolean).join(' '),
+  }
+}
+
+function resolveTurnResponsePlan({
+  text = '',
+  route = null,
+  cachedTurnContext = null,
+  groundedSourceCount = 0,
+  activeExperimentCount = 0,
+}) {
+  const cacheHit = cachedTurnContext?.cacheHit || null
+  const explicitArtifactRequest = EXPLICIT_ARTIFACT_REQUEST_RE.test(String(text || ''))
+  const explicitSignalMapRequest = EXPLICIT_SIGNAL_MAP_REQUEST_RE.test(String(text || ''))
+  const explicitArtifactType = explicitArtifactTypeForText(text)
+  const shouldHoldExperiment = activeExperimentCount >= 2 && asksForExperimentOrApplication(text)
+
+  let effectiveRoute = route
+  let requiredArtifactType = getRequiredArtifactType(route)
+
+  if (cacheHit === 'follow_up' && explicitArtifactType && requiredArtifactType !== explicitArtifactType) {
+    effectiveRoute = withRouteArtifactStrategy(
+      effectiveRoute,
+      explicitArtifactType,
+      'Short follow-up explicitly requested a visual, so use the requested artifact instead of the inherited strategy.'
+    )
+    requiredArtifactType = explicitArtifactType
+  }
+
+  const inheritedSignalMapWithoutAsk =
+    cacheHit === 'follow_up' &&
+    requiredArtifactType === 'signal_map' &&
+    !explicitSignalMapRequest
+
+  const inheritedArtifactWithoutAsk =
+    cacheHit === 'follow_up' &&
+    requiredArtifactType &&
+    !explicitArtifactRequest
+
+  if (inheritedSignalMapWithoutAsk || inheritedArtifactWithoutAsk) {
+    effectiveRoute = withRouteArtifactStrategy(
+      effectiveRoute,
+      'none',
+      'Short follow-up should preserve continuity in prose without inheriting the previous artifact.'
+    )
+    requiredArtifactType = null
+  }
+
+  if (
+    requiredArtifactType === 'signal_map' &&
+    needsCurrentSourceGrounding(text) &&
+    groundedSourceCount === 0
+  ) {
+    effectiveRoute = withRouteArtifactStrategy(
+      effectiveRoute,
+      'none',
+      'Source-thin current affairs should stay prose-first.'
+    )
+    requiredArtifactType = null
+  }
+
+  if (shouldHoldExperiment && requiredArtifactType) {
+    effectiveRoute = withRouteArtifactStrategy(
+      effectiveRoute,
+      'none',
+      'The active experiment limit is full, so this turn should not build an experiment-shaped artifact.'
+    )
+    requiredArtifactType = null
+  }
+
+  return {
+    effectiveRoute,
+    requiredArtifactType,
+    shouldHoldExperiment,
+  }
 }
 
 function needsCurrentSourceGrounding(text = '') {
@@ -515,6 +621,21 @@ export default function Chat() {
   const abortControllerRef = useRef(null) // current active stream abort handle
   const initialInputAppliedRef = useRef(false)
   const initialInputSentRef = useRef(false)
+  const postResponseQueueRef = useRef(Promise.resolve())
+
+  const releaseSending = useCallback(() => {
+    sendingRef.current = false
+    setSending(false)
+  }, [])
+
+  const enqueuePostResponseUpdate = useCallback((task) => {
+    postResponseQueueRef.current = postResponseQueueRef.current
+      .catch(() => {})
+      .then(task)
+      .catch((error) => {
+        console.warn('[post-response] Queued update failed:', error?.message || error)
+      })
+  }, [])
 
   const clearTransientRouteState = useCallback(() => {
     const state = location.state || {}
@@ -870,8 +991,7 @@ export default function Chat() {
         }
 
         setAiMessageCount((prev) => prev + 1)
-        sendingRef.current = false
-        setSending(false)
+        releaseSending()
         return
       }
 
@@ -948,20 +1068,18 @@ export default function Chat() {
       }
       const combinedWikiContext = [wikiContext, liveSearchContext].filter(Boolean).join('\n\n')
       const groundedSourceCount = sources.length + (liveSearchContext ? 1 : 0)
-      const suppressUngroundedSignalMap =
-        routedArtifactType === 'signal_map' &&
-        needsCurrentSourceGrounding(text) &&
-        groundedSourceCount === 0
-      const effectiveRoute = suppressUngroundedSignalMap
-        ? {
-            ...route,
-            artifactStrategy: 'none',
-            rationale: `${route.rationale || 'Current-affairs query.'} Source-thin current affairs should stay prose-first.`,
-          }
-        : route
       const activeExperimentCount = (sessionForTurn.active_experiments || []).filter((e) => e.status === 'active').length
-      const shouldHoldExperiment = activeExperimentCount >= 2 && asksForExperimentOrApplication(text)
-      const requiredArtifactType = shouldHoldExperiment ? null : getRequiredArtifactType(effectiveRoute)
+      const {
+        effectiveRoute,
+        requiredArtifactType,
+        shouldHoldExperiment,
+      } = resolveTurnResponsePlan({
+        text,
+        route,
+        cachedTurnContext,
+        groundedSourceCount,
+        activeExperimentCount,
+      })
       const artifactRouteContext = formatRouteContext(effectiveRoute, pillarResults)
       const continuityContext = cachedTurnContext?.cacheHit
         ? `Conversation continuity: this turn is reusing ${cachedTurnContext.cacheHit === 'follow_up' ? 'the previous turn context for a short follow-up' : 'cached context for the same query'}. Treat it as the same terrain unless the user clearly changed topic. Do not restart from first principles. Signal continuity through smooth prose only, not labels or meta-language.`
@@ -1186,28 +1304,37 @@ export default function Chat() {
 
       setAiMessageCount((prev) => prev + 1)
 
-      // Handle experiment assignment
-      let sessionForMemory = sessionForTurn
-      if (experiment) {
-        sessionForMemory = await assignExperiment(experiment, sessionForTurn)
-        const assigned = findMatchingExperiment(sessionForMemory.active_experiments, experiment)
-        if (assigned) {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantMsgId
-                ? { ...m, experiment: assigned }
-                : m
-            )
-          )
-        }
-      }
+      releaseSending()
 
-      if (isLowSignalMemoryTurn(text, cleanText)) {
-        setSession(sessionForMemory)
-      } else {
-        const updatedSession = await updatePersonalMemory(sessionForMemory, baseMessages, text, cleanText)
-        setSession(updatedSession)
-      }
+      enqueuePostResponseUpdate(async () => {
+        let sessionForMemory = sessionForTurn
+
+        try {
+          if (experiment) {
+            sessionForMemory = await assignExperiment(experiment, sessionForTurn)
+            const assigned = findMatchingExperiment(sessionForMemory.active_experiments, experiment)
+            if (assigned) {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMsgId
+                    ? { ...m, experiment: assigned }
+                    : m
+                )
+              )
+            }
+          }
+
+          if (isLowSignalMemoryTurn(text, cleanText)) {
+            setSession(sessionForMemory)
+          } else {
+            const updatedSession = await updatePersonalMemory(sessionForMemory, baseMessages, text, cleanText)
+            setSession(updatedSession)
+          }
+        } catch (postResponseError) {
+          console.warn('[post-response] Message saved, but follow-up state update failed:', postResponseError?.message || postResponseError)
+          setSession(sessionForMemory)
+        }
+      })
     } catch (err) {
       // AbortError is intentional (pagehide or component unmount) — don't show an error
       if (err.name === 'AbortError') {
@@ -1239,8 +1366,7 @@ export default function Chat() {
       }
     } finally {
       abortControllerRef.current = null
-      sendingRef.current = false
-      setSending(false)
+      releaseSending()
     }
   }
 
