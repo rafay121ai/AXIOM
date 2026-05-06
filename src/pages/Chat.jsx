@@ -10,6 +10,7 @@ import { buildArtifactForResponse, getArtifactBuildSteps, getRequiredArtifactTyp
 import { routeQuestionMode, searchWikiForRoute, formatRouteContext, formatWikiContext } from '../lib/rag'
 import { searchPersonalMemory, formatNamedPatternsContext, formatPersonalMemoryContext, updatePersonalMemory } from '../lib/personalMemory'
 import { formatLiveSearchContext, liveSearch, shouldUseLiveSearch } from '../lib/liveSearch'
+import { getCachedTurnContext, setCachedTurnContext } from '../lib/sessionTurnContext'
 
 // ─── Message Tag Parsing ─────────────────────────────────────────────────────
 const ARTIFACT_JSON_KEY_RE = /"(title|topic|core_shift|trend_state|what_is_happening_now|observed_moves|sections|forecast|frameworks|watch_points|source_weighting|confidence|counterforces|for_this_user)"\s*:/
@@ -875,15 +876,51 @@ export default function Chat() {
       }
 
       // RAG: retrieve source knowledge and personal memory for this turn.
-      const [route, personalMemories] = await Promise.all([
-        routeQuestionMode(text, sessionForTurn, nodeContext),
-        searchPersonalMemory(sessionForTurn.user_id, text, 5),
-      ])
-      const { chunks, sources, confidence: retrievalConfidence, pillarResults } = await searchWikiForRoute(text, route, 3)
-      const wikiContext = await formatWikiContext(chunks, sources)
+      // Current-session cache avoids re-embedding / re-searching the same topic
+      // during short follow-ups. It clears naturally when the browser session ends.
+      const turnCacheScope = nodeContext?.id
+        ? `node:${nodeContext.id}`
+        : nodeContext?.pillar
+          ? `pillar:${nodeContext.pillar}`
+          : 'chat'
+      const cachedTurnContext = getCachedTurnContext(sessionForTurn.id, text, turnCacheScope)
+      let route = cachedTurnContext?.route || null
+      let personalMemories = Array.isArray(cachedTurnContext?.personalMemories)
+        ? cachedTurnContext.personalMemories
+        : null
+      let chunks = Array.isArray(cachedTurnContext?.chunks) ? cachedTurnContext.chunks : null
+      let sources = Array.isArray(cachedTurnContext?.sources) ? cachedTurnContext.sources : null
+      let retrievalConfidence = Number.isFinite(cachedTurnContext?.retrievalConfidence)
+        ? cachedTurnContext.retrievalConfidence
+        : null
+      let pillarResults = cachedTurnContext?.pillarResults || null
+      let wikiContext = typeof cachedTurnContext?.wikiContext === 'string'
+        ? cachedTurnContext.wikiContext
+        : null
+      let liveSearchContext = typeof cachedTurnContext?.liveSearchContext === 'string'
+        ? cachedTurnContext.liveSearchContext
+        : ''
+
+      if (!route || !personalMemories) {
+        const [freshRoute, freshPersonalMemories] = await Promise.all([
+          routeQuestionMode(text, sessionForTurn, nodeContext),
+          searchPersonalMemory(sessionForTurn.user_id, text, 5),
+        ])
+        route = route || freshRoute
+        personalMemories = personalMemories || freshPersonalMemories
+      }
+
+      if (!chunks || !sources || retrievalConfidence === null || !pillarResults || wikiContext === null) {
+        const wikiResult = await searchWikiForRoute(text, route, 3)
+        chunks = wikiResult.chunks
+        sources = wikiResult.sources
+        retrievalConfidence = wikiResult.confidence
+        pillarResults = wikiResult.pillarResults
+        wikiContext = await formatWikiContext(chunks, sources)
+      }
+
       const routedArtifactType = getRequiredArtifactType(route)
-      let liveSearchContext = ''
-      if (shouldUseLiveSearch({
+      if (!liveSearchContext && shouldUseLiveSearch({
         text,
         retrievalConfidence,
         sourceCount: sources.length,
@@ -895,6 +932,19 @@ export default function Chat() {
         } catch (error) {
           console.warn('[Live Search] fallback skipped:', error?.message || error)
         }
+      }
+
+      if (!cachedTurnContext) {
+        setCachedTurnContext(sessionForTurn.id, text, {
+          route,
+          personalMemories,
+          chunks,
+          sources,
+          retrievalConfidence,
+          pillarResults,
+          wikiContext,
+          liveSearchContext,
+        }, turnCacheScope)
       }
       const combinedWikiContext = [wikiContext, liveSearchContext].filter(Boolean).join('\n\n')
       const groundedSourceCount = sources.length + (liveSearchContext ? 1 : 0)
