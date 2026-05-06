@@ -572,7 +572,7 @@ export async function syncPersonalWiki(session) {
 
     let { data: memories, error: memoriesError } = await supabase
       .from('personal_memories')
-      .select('type, content, importance, confidence, primary_pillar, secondary_pillars, pillar_confidence, updated_at')
+      .select('id, type, content, importance, confidence, primary_pillar, secondary_pillars, pillar_confidence, updated_at')
       .eq('user_id', session.user_id)
       .order('updated_at', { ascending: false })
       .limit(10)
@@ -580,7 +580,7 @@ export async function syncPersonalWiki(session) {
     if (memoriesError && /primary_pillar|secondary_pillars|pillar_confidence/.test(memoriesError.message || '')) {
       const fallback = await supabase
         .from('personal_memories')
-        .select('type, content, importance, confidence, updated_at')
+        .select('id, type, content, importance, confidence, updated_at')
         .eq('user_id', session.user_id)
         .order('updated_at', { ascending: false })
         .limit(10)
@@ -588,11 +588,17 @@ export async function syncPersonalWiki(session) {
       memoriesError = fallback.error
     }
 
+    console.log('[wiki] memories fetched for sync:', memories?.length, JSON.stringify(memories?.map(m => m.id)))
+
     if (!memoriesError) {
       for (let i = 0; i < (memories || []).length; i++) {
-        const node = await upsertNode(session.id, nodeFromMemory(memories[i], i + 8), i + 8)
-        const root = roots.find((r) => r.pillar === node?.pillar)
-        await upsertEdge(session.id, node, root, 'belongs_to', 0.55)
+        const memory = memories[i]
+        const node = await upsertNode(session.id, nodeFromMemory(memory, i + 8), i + 8)
+        const pillarKey = node?.pillar || memory.primary_pillar
+        const root = roots.find((r) => r.pillar === pillarKey)
+        if (node?.id && root?.id) {
+          await upsertEdge(session.id, node, root, 'belongs_to', 0.55)
+        }
       }
     }
 
