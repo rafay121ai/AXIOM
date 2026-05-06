@@ -161,7 +161,7 @@ function stripLeakedStructuredPayload(text = '') {
 }
 
 function tidyProseForArtifact(text = '', artifactType = null) {
-  const clean = String(text || '').trim()
+  const clean = stripArtifactHandoffQuestions(text, artifactType)
   if (artifactType !== 'signal_map' || !clean) return clean
 
   const hadSignalMapHeadings = SIGNAL_MAP_HEADING_RE.test(clean)
@@ -183,6 +183,19 @@ function tidyProseForArtifact(text = '', artifactType = null) {
 
   const compact = paragraphs.slice(0, 2).join('\n\n')
   return completeSentenceExcerpt(compact, MAX_SIGNAL_MAP_PROSE_CHARS)
+}
+
+function stripArtifactHandoffQuestions(text = '', artifactType = null) {
+  const clean = String(text || '').trim()
+  if (!artifactType || !clean) return clean
+
+  return clean
+    .replace(/\bI can (?:turn|make|convert|build) (?:that|this|it) into (?:a |an )?[^.!?]*[.!?](?=\s|$)/gi, '')
+    .replace(/\bI can (?:turn|make|convert|build) (?:a |an )?[^.!?]*(?:but|if)[^.!?]*[.!?](?=\s|$)/gi, '')
+    .replace(/\bDo you want (?:the|this|that)?\s*(?:map|artifact|visual|diagram|table|chart)[^?]*\?/gi, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim()
 }
 
 function completeSentenceExcerpt(text = '', maxChars = MAX_SIGNAL_MAP_PROSE_CHARS) {
@@ -218,6 +231,7 @@ function visibleResponseContract(route, artifactType = null, shouldHoldExperimen
   if (artifactType) {
     lines.push(`- A separate ${artifactType} artifact is being built by the app. Do not write the artifact yourself.`)
     lines.push('- Do not duplicate artifact sections in prose. The prose should set up the artifact, not repeat it.')
+    lines.push('- Do not ask whether to build the artifact, promise to build it later, or ask for a narrowing choice before it appears. Use the latest user message and conversation context as the scope.')
   } else {
     lines.push('- No artifact is being built for this turn. Do not output artifact tags, markdown tables, JSON, or a structured visual block.')
   }
