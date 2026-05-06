@@ -94,8 +94,13 @@ as $$
     coalesce(
       (
         select jsonb_agg(to_jsonb(n) order by n.importance desc, n.updated_at desc)
-        from personal_wiki_nodes n
-        where n.session_id = match_session_id
+        from (
+          select distinct on (lower(n.label), n.type) n.*
+          from personal_wiki_nodes n
+          join sessions s on s.id = n.session_id
+          where s.user_id = (select user_id from sessions where id = match_session_id)
+          order by lower(n.label), n.type, n.updated_at desc
+        ) n
       ),
       '[]'::jsonb
     ),
@@ -104,7 +109,8 @@ as $$
       (
         select jsonb_agg(to_jsonb(e) order by e.weight desc, e.updated_at desc)
         from personal_wiki_edges e
-        where e.session_id = match_session_id
+        join sessions s on s.id = e.session_id
+        where s.user_id = (select user_id from sessions where id = match_session_id)
       ),
       '[]'::jsonb
     )
