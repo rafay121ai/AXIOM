@@ -100,7 +100,28 @@ function wantsSignalMap(lower = '') {
   return /\b(signal map|map the signals|map this terrain|forecast|prediction|predict|where is .* moving|where are .* moving|what'?s coming|future effects?|future shift|future shifts|next \d+ (months?|years?)|next \d+-\d+ years?|next decade|10-15 years|2030|2035|202[7-9]|where will .* accrue|where does .* accrue|what happens if)\b/.test(lower)
 }
 
+function wantsExplicitArtifact(lower = '') {
+  return /\b(signal map|map this|map the signals|visuali[sz]e|show me visually|table|comparison table|compare in a table|matrix|quadrant|framework|diagram|chart|graph|watchlist|checklist|timeline|stack|ladder|pyramid|curve|loop|breakdown|structured view)\b/.test(lower)
+}
+
+function isCurrentFactualQuestion(lower = '') {
+  const freshnessAsk = /\b(now|today|current|currently|latest|recent|recently|this week|this month|this year|live|news|update|updates|what happened|what are .* doing|what should i watch next|watch next)\b/.test(lower)
+  const unstableDomain = /\b(geopolitics|geopolitical|war|election|regulation|policy|tariff|sanction|market|markets|stock|rates|company|earnings|ceo|funding|china|us[- ]china|united states|america|beijing|washington|taiwan|diplomacy|ai demand|grid|energy|semiconductor|export controls?|chip controls?)\b/.test(lower)
+  return freshnessAsk && unstableDomain
+}
+
 const QUESTION_SHAPE_RULES = [
+  {
+    matches: (lower) =>
+      isCurrentFactualQuestion(lower) &&
+      !wantsExplicitArtifact(lower),
+    build: () => ({
+      mode: 'two_pillar',
+      pillars: ['whats_coming', 'how_companies_win'],
+      artifactStrategy: 'none',
+      rationale: 'Current factual/live query. Answer in prose only unless the user explicitly asks for a visual artifact.',
+    }),
+  },
   {
     matches: (lower) =>
       /\b(what is changing|what'?s changing|how is .* changing|what changes)\b/.test(lower) &&
@@ -272,6 +293,8 @@ function describeSourceWeight(source = {}) {
 function normalizeRouterPayload(payload = {}, query = '') {
   const lower = String(query || '').toLowerCase()
   const signalMapAllowed = wantsSignalMap(lower)
+  const artifactAllowed = wantsExplicitArtifact(lower) || signalMapAllowed
+  const currentFactualWithoutArtifactAsk = isCurrentFactualQuestion(lower) && !artifactAllowed
   const requestedMode = ROUTER_MODES.has(payload.mode) ? payload.mode : 'single_pillar'
   let pillars = Array.isArray(payload.pillars)
     ? payload.pillars.filter((pillar) => ALL_PILLARS.includes(pillar))
@@ -294,6 +317,10 @@ function normalizeRouterPayload(payload = {}, query = '') {
   }
 
   if (artifactStrategy === 'signal_map' && !signalMapAllowed) {
+    artifactStrategy = 'none'
+  }
+
+  if (currentFactualWithoutArtifactAsk) {
     artifactStrategy = 'none'
   }
 
@@ -365,7 +392,9 @@ Rules:
 - four_pillar_synthesis: always use ["whats_coming","how_companies_win","money_game","think_sharper"]
 - all_pillar_synthesis: always use all six pillars
 - Use signal_map only when the user explicitly asks about signals, forecasts, predictions, future effects, what's coming, where things are moving, or a named future horizon.
-- For focused "tell me about this specific thing" questions, choose single_pillar or two_pillar with artifact_strategy "none" unless the user asks for a visual/map.
+- For current/latest/recent/news/geopolitics/markets/company-update questions, choose artifact_strategy "none" unless the user explicitly asks for a table, signal map, framework, matrix, watchlist, or other visual/structured artifact.
+- "What should I watch next?" means prose watchpoints, not an artifact. Only create an artifact if the user says "watchlist", "table", "map", "framework", or similar.
+- For focused "tell me about this specific thing" questions, choose single_pillar or two_pillar with artifact_strategy "none" unless the user asks for a visual/map/table/framework.
 - User context must influence the mode and pillar choice.
 - Choose the smallest mode that can answer the question well.`,
         },

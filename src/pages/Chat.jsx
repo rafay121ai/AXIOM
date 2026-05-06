@@ -217,6 +217,8 @@ function visibleResponseContract(route, artifactType = null, shouldHoldExperimen
   if (artifactType) {
     lines.push(`- A separate ${artifactType} artifact is being built by the app. Do not write the artifact yourself.`)
     lines.push('- Do not duplicate artifact sections in prose. The prose should set up the artifact, not repeat it.')
+  } else {
+    lines.push('- No artifact is being built for this turn. Do not output artifact tags, markdown tables, JSON, or a structured visual block.')
   }
 
   if (artifactType === 'signal_map') {
