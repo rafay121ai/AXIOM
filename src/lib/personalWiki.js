@@ -634,6 +634,8 @@ export async function getPersonalWikiGraph(sessionId) {
       match_session_id: sessionId,
     })
 
+    console.log('[wiki] getPersonalWikiGraph raw response:', JSON.stringify(data), 'error:', error)
+
     if (error) {
       console.warn('[Wiki] Graph fetch skipped:', error.message)
       return { nodes: [], edges: [] }
