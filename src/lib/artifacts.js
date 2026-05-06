@@ -148,8 +148,47 @@ function normalizeSignalMap(data) {
 }
 
 function normalizeArtifactData(type, data) {
+  if (type === 'comparison_table') return normalizeComparisonTable(data)
   if (type === 'signal_map') return normalizeSignalMap(data)
   return data
+}
+
+function normalizeComparisonTable(data) {
+  if (!isPlainObject(data)) return null
+
+  const headers = cleanArray(data.headers, 5)
+    .map(header => cleanText(header))
+    .filter(Boolean)
+
+  if (headers.length < 2) return null
+
+  const rows = Array.isArray(data.rows) ? data.rows : []
+  const normalizedRows = rows
+    .map((row) => {
+      if (Array.isArray(row)) return row.map(cell => cleanText(cell))
+      if (isPlainObject(row)) {
+        return headers.map((header) => {
+          const exact = row[header]
+          const snake = row[header.toLowerCase().replace(/\W+/g, '_')]
+          const looseKey = Object.keys(row).find(key => cleanText(key).toLowerCase() === header.toLowerCase())
+          return cleanText(exact ?? snake ?? (looseKey ? row[looseKey] : ''))
+        })
+      }
+      return []
+    })
+    .map(row => row.slice(0, headers.length))
+    .filter(row => row.length >= 2 && row.some(cell => cell && cell.toLowerCase() !== 'true' && cell.toLowerCase() !== 'false'))
+    .filter(row => row.filter(Boolean).length >= Math.min(2, headers.length))
+
+  if (normalizedRows.length === 0) return null
+
+  return {
+    title: cleanText(data.title),
+    headers,
+    rows: normalizedRows,
+    animate: data.animate !== false,
+    interactive: data.interactive === true,
+  }
 }
 
 export function getRequiredArtifactType(route) {

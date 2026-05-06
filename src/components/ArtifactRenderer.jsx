@@ -204,6 +204,7 @@ function normalizeStep(item) {
 }
 
 function normalizeRows(row) {
+  if (row === true || row === false || row === null || row === undefined) return []
   if (Array.isArray(row)) return row.map(stringifyRenderable)
   if (row && typeof row === 'object') return Object.values(row).map(stringifyRenderable)
   return [stringifyRenderable(row)]
@@ -409,7 +410,11 @@ function AreaChart({ data, onUserPlot }) {
 
 function ComparisonTable({ data }) {
   const [selected, setSelected] = useState(null)
+  const headers = asArray(data.headers).map(stringifyRenderable).filter(Boolean)
   const rows = asArray(data.rows)
+    .map(normalizeRows)
+    .map(row => row.slice(0, headers.length || row.length))
+    .filter(row => row.length > 0 && row.some(cell => cell && !/^(true|false)$/i.test(cell)))
   const interactive = data.interactive === true
 
   return (
@@ -417,7 +422,7 @@ function ComparisonTable({ data }) {
       <table style={{ borderCollapse: 'collapse', fontSize: 13, minWidth: 340, width: '100%' }}>
         <thead>
           <tr>
-            {asArray(data.headers).map((header, index) => (
+            {headers.map((header, index) => (
               <th key={index} style={{ borderBottom: `1px solid ${BORDER}`, color: ACCENT, fontWeight: 700, padding: '10px 14px', textAlign: 'left', whiteSpace: 'nowrap' }}>
                 {header}
               </th>
@@ -432,7 +437,7 @@ function ComparisonTable({ data }) {
               onClick={() => interactive && setSelected(rowIndex)}
               style={{ background: selected === rowIndex ? 'rgba(212,168,67,0.12)' : rowIndex % 2 ? 'rgba(255,255,255,0.018)' : 'transparent', cursor: interactive ? 'pointer' : 'default' }}
             >
-              {normalizeRows(row).map((cell, cellIndex) => (
+              {row.map((cell, cellIndex) => (
                 <td key={cellIndex} style={{ borderBottom: `1px solid ${BORDER}`, color: TEXT, lineHeight: 1.5, padding: '10px 14px', verticalAlign: 'top' }}>
                   {cell}
                 </td>
