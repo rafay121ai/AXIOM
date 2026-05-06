@@ -180,9 +180,27 @@ function tidyProseForArtifact(text = '', artifactType = null) {
     .filter(Boolean)
 
   const compact = paragraphs.slice(0, 2).join('\n\n')
-  return compact.length > MAX_SIGNAL_MAP_PROSE_CHARS
-    ? `${compact.slice(0, MAX_SIGNAL_MAP_PROSE_CHARS).replace(/\s+\S*$/, '')}.`
-    : compact
+  return completeSentenceExcerpt(compact, MAX_SIGNAL_MAP_PROSE_CHARS)
+}
+
+function completeSentenceExcerpt(text = '', maxChars = MAX_SIGNAL_MAP_PROSE_CHARS) {
+  const clean = String(text || '').trim()
+  if (clean.length <= maxChars) return clean
+
+  const boundaryMatches = [...clean.matchAll(/[.!?](?=\s|$)/g)]
+  const lastSafeBoundary = boundaryMatches
+    .map(match => match.index + 1)
+    .filter(index => index <= maxChars)
+    .pop()
+
+  if (lastSafeBoundary && lastSafeBoundary >= Math.min(220, maxChars * 0.45)) {
+    return clean.slice(0, lastSafeBoundary).trim()
+  }
+
+  const firstSentence = boundaryMatches[0]
+  if (firstSentence) return clean.slice(0, firstSentence.index + 1).trim()
+
+  return clean.slice(0, maxChars).replace(/\s+\S*$/, '').trim()
 }
 
 function sanitizeVisibleAssistantText(text = '', artifactType = null) {
