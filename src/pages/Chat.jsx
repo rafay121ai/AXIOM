@@ -11,6 +11,7 @@ import { routeQuestionMode, searchWikiForRoute, formatRouteContext, formatWikiCo
 import { searchPersonalMemory, formatNamedPatternsContext, formatPersonalMemoryContext, updatePersonalMemory } from '../lib/personalMemory'
 import { formatLiveSearchContext, liveSearch, shouldUseLiveSearch } from '../lib/liveSearch'
 import { getCachedTurnContext, setCachedTurnContext } from '../lib/sessionTurnContext'
+import { syncPersonalWiki } from '../lib/personalWiki'
 
 // ─── Message Tag Parsing ─────────────────────────────────────────────────────
 const ARTIFACT_JSON_KEY_RE = /"(title|topic|core_shift|trend_state|what_is_happening_now|observed_moves|sections|forecast|frameworks|watch_points|source_weighting|confidence|counterforces|for_this_user)"\s*:/
@@ -1351,6 +1352,25 @@ export default function Chat() {
           } else {
             const updatedSession = await updatePersonalMemory(sessionForMemory, baseMessages, text, cleanText)
             setSession(updatedSession)
+            const token = getStoredSessionToken()
+            if (token) {
+              syncPersonalWiki(updatedSession).then((synced) => {
+                if (synced?.nodes?.length) {
+                  const key = `axiom_brain_graph:${token}`
+                  console.log('[brain] syncing graph after turn —', synced.nodes.length, 'nodes,', synced.edges.length, 'edges')
+                  try {
+                    localStorage.setItem(key, JSON.stringify(synced))
+                    console.log('[brain] localStorage write succeeded:', key)
+                  } catch (e) {
+                    console.warn('[brain] localStorage write failed:', e?.message)
+                  }
+                } else {
+                  console.warn('[brain] syncPersonalWiki returned empty graph — skipping localStorage write')
+                }
+              }).catch((e) => {
+                console.warn('[brain] syncPersonalWiki threw:', e?.message)
+              })
+            }
           }
         } catch (postResponseError) {
           console.warn('[post-response] Message saved, but follow-up state update failed:', postResponseError?.message || postResponseError)
