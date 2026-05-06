@@ -760,9 +760,12 @@ export function buildSystemPrompt(session, wikiContext, personalMemoryContext = 
     ? `\nPatterns already named with this user — do not re-diagnose from scratch:\n${namedPatternsContext}\n\nIf these patterns come up again, reference them by name and track whether they've shifted, deepened, or resolved. Don't treat them as new observations.`
     : ''
 
-  const confidenceNote = retrievalConfidence !== null
-    ? `Wiki retrieval confidence: ${retrievalConfidence.toFixed(2)} (0.0-1.0)${retrievalConfidence < WIKI_CONTEXT_CONFIDENCE_FLOOR ? ' — LOW. Do not inject retrieved context. If support is thin, narrow the claim, lower confidence, and avoid overclaiming.' : ''}`
-    : 'Wiki retrieval confidence: not scored.'
+  const hasLiveWebContext = String(wikiContext || '').includes('Live web context from Exa')
+  const confidenceNote = hasLiveWebContext
+    ? `Wiki retrieval confidence: ${retrievalConfidence !== null ? retrievalConfidence.toFixed(2) : 'not scored'} for internal library only. Live web context is present and may be used for current facts.`
+    : retrievalConfidence !== null
+      ? `Wiki retrieval confidence: ${retrievalConfidence.toFixed(2)} (0.0-1.0)${retrievalConfidence < WIKI_CONTEXT_CONFIDENCE_FLOOR ? ' — LOW. Do not inject retrieved context. If support is thin, narrow the claim, lower confidence, and avoid overclaiming.' : ''}`
+      : 'Wiki retrieval confidence: not scored.'
 
   return `You are Axiom. A mentor built for ambitious founders and builders aged 18-28.
 
@@ -1124,7 +1127,7 @@ If the question is outside all pillars entirely, say so briefly and cleanly: "Th
 
 ${confidenceNote}
 
-If retrieval confidence is below ${WIKI_CONTEXT_CONFIDENCE_FLOOR}, do not inject retrieved wiki context into the response. Treat it as a thin-support question: keep the answer narrower, lower certainty where needed, and avoid pretending you have source-backed coverage you do not have.
+If retrieval confidence is below ${WIKI_CONTEXT_CONFIDENCE_FLOOR}, do not inject retrieved wiki context into the response unless live web context is explicitly present. Live web context may be used for current facts even when internal wiki confidence is low. Treat unsupported internal-library claims as thin-support: keep them narrower, lower certainty where needed, and avoid overclaiming.
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1298,6 +1301,7 @@ CITATION RULE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Priority order:
+0. If live web context is present, use it for current facts, recent moves, dates, and source-grounded live signals. Do not say Axiom lacks reliable live recency in that turn. If the live evidence is weak, say the evidence is thin rather than claiming no live access.
 1. If retrieval confidence is ${WIKI_CONTEXT_CONFIDENCE_FLOOR} or above AND retrieved wiki context contains chunks genuinely relevant to the user's topic — cite from those. Use the title and author exactly as they appear. Do not invent details not present in the chunk.
 2. If retrieved chunks are not relevant OR confidence is below ${WIKI_CONTEXT_CONFIDENCE_FLOOR} — draw from Axiom's knowledge library above. Answer as someone who has deeply absorbed that source. Name the author, the book, and the specific idea.
 3. If the question falls outside the library entirely — apply the epistemic honesty rule. Do not fabricate a source.

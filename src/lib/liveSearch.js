@@ -22,19 +22,32 @@ async function readError(response) {
 }
 
 export function wantsLiveSearch(text = '') {
+  return wantsFreshFacts(text) || wantsFreshForecast(text)
+}
+
+export function wantsFreshFacts(text = '') {
   const lower = String(text || '').toLowerCase()
   const freshnessAsk =
     /\b(now|today|current|currently|latest|recent|recently|this week|this month|this year|live|news|update|updates|what happened|what are .* doing)\b/.test(lower)
   const unstableDomain =
     /\b(geopolitics|war|election|regulation|policy|tariff|sanction|market|markets|stock|rates|company|earnings|ceo|funding|china|us[- ]china|united states|beijing|washington|ai demand|grid|energy|semiconductor|export controls?)\b/.test(lower)
+
+  return freshnessAsk && unstableDomain
+}
+
+export function wantsFreshForecast(text = '') {
+  const lower = String(text || '').toLowerCase()
+  const unstableDomain =
+    /\b(geopolitics|war|election|regulation|policy|tariff|sanction|market|markets|stock|rates|company|earnings|ceo|funding|china|us[- ]china|united states|beijing|washington|ai demand|grid|energy|semiconductor|export controls?)\b/.test(lower)
   const forecastAsk =
     /\b(signal|signals|forecast|prediction|predict|next \d+|next \d+-\d+ years?|next decade|202[7-9]|2030|2035|future effects?|what'?s coming)\b/.test(lower)
 
-  return (freshnessAsk && unstableDomain) || (forecastAsk && unstableDomain)
+  return forecastAsk && unstableDomain
 }
 
 export function shouldUseLiveSearch({ text, retrievalConfidence = 0, sourceCount = 0, requiredArtifactType = null }) {
   if (!wantsLiveSearch(text)) return false
+  if (wantsFreshFacts(text)) return true
   if (sourceCount === 0) return true
   if (requiredArtifactType === 'signal_map' && retrievalConfidence < 0.36) return true
   return retrievalConfidence < 0.24
@@ -74,6 +87,7 @@ export function formatLiveSearchContext(payload) {
 
   return [
     'Live web context from Exa. Use this only as current/fresh grounding; do not name Exa.',
+    'Because live web context is present, do not say you lack reliable live recency for this turn. If sources are weak, say the evidence is thin instead.',
     'When answering, mention source titles only when the user asks for sources or dates. Otherwise synthesize quietly.',
     ...lines,
   ].join('\n\n')
