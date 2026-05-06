@@ -50,8 +50,9 @@ const NODE_TYPE_BASE_RADIUS = {
   concept:    0.011,
 }
 
-const MAX_VISIBLE_NODES = 80
-const MAX_PILLAR_EDGES = 24
+const MAX_VISIBLE_NODES = 200
+const MAX_PILLAR_EDGES = 60
+const MAX_GOALS_PER_PILLAR = 3
 const PILLAR_NODE_OPACITY = 0.84
 const PILLAR_SPRITE_SCALE = 3.4
 const PILLAR_SPRITE_OPACITY = 0.18
@@ -292,10 +293,17 @@ function visibleGraph(graph) {
   const rawNodes = (graph.nodes || []).filter(node => node?.id)
   const rawEdges = (graph.edges || []).filter(edge => edge?.source_node_id && edge?.target_node_id)
   const pillarNodes = rawNodes.filter(node => node.type === 'pillar')
+  const goalCountByPillar = {}
   const candidateNodes = rawNodes
     .filter(node => node.type !== 'pillar')
     .filter(node => recommendationLevel(node) > 0 || isNodeLit(node) || node.type === 'experiment' || (node.importance || 0) >= 4)
     .sort((a, b) => nodeVisualScore(b) - nodeVisualScore(a))
+    .filter(node => {
+      if (node.type !== 'goal') return true
+      const key = node.pillar || '__none__'
+      goalCountByPillar[key] = (goalCountByPillar[key] || 0) + 1
+      return goalCountByPillar[key] <= MAX_GOALS_PER_PILLAR
+    })
     .slice(0, MAX_VISIBLE_NODES)
 
   // Pre-compute which candidates are connected before committing to visibility
