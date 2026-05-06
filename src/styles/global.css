@@ -1329,6 +1329,13 @@ h1, h2, h3 {
   transition: opacity 0.15s ease;
 }
 
+.msg__actions--assistant {
+  opacity: 1;
+  pointer-events: auto;
+  justify-content: flex-start;
+  margin-top: 6px;
+}
+
 .msg-group:hover .msg__actions,
 .msg-group:focus-within .msg__actions,
 .msg-group--actions-open .msg__actions {
@@ -1382,6 +1389,13 @@ h1, h2, h3 {
   .msg-group:focus-within .msg__actions {
     opacity: 0;
     pointer-events: none;
+  }
+
+  .msg__actions--assistant,
+  .msg-group:hover .msg__actions--assistant,
+  .msg-group:focus-within .msg__actions--assistant {
+    opacity: 1;
+    pointer-events: auto;
   }
 
   .msg-group--actions-open .msg__actions {

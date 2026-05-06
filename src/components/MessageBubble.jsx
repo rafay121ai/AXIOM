@@ -183,7 +183,19 @@ export default function MessageBubble({
     if (!text) return
 
     try {
-      await navigator.clipboard.writeText(text)
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text)
+      } else {
+        const textarea = document.createElement('textarea')
+        textarea.value = text
+        textarea.setAttribute('readonly', '')
+        textarea.style.position = 'fixed'
+        textarea.style.top = '-9999px'
+        document.body.appendChild(textarea)
+        textarea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textarea)
+      }
       setCopied(true)
       window.clearTimeout(copyResetTimerRef.current)
       copyResetTimerRef.current = window.setTimeout(() => setCopied(false), 1300)
@@ -192,8 +204,16 @@ export default function MessageBubble({
     }
   }
 
+  const copyAction = {
+    label: copied ? 'Copied' : 'Copy',
+    ariaLabel: copied ? 'Copied' : 'Copy message',
+    icon: role === 'assistant' ? 'copy' : null,
+    onClick: copyMessageText,
+    disabled: !safeContent(content),
+  }
+
   const renderedActions = [
-    { label: copied ? 'Copied' : 'Copy', onClick: copyMessageText, disabled: !safeContent(content) },
+    copyAction,
     ...visibleActions,
   ]
 
@@ -232,7 +252,12 @@ export default function MessageBubble({
               aria-label={action.ariaLabel || action.label}
               title={action.ariaLabel || action.label}
             >
-              {action.icon === 'regenerate' ? (
+              {action.icon === 'copy' ? (
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <rect x="5.1" y="5.1" width="8" height="8" rx="1.4" stroke="currentColor" strokeWidth="1.45" />
+                  <path d="M2.8 10.7H2.4A1.4 1.4 0 0 1 1 9.3V2.4A1.4 1.4 0 0 1 2.4 1h6.9a1.4 1.4 0 0 1 1.4 1.4v.4" stroke="currentColor" strokeWidth="1.45" strokeLinecap="round" />
+                </svg>
+              ) : action.icon === 'regenerate' ? (
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                   <path d="M13.2 7.1a5.2 5.2 0 1 0-1.5 4.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                   <path d="M13.2 3.8v3.3H9.9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
