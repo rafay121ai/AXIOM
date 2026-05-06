@@ -134,7 +134,6 @@ export default function MessageBubble({
   status,
   actions = [],
 }) {
-  if (!content && !streaming) return null
   const visibleActions = actions.filter(Boolean)
   const [actionsOpen, setActionsOpen] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -198,6 +197,8 @@ export default function MessageBubble({
     ...visibleActions,
   ]
 
+  if (!content && !streaming) return null
+
   return (
     <div
       ref={groupRef}
@@ -207,7 +208,7 @@ export default function MessageBubble({
       onPointerCancel={handlePointerEnd}
       onPointerLeave={handlePointerEnd}
       onContextMenu={(event) => {
-        if (event.pointerType === 'touch') event.preventDefault()
+        if (event.nativeEvent?.pointerType === 'touch') event.preventDefault()
       }}
     >
       <div className={`msg msg--${role}${streaming ? ' msg--streaming' : ''}${status === 'interrupted' ? ' msg--interrupted' : ''}`}>

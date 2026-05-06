@@ -894,6 +894,7 @@ export default function Chat() {
       reuseUserMessage = null,
       historyMessages = null,
       replaceAssistantId = null,
+      retryAttempt = 0,
     } = options
 
     sendingRef.current = true
@@ -907,6 +908,7 @@ export default function Chat() {
     let assistantMsgId = replaceAssistantId || crypto.randomUUID()
     const baseMessages = historyMessages || messages
     let fullContent = ''
+    let persistedUserMessage = reuseUserMessage
 
     setMessages((prev) => {
       const withoutReplacement = replaceAssistantId
@@ -950,6 +952,12 @@ export default function Chat() {
         if (savedUser?.id) {
           const optimisticUserId = userMsgId
           userMsgId = savedUser.id
+          persistedUserMessage = {
+            id: savedUser.id,
+            role: 'user',
+            content: text,
+            created_at: savedUser.created_at,
+          }
           setMessages((prev) =>
             prev.map((m) =>
               m.id === optimisticUserId
@@ -1370,6 +1378,26 @@ export default function Chat() {
         )
       } else {
         console.error('Send error:', err)
+        if (retryAttempt < 1 && persistedUserMessage && !fullContent.trim()) {
+          console.warn('[messages] First assistant attempt failed empty; retrying once automatically.')
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId
+                ? { ...m, content: '', streaming: true, status: null, artifact: null, experiment: null, artifactPendingType: null }
+                : m
+            )
+          )
+          abortControllerRef.current = null
+          releaseSending()
+          await sendMessage(text, {
+            reuseUserMessage: persistedUserMessage,
+            historyMessages: baseMessages,
+            replaceAssistantId: assistantMsgId,
+            retryAttempt: retryAttempt + 1,
+          })
+          return
+        }
+
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsgId
