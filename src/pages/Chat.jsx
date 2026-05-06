@@ -9,6 +9,7 @@ import { openai, CHAT_MODEL, generateOpeningMessage, generateNodeOpeningMessage,
 import { buildArtifactForResponse, getArtifactBuildSteps, getRequiredArtifactType, humanizeArtifactType } from '../lib/artifacts'
 import { routeQuestionMode, searchWikiForRoute, formatRouteContext, formatWikiContext } from '../lib/rag'
 import { searchPersonalMemory, formatNamedPatternsContext, formatPersonalMemoryContext, updatePersonalMemory } from '../lib/personalMemory'
+import { formatLiveSearchContext, liveSearch, shouldUseLiveSearch } from '../lib/liveSearch'
 
 // ─── Message Tag Parsing ─────────────────────────────────────────────────────
 const ARTIFACT_JSON_KEY_RE = /"(title|topic|core_shift|trend_state|what_is_happening_now|observed_moves|sections|forecast|frameworks|watch_points|source_weighting|confidence|counterforces|for_this_user)"\s*:/
@@ -879,10 +880,26 @@ export default function Chat() {
       const { chunks, sources, confidence: retrievalConfidence, pillarResults } = await searchWikiForRoute(text, route, 3)
       const wikiContext = await formatWikiContext(chunks, sources)
       const routedArtifactType = getRequiredArtifactType(route)
+      let liveSearchContext = ''
+      if (shouldUseLiveSearch({
+        text,
+        retrievalConfidence,
+        sourceCount: sources.length,
+        requiredArtifactType: routedArtifactType,
+      })) {
+        try {
+          const livePayload = await liveSearch(text, { numResults: 5 })
+          liveSearchContext = formatLiveSearchContext(livePayload)
+        } catch (error) {
+          console.warn('[Live Search] fallback skipped:', error?.message || error)
+        }
+      }
+      const combinedWikiContext = [wikiContext, liveSearchContext].filter(Boolean).join('\n\n')
+      const groundedSourceCount = sources.length + (liveSearchContext ? 1 : 0)
       const suppressUngroundedSignalMap =
         routedArtifactType === 'signal_map' &&
         needsCurrentSourceGrounding(text) &&
-        sources.length === 0
+        groundedSourceCount === 0
       const effectiveRoute = suppressUngroundedSignalMap
         ? {
             ...route,
@@ -917,7 +934,7 @@ export default function Chat() {
 
       const systemPrompt = buildSystemPrompt(
         sessionForTurn,
-        wikiContext,
+        combinedWikiContext,
         personalMemoryContext,
         aiMessageCount + 1,
         retrievalConfidence,
@@ -940,7 +957,7 @@ export default function Chat() {
             query: text,
             session: sessionForTurn,
             routeContext: artifactRouteContext,
-            wikiContext,
+            wikiContext: combinedWikiContext,
             personalMemoryContext,
             namedPatternsContext,
             answerDraft: text,

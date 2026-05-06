@@ -8,6 +8,7 @@ dotenv.config({ path: resolve(__dirname, '../.env') })
 
 import express from 'express'
 import cors from 'cors'
+import Exa from 'exa-js'
 import OpenAI from 'openai'
 import { createClient } from '@supabase/supabase-js'
 import rateLimit from 'express-rate-limit'
@@ -54,6 +55,23 @@ const openai = new OpenAI({
   apiKey: openaiApiKey,
 })
 
+const exaApiKey = process.env.EXA_API_KEY
+
+if (!exaApiKey) {
+  console.warn('[Axiom API] Missing EXA_API_KEY — live search will not function')
+}
+
+const exa = exaApiKey ? new Exa(exaApiKey) : null
+const liveSearchCache = new Map()
+const LIVE_SEARCH_CACHE_TTL_MS = Math.max(
+  60 * 1000,
+  Number(process.env.LIVE_SEARCH_CACHE_TTL_MS) || 6 * 60 * 60 * 1000
+)
+const LIVE_SEARCH_MAX_RESULTS = Math.min(
+  8,
+  Math.max(1, Number(process.env.LIVE_SEARCH_MAX_RESULTS) || 5)
+)
+
 const supabaseUrl = process.env.VITE_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
@@ -98,6 +116,14 @@ const embeddingsRateLimit = rateLimit({
   legacyHeaders: false,
 })
 
+const liveSearchRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { error: 'Too many live searches, please slow down.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
 // ─── Global middleware ────────────────────────────────────────────────────────
 
 const corsOptions = {
@@ -111,11 +137,112 @@ app.use(express.json({ limit: '1mb' }))
 
 app.use('/api/openai', requireAuth)
 app.use('/api/session', requireAuth)
+app.use('/api/live-search', requireAuth)
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true })
+})
+
+function cleanDomainList(value) {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((domain) => String(domain || '').trim().toLowerCase())
+    .filter((domain) => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain))
+    .slice(0, 12)
+}
+
+function cleanHighlight(value) {
+  if (Array.isArray(value)) return value.filter(Boolean).map(String).join('\n').slice(0, 900)
+  return String(value || '').trim().slice(0, 900)
+}
+
+function pruneLiveSearchCache() {
+  const now = Date.now()
+  for (const [key, entry] of liveSearchCache.entries()) {
+    if (!entry || now - entry.createdAt > LIVE_SEARCH_CACHE_TTL_MS) {
+      liveSearchCache.delete(key)
+    }
+  }
+}
+
+function makeLiveSearchCacheKey({ query, includeDomains, excludeDomains, numResults, maxAgeHours }) {
+  return JSON.stringify({
+    query: String(query || '').trim().toLowerCase(),
+    includeDomains,
+    excludeDomains,
+    numResults,
+    maxAgeHours: Number.isFinite(maxAgeHours) ? maxAgeHours : null,
+  })
+}
+
+app.post('/api/live-search', liveSearchRateLimit, async (req, res) => {
+  if (!exa) {
+    return res.status(503).json({ error: 'Live search not configured' })
+  }
+
+  const body = req.body || {}
+  const query = String(body.query || '').trim()
+  if (query.length < 3 || query.length > 500) {
+    return res.status(400).json({ error: 'Invalid search query' })
+  }
+
+  const includeDomains = cleanDomainList(body.includeDomains || body.allowedDomains)
+  const excludeDomains = cleanDomainList(body.excludeDomains)
+  const requestedResults = Number(body.numResults ?? body.num_results)
+  const numResults = Math.min(
+    LIVE_SEARCH_MAX_RESULTS,
+    Math.max(1, Number.isFinite(requestedResults) ? requestedResults : LIVE_SEARCH_MAX_RESULTS)
+  )
+  const requestedMaxAgeHours = Number(body.maxAgeHours)
+  const maxAgeHours = Number.isFinite(requestedMaxAgeHours)
+    ? Math.min(168, Math.max(-1, requestedMaxAgeHours))
+    : null
+
+  pruneLiveSearchCache()
+  const cacheKey = makeLiveSearchCacheKey({ query, includeDomains, excludeDomains, numResults, maxAgeHours })
+  const cached = liveSearchCache.get(cacheKey)
+  if (cached && Date.now() - cached.createdAt <= LIVE_SEARCH_CACHE_TTL_MS) {
+    return res.json({ ...cached.payload, cached: true })
+  }
+
+  try {
+    const options = {
+      type: 'auto',
+      numResults,
+      contents: {
+        highlights: true,
+        ...(maxAgeHours === null ? {} : { maxAgeHours }),
+      },
+      ...(includeDomains.length > 0 ? { includeDomains } : {}),
+      ...(excludeDomains.length > 0 ? { excludeDomains } : {}),
+    }
+
+    const response = await exa.search(query, options)
+    const results = (response.results || [])
+      .map((result) => ({
+        title: String(result.title || 'Untitled').trim().slice(0, 180),
+        url: result.url,
+        publishedDate: result.publishedDate || result.published_date || null,
+        author: result.author || null,
+        highlight: cleanHighlight(result.highlights || result.highlight || result.summary),
+      }))
+      .filter((result) => result.url)
+
+    const payload = {
+      query,
+      results,
+      cached: false,
+      fetchedAt: new Date().toISOString(),
+    }
+
+    liveSearchCache.set(cacheKey, { createdAt: Date.now(), payload })
+    res.json(payload)
+  } catch (err) {
+    console.error('[Live Search]', err)
+    res.status(err.status || 500).json({ error: err.message || 'Live search failed' })
+  }
 })
 
 app.post('/api/openai/embeddings', embeddingsRateLimit, async (req, res) => {
