@@ -866,10 +866,11 @@ export default function Brain() {
 
       if (!cancelled) {
         setSession(sessionData)
-        setGraph(normalizeBrainGraph(fallback))
+        if (!cachedGraph) {
+          setGraph(normalizeBrainGraph(fallback))
+        }
         setActiveId(null)
         setLoading(false)
-        writeBrainCache(sessionToken, fallback)
       }
 
       const { data: rawMessages, error: messagesError } = await supabase

@@ -224,6 +224,8 @@ const CONCEPT_NODES = [
   },
 ]
 
+const STATUS_RANK = { bright: 3, active: 2, ghosted: 1, dim: 0, seed: 0, resolved: 0 }
+
 const MEMORY_TYPE_TO_NODE_TYPE = {
   goal: 'goal',
   pattern: 'pattern',
@@ -326,7 +328,7 @@ async function upsertNode(sessionId, rawNode, index = 0) {
     const updates = {
       pillar: node.pillar || existing.pillar,
       summary: node.summary || existing.summary,
-      status: existing.status === 'bright' ? existing.status : node.status,
+      status: (STATUS_RANK[existing.status] ?? 0) >= (STATUS_RANK[node.status] ?? 0) ? existing.status : node.status,
       importance: Math.max(existing.importance || 1, node.importance),
       confidence: Math.max(existing.confidence || 0, node.confidence),
       updated_at: new Date().toISOString(),
