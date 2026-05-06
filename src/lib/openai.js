@@ -197,11 +197,44 @@ export async function requestJsonObject({
 }
 
 // ─── Embeddings ─────────────────────────────────────────────────────────────
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function isTransientNetworkError(error) {
+  const message = String(error?.message || error || '').toLowerCase()
+  return (
+    message.includes('failed to fetch') ||
+    message.includes('network') ||
+    message.includes('connection') ||
+    message.includes('timeout') ||
+    message.includes('reset')
+  )
+}
+
+async function withTransientRetry(fn, { retries = 2, baseDelayMs = 250 } = {}) {
+  let lastError = null
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return await fn()
+    } catch (error) {
+      lastError = error
+      if (!isTransientNetworkError(error) || attempt >= retries) break
+      await wait(baseDelayMs * (attempt + 1))
+    }
+  }
+
+  throw lastError
+}
+
 export async function generateEmbedding(text) {
-  const response = await openai.embeddings.create({
-    model: EMBED_MODEL,
-    input: text,
-  })
+  const response = await withTransientRetry(() =>
+    openai.embeddings.create({
+      model: EMBED_MODEL,
+      input: text,
+    })
+  )
   return response.data[0].embedding
 }
 

@@ -552,17 +552,22 @@ async function searchSingleQuery(query, matchCount, filterPillar) {
   })
 
   return cachedAsync(searchCache, cacheKey, async () => {
-    const embedding = await generateEmbedding(query)
-    const { data, error } = await supabase.rpc('match_wiki_chunks', {
-      query_embedding: embedding,
-      match_count: matchCount,
-      filter_pillar: filterPillar,
-    })
-    if (error) {
-      console.error(`RAG search error for query "${query}":`, error)
+    try {
+      const embedding = await generateEmbedding(query)
+      const { data, error } = await supabase.rpc('match_wiki_chunks', {
+        query_embedding: embedding,
+        match_count: matchCount,
+        filter_pillar: filterPillar,
+      })
+      if (error) {
+        console.error(`RAG search error for query "${query}":`, error)
+        return []
+      }
+      return data || []
+    } catch (error) {
+      console.warn(`RAG search skipped for query "${query}":`, error?.message || error)
       return []
     }
-    return data || []
   })
 }
 
