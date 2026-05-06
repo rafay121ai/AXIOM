@@ -1823,7 +1823,7 @@ function MessageGroup({
   const canEdit = msg.role === 'user' && isLatestUser && !sending && !isEditing
   const canRegenerate = msg.role === 'assistant' && isLatestAssistant && !sending && !msg.streaming && typeof onRegenerate === 'function'
   const messageActions = [
-    canEdit && { label: 'Edit', onClick: () => onStartEdit(msg) },
+    canEdit && { label: 'Edit', ariaLabel: 'Edit message', icon: 'edit', onClick: () => onStartEdit(msg) },
     canRegenerate && { label: 'Regenerate', ariaLabel: 'Regenerate response', icon: 'regenerate', onClick: onRegenerate },
   ]
 
