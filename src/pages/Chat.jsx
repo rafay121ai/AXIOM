@@ -963,8 +963,12 @@ export default function Chat() {
       const shouldHoldExperiment = activeExperimentCount >= 2 && asksForExperimentOrApplication(text)
       const requiredArtifactType = shouldHoldExperiment ? null : getRequiredArtifactType(effectiveRoute)
       const artifactRouteContext = formatRouteContext(effectiveRoute, pillarResults)
+      const continuityContext = cachedTurnContext?.cacheHit
+        ? `Conversation continuity: this turn is reusing ${cachedTurnContext.cacheHit === 'follow_up' ? 'the previous turn context for a short follow-up' : 'cached context for the same query'}. Treat it as the same terrain unless the user clearly changed topic. Do not restart from first principles. Signal continuity through smooth prose only, not labels or meta-language.`
+        : ''
       const routeContext = [
         artifactRouteContext,
+        continuityContext,
         visibleResponseContract(effectiveRoute, requiredArtifactType, shouldHoldExperiment),
       ].filter(Boolean).join('\n\n')
       const graphContext = nodeContext

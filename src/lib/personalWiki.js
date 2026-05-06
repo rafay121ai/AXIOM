@@ -287,7 +287,8 @@ function normalizeNode(rawNode, index = 0) {
   const label = typeof rawNode?.label === 'string' ? rawNode.label.trim() : ''
   if (!label) return null
 
-  const pillar = rawNode.pillar ?? inferStoragePillar(`${label} ${rawNode.summary || ''}`, null)
+  const shouldInferPillar = rawNode.allowPillarInference !== false
+  const pillar = rawNode.pillar ?? (shouldInferPillar ? inferStoragePillar(`${label} ${rawNode.summary || ''}`, null) : null)
   const pos = rawNode.x == null ? nodePosition(index, pillar) : rawNode
 
   return {
@@ -507,13 +508,16 @@ function seedNodesFromSession(session) {
 }
 
 function nodeFromMemory(memory, index) {
-  const pillar = inferStoragePillar(memory.content, memory.primary_pillar || null)
+  const pillarConfidence = Number(memory.pillar_confidence ?? 0.7)
+  const hasConfidentPillar = memory.primary_pillar && pillarConfidence >= 0.55
+  const pillar = hasConfidentPillar ? inferStoragePillar(memory.content, memory.primary_pillar) : null
   return normalizeNode({
     label: memory.content.length > 54 ? `${memory.content.slice(0, 51)}...` : memory.content,
     type: MEMORY_TYPE_TO_NODE_TYPE[memory.type] || 'concept',
     pillar,
+    allowPillarInference: hasConfidentPillar,
     summary: memory.content,
-    status: 'active',
+    status: hasConfidentPillar ? 'active' : 'dim',
     importance: memory.importance || 3,
     confidence: memory.confidence ?? 0.7,
   }, index)

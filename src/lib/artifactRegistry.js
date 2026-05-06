@@ -201,6 +201,12 @@ export const ARTIFACT_PROFILES = {
       'Use this for clean structural contrasts, tradeoffs, options, layers, value pools, or what something gives versus what it costs.',
       'Keep headers short and rows concrete.',
       'Prefer 3 columns and 3-6 rows.',
+      'Expose the hidden variable that decides the comparison. Do not settle for generic rows like "market position", "risk", or "bottom line" when sharper dimensions are available.',
+      'For company strategy comparisons, prefer rows like parent/capital backing, distribution footprint, density or network advantage, category breadth, unit economics, expansion path, regulatory or ops risk, and strategic vulnerability.',
+      'For geopolitics, prefer rows like capability, intent, chokepoint, escalation path, constraint, leverage, time horizon, and what would change the read.',
+      'For personal psychology, prefer rows like trigger, defense move, short-term payoff, hidden cost, identity protection, and intervention point.',
+      'For money or investing, prefer rows like cash-flow durability, downside, leverage, timing, capital intensity, ownership, and incentives.',
+      'For future or technology comparisons, prefer rows like adoption bottleneck, control point, distribution path, incumbent response, timing risk, and value capture.',
     ],
     isComplete(data) {
       return Array.isArray(data.headers) && data.headers.length >= 2 && Array.isArray(data.rows) && data.rows.length > 0

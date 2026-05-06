@@ -83,6 +83,7 @@ export function formatLiveSearchContext(payload) {
     'Live web context from Exa. Use this only as current/fresh grounding; do not name Exa.',
     'Because live web context is present, do not say you lack reliable live recency for this turn. If sources are weak, say the evidence is thin instead.',
     'When answering, mention source titles only when the user asks for sources or dates. Otherwise synthesize quietly.',
+    'When live web context is present, synthesize it into prose without visible section labels. Do not write headers like "Live evidence", "Current signals", or "Interpretation". The structure is internal. The answer should read as one coherent response.',
     ...lines,
   ].join('\n\n')
 }
