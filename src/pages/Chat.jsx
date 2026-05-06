@@ -1796,7 +1796,7 @@ function MessageGroup({
   const canRegenerate = msg.role === 'assistant' && isLatestAssistant && !sending && !msg.streaming && typeof onRegenerate === 'function'
   const messageActions = [
     canEdit && { label: 'Edit', onClick: () => onStartEdit(msg) },
-    canRegenerate && { label: 'Regenerate', onClick: onRegenerate },
+    canRegenerate && { label: 'Regenerate', ariaLabel: 'Regenerate response', icon: 'regenerate', onClick: onRegenerate },
   ]
 
   // If Axiom placed <artifact_here/> inside the text, inject the artifact inline

@@ -1,5 +1,6 @@
 // Renders a single message. Streaming state shows pulsing dot.
 // Does NOT render experiment/warning cards — those are handled by the parent.
+import { useEffect, useRef, useState } from 'react'
 
 // Final defense: strip any artifact/experiment tags that weren't caught upstream.
 function normalizeResponseText(text) {
@@ -135,26 +136,109 @@ export default function MessageBubble({
 }) {
   if (!content && !streaming) return null
   const visibleActions = actions.filter(Boolean)
+  const [actionsOpen, setActionsOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const groupRef = useRef(null)
+  const longPressTimerRef = useRef(null)
+  const copyResetTimerRef = useRef(null)
+
+  useEffect(() => {
+    if (!actionsOpen) return undefined
+
+    function closeOnOutsidePress(event) {
+      if (!groupRef.current?.contains(event.target)) {
+        setActionsOpen(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', closeOnOutsidePress)
+    return () => document.removeEventListener('pointerdown', closeOnOutsidePress)
+  }, [actionsOpen])
+
+  useEffect(() => () => {
+    window.clearTimeout(longPressTimerRef.current)
+    window.clearTimeout(copyResetTimerRef.current)
+  }, [])
+
+  function clearLongPressTimer() {
+    window.clearTimeout(longPressTimerRef.current)
+    longPressTimerRef.current = null
+  }
+
+  function handlePointerDown(event) {
+    if (event.pointerType !== 'touch') return
+    if (event.target.closest('button, a, textarea, input')) return
+
+    clearLongPressTimer()
+    longPressTimerRef.current = window.setTimeout(() => {
+      setActionsOpen(true)
+    }, 430)
+  }
+
+  function handlePointerEnd() {
+    clearLongPressTimer()
+  }
+
+  async function copyMessageText() {
+    const text = safeContent(content)
+    if (!text) return
+
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      window.clearTimeout(copyResetTimerRef.current)
+      copyResetTimerRef.current = window.setTimeout(() => setCopied(false), 1300)
+    } catch (error) {
+      console.warn('[messages] Copy failed:', error?.message || error)
+    }
+  }
+
+  const renderedActions = [
+    { label: copied ? 'Copied' : 'Copy', onClick: copyMessageText, disabled: !safeContent(content) },
+    ...visibleActions,
+  ]
 
   return (
-    <div className={`msg-group msg-group--${role}`}>
+    <div
+      ref={groupRef}
+      className={`msg-group msg-group--${role}${actionsOpen ? ' msg-group--actions-open' : ''}`}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerEnd}
+      onPointerCancel={handlePointerEnd}
+      onPointerLeave={handlePointerEnd}
+      onContextMenu={(event) => {
+        if (event.pointerType === 'touch') event.preventDefault()
+      }}
+    >
       <div className={`msg msg--${role}${streaming ? ' msg--streaming' : ''}${status === 'interrupted' ? ' msg--interrupted' : ''}`}>
         {renderContent(content, artifactNode)}
       </div>
       {status === 'interrupted' && (
         <div className="msg__status">Stopped</div>
       )}
-      {visibleActions.length > 0 && (
+      {renderedActions.length > 0 && (
         <div className={`msg__actions msg__actions--${role}`}>
-          {visibleActions.map((action) => (
+          {renderedActions.map((action) => (
             <button
               key={action.label}
               type="button"
-              className="msg__action"
-              onClick={action.onClick}
+              className={`msg__action${action.icon ? ' msg__action--icon' : ''}`}
+              onClick={(event) => {
+                event.stopPropagation()
+                action.onClick?.()
+              }}
               disabled={action.disabled}
+              aria-label={action.ariaLabel || action.label}
+              title={action.ariaLabel || action.label}
             >
-              {action.label}
+              {action.icon === 'regenerate' ? (
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M13.2 7.1a5.2 5.2 0 1 0-1.5 4.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  <path d="M13.2 3.8v3.3H9.9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              ) : (
+                action.label
+              )}
             </button>
           ))}
         </div>
