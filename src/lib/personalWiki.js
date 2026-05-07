@@ -609,37 +609,35 @@ export async function backfillNodeLabels(sessionId) {
 
   if (!brokenNodes.length) return
 
-  const summaries = [...new Set(brokenNodes.map((node) => node.summary).filter(Boolean))]
   const { data: sessionRow } = await supabase
     .from('sessions')
     .select('user_id')
     .eq('id', sessionId)
     .maybeSingle()
 
-  let memoriesQuery = supabase
+  const userId = sessionRow?.user_id
+  if (!userId) return
+
+  const { data: memories, error: memoriesError } = await supabase
     .from('personal_memories')
-    .select('id, type, content, importance, confidence, primary_pillar, secondary_pillars, pillar_confidence, updated_at')
-    .in('content', summaries)
-
-  memoriesQuery = sessionRow?.user_id
-    ? memoriesQuery.eq('user_id', sessionRow.user_id)
-    : memoriesQuery.eq('session_id', sessionId)
-
-  const { data: memories, error: memoriesError } = await memoriesQuery
+    .select('id, content, type, primary_pillar, importance, confidence')
+    .eq('user_id', userId)
 
   if (memoriesError) {
     console.warn('[Wiki] Label backfill memory fetch failed:', memoriesError.message)
     return
   }
 
-  const memoryByContent = new Map((memories || []).map((memory) => [memory.content, memory]))
-
   for (const node of brokenNodes) {
-    const memory = memoryByContent.get(node.summary)
-    if (!memory) continue
+    const nodeLabel = String(node.label || '').replace('...', '').trim()
+    const match = (memories || []).find(m =>
+      m.content.startsWith(nodeLabel) ||
+      nodeLabel.startsWith(m.content.slice(0, 30))
+    )
+    if (!match) continue
 
     try {
-      const label = await generateNodeLabel(memory)
+      const label = await generateNodeLabel(match)
       await supabase
         .from('personal_wiki_nodes')
         .update({ label, updated_at: new Date().toISOString() })
