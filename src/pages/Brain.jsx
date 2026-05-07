@@ -1161,11 +1161,11 @@ export default function Brain() {
         const period = level > 1 ? 2.2 : 2.8
         const phase = (t / period) * Math.PI * 2 + index * 0.37
         const wave = (Math.sin(phase) + 1) / 2
-        const spriteMin = level > 1 ? 0.88 : 0.92
-        const spriteMax = level > 1 ? 1.18 : 1.10
+        const spriteMin = level > 1 ? 0.76 : 0.84
+        const spriteMax = level > 1 ? 1.58 : 1.34
         const spritePulse = spriteMin + (spriteMax - spriteMin) * wave
         const haloPulse = spriteMax + spriteMin - spritePulse
-        const opacityPulse = (wave - 0.5) * 0.12
+        const opacityPulse = (wave - 0.5) * (level > 1 ? 0.26 : 0.18)
 
         if (mesh.userData.baseRecommendationLevel !== level) {
           const radius = getNodeRadius(node)
@@ -1181,14 +1181,14 @@ export default function Brain() {
         if (sprite) {
           const baseScale = mesh.userData.baseSpriteScale ?? sprite.scale.x
           const baseOpacity = mesh.userData.baseSpriteOpacity ?? sprite.material.opacity
-          sprite.scale.setScalar(baseScale * spritePulse)
+          sprite.scale.set(baseScale * spritePulse, baseScale * spritePulse, 1)
           sprite.material.opacity = Math.max(0, Math.min(1, baseOpacity + opacityPulse))
         }
 
         if (halo) {
           const baseScale = mesh.userData.baseHaloScale ?? halo.scale.x
           const baseOpacity = mesh.userData.baseHaloOpacity ?? halo.material.opacity
-          halo.scale.setScalar(baseScale * haloPulse)
+          halo.scale.set(baseScale * haloPulse, baseScale * haloPulse, 1)
           halo.material.opacity = Math.max(0, Math.min(1, baseOpacity - opacityPulse))
         }
       })
