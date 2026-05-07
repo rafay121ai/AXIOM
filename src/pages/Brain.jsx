@@ -197,6 +197,10 @@ function recencyScore(value) {
 }
 
 function recommendBrainNodes(graph, messages = []) {
+  if (!graph?.nodes?.length || graph.nodes.filter(n => n.type !== 'pillar').length < 3) {
+    return []
+  }
+
   const nodes = (graph.nodes || []).filter(node => node?.id && node.type !== 'pillar')
   const text = recentMessageText(messages)
 
@@ -828,6 +832,7 @@ export default function Brain() {
   const [session, setSession] = useState(null)
   const [authUser, setAuthUser] = useState(null)
   const [graph, setGraph] = useState({ nodes: [], edges: [] })
+  const [graphReady, setGraphReady] = useState(false)
   const [recentMessages, setRecentMessages] = useState([])
   const [conversationItems, setConversationItems] = useState([])
   const [activeId, setActiveId] = useState(null)
@@ -849,7 +854,7 @@ export default function Brain() {
   const touch = isTouchDevice()
   const recommendedNodeIds = useMemo(
     () => recommendBrainNodes(graph, recentMessages),
-    [graph, recentMessages]
+    [graph, recentMessages, graphReady]
   )
 
   // ─── Data fetching (unchanged) ──────────────────────────────────────────────
@@ -959,6 +964,7 @@ export default function Brain() {
         if (!cancelled && synced.nodes.length > 0) {
           setGraph(normalizeBrainGraph(synced))
           writeBrainCache(sessionToken, synced)
+          setGraphReady(true)
         }
 
         const backfillKey = `axiom_labels_backfilled:${sessionData.session_token}`
