@@ -306,38 +306,36 @@ function visibleGraph(graph) {
     })
     .slice(0, MAX_VISIBLE_NODES)
 
-  // Pre-compute which candidates are connected before committing to visibility
   const candidateIds = new Set([
     ...pillarNodes.map(n => n.id),
     ...candidateNodes.map(n => n.id),
   ])
+  const candidateNodeById = new Map([...pillarNodes, ...candidateNodes].map(node => [node.id, node]))
+
+  const nonPillarEdges = rawEdges
+    .filter(edge => edge.relationship !== 'belongs_to')
+    .filter(edge => candidateIds.has(edge.source_node_id) && candidateIds.has(edge.target_node_id))
+
+  const pillarEdges = rawEdges
+    .filter(edge => edge.relationship === 'belongs_to')
+    .filter(edge => candidateIds.has(edge.source_node_id) && candidateIds.has(edge.target_node_id))
+    .sort((a, b) => nodeVisualScore(candidateNodeById.get(b.source_node_id)) - nodeVisualScore(candidateNodeById.get(a.source_node_id)))
+    .slice(0, MAX_PILLAR_EDGES)
+
+  const edges = [...nonPillarEdges, ...pillarEdges]
   const connectedIds = new Set()
-  rawEdges.forEach(edge => {
-    if (candidateIds.has(edge.source_node_id) && candidateIds.has(edge.target_node_id)) {
-      connectedIds.add(edge.source_node_id)
-      connectedIds.add(edge.target_node_id)
-    }
+  edges.forEach(edge => {
+    connectedIds.add(edge.source_node_id)
+    connectedIds.add(edge.target_node_id)
   })
 
   // Drop non-pillar nodes with no edges — they carry no relational context
   const selectedNodes = candidateNodes.filter(n => connectedIds.has(n.id) || !n.pillar)
   const nodes = [...pillarNodes, ...selectedNodes]
-  const nodeById = new Map(nodes.map(node => [node.id, node]))
   const visibleIds = new Set(nodes.map(node => node.id))
+  const visibleEdges = edges.filter(edge => visibleIds.has(edge.source_node_id) && visibleIds.has(edge.target_node_id))
 
-  const nonPillarEdges = rawEdges
-    .filter(edge => edge.relationship !== 'belongs_to')
-    .filter(edge => visibleIds.has(edge.source_node_id) && visibleIds.has(edge.target_node_id))
-
-  const pillarEdges = rawEdges
-    .filter(edge => edge.relationship === 'belongs_to')
-    .filter(edge => visibleIds.has(edge.source_node_id) && visibleIds.has(edge.target_node_id))
-    .sort((a, b) => nodeVisualScore(nodeById.get(b.source_node_id)) - nodeVisualScore(nodeById.get(a.source_node_id)))
-    .slice(0, MAX_PILLAR_EDGES)
-
-  const edges = [...nonPillarEdges, ...pillarEdges]
-
-  return { nodes, edges, connectedIds }
+  return { nodes, edges: visibleEdges, connectedIds }
 }
 
 function isNodeMuted(node, connected) {
@@ -726,10 +724,14 @@ function buildScene(th, graph) {
 
   const existingIds = new Set(th.nodeMeshes.map(m => m.userData?.node?.id).filter(Boolean))
   const newIds = new Set(nodes.map(n => n.id))
+  const edgeHash = edges.map(e => `${e.source_node_id}:${e.target_node_id}`).join(',')
+  const prevEdgeHash = th.edgeHash || ''
+  const edgesChanged = edgeHash !== prevEdgeHash
   const needsRebuild = th.nodeMeshes.length === 0
     || existingIds.size !== newIds.size
     || ![...newIds].every(id => existingIds.has(id))
     || th.edgeMeshes.length !== edges.length
+    || edgesChanged
 
   if (!needsRebuild) {
     const nodeMap = new Map(nodes.map(n => [n.id, n]))
@@ -811,6 +813,7 @@ function buildScene(th, graph) {
     scene.add(edgeMesh)
     th.edgeMeshes.push(edgeMesh)
   }
+  th.edgeHash = edgeHash
 
   if (!th.hasPlayedOpen) {
     th.hasPlayedOpen = true

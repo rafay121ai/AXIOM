@@ -316,7 +316,7 @@ async function upsertNode(sessionId, rawNode, index = 0) {
     .from('personal_wiki_nodes')
     .select('*')
     .eq('session_id', sessionId)
-    .eq('label', node.label)
+    .eq('summary', node.summary)
     .eq('type', node.type)
     .maybeSingle()
 
@@ -327,6 +327,7 @@ async function upsertNode(sessionId, rawNode, index = 0) {
 
   if (existing) {
     const updates = {
+      label: node.label || existing.label,
       pillar: node.pillar || existing.pillar,
       summary: node.summary || existing.summary,
       status: (STATUS_RANK[existing.status] ?? 0) >= (STATUS_RANK[node.status] ?? 0) ? existing.status : node.status,
@@ -601,7 +602,8 @@ export async function backfillNodeLabels(sessionId) {
     (
       String(node.label || '').endsWith('...') ||
       node.label === node.summary ||
-      String(node.label || '').toLowerCase().startsWith('the user')
+      String(node.label || '').toLowerCase().startsWith('the user') ||
+      String(node.label || '').length > 40
     )
   )
 
