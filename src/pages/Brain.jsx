@@ -584,15 +584,35 @@ function createNodeMesh(node, connected = false) {
   halo.scale.set(haloScale, haloScale, 1)
   mesh.add(halo)
 
+  let outerHalo = null
+  const outerHaloScale = recommended && !muted ? radius * (recommended > 1 ? 12.5 : 10.0) : 0
+  const outerHaloOpacity = recommended && !muted ? (recommended > 1 ? 0.18 : 0.12) : 0
+  if (outerHaloScale > 0) {
+    const outerHaloMat = new THREE.SpriteMaterial({
+      map: getHaloTexture(),
+      color: RECOMMENDATION_PULSE_COLOR,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      opacity: outerHaloOpacity,
+    })
+    outerHalo = new THREE.Sprite(outerHaloMat)
+    outerHalo.scale.set(outerHaloScale, outerHaloScale, 1)
+    mesh.add(outerHalo)
+  }
+
   mesh.userData = {
     node,
     sprite,
     halo,
+    outerHalo,
     connected,
     baseSpriteScale: spriteScale,
     baseHaloScale: haloScale,
+    baseOuterHaloScale: outerHaloScale,
     baseSpriteOpacity: spriteOpacity,
     baseHaloOpacity: haloOpacity,
+    baseOuterHaloOpacity: outerHaloOpacity,
     baseRecommendationLevel: recommended,
   }
   return mesh
@@ -796,6 +816,12 @@ function buildScene(th, graph) {
           halo.material.color.set(recommended ? RECOMMENDATION_PULSE_COLOR : renderColor)
           halo.scale.setScalar(muted ? 0 : radius * (pillar ? PILLAR_HALO_SCALE : recommended ? (recommended > 1 ? 5.8 : 4.9) : lit ? 3.0 : 2.4))
           halo.material.opacity = muted ? 0 : pillar ? PILLAR_HALO_OPACITY : recommended ? (recommended > 1 ? 0.30 : 0.22) : lit ? 0.22 : 0.12
+        }
+        const outerHalo = mesh.userData.outerHalo
+        if (outerHalo) {
+          outerHalo.material.color.set(RECOMMENDATION_PULSE_COLOR)
+          outerHalo.scale.setScalar(recommended && !muted ? radius * (recommended > 1 ? 12.5 : 10.0) : 0)
+          outerHalo.material.opacity = recommended && !muted ? (recommended > 1 ? 0.18 : 0.12) : 0
         }
       }
     })
@@ -1185,8 +1211,10 @@ export default function Brain() {
           const pillar = node.type === 'pillar'
           mesh.userData.baseSpriteScale = radius * (muted ? 1.35 : pillar ? PILLAR_SPRITE_SCALE : level > 1 ? 3.6 : 3.0)
           mesh.userData.baseHaloScale = muted ? 0 : radius * (pillar ? PILLAR_HALO_SCALE : level > 1 ? 5.8 : 4.9)
+          mesh.userData.baseOuterHaloScale = muted ? 0 : radius * (level > 1 ? 12.5 : 10.0)
           mesh.userData.baseSpriteOpacity = muted ? 0.035 : pillar ? PILLAR_SPRITE_OPACITY : level > 1 ? 0.36 : 0.26
           mesh.userData.baseHaloOpacity = muted ? 0 : pillar ? PILLAR_HALO_OPACITY : level > 1 ? 0.30 : 0.22
+          mesh.userData.baseOuterHaloOpacity = muted ? 0 : level > 1 ? 0.18 : 0.12
           mesh.userData.baseRecommendationLevel = level
         }
 
@@ -1204,6 +1232,16 @@ export default function Brain() {
           halo.material.color.set(RECOMMENDATION_PULSE_COLOR)
           halo.scale.set(baseScale * haloPulse, baseScale * haloPulse, 1)
           halo.material.opacity = Math.max(0, Math.min(1, baseOpacity - opacityPulse))
+        }
+
+        const outerHalo = mesh.userData.outerHalo
+        if (outerHalo) {
+          const baseScale = mesh.userData.baseOuterHaloScale ?? outerHalo.scale.x
+          const baseOpacity = mesh.userData.baseOuterHaloOpacity ?? outerHalo.material.opacity
+          const outerPulse = 0.92 + wave * 0.22
+          outerHalo.material.color.set(RECOMMENDATION_PULSE_COLOR)
+          outerHalo.scale.set(baseScale * outerPulse, baseScale * outerPulse, 1)
+          outerHalo.material.opacity = Math.max(0, Math.min(1, baseOpacity + opacityPulse * 0.45))
         }
       })
 
@@ -1308,6 +1346,12 @@ export default function Brain() {
           halo.material.color.set(recommended ? RECOMMENDATION_PULSE_COLOR : renderColor)
           halo.scale.setScalar(muted ? 0 : radius * (pillar ? PILLAR_HALO_SCALE : recommended ? (recommended > 1 ? 5.8 : 4.9) : lit ? 3.0 : 2.4))
           halo.material.opacity = muted ? 0 : pillar ? PILLAR_HALO_OPACITY : recommended ? (recommended > 1 ? 0.30 : 0.22) : lit ? 0.22 : 0.12
+        }
+        const outerHalo = mesh.userData.outerHalo
+        if (outerHalo) {
+          outerHalo.material.color.set(RECOMMENDATION_PULSE_COLOR)
+          outerHalo.scale.setScalar(recommended && !muted ? radius * (recommended > 1 ? 12.5 : 10.0) : 0)
+          outerHalo.material.opacity = recommended && !muted ? (recommended > 1 ? 0.18 : 0.12) : 0
         }
       }
     })

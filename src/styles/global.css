@@ -840,7 +840,7 @@ h1, h2, h3 {
   transform: translateX(-50%);
   color: rgba(244,241,232,0.42);
   font-family: var(--font-serif);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 400;
   line-height: 1.4;
   letter-spacing: 0;
