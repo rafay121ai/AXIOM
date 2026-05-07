@@ -8,27 +8,27 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { clearStoredSessionToken, getStoredSessionToken, supabase } from '../lib/supabase'
 import { ensureCurrentWeeklyRead, fetchLatestWeeklyRead } from '../lib/sessionReads'
-import { fallbackGraph, getPersonalWikiGraph, markWikiNodeAccessed, syncPersonalWiki } from '../lib/personalWiki'
+import { backfillNodeLabels, fallbackGraph, getPersonalWikiGraph, markWikiNodeAccessed, syncPersonalWiki } from '../lib/personalWiki'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const NODE_TYPE_COLORS = {
-  pillar:     null,
-  goal:       0xFF4800,
-  concept:    0x00FFD1,
+  pillar: null,
+  goal: 0xFF4800,
+  concept: 0x00FFD1,
   experiment: 0xF72585,
-  pattern:    0x3A0CA3,
+  pattern: 0x3A0CA3,
 }
 
 const PILLAR_COLORS = {
-  psychology:        0x9B59B6,
-  economics:         0xD4A843,
-  human_mind:        0x9B59B6,
-  money_game:        0xD4A843,
+  psychology: 0x9B59B6,
+  economics: 0xD4A843,
+  human_mind: 0x9B59B6,
+  money_game: 0xD4A843,
   how_companies_win: 0x2E86C1,
-  whats_coming:      0x27AE60,
-  think_sharper:     0xEDEDEC,
-  move_people:       0xC93A52,
+  whats_coming: 0x27AE60,
+  think_sharper: 0xEDEDEC,
+  move_people: 0xC93A52,
 }
 
 const PILLAR_DISPLAY_NAMES = {
@@ -43,11 +43,11 @@ const PILLAR_DISPLAY_NAMES = {
 }
 
 const NODE_TYPE_BASE_RADIUS = {
-  pillar:     0.018,
-  goal:       0.016,
+  pillar: 0.018,
+  goal: 0.016,
   experiment: 0.015,
-  pattern:    0.013,
-  concept:    0.011,
+  pattern: 0.013,
+  concept: 0.011,
 }
 
 const MAX_VISIBLE_NODES = 200
@@ -523,33 +523,45 @@ function createNodeMesh(node, connected = false) {
   const material = createGradientNodeMaterial(color, opacity, muted)
   const mesh = new THREE.Mesh(geometry, material)
 
+  const spriteOpacity = muted ? 0.035 : pillar ? PILLAR_SPRITE_OPACITY : recommended ? (recommended > 1 ? 0.28 : 0.18) : lit ? 0.20 : 0.075
   const spriteMat = new THREE.SpriteMaterial({
     map: getGlowTexture(),
     color,
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
-    opacity: muted ? 0.035 : pillar ? PILLAR_SPRITE_OPACITY : recommended ? (recommended > 1 ? 0.28 : 0.18) : lit ? 0.20 : 0.075,
+    opacity: spriteOpacity,
   })
   const sprite = new THREE.Sprite(spriteMat)
   const spriteScale = radius * (muted ? 1.35 : pillar ? PILLAR_SPRITE_SCALE : recommended ? (recommended > 1 ? 3.0 : 2.55) : lit ? 2.35 : 1.65)
   sprite.scale.set(spriteScale, spriteScale, 1)
   mesh.add(sprite)
 
+  const haloOpacity = muted ? 0 : pillar ? PILLAR_HALO_OPACITY : recommended ? (recommended > 1 ? 0.30 : 0.20) : lit ? 0.22 : 0.12
   const haloMat = new THREE.SpriteMaterial({
     map: getHaloTexture(),
     color,
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
-    opacity: muted ? 0 : pillar ? PILLAR_HALO_OPACITY : recommended ? (recommended > 1 ? 0.30 : 0.20) : lit ? 0.22 : 0.12,
+    opacity: haloOpacity,
   })
   const halo = new THREE.Sprite(haloMat)
   const haloScale = muted ? 0 : radius * (pillar ? PILLAR_HALO_SCALE : recommended ? (recommended > 1 ? 3.7 : 3.15) : lit ? 3.0 : 2.4)
   halo.scale.set(haloScale, haloScale, 1)
   mesh.add(halo)
 
-  mesh.userData = { node, sprite, halo, connected }
+  mesh.userData = {
+    node,
+    sprite,
+    halo,
+    connected,
+    baseSpriteScale: spriteScale,
+    baseHaloScale: haloScale,
+    baseSpriteOpacity: spriteOpacity,
+    baseHaloOpacity: haloOpacity,
+    baseRecommendationLevel: recommended,
+  }
   return mesh
 }
 
@@ -691,7 +703,7 @@ function playOpenAnimation(nodeMeshes, edgeMeshes, scene) {
 
   delay(400).then(() => {
     edgeMeshes.forEach((mesh, i) => {
-    const targetOpacity = mesh.userData.targetOpacity ?? 0.20
+      const targetOpacity = mesh.userData.targetOpacity ?? 0.20
       setTimeout(() => {
         animateTween(0, targetOpacity, 400, v => { mesh.material.opacity = v }, 'easeOut')
       }, i * 5)
@@ -940,10 +952,25 @@ export default function Brain() {
         writeBrainCache(sessionToken, existingGraph)
       }
 
-      syncPersonalWiki(sessionData).then((synced) => {
+      syncPersonalWiki(sessionData).then(async (synced) => {
         if (!cancelled && synced.nodes.length > 0) {
           setGraph(normalizeBrainGraph(synced))
           writeBrainCache(sessionToken, synced)
+        }
+
+        const backfillKey = `axiom_labels_backfilled:${sessionData.id}`
+        try {
+          if (localStorage.getItem(backfillKey) !== '1') {
+            await backfillNodeLabels(sessionData.id)
+            localStorage.setItem(backfillKey, '1')
+            const refreshedGraph = await getPersonalWikiGraph(sessionData.id)
+            if (!cancelled && refreshedGraph.nodes.length > 0) {
+              setGraph(normalizeBrainGraph(refreshedGraph))
+              writeBrainCache(sessionToken, refreshedGraph)
+            }
+          }
+        } catch (error) {
+          console.warn('[Wiki] Label backfill skipped:', error?.message || error)
         }
       })
     }
@@ -1091,6 +1118,49 @@ export default function Brain() {
       if (!isDragging && !activeIdRef.current && th?.nodeMeshes?.length > 0) {
         scene.rotation.y += 0.0007
       }
+
+      const t = performance.now() / 1000
+      th?.nodeMeshes?.forEach((mesh, index) => {
+        const node = mesh.userData?.node
+        const level = recommendationLevel(node)
+        if (!level || node?.id === activeIdRef.current) return
+
+        const sprite = mesh.userData.sprite
+        const halo = mesh.userData.halo
+        const period = level > 1 ? 2.2 : 2.8
+        const phase = (t / period) * Math.PI * 2 + index * 0.37
+        const wave = (Math.sin(phase) + 1) / 2
+        const spriteMin = level > 1 ? 0.88 : 0.92
+        const spriteMax = level > 1 ? 1.18 : 1.10
+        const spritePulse = spriteMin + (spriteMax - spriteMin) * wave
+        const haloPulse = spriteMax + spriteMin - spritePulse
+        const opacityPulse = (wave - 0.5) * 0.12
+
+        if (mesh.userData.baseRecommendationLevel !== level) {
+          const radius = getNodeRadius(node)
+          const muted = isNodeMuted(node, mesh.userData.connected)
+          const pillar = node.type === 'pillar'
+          mesh.userData.baseSpriteScale = radius * (muted ? 1.35 : pillar ? PILLAR_SPRITE_SCALE : level > 1 ? 3.0 : 2.55)
+          mesh.userData.baseHaloScale = muted ? 0 : radius * (pillar ? PILLAR_HALO_SCALE : level > 1 ? 3.7 : 3.15)
+          mesh.userData.baseSpriteOpacity = muted ? 0.035 : pillar ? PILLAR_SPRITE_OPACITY : level > 1 ? 0.28 : 0.18
+          mesh.userData.baseHaloOpacity = muted ? 0 : pillar ? PILLAR_HALO_OPACITY : level > 1 ? 0.30 : 0.20
+          mesh.userData.baseRecommendationLevel = level
+        }
+
+        if (sprite) {
+          const baseScale = mesh.userData.baseSpriteScale ?? sprite.scale.x
+          const baseOpacity = mesh.userData.baseSpriteOpacity ?? sprite.material.opacity
+          sprite.scale.setScalar(baseScale * spritePulse)
+          sprite.material.opacity = Math.max(0, Math.min(1, baseOpacity + opacityPulse))
+        }
+
+        if (halo) {
+          const baseScale = mesh.userData.baseHaloScale ?? halo.scale.x
+          const baseOpacity = mesh.userData.baseHaloOpacity ?? halo.material.opacity
+          halo.scale.setScalar(baseScale * haloPulse)
+          halo.material.opacity = Math.max(0, Math.min(1, baseOpacity - opacityPulse))
+        }
+      })
 
       const nextMode = camera.position.z < 1.5 ? 'inside' : 'wide'
       if (nextMode !== lastViewMode) {
@@ -1271,6 +1341,7 @@ export default function Brain() {
     enterChat({
       freshThread: true,
       threadId: crypto.randomUUID(),
+      pulseNodeEntry: Boolean(node?.id && recommendedNodeIds.includes(node.id)),
       nodeContext: node ? {
         id: node.id,
         label: node.label,
@@ -1398,11 +1469,11 @@ export default function Brain() {
               }}
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M8.9 7.4C8.9 5.1 10.3 3.5 12 3.5C13.7 3.5 15.1 5.1 15.1 7.4C15.1 9.9 13.7 11.8 12 11.8C10.3 11.8 8.9 9.9 8.9 7.4Z" stroke="currentColor" strokeWidth="1.4"/>
-                <path d="M7.1 14.3C8.4 13.4 10 12.9 12 12.9C14 12.9 15.6 13.4 16.9 14.3C18.2 15.2 18.9 16.5 18.9 18V19.5H5.1V18C5.1 16.5 5.8 15.2 7.1 14.3Z" stroke="currentColor" strokeWidth="1.4"/>
-                <circle cx="9" cy="8.1" r="0.9" fill="currentColor"/>
-                <circle cx="15" cy="8.1" r="0.9" fill="currentColor"/>
-                <path d="M9.8 10.1C10.4 10.5 11.1 10.7 12 10.7C12.9 10.7 13.6 10.5 14.2 10.1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                <path d="M8.9 7.4C8.9 5.1 10.3 3.5 12 3.5C13.7 3.5 15.1 5.1 15.1 7.4C15.1 9.9 13.7 11.8 12 11.8C10.3 11.8 8.9 9.9 8.9 7.4Z" stroke="currentColor" strokeWidth="1.4" />
+                <path d="M7.1 14.3C8.4 13.4 10 12.9 12 12.9C14 12.9 15.6 13.4 16.9 14.3C18.2 15.2 18.9 16.5 18.9 18V19.5H5.1V18C5.1 16.5 5.8 15.2 7.1 14.3Z" stroke="currentColor" strokeWidth="1.4" />
+                <circle cx="9" cy="8.1" r="0.9" fill="currentColor" />
+                <circle cx="15" cy="8.1" r="0.9" fill="currentColor" />
+                <path d="M9.8 10.1C10.4 10.5 11.1 10.7 12 10.7C12.9 10.7 13.6 10.5 14.2 10.1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
               </svg>
             </button>
             {accountOpen && (
@@ -1480,7 +1551,7 @@ export default function Brain() {
           {!activeIsPillar && activeNode.summary && (
             <div className="brain__node-summary">{activeNode.summary}</div>
           )}
-          <button onClick={() => startFromNode(activeNode)}>Move with this</button>
+          <button onClick={() => startFromNode(activeNode)}>Lets's Move</button>
         </div>
       )}
 
@@ -1495,7 +1566,7 @@ export default function Brain() {
           />
           <button className="brain__send" disabled={!input.trim()} aria-label="Start session">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M2 8L14 8M14 8L9 3M14 8L9 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M2 8L14 8M14 8L9 3M14 8L9 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
         </div>

@@ -465,27 +465,6 @@ function auditArtifact(userText, assistantText, artifact) {
   console.info('[artifact-audit] Parsed artifact:', artifact.type)
 }
 
-function estimateNodeContextLevel(node) {
-  if (!node) return 0
-
-  const summaryLength = (node.summary || '').trim().length
-  const confidence = Number(node.confidence ?? 0.35)
-  const importance = Number(node.importance || 3)
-  const status = node.status || 'dim'
-
-  let score = 0
-  score += Math.min(0.3, Math.max(0, confidence) * 0.3)
-  if (summaryLength > 240) score += 0.25
-  else if (summaryLength > 120) score += 0.18
-  else if (summaryLength > 40) score += 0.1
-  if (['active', 'bright', 'ghosted', 'resolved'].includes(status)) score += 0.18
-  if (node.last_activated_at) score += 0.08
-  if (['pattern', 'goal', 'experiment'].includes(node.type)) score += 0.08
-  score += Math.min(0.11, Math.max(0, importance - 1) * 0.0275)
-
-  return Math.max(0, Math.min(1, score))
-}
-
 // Strip tag blocks from streaming display — tags are invisible while generating,
 // then resolved into rendered components once the stream ends.
 function stripForDisplay(text, artifactType = null) {
@@ -619,6 +598,7 @@ export default function Chat() {
   const freshThread = Boolean(location.state?.freshThread)
   const autoSend = Boolean(location.state?.autoSend)
   const skipOpening = Boolean(location.state?.skipOpening)
+  const pulseNodeEntry = Boolean(location.state?.pulseNodeEntry)
 
   const [session, setSession] = useState(null)
   const [messages, setMessages] = useState([])  // { id, role, content, streaming, experiment, artifactPendingType }
@@ -654,7 +634,7 @@ export default function Chat() {
 
   const clearTransientRouteState = useCallback(() => {
     const state = location.state || {}
-    if (!('autoSend' in state) && !('initialInput' in state) && !('freshThread' in state) && !('skipOpening' in state)) {
+    if (!('autoSend' in state) && !('initialInput' in state) && !('freshThread' in state) && !('skipOpening' in state) && !('pulseNodeEntry' in state)) {
       return
     }
 
@@ -666,6 +646,7 @@ export default function Chat() {
         initialInput: '',
         freshThread: false,
         skipOpening: false,
+        pulseNodeEntry: false,
       },
     })
   }, [location.pathname, location.state, navigate])
@@ -781,7 +762,7 @@ export default function Chat() {
     if (isNew && skipOpening) {
       // Brain input is a fresh intent. Let the user's first message lead.
     } else if (isNew && nodeContext) {
-      await streamNodeOpeningMessage(updatedSession, nodeContext)
+      await streamNodeOpeningMessage(updatedSession, nodeContext, pulseNodeEntry)
     } else if (isNew) {
       await streamOpeningMessage(updatedSession)
     }
@@ -858,7 +839,7 @@ export default function Chat() {
     }
   }
 
-  async function streamNodeOpeningMessage(sess, node) {
+  async function streamNodeOpeningMessage(sess, node, isPulseEntry = false) {
     const msgId = crypto.randomUUID()
     setMessages((prev) => [
       ...prev,
@@ -866,8 +847,7 @@ export default function Chat() {
     ])
 
     try {
-      const contextLevel = estimateNodeContextLevel(node)
-      const content = await generateNodeOpeningMessage(sess, node, contextLevel)
+      const content = await generateNodeOpeningMessage(sess, node, isPulseEntry)
       await saveAssistantOpening(sess, msgId, content)
     } catch (err) {
       console.error('Node opening message error:', err)

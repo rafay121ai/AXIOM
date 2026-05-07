@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { requestJsonObject } from './openai'
 
 const DISPLAY_PILLARS = [
   'human_mind',
@@ -472,25 +473,6 @@ function buildDisplayGraph(graph, sessionId = null) {
 function seedNodesFromSession(session) {
   const nodes = [...CONCEPT_NODES]
   const answers = session?.onboarding_answers || []
-  const profile = session?.axiom_profile || ''
-
-  const profilePillar = inferStoragePillar(profile, null)
-  if (profile) {
-    nodes.push({
-      label:
-        profilePillar === 'money_game'
-          ? 'Market Behavior Pattern'
-          : profilePillar === 'human_mind'
-            ? 'Identity Protection Pattern'
-            : 'Emerging Pattern',
-      type: 'pattern',
-      pillar: profilePillar,
-      summary: profile,
-      status: 'dim',
-      importance: 4,
-      confidence: 0.7,
-    })
-  }
 
   for (const qa of answers.slice(0, 4)) {
     const text = `${qa.question || ''} ${qa.answer || ''}`
@@ -509,12 +491,60 @@ function seedNodesFromSession(session) {
   return nodes
 }
 
-function nodeFromMemory(memory, index) {
+function fallbackMemoryLabel(memory) {
+  return memory.content.length > 54 ? `${memory.content.slice(0, 51)}...` : memory.content
+}
+
+async function generateNodeLabel(memory) {
+  const parsed = await requestJsonObject({
+    label: 'node label',
+    maxCompletionTokens: 80,
+    messages: [
+      {
+        role: 'system',
+        content: 'You generate short, sharp titles for knowledge graph nodes. Return only valid JSON: { "label": "..." }. No markdown. No preamble.',
+      },
+      {
+        role: 'user',
+        content: `Generate a node label for this memory:
+Type: ${memory.type}
+Pillar: ${memory.primary_pillar || 'unknown'}
+Content: ${memory.content}
+
+Rules:
+- 2 to 5 words maximum
+- Title case
+- Must be a noun phrase, not a sentence
+- Capture the core concept, not the full detail
+- No verbs like 'wants', 'is trying', 'has been'
+- No filler words like 'the user', 'a pattern of', 'tendency to'
+- Examples of good labels: 'Compounding Mindset', 'Fear of Market Feedback', 'Execution Over Planning', 'Recurring Pivot Impulse'`,
+      },
+    ],
+  })
+
+  const label = typeof parsed.label === 'string' ? parsed.label.trim() : ''
+  if (!label) throw new Error('Empty generated node label')
+  return label
+}
+
+async function nodeFromMemory(memory, index) {
+  if (memory.type === 'pattern' && ((memory.confidence ?? 0) < 0.65 || (memory.importance ?? 0) < 3)) {
+    return null
+  }
+
+  let label = fallbackMemoryLabel(memory)
+  try {
+    label = await generateNodeLabel(memory)
+  } catch (error) {
+    console.warn('[Wiki] Node label generation failed:', error?.message || error)
+  }
+
   const pillarConfidence = Number(memory.pillar_confidence ?? 0.7)
   const hasConfidentPillar = memory.primary_pillar && pillarConfidence >= 0.55
   const pillar = hasConfidentPillar ? inferStoragePillar(memory.content, memory.primary_pillar) : null
   return normalizeNode({
-    label: memory.content.length > 54 ? `${memory.content.slice(0, 51)}...` : memory.content,
+    label,
     type: MEMORY_TYPE_TO_NODE_TYPE[memory.type] || 'concept',
     pillar,
     allowPillarInference: hasConfidentPillar,
@@ -551,6 +581,67 @@ async function fetchSessionExperiments(sessionId) {
   }
 
   return data || []
+}
+
+export async function backfillNodeLabels(sessionId) {
+  if (!sessionId) return
+
+  const { data: nodes, error: nodesError } = await supabase
+    .from('personal_wiki_nodes')
+    .select('id, label, summary')
+    .eq('session_id', sessionId)
+
+  if (nodesError) {
+    console.warn('[Wiki] Label backfill node fetch failed:', nodesError.message)
+    return
+  }
+
+  const brokenNodes = (nodes || []).filter((node) =>
+    node?.summary &&
+    (String(node.label || '').endsWith('...') || node.label === node.summary)
+  )
+
+  if (!brokenNodes.length) return
+
+  const summaries = [...new Set(brokenNodes.map((node) => node.summary).filter(Boolean))]
+  const { data: sessionRow } = await supabase
+    .from('sessions')
+    .select('user_id')
+    .eq('id', sessionId)
+    .maybeSingle()
+
+  let memoriesQuery = supabase
+    .from('personal_memories')
+    .select('id, type, content, importance, confidence, primary_pillar, secondary_pillars, pillar_confidence, updated_at')
+    .in('content', summaries)
+
+  memoriesQuery = sessionRow?.user_id
+    ? memoriesQuery.eq('user_id', sessionRow.user_id)
+    : memoriesQuery.eq('session_id', sessionId)
+
+  const { data: memories, error: memoriesError } = await memoriesQuery
+
+  if (memoriesError) {
+    console.warn('[Wiki] Label backfill memory fetch failed:', memoriesError.message)
+    return
+  }
+
+  const memoryByContent = new Map((memories || []).map((memory) => [memory.content, memory]))
+
+  for (const node of brokenNodes) {
+    const memory = memoryByContent.get(node.summary)
+    if (!memory) continue
+
+    try {
+      const label = await generateNodeLabel(memory)
+      await supabase
+        .from('personal_wiki_nodes')
+        .update({ label, updated_at: new Date().toISOString() })
+        .eq('id', node.id)
+    } catch (error) {
+      console.warn('[Wiki] Label backfill failed:', error?.message || error)
+    }
+  }
 }
 
 export async function syncPersonalWiki(session) {
@@ -593,7 +684,9 @@ export async function syncPersonalWiki(session) {
     if (!memoriesError) {
       for (let i = 0; i < (memories || []).length; i++) {
         const memory = memories[i]
-        const node = await upsertNode(session.id, nodeFromMemory(memory, i + 8), i + 8)
+        const memoryNode = await nodeFromMemory(memory, i + 8)
+        if (!memoryNode) continue
+        const node = await upsertNode(session.id, memoryNode, i + 8)
         const pillarKey = node?.pillar || memory.primary_pillar
         const root = roots.find((r) => r.pillar === pillarKey)
         if (node?.id && root?.id) {

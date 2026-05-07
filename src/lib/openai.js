@@ -586,11 +586,78 @@ ${history || 'No recent messages.'}`,
   return response.choices[0].message.content.trim()
 }
 
-export async function generateNodeOpeningMessage(session, nodeContext, contextLevel) {
+function estimateNodeContextLevel(node) {
+  if (!node) return 0
+
+  const summaryLength = (node.summary || '').trim().length
+  const confidence = Number(node.confidence ?? 0.35)
+  const importance = Number(node.importance || 3)
+  const status = node.status || 'dim'
+
+  let score = 0
+  score += Math.min(0.3, Math.max(0, confidence) * 0.3)
+  if (summaryLength > 240) score += 0.25
+  else if (summaryLength > 120) score += 0.18
+  else if (summaryLength > 40) score += 0.1
+  if (['active', 'bright', 'ghosted', 'resolved'].includes(status)) score += 0.18
+  if (node.last_activated_at) score += 0.08
+  if (['pattern', 'goal', 'experiment'].includes(node.type)) score += 0.08
+  score += Math.min(0.11, Math.max(0, importance - 1) * 0.0275)
+
+  return Math.max(0, Math.min(1, score))
+}
+
+export async function generateNodeOpeningMessage(session, nodeContext, isPulseEntry = false) {
+  const contextLevel = estimateNodeContextLevel(nodeContext)
   const level = Number.isFinite(contextLevel) ? Math.max(0, Math.min(1, contextLevel)) : 0
   const percent = Math.round(level * 100)
   const nodeType = nodeContext.type || 'concept'
   const activeExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'active')
+
+  if (isPulseEntry) {
+    const response = await openai.chat.completions.create({
+      model: CHAT_MODEL,
+      messages: [
+        {
+          role: 'system',
+          content: `You are Axiom. A mentor for ambitious founders aged 18-28.
+
+This is a brand-new thread opened from a pulsing recommended Founder Brain node. The pulse means Axiom thinks this node is relevant now.
+
+Write one opening message only.
+- Read the private theory and session notes carefully.
+- Read the Founder Brain node fields carefully.
+- Open with 1-2 sentences recapping specifically what was discussed, attempted, avoided, or left unresolved around this node in previous sessions. Use actual detail from session notes. If session notes contain nothing specific about this node, skip the recap entirely.
+- Then give a concrete next step or plan of action for this node, framed as a direction, not a question. A natural shape is "Here's where I'd pick this back up:" followed by 2-3 sentences of substance.
+- End with one short sharp question that opens the conversation.
+- Tone: no-BS, warm when needed, conversational, like a mentor who actually remembers the user.
+- Never use em dashes. Never use generic AI phrasing. No greeting. No list. Pure prose.
+- Length: 4-6 sentences max.`,
+        },
+        {
+          role: 'user',
+          content: `Private theory: ${session.axiom_profile || 'None'}
+Session notes: ${session.session_notes || 'None'}
+Pillar weights: ${session.pillar_weights ? JSON.stringify(session.pillar_weights) : 'balanced'}
+Active experiments: ${JSON.stringify(activeExps)}
+
+Founder Brain node:
+Label: ${nodeContext.label}
+Type: ${nodeContext.type}
+Pillar: ${nodeContext.pillar || 'unmapped'}
+Summary: ${nodeContext.summary || 'No summary yet.'}
+Status: ${nodeContext.status || 'dim'}
+Importance: ${nodeContext.importance || 3}
+Confidence: ${nodeContext.confidence ?? 0.7}
+Last activated at: ${nodeContext.last_activated_at || 'Never'}
+Context completeness: ${percent}%`,
+        },
+      ],
+      max_completion_tokens: 240,
+    })
+
+    return response.choices[0].message.content
+  }
 
   let directive
 
@@ -706,6 +773,22 @@ Rules:
 - Do not store a memory if it is only a one-off topic question.
 - If the user's turn was a single word, a confirmation, a one-off factual question, or contained no revealed goal, pattern, decision, or preference — return an empty memories array. Low-signal turns do not get stored.
 - Prefer updating durable patterns, goals, decisions, preferences, and experiment results.
+- type "pattern" has strict criteria. Only classify a memory as type "pattern" if ALL 
+  of the following are true:
+  (1) It describes a recurring behavior or tendency — something the user does repeatedly, 
+      not something observed once.
+  (2) It has a clear cause-effect or trigger-response structure: when X happens, this 
+      person does Y. If you cannot complete that sentence with real specifics from the 
+      conversation, it is not a pattern.
+  (3) It is actionable — Axiom can use it to give meaningfully different advice than it 
+      would without knowing this pattern.
+  (4) It is not already obvious from the user's stated goals or their axiom_profile.
+  If a memory does not meet all four criteria, classify it as 'belief', 'preference', 
+  or 'fact' instead — whichever fits. Do not default to 'pattern' for behavioral 
+  observations that only appeared once.
+- A pattern memory must have confidence >= 0.65 and importance >= 3. If a behavioral 
+  observation does not meet this bar, do not store it at all this turn — it needs more 
+  evidence before it earns a memory.
 - Do not store sensitive personal data unless the user explicitly volunteered it and it matters for mentoring.
 - Keep session_notes under 900 characters.
 - Return at most 3 memories.
