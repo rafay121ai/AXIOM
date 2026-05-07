@@ -103,7 +103,27 @@ function wantsSignalMap(lower = '') {
 }
 
 function wantsExplicitArtifact(lower = '') {
-  return /\b(signal map|map this|map the signals|visuali[sz]e|show me visually|table|comparison table|compare in a table|matrix|quadrant|framework|diagram|chart|graph|watchlist|checklist|timeline|stack|ladder|pyramid|curve|loop|breakdown|structured view)\b/.test(lower)
+  return /\b(signal map|map this|map the signals|visuali[sz]e|show me visually|table|comparison table|compare in a table|matrix|quadrant|diagram|chart|graph|watchlist|checklist|timeline|stack|ladder|pyramid|curve|loop)\b/.test(lower)
+}
+
+function isPracticalJudgmentTurn(lower = '') {
+  const practicalContext =
+    /\b(my|our|me|i|we|father|brother|family|business|company|customers?|buyers?|suppliers?|cash|collection|collect|credit|payment|accounts|production|selling|market|textile|wholesale)\b/.test(lower)
+  const judgmentAsk =
+    /\b(how long|how possible|possible|what should|how should|can i|can we|tell me|done before|people .* done|examples?|currently|right now|every week|every month|process works)\b/.test(lower)
+
+  return practicalContext && judgmentAsk
+}
+
+function wantsVisualReasoningArtifact(lower = '') {
+  if (isPracticalJudgmentTurn(lower)) return false
+
+  const asksToUnderstandStructure =
+    /\b(i don'?t get|i still don'?t get|confused|help me understand|explain|teach me|how does .* work|how do .* relate|relationship between|moving parts|structure of|framework behind|mental model|break down the structure|map the sequence|sequence from|stages of|layers of)\b/.test(lower)
+  const visualReasoningShape =
+    /\b(relationship|relate|moving parts|structure|sequence|stages|layers|loop|cycle|stack|pyramid|curve|tradeoff|tension| vs |versus|system|mechanism)\b/.test(lower)
+
+  return asksToUnderstandStructure && visualReasoningShape
 }
 
 function isCurrentFactualQuestion(lower = '') {
@@ -296,7 +316,7 @@ function describeSourceWeight(source = {}) {
 function normalizeRouterPayload(payload = {}, query = '') {
   const lower = String(query || '').toLowerCase()
   const signalMapAllowed = wantsSignalMap(lower)
-  const artifactAllowed = wantsExplicitArtifact(lower) || signalMapAllowed
+  const artifactAllowed = wantsExplicitArtifact(lower) || signalMapAllowed || wantsVisualReasoningArtifact(lower)
   const currentFactualWithoutArtifactAsk = isCurrentFactualQuestion(lower) && !artifactAllowed
   const requestedMode = ROUTER_MODES.has(payload.mode) ? payload.mode : 'single_pillar'
   let pillars = Array.isArray(payload.pillars)
@@ -320,6 +340,10 @@ function normalizeRouterPayload(payload = {}, query = '') {
   }
 
   if (artifactStrategy === 'signal_map' && !signalMapAllowed) {
+    artifactStrategy = 'none'
+  }
+
+  if (artifactStrategy !== 'none' && !artifactAllowed) {
     artifactStrategy = 'none'
   }
 

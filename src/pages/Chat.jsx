@@ -246,14 +246,40 @@ function visibleResponseContract(route, artifactType = null, shouldHoldExperimen
 }
 
 function shouldHaveArtifact(text) {
-  return /\b(example|examples|framework|steps|process|compare|comparison|breakdown|checklist|matrix|timeline|how does|how do|how should|what should be in|walk me through)\b/i.test(text)
+  return hasExplicitArtifactRequest(text) || suggestsVisualReasoningArtifact(text)
 }
 
 const EXPLICIT_ARTIFACT_REQUEST_RE =
-  /\b(signal map|map this|artifact|visual|diagram|chart|graph|table|compare|comparison|matrix|framework|watchlist|checklist|timeline|quadrant)\b/i
+  /\b(signal map|map this|artifact|visual|diagram|chart|graph|table|comparison table|compare in a table|matrix|watchlist|checklist|timeline|quadrant)\b/i
 
 const EXPLICIT_SIGNAL_MAP_REQUEST_RE =
   /\b(signal map|map this|forecast|prediction|predict|what(?:'s| is) coming|future|2027|2028|2030|next \d+|opportunit(?:y|ies)|where .* moving|current signals|watch points|trend)\b/i
+
+function hasExplicitArtifactRequest(text = '') {
+  return EXPLICIT_ARTIFACT_REQUEST_RE.test(String(text || ''))
+}
+
+function isPracticalJudgmentTurn(text = '') {
+  const clean = String(text || '').toLowerCase()
+  const practicalContext =
+    /\b(my|our|me|i|we|father|brother|family|business|company|customers?|buyers?|suppliers?|cash|collection|collect|credit|payment|accounts|production|selling|market|textile|wholesale)\b/.test(clean)
+  const judgmentAsk =
+    /\b(how long|how possible|possible|what should|how should|can i|can we|tell me|done before|people .* done|examples?|currently|right now|every week|every month|process works)\b/.test(clean)
+
+  return practicalContext && judgmentAsk
+}
+
+function suggestsVisualReasoningArtifact(text = '') {
+  const clean = String(text || '').toLowerCase()
+  if (isPracticalJudgmentTurn(clean)) return false
+
+  const asksToUnderstandStructure =
+    /\b(i don'?t get|i still don'?t get|confused|help me understand|explain|teach me|how does .* work|how do .* relate|relationship between|moving parts|structure of|framework behind|mental model|break down the structure|map the sequence|sequence from|stages of|layers of)\b/.test(clean)
+  const visualReasoningShape =
+    /\b(relationship|relate|moving parts|structure|sequence|stages|layers|loop|cycle|stack|pyramid|curve|tradeoff|tension| vs |versus|system|mechanism)\b/.test(clean)
+
+  return asksToUnderstandStructure && visualReasoningShape
+}
 
 function asksForExperimentOrApplication(text = '') {
   return /\b(experiment|practical|apply|application|next step|next move|what should i do|what do i do|do today|try today|test this|real[- ]world)\b/i.test(text)
@@ -262,7 +288,7 @@ function asksForExperimentOrApplication(text = '') {
 function explicitArtifactTypeForText(text = '') {
   const clean = String(text || '').toLowerCase()
   if (EXPLICIT_SIGNAL_MAP_REQUEST_RE.test(clean)) return 'signal_map'
-  if (/\b(table|compare|comparison|matrix)\b/.test(clean)) return 'comparison_table'
+  if (/\b(table|comparison table|compare in a table|matrix)\b/.test(clean)) return 'comparison_table'
   if (/\b(loop|cycle)\b/.test(clean)) return 'reasoning_cycle'
   if (/\b(stack|layer|layers|ladder)\b/.test(clean)) return 'reasoning_stack'
   if (/\b(pyramid|hierarchy|hierarchical)\b/.test(clean)) return 'reasoning_pyramid'
@@ -294,7 +320,9 @@ function resolveTurnResponsePlan({
   activeExperimentCount = 0,
 }) {
   const cacheHit = cachedTurnContext?.cacheHit || null
-  const explicitArtifactRequest = EXPLICIT_ARTIFACT_REQUEST_RE.test(String(text || ''))
+  const explicitArtifactRequest = hasExplicitArtifactRequest(text)
+  const visualReasoningArtifact = suggestsVisualReasoningArtifact(text)
+  const artifactAllowed = explicitArtifactRequest || visualReasoningArtifact
   const explicitSignalMapRequest = EXPLICIT_SIGNAL_MAP_REQUEST_RE.test(String(text || ''))
   const explicitArtifactType = explicitArtifactTypeForText(text)
   const shouldHoldExperiment = activeExperimentCount >= 2 && asksForExperimentOrApplication(text)
@@ -302,7 +330,16 @@ function resolveTurnResponsePlan({
   let effectiveRoute = route
   let requiredArtifactType = getRequiredArtifactType(route)
 
-  if (cacheHit === 'follow_up' && explicitArtifactType && requiredArtifactType !== explicitArtifactType) {
+  if (requiredArtifactType && !artifactAllowed) {
+    effectiveRoute = withRouteArtifactStrategy(
+      effectiveRoute,
+      'none',
+      'Artifacts require either an explicit request or a clear visual-reasoning need, so answer in prose.'
+    )
+    requiredArtifactType = null
+  }
+
+  if (cacheHit === 'follow_up' && artifactAllowed && explicitArtifactType && requiredArtifactType !== explicitArtifactType) {
     effectiveRoute = withRouteArtifactStrategy(
       effectiveRoute,
       explicitArtifactType,
@@ -319,7 +356,7 @@ function resolveTurnResponsePlan({
   const inheritedArtifactWithoutAsk =
     cacheHit === 'follow_up' &&
     requiredArtifactType &&
-    !explicitArtifactRequest
+    !artifactAllowed
 
   if (inheritedSignalMapWithoutAsk || inheritedArtifactWithoutAsk) {
     effectiveRoute = withRouteArtifactStrategy(
@@ -418,6 +455,12 @@ function artifactLooksLikeExperiment(artifact) {
 
 function hasConcreteIncident(text = '') {
   const lower = text.toLowerCase()
+  const businessProcessDetails =
+    /\b(customer|customers|buyer|buyers|supplier|suppliers|raw goods|finished goods|office|father|brother|cash|collection|collect|credit|payment|accounts|interior sindh|market|textile|wholesale)\b/.test(lower) &&
+    /\b(every week|weekly|every month|once or twice|most of the time|most times|currently|right now|process works|goes to|come with|has to go|handles|recorded)\b/.test(lower)
+
+  if (businessProcessDetails) return true
+
   return /\b(yesterday|last night|last week|this week|this month|after i|because i|i did|i tried|i launched|i sold|i posted|i shipped|i invested|i traded|i spent|i lost|i made \$|we did|we tried|we launched|we sold|we shipped)\b/.test(lower) ||
     /\b\d+[%$]?\b/.test(lower)
 }
