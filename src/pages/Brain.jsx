@@ -204,7 +204,7 @@ function recommendBrainNodes(graph, messages = []) {
   const nodes = (graph.nodes || []).filter(node => node?.id && node.type !== 'pillar')
   const text = recentMessageText(messages)
 
-  return nodes
+  const scored = nodes
     .filter(node => !['resolved', 'cancelled', 'completed'].includes(node.status))
     .map(node => {
       const label = `${node.label || ''} ${node.summary || ''}`.toLowerCase()
@@ -223,10 +223,20 @@ function recommendBrainNodes(graph, messages = []) {
 
       return { node, score }
     })
-    .filter(item => item.score > 50)
+    .filter(item => item.score > 20)
     .sort((a, b) => b.score - a.score)
     .slice(0, 3)
     .map(item => item.node?.id)
+    .filter(Boolean)
+
+  if (scored.length > 0) return scored
+
+  // Fallback: return top 3 by importance if nothing scored
+  return nodes
+    .filter(n => !['resolved', 'cancelled', 'completed'].includes(n.status))
+    .sort((a, b) => (b.importance || 0) - (a.importance || 0))
+    .slice(0, 3)
+    .map(n => n.id)
     .filter(Boolean)
 }
 
@@ -1127,6 +1137,15 @@ export default function Brain() {
       animFrameId = requestAnimationFrame(animate)
 
       const th = threeRef.current
+      if (!th._pulseAuditDone && th?.nodeMeshes?.length > 0) {
+        const pulseable = th.nodeMeshes.filter(m =>
+          recommendationLevel(m.userData?.node) > 0
+        )
+        console.log('[Pulse Audit] pulseable nodes:', pulseable.length,
+          pulseable.map(m => m.userData?.node?.label))
+        th._pulseAuditDone = true
+      }
+
       if (!isDragging && !activeIdRef.current && th?.nodeMeshes?.length > 0) {
         scene.rotation.y += 0.0007
       }
