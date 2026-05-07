@@ -516,6 +516,7 @@ function uniqueLabelCandidate(label, existingLabels = new Set()) {
 async function generateNodeLabel(memory) {
   const parsed = await requestJsonObject({
     label: 'node label',
+    model: 'gpt-4.1-mini-2025-04-14',
     maxCompletionTokens: 80,
     messages: [
       {

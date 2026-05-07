@@ -548,7 +548,7 @@ export async function generateWeeklyRead(session, recentMessages = []) {
     .join('\n\n')
 
   const response = await openai.chat.completions.create({
-    model: CHAT_MODEL,
+    model: 'gpt-4.1-mini-2025-04-14',
     messages: [
       {
         role: 'system',
