@@ -25,6 +25,7 @@ import { isCurrentFactualLiveQuestion } from './liveSearchTriggers'
 // values than a classifier-style confidence score. Empirical source-specific
 // tests in this corpus put strong hits around 0.35-0.45.
 const CONFIDENCE_THRESHOLD = 0.30
+const QUERY_EXPANSION_CONFIDENCE_FLOOR = 0.38
 const ROUTER_MODES = new Set([
   'single_pillar',
   'two_pillar',
@@ -603,13 +604,23 @@ async function fetchSourcesForChunks(chunks) {
 // Returns { chunks, sources, confidence } where confidence is the top similarity score.
 // If no chunk clears CONFIDENCE_THRESHOLD, returns { chunks: [], sources: [], confidence: 0 }.
 export async function searchWiki(query, matchCount = 3, filterPillar = null) {
-  const alternatives = await expandQuery(query)
-  const allQueries = [query, ...alternatives]
+  const rawResults = await searchSingleQuery(query, matchCount * 3, filterPillar)
+  const rawSearch = await buildWikiSearchResult([rawResults], matchCount)
+  if (rawSearch.confidence >= QUERY_EXPANSION_CONFIDENCE_FLOOR) {
+    return rawSearch
+  }
 
-  const resultSets = await Promise.all(
-    allQueries.map((q) => searchSingleQuery(q, matchCount * 3, filterPillar))
+  const alternatives = await expandQuery(query)
+  if (alternatives.length === 0) return rawSearch
+
+  const expandedResultSets = await Promise.all(
+    alternatives.map((q) => searchSingleQuery(q, matchCount * 3, filterPillar))
   )
 
+  return buildWikiSearchResult([rawResults, ...expandedResultSets], matchCount)
+}
+
+async function buildWikiSearchResult(resultSets, matchCount) {
   // Merge — deduplicate by title, keep highest similarity per source
   const bestByTitle = new Map()
   for (const chunks of resultSets) {

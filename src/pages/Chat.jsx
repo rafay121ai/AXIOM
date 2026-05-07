@@ -390,6 +390,24 @@ function isLowSignalMemoryTurn(userText = '', assistantText = '') {
   return user.length < 18 && !/\b(i|me|my|we|our|did|tried|built|launched|sold|failed|decided|feel|think|want|need)\b/i.test(user)
 }
 
+function shouldRunMemoryUpdate(userText = '', assistantText = '', options = {}) {
+  if (isLowSignalMemoryTurn(userText, assistantText)) return false
+
+  const user = String(userText || '').trim()
+  const wordCount = user.split(/\s+/).filter(Boolean).length
+  const importantTurn =
+    Boolean(options.experiment) ||
+    Boolean(options.nodeContext?.id) ||
+    looksLikeExperimentCompletion(user) ||
+    looksLikeExperimentCancel(user) ||
+    /\b(i decided|we decided|decided to|my goal|new goal|i want to|i need to|we need to|i prefer|my preference|from now on|i'?m going to|i am going to)\b/i.test(user)
+
+  if (wordCount < 15 && !importantTurn) return false
+  if (importantTurn) return true
+
+  return Number(options.assistantTurnCount || 0) % 3 === 0
+}
+
 function artifactLooksLikeExperiment(artifact) {
   if (!artifact?.data) return false
   const title = String(artifact.data.title || artifact.data.label || '').toLowerCase()
@@ -1298,7 +1316,16 @@ export default function Chat() {
             }
           }
 
-          if (isLowSignalMemoryTurn(text, cleanText)) {
+          const assistantTurnCount = baseMessages.filter((message) =>
+            message.role === 'assistant' && !message.streaming
+          ).length + 1
+          const shouldUpdateMemory = shouldRunMemoryUpdate(text, cleanText, {
+            assistantTurnCount,
+            nodeContext,
+            experiment,
+          })
+
+          if (!shouldUpdateMemory) {
             setSession(sessionForMemory)
           } else {
             const updatedSession = await updatePersonalMemory(sessionForMemory, baseMessages, text, cleanText)
