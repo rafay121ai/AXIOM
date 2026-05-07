@@ -454,12 +454,15 @@ function artifactLooksLikeExperiment(artifact) {
 }
 
 function hasConcreteIncident(text = '') {
-  const lower = text.toLowerCase()
+  const clean = String(text || '').trim()
+  const lower = clean.toLowerCase()
+  const wordCount = clean.split(/\s+/).filter(Boolean).length
   const businessProcessDetails =
-    /\b(customer|customers|buyer|buyers|supplier|suppliers|raw goods|finished goods|office|father|brother|cash|collection|collect|credit|payment|accounts|interior sindh|market|textile|wholesale)\b/.test(lower) &&
-    /\b(every week|weekly|every month|once or twice|most of the time|most times|currently|right now|process works|goes to|come with|has to go|handles|recorded)\b/.test(lower)
+    /\b(founder|startup|product|users?|customers?|buyers?|supplier|suppliers|sales|revenue|cash|collection|collect|credit|payment|accounts|team|employee|operator|operations?|office|father|brother|family|business|company|market|textile|wholesale|manufactur|production|inventory|distribution|pricing|vendor|client|clients|interior sindh)\b/.test(lower) &&
+    /\b(currently|right now|today|yesterday|this week|this month|every day|every week|weekly|every month|once or twice|most of the time|most times|process works|goes to|come with|has to go|handles|recorded|tried|launched|sold|shipped|built|posted|talked to|called|met|hired|fired|paid|collected|owes|delivered)\b/.test(lower)
 
   if (businessProcessDetails) return true
+  if (wordCount >= 35 && /\b(i|we|my|our)\b/.test(lower) && /\b(because|but|when|after|before|currently|every|most|usually|process|problem|customer|user|buyer|team|business|product|market)\b/.test(lower)) return true
 
   return /\b(yesterday|last night|last week|this week|this month|after i|because i|i did|i tried|i launched|i sold|i posted|i shipped|i invested|i traded|i spent|i lost|i made \$|we did|we tried|we launched|we sold|we shipped)\b/.test(lower) ||
     /\b\d+[%$]?\b/.test(lower)
@@ -473,12 +476,13 @@ function isAwaitingConcreteIncident(messages = []) {
 
 function followUpIncidentQuestion(text = '') {
   if (hasConcreteIncident(text)) return null
+  if (/\b(i just told|i already told|already told|as i said|like i said)\b/i.test(text)) return null
   return 'That still is not the actual event. Name the concrete win, choice, or moment first, then I can work with it.'
 }
 
 function firstPersonIncidentQuestion(text = '') {
   const lower = text.toLowerCase()
-  const hasFirstPersonPattern = /\b(i keep|i always|i tend to|i feel like|i feel|i'm|i am|i can't|i cannot|i struggle|i avoid|i procrastinate|i overthink|why do i|how do i)\b/.test(lower)
+  const hasFirstPersonPattern = /\b(i keep|i always|i tend to|i feel like|i feel|i can't|i cannot|i struggle|i avoid|i procrastinate|i overthink|why do i|how do i)\b/.test(lower)
   if (!hasFirstPersonPattern) return null
 
   if (hasConcreteIncident(text)) return null
@@ -503,7 +507,7 @@ function firstPersonIncidentQuestion(text = '') {
     return 'What is the most recent moment where this pattern showed up? Give me the scene, not the diagnosis yet.'
   }
 
-  return 'What happened recently that made you ask this? Give me the actual situation first.'
+  return null
 }
 
 function auditArtifact(userText, assistantText, artifact) {
