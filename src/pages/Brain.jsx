@@ -62,6 +62,7 @@ const PILLAR_HALO_SCALE = 4.4
 const PILLAR_HALO_OPACITY = 0.28
 const PILLAR_HALO_ACTIVE_SCALE = 5.1
 const PILLAR_HALO_ACTIVE_OPACITY = 0.36
+const RECOMMENDATION_PULSE_COLOR = 0xFFF15C
 
 const PILLAR_POSITIONS = {
   human_mind: { x: -0.50, y: 0.22, z: 0.08 },
@@ -535,31 +536,32 @@ function createNodeMesh(node, connected = false) {
   const material = createGradientNodeMaterial(color, opacity, muted)
   const mesh = new THREE.Mesh(geometry, material)
 
-  const spriteOpacity = muted ? 0.035 : pillar ? PILLAR_SPRITE_OPACITY : recommended ? (recommended > 1 ? 0.28 : 0.18) : lit ? 0.20 : 0.075
+  const pulseColor = recommended ? RECOMMENDATION_PULSE_COLOR : color
+  const spriteOpacity = muted ? 0.035 : pillar ? PILLAR_SPRITE_OPACITY : recommended ? (recommended > 1 ? 0.58 : 0.42) : lit ? 0.20 : 0.075
   const spriteMat = new THREE.SpriteMaterial({
     map: getGlowTexture(),
-    color,
+    color: pulseColor,
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
     opacity: spriteOpacity,
   })
   const sprite = new THREE.Sprite(spriteMat)
-  const spriteScale = radius * (muted ? 1.35 : pillar ? PILLAR_SPRITE_SCALE : recommended ? (recommended > 1 ? 3.0 : 2.55) : lit ? 2.35 : 1.65)
+  const spriteScale = radius * (muted ? 1.35 : pillar ? PILLAR_SPRITE_SCALE : recommended ? (recommended > 1 ? 4.8 : 3.8) : lit ? 2.35 : 1.65)
   sprite.scale.set(spriteScale, spriteScale, 1)
   mesh.add(sprite)
 
-  const haloOpacity = muted ? 0 : pillar ? PILLAR_HALO_OPACITY : recommended ? (recommended > 1 ? 0.30 : 0.20) : lit ? 0.22 : 0.12
+  const haloOpacity = muted ? 0 : pillar ? PILLAR_HALO_OPACITY : recommended ? (recommended > 1 ? 0.48 : 0.34) : lit ? 0.22 : 0.12
   const haloMat = new THREE.SpriteMaterial({
     map: getHaloTexture(),
-    color,
+    color: pulseColor,
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
     opacity: haloOpacity,
   })
   const halo = new THREE.Sprite(haloMat)
-  const haloScale = muted ? 0 : radius * (pillar ? PILLAR_HALO_SCALE : recommended ? (recommended > 1 ? 3.7 : 3.15) : lit ? 3.0 : 2.4)
+  const haloScale = muted ? 0 : radius * (pillar ? PILLAR_HALO_SCALE : recommended ? (recommended > 1 ? 7.2 : 5.8) : lit ? 3.0 : 2.4)
   halo.scale.set(haloScale, haloScale, 1)
   mesh.add(halo)
 
@@ -765,16 +767,16 @@ function buildScene(th, graph) {
         const sprite = mesh.userData.sprite
         if (sprite) {
           const pillar = latest.type === 'pillar'
-          sprite.material.color.set(renderColor)
-          sprite.scale.setScalar(radius * (muted ? 1.35 : pillar ? PILLAR_SPRITE_SCALE : recommended ? (recommended > 1 ? 3.0 : 2.55) : lit ? 2.35 : 1.65))
-          sprite.material.opacity = muted ? 0.035 : pillar ? PILLAR_SPRITE_OPACITY : recommended ? (recommended > 1 ? 0.28 : 0.18) : lit ? 0.20 : 0.075
+          sprite.material.color.set(recommended ? RECOMMENDATION_PULSE_COLOR : renderColor)
+          sprite.scale.setScalar(radius * (muted ? 1.35 : pillar ? PILLAR_SPRITE_SCALE : recommended ? (recommended > 1 ? 4.8 : 3.8) : lit ? 2.35 : 1.65))
+          sprite.material.opacity = muted ? 0.035 : pillar ? PILLAR_SPRITE_OPACITY : recommended ? (recommended > 1 ? 0.58 : 0.42) : lit ? 0.20 : 0.075
         }
         const halo = mesh.userData.halo
         if (halo) {
           const pillar = latest.type === 'pillar'
-          halo.material.color.set(renderColor)
-          halo.scale.setScalar(muted ? 0 : radius * (pillar ? PILLAR_HALO_SCALE : recommended ? (recommended > 1 ? 3.7 : 3.15) : lit ? 3.0 : 2.4))
-          halo.material.opacity = muted ? 0 : pillar ? PILLAR_HALO_OPACITY : recommended ? (recommended > 1 ? 0.30 : 0.20) : lit ? 0.22 : 0.12
+          halo.material.color.set(recommended ? RECOMMENDATION_PULSE_COLOR : renderColor)
+          halo.scale.setScalar(muted ? 0 : radius * (pillar ? PILLAR_HALO_SCALE : recommended ? (recommended > 1 ? 7.2 : 5.8) : lit ? 3.0 : 2.4))
+          halo.material.opacity = muted ? 0 : pillar ? PILLAR_HALO_OPACITY : recommended ? (recommended > 1 ? 0.48 : 0.34) : lit ? 0.22 : 0.12
         }
       }
     })
@@ -1137,15 +1139,6 @@ export default function Brain() {
       animFrameId = requestAnimationFrame(animate)
 
       const th = threeRef.current
-      if (th && !th._pulseAuditDone && th.nodeMeshes?.length > 0) {
-        const pulseable = th.nodeMeshes.filter(m =>
-          recommendationLevel(m.userData?.node) > 0
-        )
-        console.log('[Pulse Audit] pulseable nodes:', pulseable.length,
-          pulseable.map(m => m.userData?.node?.label))
-        th._pulseAuditDone = true
-      }
-
       if (!isDragging && !activeIdRef.current && th?.nodeMeshes?.length > 0) {
         scene.rotation.y += 0.0007
       }
@@ -1161,26 +1154,27 @@ export default function Brain() {
         const period = level > 1 ? 2.2 : 2.8
         const phase = (t / period) * Math.PI * 2 + index * 0.37
         const wave = (Math.sin(phase) + 1) / 2
-        const spriteMin = level > 1 ? 0.76 : 0.84
-        const spriteMax = level > 1 ? 1.58 : 1.34
+        const spriteMin = level > 1 ? 0.62 : 0.72
+        const spriteMax = level > 1 ? 2.05 : 1.72
         const spritePulse = spriteMin + (spriteMax - spriteMin) * wave
         const haloPulse = spriteMax + spriteMin - spritePulse
-        const opacityPulse = (wave - 0.5) * (level > 1 ? 0.26 : 0.18)
+        const opacityPulse = (wave - 0.5) * (level > 1 ? 0.36 : 0.26)
 
         if (mesh.userData.baseRecommendationLevel !== level) {
           const radius = getNodeRadius(node)
           const muted = isNodeMuted(node, mesh.userData.connected)
           const pillar = node.type === 'pillar'
-          mesh.userData.baseSpriteScale = radius * (muted ? 1.35 : pillar ? PILLAR_SPRITE_SCALE : level > 1 ? 3.0 : 2.55)
-          mesh.userData.baseHaloScale = muted ? 0 : radius * (pillar ? PILLAR_HALO_SCALE : level > 1 ? 3.7 : 3.15)
-          mesh.userData.baseSpriteOpacity = muted ? 0.035 : pillar ? PILLAR_SPRITE_OPACITY : level > 1 ? 0.28 : 0.18
-          mesh.userData.baseHaloOpacity = muted ? 0 : pillar ? PILLAR_HALO_OPACITY : level > 1 ? 0.30 : 0.20
+          mesh.userData.baseSpriteScale = radius * (muted ? 1.35 : pillar ? PILLAR_SPRITE_SCALE : level > 1 ? 4.8 : 3.8)
+          mesh.userData.baseHaloScale = muted ? 0 : radius * (pillar ? PILLAR_HALO_SCALE : level > 1 ? 7.2 : 5.8)
+          mesh.userData.baseSpriteOpacity = muted ? 0.035 : pillar ? PILLAR_SPRITE_OPACITY : level > 1 ? 0.58 : 0.42
+          mesh.userData.baseHaloOpacity = muted ? 0 : pillar ? PILLAR_HALO_OPACITY : level > 1 ? 0.48 : 0.34
           mesh.userData.baseRecommendationLevel = level
         }
 
         if (sprite) {
           const baseScale = mesh.userData.baseSpriteScale ?? sprite.scale.x
           const baseOpacity = mesh.userData.baseSpriteOpacity ?? sprite.material.opacity
+          sprite.material.color.set(RECOMMENDATION_PULSE_COLOR)
           sprite.scale.set(baseScale * spritePulse, baseScale * spritePulse, 1)
           sprite.material.opacity = Math.max(0, Math.min(1, baseOpacity + opacityPulse))
         }
@@ -1188,6 +1182,7 @@ export default function Brain() {
         if (halo) {
           const baseScale = mesh.userData.baseHaloScale ?? halo.scale.x
           const baseOpacity = mesh.userData.baseHaloOpacity ?? halo.material.opacity
+          halo.material.color.set(RECOMMENDATION_PULSE_COLOR)
           halo.scale.set(baseScale * haloPulse, baseScale * haloPulse, 1)
           halo.material.opacity = Math.max(0, Math.min(1, baseOpacity - opacityPulse))
         }
@@ -1285,15 +1280,15 @@ export default function Brain() {
         setNodeOpacity(mesh, muted ? 0.20 : node.type === 'pillar' ? PILLAR_NODE_OPACITY : recommended ? 0.82 : lit ? 0.92 : 0.42)
         if (sprite) {
           const pillar = node.type === 'pillar'
-          sprite.material.color.set(renderColor)
-          sprite.scale.setScalar(radius * (muted ? 1.35 : pillar ? PILLAR_SPRITE_SCALE : recommended ? (recommended > 1 ? 3.0 : 2.55) : lit ? 2.35 : 1.65))
-          sprite.material.opacity = muted ? 0.035 : pillar ? PILLAR_SPRITE_OPACITY : recommended ? (recommended > 1 ? 0.28 : 0.18) : lit ? 0.20 : 0.075
+          sprite.material.color.set(recommended ? RECOMMENDATION_PULSE_COLOR : renderColor)
+          sprite.scale.setScalar(radius * (muted ? 1.35 : pillar ? PILLAR_SPRITE_SCALE : recommended ? (recommended > 1 ? 4.8 : 3.8) : lit ? 2.35 : 1.65))
+          sprite.material.opacity = muted ? 0.035 : pillar ? PILLAR_SPRITE_OPACITY : recommended ? (recommended > 1 ? 0.58 : 0.42) : lit ? 0.20 : 0.075
         }
         if (halo) {
           const pillar = node.type === 'pillar'
-          halo.material.color.set(renderColor)
-          halo.scale.setScalar(muted ? 0 : radius * (pillar ? PILLAR_HALO_SCALE : recommended ? (recommended > 1 ? 3.7 : 3.15) : lit ? 3.0 : 2.4))
-          halo.material.opacity = muted ? 0 : pillar ? PILLAR_HALO_OPACITY : recommended ? (recommended > 1 ? 0.30 : 0.20) : lit ? 0.22 : 0.12
+          halo.material.color.set(recommended ? RECOMMENDATION_PULSE_COLOR : renderColor)
+          halo.scale.setScalar(muted ? 0 : radius * (pillar ? PILLAR_HALO_SCALE : recommended ? (recommended > 1 ? 7.2 : 5.8) : lit ? 3.0 : 2.4))
+          halo.material.opacity = muted ? 0 : pillar ? PILLAR_HALO_OPACITY : recommended ? (recommended > 1 ? 0.48 : 0.34) : lit ? 0.22 : 0.12
         }
       }
     })
