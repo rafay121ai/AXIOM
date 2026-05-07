@@ -185,8 +185,8 @@ app.post('/api/live-search', liveSearchRateLimit, async (req, res) => {
   }
 
   const body = req.body || {}
-  const query = String(body.query || '').trim()
-  if (query.length < 3 || query.length > 500) {
+  const query = String(body.query || '').trim().slice(0, 500)
+  if (query.length < 3) {
     return res.status(400).json({ error: 'Invalid search query' })
   }
 

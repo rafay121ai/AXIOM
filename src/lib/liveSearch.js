@@ -48,12 +48,13 @@ export function shouldUseLiveSearch({ text, retrievalConfidence = 0, sourceCount
 }
 
 export async function liveSearch(query, options = {}) {
+  const searchQuery = String(query || '').trim().slice(0, 500)
   const authHeaders = await getAuthHeaders()
   const response = await fetch(apiUrl('/api/live-search'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders },
     body: JSON.stringify({
-      query,
+      query: searchQuery,
       numResults: options.numResults || 5,
       includeDomains: options.includeDomains || options.allowedDomains || undefined,
       excludeDomains: options.excludeDomains || undefined,
