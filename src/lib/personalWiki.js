@@ -326,8 +326,23 @@ async function upsertNode(sessionId, rawNode, index = 0) {
   }
 
   if (existing) {
+    let nextLabel = node.label || existing.label
+    if (nextLabel && nextLabel !== existing.label) {
+      const { data: labelMatches } = await supabase
+        .from('personal_wiki_nodes')
+        .select('id, label')
+        .eq('session_id', sessionId)
+        .eq('type', node.type)
+
+      const hasLabelConflict = (labelMatches || []).some((match) =>
+        match.id !== existing.id &&
+        String(match.label || '').trim().toLowerCase() === String(nextLabel).trim().toLowerCase()
+      )
+      if (hasLabelConflict) nextLabel = existing.label
+    }
+
     const updates = {
-      label: node.label || existing.label,
+      label: nextLabel,
       pillar: node.pillar || existing.pillar,
       summary: node.summary || existing.summary,
       status: (STATUS_RANK[existing.status] ?? 0) >= (STATUS_RANK[node.status] ?? 0) ? existing.status : node.status,
@@ -589,7 +604,7 @@ export async function backfillNodeLabels(sessionId) {
 
   const { data: nodes, error: nodesError } = await supabase
     .from('personal_wiki_nodes')
-    .select('id, label, summary')
+    .select('id, label, summary, type')
     .eq('session_id', sessionId)
 
   if (nodesError) {
@@ -638,6 +653,13 @@ export async function backfillNodeLabels(sessionId) {
 
     try {
       const label = await generateNodeLabel(match)
+      const hasLabelConflict = (nodes || []).some((candidate) =>
+        candidate.id !== node.id &&
+        candidate.type === node.type &&
+        String(candidate.label || '').trim().toLowerCase() === String(label).trim().toLowerCase()
+      )
+      if (hasLabelConflict) continue
+
       await supabase
         .from('personal_wiki_nodes')
         .update({ label, updated_at: new Date().toISOString() })
