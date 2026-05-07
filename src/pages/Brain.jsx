@@ -958,8 +958,12 @@ export default function Brain() {
           writeBrainCache(sessionToken, synced)
         }
 
-        const backfillKey = `axiom_labels_backfilled:${sessionData.id}`
+        const backfillKey = `axiom_labels_backfilled:${sessionData.session_token}`
         try {
+          Object.keys(localStorage)
+            .filter((key) => key.startsWith('axiom_labels_backfilled:') && key !== backfillKey)
+            .forEach((key) => localStorage.removeItem(key))
+
           if (localStorage.getItem(backfillKey) !== '1') {
             await backfillNodeLabels(sessionData.id)
             localStorage.setItem(backfillKey, '1')
