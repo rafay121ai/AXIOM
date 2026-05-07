@@ -3,6 +3,7 @@ import { supabase } from './supabase'
 
 export const PROFILE_MODEL = 'gpt-5.2-2025-12-11'
 export const CHAT_MODEL = 'gpt-5.4-mini-2026-03-17'
+export const UTILITY_MODEL = 'gpt-4.1-mini'
 export const EMBED_MODEL = 'text-embedding-3-small'
 const WIKI_CONTEXT_CONFIDENCE_FLOOR = 0.30
 
@@ -548,7 +549,7 @@ export async function generateWeeklyRead(session, recentMessages = []) {
     .join('\n\n')
 
   const response = await openai.chat.completions.create({
-    model: 'gpt-4.1-mini-2025-04-14',
+    model: UTILITY_MODEL,
     messages: [
       {
         role: 'system',

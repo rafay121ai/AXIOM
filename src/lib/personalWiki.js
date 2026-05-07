@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import { requestJsonObject } from './openai'
+import { requestJsonObject, UTILITY_MODEL } from './openai'
 
 const DISPLAY_PILLARS = [
   'human_mind',
@@ -372,6 +372,22 @@ async function upsertNode(sessionId, rawNode, index = 0) {
   return data
 }
 
+async function findExistingNodeBySummary(sessionId, summary, type) {
+  if (!sessionId || !summary || !type) return null
+
+  const { data, error } = await supabase
+    .from('personal_wiki_nodes')
+    .select('id, label, summary, type')
+    .eq('session_id', sessionId)
+    .eq('summary', summary)
+    .eq('type', type)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+
+  if (error) return null
+  return data?.[0] || null
+}
+
 async function upsertEdge(sessionId, source, target, relationship = 'related_to', weight = 0.5) {
   if (!source?.id || !target?.id || source.id === target.id) return
 
@@ -496,8 +512,90 @@ function seedNodesFromSession(session) {
   return nodes
 }
 
-function fallbackMemoryLabel(memory) {
-  return memory.content.length > 54 ? `${memory.content.slice(0, 51)}...` : memory.content
+const FALLBACK_LABEL_STOPWORDS = new Set([
+  'about',
+  'after',
+  'again',
+  'also',
+  'appears',
+  'around',
+  'because',
+  'before',
+  'being',
+  'building',
+  'could',
+  'find',
+  'from',
+  'have',
+  'into',
+  'need',
+  'needs',
+  'one',
+  'pick',
+  'single',
+  'that',
+  'their',
+  'thing',
+  'this',
+  'toward',
+  'trying',
+  'user',
+  'wants',
+  'when',
+  'with',
+  'would',
+])
+
+function fallbackTitleCase(value = '') {
+  return String(value)
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+    .replace(/\b[a-z]/g, char => char.toUpperCase())
+}
+
+function fallbackMemoryLabel(memory = {}) {
+  const content = String(memory.content || '')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\b\d+h\s*window\b/gi, ' ')
+    .replace(/^the user\s+/i, '')
+    .replace(/\b(the user|a pattern of|tendency to|wants to|needs to|is trying to|has been trying to)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (/\bhardest to copy|competitors.*copy|copy after\b/i.test(content)) {
+    return 'Hardest-To-Copy Advantage'
+  }
+  if (/\bcompany\b/i.test(content) && /\badmire|building toward|competitor/i.test(content)) {
+    return 'Company Advantage'
+  }
+  if (/\bfriendship|friend\b/i.test(content)) {
+    return 'Friendship Practice'
+  }
+  if (/\bidentity|defend|defended\b/i.test(content)) {
+    return 'Defended Identity'
+  }
+
+  const words = content
+    .replace(/[^a-z0-9\s-]/gi, ' ')
+    .split(/\s+/)
+    .map(word => word.trim())
+    .filter(word => word.length > 2 && !FALLBACK_LABEL_STOPWORDS.has(word.toLowerCase()))
+    .slice(0, 4)
+
+  return fallbackTitleCase(words.join(' ')) || 'Untitled Node'
+}
+
+function isBrokenNodeLabel(label = '', summary = '') {
+  const clean = String(label || '').trim()
+  return (
+    !clean ||
+    clean.endsWith('...') ||
+    clean === summary ||
+    clean.toLowerCase().startsWith('the user') ||
+    clean.length > 40
+  )
 }
 
 function uniqueLabelCandidate(label, existingLabels = new Set()) {
@@ -516,7 +614,7 @@ function uniqueLabelCandidate(label, existingLabels = new Set()) {
 async function generateNodeLabel(memory) {
   const parsed = await requestJsonObject({
     label: 'node label',
-    model: 'gpt-4.1-mini-2025-04-14',
+    model: UTILITY_MODEL,
     maxCompletionTokens: 80,
     messages: [
       {
@@ -572,21 +670,30 @@ async function nodeFromMemory(memory, index) {
   }, index)
 }
 
-async function nodeFromExperiment(experiment, index) {
-  let label = experiment.description.length > 54 ? `${experiment.description.slice(0, 51)}...` : experiment.description
-  try {
-    label = await generateNodeLabel({
-      type: 'experiment_result',
-      primary_pillar: experiment.pillar || null,
-      content: experiment.description,
-    })
-  } catch {}
+async function nodeFromExperiment(experiment, index, existingLabel = '') {
+  const summary = `${experiment.description} (${experiment.window_hours}h window)`
+  let label = fallbackMemoryLabel({
+    type: 'experiment_result',
+    primary_pillar: experiment.pillar || null,
+    content: experiment.description,
+  })
+  if (existingLabel && !isBrokenNodeLabel(existingLabel, summary)) {
+    label = existingLabel
+  } else {
+    try {
+      label = await generateNodeLabel({
+        type: 'experiment_result',
+        primary_pillar: experiment.pillar || null,
+        content: experiment.description,
+      })
+    } catch {}
+  }
 
   return normalizeNode({
     label,
     type: 'experiment',
     pillar: inferStoragePillar(experiment.description, experiment.pillar || null),
-    summary: `${experiment.description} (${experiment.window_hours}h window)`,
+    summary,
     status: experiment.status === 'ghosted' ? 'ghosted' : 'active',
     importance: 4,
     confidence: 0.8,
@@ -617,13 +724,7 @@ export async function backfillNodeLabels(sessionId) {
   if (nodesError) return
 
   const brokenNodes = (nodes || []).filter((node) =>
-    node?.summary &&
-    (
-      String(node.label || '').endsWith('...') ||
-      node.label === node.summary ||
-      String(node.label || '').toLowerCase().startsWith('the user') ||
-      String(node.label || '').length > 40
-    )
+    node?.summary && isBrokenNodeLabel(node.label, node.summary)
   )
 
   if (!brokenNodes.length) return
@@ -666,7 +767,18 @@ export async function backfillNodeLabels(sessionId) {
         .from('personal_wiki_nodes')
         .update({ label: uniqueLabel, updated_at: new Date().toISOString() })
         .eq('id', node.id)
-    } catch {}
+    } catch {
+      const fallbackLabel = fallbackMemoryLabel(match)
+      const existingLabels = new Set((nodes || [])
+        .filter((candidate) => candidate.id !== node.id && candidate.type === node.type)
+        .map((candidate) => String(candidate.label || '').trim().toLowerCase()))
+      const uniqueLabel = uniqueLabelCandidate(fallbackLabel, existingLabels)
+
+      await supabase
+        .from('personal_wiki_nodes')
+        .update({ label: uniqueLabel, updated_at: new Date().toISOString() })
+        .eq('id', node.id)
+    }
   }
 }
 
@@ -722,7 +834,13 @@ export async function syncPersonalWiki(session) {
     const tableExperiments = await fetchSessionExperiments(session.id)
     const experiments = tableExperiments || session.active_experiments || []
     for (let i = 0; i < experiments.length; i++) {
-      const node = await upsertNode(session.id, await nodeFromExperiment(experiments[i], i + 20), i + 20)
+      const summary = `${experiments[i].description} (${experiments[i].window_hours}h window)`
+      const existing = await findExistingNodeBySummary(session.id, summary, 'experiment')
+      const node = await upsertNode(
+        session.id,
+        await nodeFromExperiment(experiments[i], i + 20, existing?.label || ''),
+        i + 20
+      )
       const root = roots.find((r) => r.pillar === node?.pillar)
       await upsertEdge(session.id, node, root, 'tested_by', 0.7)
     }
