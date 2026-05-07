@@ -797,7 +797,7 @@ h1, h2, h3 {
 .brain__account-read-text {
   color: rgba(244,241,232,0.78);
   font-family: var(--font-serif);
-  font-size: 13px;
+  font-size: 18px;
   line-height: 1.15;
 }
 
