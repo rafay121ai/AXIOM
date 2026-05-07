@@ -312,18 +312,21 @@ async function upsertNode(sessionId, rawNode, index = 0) {
   const node = normalizeNode(rawNode, index)
   if (!node) return null
 
-  const { data: existing, error: selectError } = await supabase
+  const { data: existingMatches, error: selectError } = await supabase
     .from('personal_wiki_nodes')
     .select('*')
     .eq('session_id', sessionId)
     .eq('summary', node.summary)
     .eq('type', node.type)
-    .maybeSingle()
+    .order('updated_at', { ascending: false })
+    .limit(1)
 
   if (selectError) {
     console.warn('[Wiki] Node lookup skipped:', selectError.message)
     return null
   }
+
+  const existing = existingMatches?.[0] || null
 
   if (existing) {
     let nextLabel = node.label || existing.label
@@ -334,11 +337,10 @@ async function upsertNode(sessionId, rawNode, index = 0) {
         .eq('session_id', sessionId)
         .eq('type', node.type)
 
-      const hasLabelConflict = (labelMatches || []).some((match) =>
-        match.id !== existing.id &&
-        String(match.label || '').trim().toLowerCase() === String(nextLabel).trim().toLowerCase()
-      )
-      if (hasLabelConflict) nextLabel = existing.label
+      const existingLabels = new Set((labelMatches || [])
+        .filter((match) => match.id !== existing.id)
+        .map((match) => String(match.label || '').trim().toLowerCase()))
+      nextLabel = uniqueLabelCandidate(nextLabel, existingLabels)
     }
 
     const updates = {
@@ -511,6 +513,19 @@ function fallbackMemoryLabel(memory) {
   return memory.content.length > 54 ? `${memory.content.slice(0, 51)}...` : memory.content
 }
 
+function uniqueLabelCandidate(label, existingLabels = new Set()) {
+  const clean = String(label || '').trim()
+  const candidates = [
+    clean,
+    `${clean} Signal`,
+    `${clean} Context`,
+    `${clean} Practice`,
+    `${clean} Path`,
+  ].filter(Boolean)
+
+  return candidates.find((candidate) => !existingLabels.has(candidate.toLowerCase())) || clean
+}
+
 async function generateNodeLabel(memory) {
   const parsed = await requestJsonObject({
     label: 'node label',
@@ -571,9 +586,20 @@ async function nodeFromMemory(memory, index) {
   }, index)
 }
 
-function nodeFromExperiment(experiment, index) {
+async function nodeFromExperiment(experiment, index) {
+  let label = experiment.description.length > 54 ? `${experiment.description.slice(0, 51)}...` : experiment.description
+  try {
+    label = await generateNodeLabel({
+      type: 'experiment_result',
+      primary_pillar: experiment.pillar || null,
+      content: experiment.description,
+    })
+  } catch (error) {
+    console.warn('[Wiki] Experiment label generation failed:', error?.message || error)
+  }
+
   return normalizeNode({
-    label: experiment.description.length > 54 ? `${experiment.description.slice(0, 51)}...` : experiment.description,
+    label,
     type: 'experiment',
     pillar: inferStoragePillar(experiment.description, experiment.pillar || null),
     summary: `${experiment.description} (${experiment.window_hours}h window)`,
@@ -604,7 +630,7 @@ export async function backfillNodeLabels(sessionId) {
 
   const { data: nodes, error: nodesError } = await supabase
     .from('personal_wiki_nodes')
-    .select('id, label, summary, type')
+        .select('id, label, summary, type, pillar')
     .eq('session_id', sessionId)
 
   if (nodesError) {
@@ -648,21 +674,22 @@ export async function backfillNodeLabels(sessionId) {
     const match = (memories || []).find(m =>
       m.content.startsWith(nodeLabel) ||
       nodeLabel.startsWith(m.content.slice(0, 30))
-    )
-    if (!match) continue
+    ) || {
+      type: node.type,
+      primary_pillar: node.pillar || null,
+      content: node.summary,
+    }
 
     try {
       const label = await generateNodeLabel(match)
-      const hasLabelConflict = (nodes || []).some((candidate) =>
-        candidate.id !== node.id &&
-        candidate.type === node.type &&
-        String(candidate.label || '').trim().toLowerCase() === String(label).trim().toLowerCase()
-      )
-      if (hasLabelConflict) continue
+      const existingLabels = new Set((nodes || [])
+        .filter((candidate) => candidate.id !== node.id && candidate.type === node.type)
+        .map((candidate) => String(candidate.label || '').trim().toLowerCase()))
+      const uniqueLabel = uniqueLabelCandidate(label, existingLabels)
 
       await supabase
         .from('personal_wiki_nodes')
-        .update({ label, updated_at: new Date().toISOString() })
+        .update({ label: uniqueLabel, updated_at: new Date().toISOString() })
         .eq('id', node.id)
     } catch (error) {
       console.warn('[Wiki] Label backfill failed:', error?.message || error)
@@ -724,7 +751,7 @@ export async function syncPersonalWiki(session) {
     const tableExperiments = await fetchSessionExperiments(session.id)
     const experiments = tableExperiments || session.active_experiments || []
     for (let i = 0; i < experiments.length; i++) {
-      const node = await upsertNode(session.id, nodeFromExperiment(experiments[i], i + 20), i + 20)
+      const node = await upsertNode(session.id, await nodeFromExperiment(experiments[i], i + 20), i + 20)
       const root = roots.find((r) => r.pillar === node?.pillar)
       await upsertEdge(session.id, node, root, 'tested_by', 0.7)
     }
