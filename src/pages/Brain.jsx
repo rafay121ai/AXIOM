@@ -1137,7 +1137,7 @@ export default function Brain() {
       animFrameId = requestAnimationFrame(animate)
 
       const th = threeRef.current
-      if (!th._pulseAuditDone && th?.nodeMeshes?.length > 0) {
+      if (th && !th._pulseAuditDone && th.nodeMeshes?.length > 0) {
         const pulseable = th.nodeMeshes.filter(m =>
           recommendationLevel(m.userData?.node) > 0
         )
