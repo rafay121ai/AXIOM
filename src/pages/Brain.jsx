@@ -963,6 +963,7 @@ export default function Brain() {
           Object.keys(localStorage)
             .filter((key) => key.startsWith('axiom_labels_backfilled:') && key !== backfillKey)
             .forEach((key) => localStorage.removeItem(key))
+          localStorage.removeItem(backfillKey)
 
           if (localStorage.getItem(backfillKey) !== '1') {
             await backfillNodeLabels(sessionData.id)
@@ -1555,7 +1556,7 @@ export default function Brain() {
           {!activeIsPillar && activeNode.summary && (
             <div className="brain__node-summary">{activeNode.summary}</div>
           )}
-          <button onClick={() => startFromNode(activeNode)}>Lets's Move</button>
+          <button onClick={() => startFromNode(activeNode)}>Let's Move</button>
         </div>
       )}
 

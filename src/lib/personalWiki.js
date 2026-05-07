@@ -598,7 +598,11 @@ export async function backfillNodeLabels(sessionId) {
 
   const brokenNodes = (nodes || []).filter((node) =>
     node?.summary &&
-    (String(node.label || '').endsWith('...') || node.label === node.summary)
+    (
+      String(node.label || '').endsWith('...') ||
+      node.label === node.summary ||
+      String(node.label || '').toLowerCase().startsWith('the user')
+    )
   )
 
   if (!brokenNodes.length) return
