@@ -89,12 +89,7 @@ function parseArtifact(text) {
   const data = safeParseJsonText(match[2])
   const cleanText = text.replace(/<artifact[^>]*>[\s\S]*?<\/artifact>/, '').trim()
 
-  if (!data || typeof data !== 'object') {
-    if (import.meta.env.DEV) {
-      console.warn('[parseArtifact] JSON parse failed or returned non-object', { type, raw: match[2]?.slice(0, 200) })
-    }
-    return { cleanText, artifact: null }
-  }
+  if (!data || typeof data !== 'object') return { cleanText, artifact: null }
 
   return { cleanText, artifact: { type, data } }
 }
@@ -453,16 +448,7 @@ function firstPersonIncidentQuestion(text = '') {
 function auditArtifact(userText, assistantText, artifact) {
   if (!import.meta.env.DEV) return
   if (!shouldHaveArtifact(userText)) return
-
-  if (!artifact) {
-    console.warn('[artifact-audit] Expected an artifact for structured request, but none was parsed.', {
-      userText,
-      assistantPreview: assistantText.slice(0, 500),
-    })
-    return
-  }
-
-  console.info('[artifact-audit] Parsed artifact:', artifact.type)
+  if (!artifact) return
 }
 
 // Strip tag blocks from streaming display — tags are invisible while generating,
@@ -511,10 +497,7 @@ async function fetchSessionExperiments(sessionId) {
     .eq('session_id', sessionId)
     .order('assigned_at', { ascending: true })
 
-  if (error) {
-    console.warn('[experiments] Fetch failed, falling back to session JSON:', error.message)
-    return null
-  }
+  if (error) return null
 
   return (data || []).map(normalizeExperiment)
 }
@@ -627,9 +610,7 @@ export default function Chat() {
     postResponseQueueRef.current = postResponseQueueRef.current
       .catch(() => {})
       .then(task)
-      .catch((error) => {
-        console.warn('[post-response] Queued update failed:', error?.message || error)
-      })
+      .catch(() => {})
   }, [])
 
   const clearTransientRouteState = useCallback(() => {
@@ -733,10 +714,7 @@ export default function Chat() {
       ? messagesQuery.eq('thread_id', threadId)
       : messagesQuery.is('thread_id', null)
 
-    const { data: msgs, error: msgsError } = await messagesQuery
-    if (msgsError) {
-      console.error('Messages fetch error:', msgsError)
-    }
+    const { data: msgs } = await messagesQuery
 
     const existing = msgs || []
     const isNew = freshThread || existing.length === 0
@@ -827,8 +805,7 @@ export default function Chat() {
     try {
       const content = await generateOpeningMessage(sess, true)
       await saveAssistantOpening(sess, msgId, content)
-    } catch (err) {
-      console.error('Opening message error:', err)
+    } catch {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === msgId
@@ -849,8 +826,7 @@ export default function Chat() {
     try {
       const content = await generateNodeOpeningMessage(sess, node, isPulseEntry)
       await saveAssistantOpening(sess, msgId, content)
-    } catch (err) {
-      console.error('Node opening message error:', err)
+    } catch {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === msgId
@@ -1052,9 +1028,7 @@ export default function Chat() {
         try {
           const livePayload = await liveSearch(text, { numResults: 5 })
           liveSearchContext = formatLiveSearchContext(livePayload)
-        } catch (error) {
-          console.warn('[Live Search] fallback skipped:', error?.message || error)
-        }
+        } catch {}
       }
 
       if (!cachedTurnContext) {
@@ -1243,8 +1217,7 @@ export default function Chat() {
           } else {
             fullContent = cleanText
           }
-        } catch (artifactErr) {
-          console.warn(`Structured artifact generation failed for ${requiredArtifactType}:`, artifactErr?.message || artifactErr)
+        } catch {
           fullContent = cleanText
         }
       } else {
@@ -1255,13 +1228,11 @@ export default function Chat() {
       }
 
       if (shouldHoldExperiment && artifactLooksLikeExperiment(artifact)) {
-        console.warn('[experiments] Suppressed experiment-shaped artifact because two are already active.')
         artifact = null
         fullContent = cleanText
       }
 
       if (experiment && activeExperimentCount >= 2) {
-        console.warn('[experiments] Suppressed experiment because two are already active.')
         experiment = null
       }
 
@@ -1337,30 +1308,20 @@ export default function Chat() {
               syncPersonalWiki(updatedSession).then((synced) => {
                 if (synced?.nodes?.length) {
                   const key = `axiom_brain_graph:${token}`
-                  console.log('[brain] syncing graph after turn —', synced.nodes.length, 'nodes,', synced.edges.length, 'edges')
                   try {
                     localStorage.setItem(key, JSON.stringify(synced))
-                    console.log('[brain] localStorage write succeeded:', key)
-                  } catch (e) {
-                    console.warn('[brain] localStorage write failed:', e?.message)
-                  }
-                } else {
-                  console.warn('[brain] syncPersonalWiki returned empty graph — skipping localStorage write')
+                  } catch {}
                 }
-              }).catch((e) => {
-                console.warn('[brain] syncPersonalWiki threw:', e?.message)
-              })
+              }).catch(() => {})
             }
           }
-        } catch (postResponseError) {
-          console.warn('[post-response] Message saved, but follow-up state update failed:', postResponseError?.message || postResponseError)
+        } catch {
           setSession(sessionForMemory)
         }
       })
     } catch (err) {
       // AbortError is intentional (pagehide or component unmount) — don't show an error
       if (err.name === 'AbortError') {
-        console.log('Stream aborted.')
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsgId
@@ -1377,9 +1338,7 @@ export default function Chat() {
           )
         )
       } else {
-        console.error('Send error:', err)
         if (retryAttempt < 1 && persistedUserMessage && !fullContent.trim()) {
-          console.warn('[messages] First assistant attempt failed empty; retrying once automatically.')
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantMsgId
@@ -1455,10 +1414,7 @@ export default function Chat() {
       .select('*')
       .single()
 
-    if (error) {
-      console.warn('[experiments] Insert failed:', error.message)
-      return baseSession
-    }
+    if (error) return baseSession
 
     const updated = [...activeExps, normalizeExperiment(data || newExp)]
     const sessionUpdates = shouldResetMissStreak ? { consecutive_miss_count: 0 } : {}
@@ -1505,10 +1461,7 @@ export default function Chat() {
       .select('*')
       .single()
 
-    if (error) {
-      console.warn('[experiments] Status update failed:', error.message)
-      return null
-    }
+    if (error) return null
 
     const normalized = normalizeExperiment(data)
     const sessionUpdates = status === 'completed' ? { consecutive_miss_count: 0 } : {}
@@ -1632,10 +1585,7 @@ export default function Chat() {
       .update({ content: text })
       .eq('id', message.id)
 
-    if (error) {
-      console.warn('[messages] Edit failed:', error.message)
-      return
-    }
+    if (error) return
 
     await retireAssistantExperiment(targetAssistant, 'Cancelled by user message edit.')
 

@@ -361,13 +361,7 @@ export default function Onboarding() {
 
       if (cancelled) return
 
-      if (error) {
-        const message = error.message || ''
-        if (!message.toLowerCase().includes('user_id')) {
-          console.error('Session restore failed:', error)
-        }
-        return
-      }
+      if (error) return
 
       if (data?.session_token) {
         setStoredSessionToken(data.session_token)
@@ -491,8 +485,7 @@ export default function Onboarding() {
 
       setStoredSessionToken(sessionToken)
       navigate('/brain')
-    } catch (err) {
-      console.error('Onboarding error:', err)
+    } catch {
       setError('Something went wrong. Try again.')
       setIsProcessing(false)
     }

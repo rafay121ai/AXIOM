@@ -52,7 +52,6 @@ export default function AuthCallback() {
         navigate('/', { replace: true })
       } catch (err) {
         if (!mounted) return
-        console.error('Auth callback failed:', err)
         setError(err?.message || 'Google sign-in failed.')
       }
     }

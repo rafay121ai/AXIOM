@@ -345,7 +345,6 @@ export async function buildArtifactForResponse({
     }
   } catch (error) {
     if (error?.name === 'AbortError') throw error
-    console.warn(`Artifact stream failed for ${artifactType}:`, error?.message || error)
   }
 
   if (!progressiveData || Object.keys(progressiveData).length === 0 || !artifactLooksComplete(artifactType, progressiveData)) {

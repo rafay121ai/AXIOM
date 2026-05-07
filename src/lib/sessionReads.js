@@ -38,10 +38,7 @@ export async function fetchLatestWeeklyRead(sessionId) {
     .limit(1)
     .maybeSingle()
 
-  if (error) {
-    console.warn('[Reads] Latest read fetch skipped:', error.message)
-    return null
-  }
+  if (error) return null
 
   return data || null
 }
@@ -58,10 +55,7 @@ export async function ensureCurrentWeeklyRead(session, recentMessages = []) {
     .eq('week_start', weekStart)
     .maybeSingle()
 
-  if (existingError) {
-    console.warn('[Reads] Current week fetch skipped:', existingError.message)
-    return null
-  }
+  if (existingError) return null
 
   if (existing) return existing
 
@@ -82,14 +76,10 @@ export async function ensureCurrentWeeklyRead(session, recentMessages = []) {
       .select('*')
       .single()
 
-    if (error) {
-      console.warn('[Reads] Insert skipped:', error.message)
-      return null
-    }
+    if (error) return null
 
     return data
-  } catch (err) {
-    console.warn('[Reads] Generation skipped:', err?.message || err)
+  } catch {
     return null
   }
 }

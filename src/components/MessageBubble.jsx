@@ -200,9 +200,7 @@ export default function MessageBubble({
       setCopied(true)
       window.clearTimeout(copyResetTimerRef.current)
       copyResetTimerRef.current = window.setTimeout(() => setCopied(false), 1300)
-    } catch (error) {
-      console.warn('[messages] Copy failed:', error?.message || error)
-    }
+    } catch {}
   }
 
   const copyAction = {

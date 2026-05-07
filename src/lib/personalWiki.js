@@ -321,10 +321,7 @@ async function upsertNode(sessionId, rawNode, index = 0) {
     .order('updated_at', { ascending: false })
     .limit(1)
 
-  if (selectError) {
-    console.warn('[Wiki] Node lookup skipped:', selectError.message)
-    return null
-  }
+  if (selectError) return null
 
   const existing = existingMatches?.[0] || null
 
@@ -361,10 +358,7 @@ async function upsertNode(sessionId, rawNode, index = 0) {
       .select()
       .single()
 
-    if (error) {
-      console.warn('[Wiki] Node update skipped:', error.message)
-      return existing
-    }
+    if (error) return existing
     return data
   }
 
@@ -374,10 +368,7 @@ async function upsertNode(sessionId, rawNode, index = 0) {
     .select()
     .single()
 
-  if (error) {
-    console.warn('[Wiki] Node insert skipped:', error.message)
-    return null
-  }
+  if (error) return null
   return data
 }
 
@@ -393,10 +384,7 @@ async function upsertEdge(sessionId, source, target, relationship = 'related_to'
     .eq('relationship', relationship)
     .maybeSingle()
 
-  if (selectError) {
-    console.warn('[Wiki] Edge lookup skipped:', selectError.message)
-    return
-  }
+  if (selectError) return
 
   if (existing) {
     const { error } = await supabase
@@ -407,7 +395,6 @@ async function upsertEdge(sessionId, source, target, relationship = 'related_to'
       })
       .eq('id', existing.id)
 
-    if (error) console.warn('[Wiki] Edge update skipped:', error.message)
     return
   }
 
@@ -419,7 +406,7 @@ async function upsertEdge(sessionId, source, target, relationship = 'related_to'
     weight,
   })
 
-  if (error) console.warn('[Wiki] Edge insert skipped:', error.message)
+  if (error) return
 }
 
 function buildDisplayRoots(sessionId = null) {
@@ -567,9 +554,7 @@ async function nodeFromMemory(memory, index) {
   let label = fallbackMemoryLabel(memory)
   try {
     label = await generateNodeLabel(memory)
-  } catch (error) {
-    console.warn('[Wiki] Node label generation failed:', error?.message || error)
-  }
+  } catch {}
 
   const pillarConfidence = Number(memory.pillar_confidence ?? 0.7)
   const hasConfidentPillar = memory.primary_pillar && pillarConfidence >= 0.55
@@ -594,9 +579,7 @@ async function nodeFromExperiment(experiment, index) {
       primary_pillar: experiment.pillar || null,
       content: experiment.description,
     })
-  } catch (error) {
-    console.warn('[Wiki] Experiment label generation failed:', error?.message || error)
-  }
+  } catch {}
 
   return normalizeNode({
     label,
@@ -617,10 +600,7 @@ async function fetchSessionExperiments(sessionId) {
     .order('assigned_at', { ascending: false })
     .limit(10)
 
-  if (error) {
-    console.warn('[Wiki] Experiment fetch failed:', error.message)
-    return null
-  }
+  if (error) return null
 
   return data || []
 }
@@ -633,10 +613,7 @@ export async function backfillNodeLabels(sessionId) {
         .select('id, label, summary, type, pillar')
     .eq('session_id', sessionId)
 
-  if (nodesError) {
-    console.warn('[Wiki] Label backfill node fetch failed:', nodesError.message)
-    return
-  }
+  if (nodesError) return
 
   const brokenNodes = (nodes || []).filter((node) =>
     node?.summary &&
@@ -664,10 +641,7 @@ export async function backfillNodeLabels(sessionId) {
     .select('id, content, type, primary_pillar, importance, confidence')
     .eq('user_id', userId)
 
-  if (memoriesError) {
-    console.warn('[Wiki] Label backfill memory fetch failed:', memoriesError.message)
-    return
-  }
+  if (memoriesError) return
 
   for (const node of brokenNodes) {
     const nodeLabel = String(node.label || '').replace('...', '').trim()
@@ -691,9 +665,7 @@ export async function backfillNodeLabels(sessionId) {
         .from('personal_wiki_nodes')
         .update({ label: uniqueLabel, updated_at: new Date().toISOString() })
         .eq('id', node.id)
-    } catch (error) {
-      console.warn('[Wiki] Label backfill failed:', error?.message || error)
-    }
+    } catch {}
   }
 }
 
@@ -732,8 +704,6 @@ export async function syncPersonalWiki(session) {
       memoriesError = fallback.error
     }
 
-    console.log('[wiki] memories fetched for sync:', memories?.length, JSON.stringify(memories?.map(m => m.id)))
-
     if (!memoriesError) {
       for (let i = 0; i < (memories || []).length; i++) {
         const memory = memories[i]
@@ -757,8 +727,7 @@ export async function syncPersonalWiki(session) {
     }
 
     return getPersonalWikiGraph(session.id)
-  } catch (err) {
-    console.warn('[Wiki] Sync failed:', err?.message || err)
+  } catch {
     return fallbackGraph(session)
   }
 }
@@ -775,7 +744,7 @@ export async function markWikiNodeAccessed(nodeId) {
     })
     .eq('id', nodeId)
 
-  if (error) console.warn('[Wiki] Node activation skipped:', error.message)
+  if (error) return
 }
 
 export async function getPersonalWikiGraph(sessionId) {
@@ -786,10 +755,7 @@ export async function getPersonalWikiGraph(sessionId) {
       match_session_id: sessionId,
     })
 
-    console.log('[wiki] getPersonalWikiGraph raw response:', JSON.stringify(data), 'error:', error)
-
     if (error) {
-      console.warn('[Wiki] Graph fetch skipped:', error.message)
       return { nodes: [], edges: [] }
     }
 
@@ -797,8 +763,7 @@ export async function getPersonalWikiGraph(sessionId) {
       nodes: data?.nodes || [],
       edges: data?.edges || [],
     }, sessionId)
-  } catch (err) {
-    console.warn('[Wiki] Graph fetch failed:', err?.message || err)
+  } catch {
     return { nodes: [], edges: [] }
   }
 }

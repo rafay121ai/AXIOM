@@ -411,8 +411,7 @@ Selected node: ${nodeContext ? `${nodeContext.label} | pillar: ${nodeContext.pil
       ],
     })
     return normalizeRouterPayload(parsed, query)
-  }).catch((err) => {
-    console.warn('[RAG] Question routing failed (falling back):', err?.message || err)
+  }).catch(() => {
     return fallbackRouteQuestionMode(query, session, nodeContext)
   })
 }
@@ -537,8 +536,7 @@ Example output: ["procrastination vs genuine disinterest", "resistance to finish
     const alternatives = JSON.parse(raw)
     if (Array.isArray(alternatives)) return alternatives.slice(0, 3)
     return []
-  }).catch((err) => {
-    console.warn('[RAG] Query expansion failed (falling back to original query only):', err?.message || err)
+  }).catch(() => {
     return []
   })
 }
@@ -559,13 +557,9 @@ async function searchSingleQuery(query, matchCount, filterPillar) {
         match_count: matchCount,
         filter_pillar: filterPillar,
       })
-      if (error) {
-        console.error(`RAG search error for query "${query}":`, error)
-        return []
-      }
+      if (error) return []
       return data || []
-    } catch (error) {
-      console.warn(`RAG search skipped for query "${query}":`, error?.message || error)
+    } catch {
       return []
     }
   })
@@ -597,10 +591,7 @@ async function fetchSourcesForChunks(chunks) {
     `)
     .in('title', titles)
 
-  if (error) {
-    console.warn('[RAG] Source fetch failed (continuing with chunks only):', error.message)
-    return []
-  }
+  if (error) return []
 
   const wantedKeys = new Set(chunks.map(sourceMatchKey))
   return (data || [])
@@ -744,8 +735,7 @@ Source: ${title}`,
       max_completion_tokens: 120,
     })
     return response.choices[0].message.content.trim()
-  }).catch((err) => {
-    console.warn(`[RAG] Prior synthesis failed for "${title}":`, err?.message || err)
+  }).catch(() => {
     // Fallback: reformat raw text without LLM — take first sentence only
     const firstSentence = combinedText.split(/[.!?]/)[0].trim()
     return `Axiom knows from ${author}, ${title}: ${firstSentence}.`

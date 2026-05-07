@@ -68,16 +68,12 @@ export async function searchPersonalMemory(userId, query, matchCount = 5) {
       similarity_threshold: 0.35,
     })
 
-    if (error) {
-      console.warn('[Memory] Search skipped:', error.message)
-      return []
-    }
+    if (error) return []
 
     const memories = data || []
     await markMemoriesUsed(memories.map((memory) => memory.id).filter(Boolean))
     return memories
-  } catch (err) {
-    console.warn('[Memory] Search failed:', err?.message || err)
+  } catch {
     return []
   }
 }
@@ -111,9 +107,7 @@ async function markMemoriesUsed(memoryIds) {
     memory_ids: memoryIds,
   })
 
-  if (error) {
-    console.warn('[Memory] Usage update skipped:', error.message)
-  }
+  if (error) return
 }
 
 async function findSimilarMemory(userId, memory, embedding) {
@@ -124,10 +118,7 @@ async function findSimilarMemory(userId, memory, embedding) {
     similarity_threshold: 0.82,
   })
 
-  if (error) {
-    console.warn('[Memory] Dedupe skipped:', error.message)
-    return null
-  }
+  if (error) return null
 
   return data?.[0] || null
 }
@@ -164,9 +155,7 @@ async function upsertPersonalMemory(sessionId, userId, memory) {
           .from('personal_memories')
           .update(legacyUpdates)
           .eq('id', existing.id)
-        if (legacyError) console.warn('[Memory] Update skipped:', legacyError.message)
-      } else {
-        console.warn('[Memory] Update skipped:', error.message)
+        if (legacyError) return
       }
     }
     return
@@ -191,9 +180,7 @@ async function upsertPersonalMemory(sessionId, userId, memory) {
     if (/primary_pillar|secondary_pillars|pillar_confidence/.test(error.message || '')) {
       const { primary_pillar, secondary_pillars, pillar_confidence, ...legacyPayload } = payload
       const { error: legacyError } = await supabase.from('personal_memories').insert(legacyPayload)
-      if (legacyError) console.warn('[Memory] Insert skipped:', legacyError.message)
-    } else {
-      console.warn('[Memory] Insert skipped:', error.message)
+      if (legacyError) return
     }
   }
 }
@@ -207,9 +194,7 @@ async function savePersonalMemories(sessionId, userId, memories) {
 
     try {
       await upsertPersonalMemory(sessionId, userId, memory)
-    } catch (err) {
-      console.warn('[Memory] Save failed:', err?.message || err)
-    }
+    } catch {}
   }
 }
 
@@ -230,21 +215,16 @@ export async function updatePersonalMemory(session, recentMessages, userMessage,
     }
 
     if (Object.keys(sessionUpdates).length > 0) {
-      const { error } = await supabase
+      await supabase
         .from('sessions')
         .update(sessionUpdates)
         .eq('id', session.id)
-
-      if (error) {
-        console.warn('[Memory] Session update skipped:', error.message)
-      }
     }
 
     await savePersonalMemories(session.id, session.user_id || null, update.memories || [])
 
     return { ...session, session_notes: sessionNotes, concept_progress: conceptProgress.length > 0 ? conceptProgress : session.concept_progress }
-  } catch (err) {
-    console.warn('[Memory] Update failed:', err?.message || err)
+  } catch {
     return session
   }
 }

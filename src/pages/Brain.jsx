@@ -977,9 +977,7 @@ export default function Brain() {
               writeBrainCache(sessionToken, refreshedGraph)
             }
           }
-        } catch (error) {
-          console.warn('[Wiki] Label backfill skipped:', error?.message || error)
-        }
+        } catch {}
       })
     }
 
