@@ -1161,6 +1161,8 @@ export default function Chat() {
 
       history.push({ role: 'user', content: text })
 
+      const experimentAssignedInSession = baseMessages.some((m) => m.experiment != null)
+
       const systemPrompt = buildSystemPrompt(
         sessionForTurn,
         combinedWikiContext,
@@ -1168,7 +1170,8 @@ export default function Chat() {
         aiMessageCount + 1,
         retrievalConfidence,
         namedPatternsContext,
-        routeContext
+        routeContext,
+        experimentAssignedInSession
       )
 
       const runAbort = new AbortController()
