@@ -327,7 +327,7 @@ export async function generateWelcomeRead(session) {
   const parsed = await requestJsonObject({
     label: 'welcome read',
     model: UTILITY_MODEL,
-    maxCompletionTokens: 260,
+    maxCompletionTokens: 160,
     usageContext: { call_type: 'onboarding', session_id: session?.id },
     messages: [
       {
@@ -337,7 +337,7 @@ Return only valid JSON. No markdown.
 
 Schema:
 {
-  "read": "3-4 short lines. Sharp, personal, specific. Sounds like Axiom already sees something true from onboarding.",
+  "read": "One sharp sentence under 18 words. Personal and specific. No second sentence.",
   "suggested_question": "One specific question this user could ask Axiom right now. It must be tied to their onboarding answers, not generic."
 }
 
@@ -346,6 +346,7 @@ Rules:
 - Do not mention onboarding, profile, quiz, or data.
 - No generic founder advice.
 - The read should feel like a mentor entering with a precise read, not a product welcome.
+- The read must be a one-liner: under 18 words, one sentence, no line breaks, no metaphor, no em dash.
 - The suggested question should be written in first person, as the user would ask it.`,
       },
       {

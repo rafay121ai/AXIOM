@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import Onboarding from './pages/Onboarding'
 import Chat from './pages/Chat'
 import Brain from './pages/Brain'
-import Welcome, { hasSeenAxiomWelcome } from './pages/Welcome'
+import Welcome from './pages/Welcome'
 import AuthCallback from './pages/AuthCallback'
 import { getStoredSessionToken, supabase } from './lib/supabase'
 import { closeAppSession, pingAppSession, startAppSession } from './lib/appSessionTracker'
@@ -39,16 +39,6 @@ function RequireSession({ children }) {
 
   if (loading) return <div className="onboarding"><div className="pulse-dot" /></div>
   if (!user || !token) return <Navigate to="/" replace />
-  return children
-}
-
-function RequireBrainSession({ children }) {
-  const { loading, user } = useAuthUser()
-  const token = getStoredSessionToken()
-
-  if (loading) return <div className="onboarding"><div className="pulse-dot" /></div>
-  if (!user || !token) return <Navigate to="/" replace />
-  if (!hasSeenAxiomWelcome()) return <Navigate to="/welcome" replace />
   return children
 }
 
@@ -143,9 +133,9 @@ export default function App() {
         <Route
           path="/brain"
           element={
-            <RequireBrainSession>
+            <RequireSession>
               <Brain />
-            </RequireBrainSession>
+            </RequireSession>
           }
         />
         <Route

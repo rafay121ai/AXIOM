@@ -4,16 +4,43 @@ import { clearStoredSessionToken, getStoredSessionToken, supabase } from '../lib
 import { generateWelcomeRead } from '../lib/openai'
 
 export const AXIOM_WELCOME_SEEN_KEY = 'axiom_welcome_seen'
+export const AXIOM_WELCOME_PENDING_KEY = 'axiom_welcome_pending'
 const welcomeGenerationCache = new Map()
 
 function markWelcomeSeen() {
-  try { localStorage.setItem(AXIOM_WELCOME_SEEN_KEY, '1') }
+  try {
+    localStorage.setItem(AXIOM_WELCOME_SEEN_KEY, '1')
+    localStorage.removeItem(AXIOM_WELCOME_PENDING_KEY)
+  }
   catch { /* ignore storage failures */ }
+}
+
+export function markAxiomWelcomePending() {
+  try { localStorage.setItem(AXIOM_WELCOME_PENDING_KEY, '1') }
+  catch { /* ignore storage failures */ }
+}
+
+function hasPendingAxiomWelcome() {
+  try { return localStorage.getItem(AXIOM_WELCOME_PENDING_KEY) === '1' }
+  catch { return false }
 }
 
 export function hasSeenAxiomWelcome() {
   try { return localStorage.getItem(AXIOM_WELCOME_SEEN_KEY) === '1' }
   catch { return false }
+}
+
+function compactWelcomeRead(value) {
+  const cleaned = String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (!cleaned) {
+    return 'You already know the move you are circling.'
+  }
+
+  const firstSentence = cleaned.match(/^.*?[.!?](?=\s|$)/)?.[0]?.trim() || cleaned
+  return firstSentence.length > 150 ? `${firstSentence.slice(0, 147).trim()}...` : firstSentence
 }
 
 function firstNameForUser(user, row) {
@@ -37,7 +64,7 @@ export default function Welcome() {
     let cancelled = false
 
     async function loadWelcome() {
-      if (hasSeenAxiomWelcome()) {
+      if (hasSeenAxiomWelcome() || !hasPendingAxiomWelcome()) {
         navigate('/brain', { replace: true })
         return
       }
@@ -81,11 +108,11 @@ export default function Welcome() {
         welcomeGenerationCache.set(cacheKey, generation)
         const generated = await generation
         if (cancelled) return
-        setRead(generated.read || 'You are not here because you need more information. You are here because the next move has been waiting for you to stop negotiating with it.')
+        setRead(compactWelcomeRead(generated.read))
         setSuggestedQuestion(generated.suggested_question || 'What is the first move I am avoiding right now?')
       } catch {
         if (cancelled) return
-        setRead('You are not here because you need more information. You are here because the next move has been waiting for you to stop negotiating with it.')
+        setRead('You already know the move you are circling.')
         setSuggestedQuestion('What is the first move I am avoiding right now?')
       } finally {
         if (!cancelled) setLoading(false)
@@ -136,9 +163,8 @@ export default function Welcome() {
         <header className="welcome__header">
           <h1 className="welcome__name">{firstName}</h1>
           <div className="welcome__read">
-            {read.split('\n').filter(Boolean).map((line) => (
-              <p key={line}>{line}</p>
-            ))}
+            <div className="welcome__read-label">Axiom read</div>
+            <p>{read}</p>
           </div>
         </header>
 
