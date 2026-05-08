@@ -27,14 +27,34 @@ function CollapsibleSection({ label, content }) {
   )
 }
 
+function formatDueLabel(dueAt) {
+  if (!dueAt) return ''
+
+  const dueTime = new Date(dueAt).getTime()
+  if (!Number.isFinite(dueTime)) return ''
+
+  const diffMs = dueTime - Date.now()
+  if (diffMs <= 0) return 'Due now'
+
+  const hours = Math.ceil(diffMs / (60 * 60 * 1000))
+  if (hours <= 48) return `Due in ${hours} hour${hours === 1 ? '' : 's'}`
+
+  const days = Math.ceil(hours / 24)
+  return `Due in ${days} day${days === 1 ? '' : 's'}`
+}
+
 export default function ExperimentCard({
   status = 'active',
+  title,
   description,
   windowHours,
+  dueAt,
   howToDoIt,
   realWorldExample,
   whatToNotice,
   successCondition,
+  assignmentError,
+  errorMessage,
   onReport,
   onDone,
   onCancel,
@@ -43,6 +63,7 @@ export default function ExperimentCard({
     windowHours <= 24
       ? `${windowHours}h window`
       : `${Math.round(windowHours / 24)}d window`
+  const dueLabel = formatDueLabel(dueAt)
 
   const sections = [
     howToDoIt        && { label: 'How to do it',                   content: howToDoIt },
@@ -61,8 +82,15 @@ export default function ExperimentCard({
           </span>
         )}
       </div>
+      {title && <h3 className="experiment-card__title">{title}</h3>}
+      {dueLabel && <span className="experiment-card__due">{dueLabel}</span>}
       <p className="experiment-card__description">{description}</p>
       <span className="experiment-card__window">{windowLabel}</span>
+      {assignmentError && (
+        <p className="experiment-card__error">
+          {errorMessage || 'This experiment card was generated, but it was not saved. Try again before acting on it.'}
+        </p>
+      )}
       {(onReport || onDone || onCancel) && (
         <div className="experiment-card__actions">
           {onReport && (

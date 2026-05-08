@@ -1571,6 +1571,25 @@ h1, h2, h3 {
   color: rgba(237,237,236,0.42);
 }
 
+.experiment-card__status--error {
+  color: rgba(255,113,113,0.86);
+  border-color: rgba(255,113,113,0.22);
+}
+
+.experiment-card__title {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.experiment-card__due {
+  color: rgba(237,237,236,0.54);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .experiment-card__description {
   font-size: 14px;
   line-height: 1.6;
@@ -1580,6 +1599,16 @@ h1, h2, h3 {
 .experiment-card__window {
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.experiment-card__error {
+  border: 1px solid rgba(255,113,113,0.18);
+  border-radius: var(--radius-sm);
+  color: rgba(255,180,180,0.9);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 2px 0 0;
+  padding: 8px 10px;
 }
 
 .experiment-card__actions {

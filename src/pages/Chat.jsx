@@ -42,6 +42,30 @@ function safeParseJsonText(text) {
   }
 }
 
+function normalizeExperimentPillarForStorage(pillar) {
+  const normalized = String(pillar || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[’']/g, '')
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+
+  const aliases = {
+    the_human_mind: 'human_mind',
+    human_mind: 'human_mind',
+    money_game: 'money_game',
+    the_money_game: 'money_game',
+    how_companies_win: 'how_companies_win',
+    whats_coming: 'whats_coming',
+    what_s_coming: 'whats_coming',
+    think_sharper: 'think_sharper',
+    move_people: 'move_people',
+  }
+
+  return aliases[normalized] || null
+}
+
 function inferArtifactTypeFromData(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return null
   if (
@@ -223,7 +247,7 @@ function sanitizeVisibleAssistantText(text = '', artifactType = null) {
 function visibleResponseContract(route, artifactType = null, shouldHoldExperiment = false) {
   const lines = [
     'VISIBLE RESPONSE CONTRACT:',
-    '- The visible chat answer must be prose only. Never output raw JSON, schemas, artifact payloads, or internal route labels.',
+    '- Your visible response must be prose only. When you are assigning an experiment, your prose response ends normally, then on a new line you append the experiment tag. The experiment tag is not part of the visible response. It is a structured output appended after your prose. Never put JSON in your prose. Always put it in the tag.',
   ]
 
   if (artifactType) {
@@ -554,6 +578,8 @@ function normalizeExperiment(row) {
     cancelled_at: row.cancelled_at,
     ghosted_at: row.ghosted_at,
     outcome: row.outcome,
+    assignment_error: row.assignment_error || false,
+    error_message: row.error_message || '',
   }
 }
 
@@ -1376,6 +1402,15 @@ export default function Chat() {
             sessionForMemory = await assignExperiment(experiment, sessionForTurn)
             const assigned = findMatchingExperiment(sessionForMemory.active_experiments, experiment)
             if (assigned) {
+              const enrichedContent = `${cleanText}\n\n<experiment>\n${JSON.stringify(assigned)}\n</experiment>`
+              supabase
+                .from('messages')
+                .update({ content: enrichedContent })
+                .eq('id', assistantMsgId)
+                .then(({ error }) => {
+                  if (error) console.error('Failed to persist enriched experiment message', error)
+                })
+
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantMsgId
@@ -1479,8 +1514,10 @@ export default function Chat() {
     const assignedAt = new Date()
     const windowHours = Number(experiment.window_hours) > 0 ? Number(experiment.window_hours) : 48
     const dueAt = new Date(assignedAt.getTime() + windowHours * 3600 * 1000)
+    const storagePillar = normalizeExperimentPillarForStorage(experiment.pillar)
     const newExp = {
       ...experiment,
+      pillar: storagePillar || experiment.pillar || null,
       window_hours: windowHours,
       assigned_at: assignedAt.toISOString(),
       due_at: dueAt.toISOString(),
@@ -1496,7 +1533,7 @@ export default function Chat() {
         title: experiment.title || null,
         description: experiment.description,
         status: 'active',
-        pillar: experiment.pillar || null,
+        pillar: storagePillar,
         topic: experiment.topic || null,
         window_hours: windowHours,
         reference_count: 0,
@@ -1511,7 +1548,24 @@ export default function Chat() {
       .select('*')
       .single()
 
-    if (error) return baseSession
+    if (error) {
+      console.error('Failed to assign experiment', {
+        error,
+        experiment,
+        session_id: baseSession.id,
+        user_id: baseSession.user_id,
+      })
+
+      const failedExperiment = {
+        ...newExp,
+        status: 'error',
+        assignment_error: true,
+        error_message: error.message || 'This experiment was generated, but it was not saved.',
+      }
+      const updatedSession = { ...baseSession, active_experiments: [...activeExps, failedExperiment] }
+      setSession(updatedSession)
+      return updatedSession
+    }
 
     const updated = [...activeExps, normalizeExperiment(data || newExp)]
     const sessionUpdates = shouldResetMissStreak ? { consecutive_miss_count: 0 } : {}
@@ -1533,7 +1587,7 @@ export default function Chat() {
     return [...experiments]
       .reverse()
       .find((item) =>
-        item.status === 'active' &&
+        (item.status === 'active' || item.assignment_error) &&
         item.description === experiment.description &&
         Number(item.window_hours) === Number(experiment.window_hours || 48)
       ) || null
@@ -1926,13 +1980,17 @@ function MessageGroup({
       {showArtifact && !inlineArtifact && artifactElement}
       {showExperiment && (
         <ExperimentCard
+          title={msg.experiment.title}
           description={msg.experiment.description}
           windowHours={msg.experiment.window_hours}
+          dueAt={msg.experiment.due_at}
           howToDoIt={msg.experiment.how_to_do_it}
           realWorldExample={msg.experiment.real_world_example}
           whatToNotice={msg.experiment.what_to_notice}
           successCondition={msg.experiment.success_condition}
           status={msg.experiment.status}
+          assignmentError={msg.experiment.assignment_error}
+          errorMessage={msg.experiment.error_message}
           onReport={msg.experiment.id && msg.experiment.status === 'active' ? () => onExperimentReport(msg.experiment) : null}
           onDone={msg.experiment.id && msg.experiment.status === 'active' ? () => onExperimentDone(msg.experiment) : null}
           onCancel={msg.experiment.id && msg.experiment.status === 'active' ? () => onExperimentCancel(msg.experiment) : null}

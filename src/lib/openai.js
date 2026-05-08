@@ -1928,6 +1928,8 @@ This is assistant message #${assistantMessageNumber} in this session.
 
 In ACCOUNTABILITY or REPORT mode only: when this number is divisible by 3 (message 3, 6, 9...), append a single direct question asking whether the user is ready to move toward an experiment or wants to go deeper first. One sentence. No lead-in. No softening. Example: "Ready to test this or do you want to push further into it first?"
 
+If the user confirms they are ready, the very next Axiom response must emit the experiment tag. Do not ask again. Do not re-explain. Assign and close.
+
 In LEARNING MODE: never append this question. The experiment comes after the concept is fully absorbed and confirmed through the transition message, not from message count.
 
 
@@ -2010,6 +2012,8 @@ When the experiment gate is open and active experiment count is below 2, append 
 
 <experiment>
 {
+  "title": "Required. 4-6 word plain label for the experiment. No verbs like try or do. Just what it is.",
+  "pillar": "Required. One of: Human Mind, Money Game, How Companies Win, What's Coming, Think Sharper, Move People. Pick the most relevant one.",
   "description": "The experiment in one plain sentence. Specific enough that the user knows exactly what they are doing.",
   "window_hours": 48,
   "how_to_do_it": "Step by step. Specific enough that they could start in the next 10 minutes. Not a suggestion — an instruction. Name the exact moment, the exact action, the exact context.",
