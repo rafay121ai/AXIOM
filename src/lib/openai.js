@@ -319,6 +319,52 @@ Rules:
   return response.choices[0].message.content
 }
 
+export async function generateWelcomeRead(session) {
+  const onboardingAnswers = Array.isArray(session?.onboarding_answers)
+    ? session.onboarding_answers
+    : []
+
+  const parsed = await requestJsonObject({
+    label: 'welcome read',
+    model: UTILITY_MODEL,
+    maxCompletionTokens: 260,
+    usageContext: { call_type: 'onboarding', session_id: session?.id },
+    messages: [
+      {
+        role: 'system',
+        content: `You write the first welcome read for Axiom.
+Return only valid JSON. No markdown.
+
+Schema:
+{
+  "read": "3-4 short lines. Sharp, personal, specific. Sounds like Axiom already sees something true from onboarding.",
+  "suggested_question": "One specific question this user could ask Axiom right now. It must be tied to their onboarding answers, not generic."
+}
+
+Rules:
+- Use the user's private theory and onboarding answers only.
+- Do not mention onboarding, profile, quiz, or data.
+- No generic founder advice.
+- The read should feel like a mentor entering with a precise read, not a product welcome.
+- The suggested question should be written in first person, as the user would ask it.`,
+      },
+      {
+        role: 'user',
+        content: `Private theory:
+${session?.axiom_profile || 'None'}
+
+Onboarding answers:
+${JSON.stringify(onboardingAnswers, null, 2)}`,
+      },
+    ],
+  })
+
+  return {
+    read: typeof parsed.read === 'string' ? parsed.read.trim() : '',
+    suggested_question: typeof parsed.suggested_question === 'string' ? parsed.suggested_question.trim() : '',
+  }
+}
+
 // ─── Opening Message ─────────────────────────────────────────────────────────
 export async function generateOpeningMessage(session, isNew) {
   const unresolvedExperiment = session.unresolved_experiment || null

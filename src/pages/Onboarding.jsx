@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getStoredSessionToken, setStoredSessionToken, supabase } from '../lib/supabase'
 import { generateAxiomProfile } from '../lib/openai'
+import { AXIOM_WELCOME_SEEN_KEY } from './Welcome'
 
 // ─── Question Pool ───────────────────────────────────────────────────────────
 const QUESTION_POOL = {
@@ -484,7 +485,11 @@ export default function Onboarding() {
       if (insertError) throw insertError
 
       setStoredSessionToken(sessionToken)
-      navigate('/brain')
+      const welcomeSeen = (() => {
+        try { return localStorage.getItem(AXIOM_WELCOME_SEEN_KEY) === '1' }
+        catch { return false }
+      })()
+      navigate(welcomeSeen ? '/brain' : '/welcome')
     } catch {
       setError('Something went wrong. Try again.')
       setIsProcessing(false)

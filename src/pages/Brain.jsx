@@ -86,20 +86,6 @@ function brainCacheKey(sessionToken) {
   return `axiom_brain_graph:${sessionToken}`
 }
 
-function brainOverlaySeenKey(sessionToken) {
-  return `axiom_brain_overlay_seen:${sessionToken}`
-}
-
-function hasSeenBrainOverlay(sessionToken) {
-  try { return localStorage.getItem(brainOverlaySeenKey(sessionToken)) === '1' }
-  catch { return false }
-}
-
-function markBrainOverlaySeen(sessionToken) {
-  try { localStorage.setItem(brainOverlaySeenKey(sessionToken), '1') }
-  catch { /* ignore storage failures */ }
-}
-
 function readBrainCache(sessionToken) {
   try {
     const cached = localStorage.getItem(brainCacheKey(sessionToken))
@@ -996,18 +982,6 @@ export default function Brain() {
         if (!cancelled && latestRead) {
           setWeeklyRead(latestRead)
           setOverlayMessage(latestRead.content)
-        }
-      }
-
-      const firstBrainOpen = !hasSeenBrainOverlay(sessionToken)
-
-      if (firstBrainOpen && !cancelled) setShowGestureHint(true)
-
-      if (firstBrainOpen && !cancelled) {
-        const content = storedRead?.content
-        if (content) {
-          setShowOverlayMessage(true)
-          markBrainOverlaySeen(sessionToken)
         }
       }
 

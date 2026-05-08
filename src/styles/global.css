@@ -1618,6 +1618,210 @@ h1, h2, h3 {
   margin-top: 2px;
 }
 
+/* ─── Welcome Screen ─────────────────────────────────────────────────── */
+.welcome {
+  min-height: 100%;
+  width: 100%;
+  background: #080808;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 44px 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.welcome::before {
+  content: '';
+  position: absolute;
+  inset: -20%;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(201,168,76,0.08), transparent 34%),
+    linear-gradient(180deg, rgba(255,255,255,0.025), transparent 28%);
+  pointer-events: none;
+}
+
+.welcome__grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.18;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 3px 3px, 5px 5px;
+  mix-blend-mode: screen;
+}
+
+.welcome__shell {
+  width: min(680px, 100%);
+  position: relative;
+  z-index: 1;
+  border: 1px solid rgba(201,168,76,0.16);
+  border-radius: 6px;
+  background:
+    linear-gradient(180deg, rgba(18,18,18,0.82), rgba(10,10,10,0.72)),
+    rgba(12,12,12,0.7);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.05),
+    0 30px 90px rgba(0,0,0,0.55);
+  backdrop-filter: blur(18px);
+  padding: clamp(28px, 5vw, 54px);
+}
+
+.welcome__loading {
+  position: relative;
+  z-index: 1;
+}
+
+.welcome__header {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.welcome__name {
+  font-family: var(--font-serif);
+  font-size: clamp(56px, 12vw, 112px);
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 0.9;
+  color: var(--text-primary);
+  animation: welcomeNameFade 1.4s var(--ease-out) both;
+}
+
+.welcome__read {
+  color: rgba(237,237,236,0.68);
+  font-family: var(--font-serif);
+  font-size: clamp(20px, 3vw, 28px);
+  font-weight: 300;
+  line-height: 1.35;
+  max-width: 560px;
+}
+
+.welcome__read p + p {
+  margin-top: 4px;
+}
+
+.welcome__copy {
+  color: rgba(237,237,236,0.74);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.75;
+  margin-top: clamp(32px, 5vw, 46px);
+  max-width: 590px;
+}
+
+.welcome__copy p + p {
+  margin-top: 14px;
+}
+
+.welcome__prompt-wrap {
+  margin-top: 34px;
+}
+
+.welcome__prompt-label {
+  color: var(--gold);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  line-height: 1;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+
+.welcome__prompt {
+  width: 100%;
+  appearance: none;
+  border: 1px solid rgba(201,168,76,0.28);
+  border-radius: 6px;
+  background:
+    linear-gradient(180deg, rgba(20,20,20,0.86), rgba(9,9,9,0.76)),
+    rgba(8,8,8,0.82);
+  box-shadow:
+    inset 0 0 24px rgba(201,168,76,0.055),
+    0 16px 48px rgba(0,0,0,0.42);
+  color: rgba(237,237,236,0.9);
+  cursor: pointer;
+  font-family: var(--font-serif);
+  font-size: clamp(19px, 3vw, 27px);
+  line-height: 1.32;
+  padding: 22px 24px;
+  text-align: left;
+  transition: border-color 180ms var(--ease-out), transform 180ms var(--ease-out), color 180ms var(--ease-out);
+}
+
+.welcome__prompt:hover {
+  border-color: rgba(232,197,106,0.46);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.welcome__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 26px;
+}
+
+.welcome__primary,
+.welcome__secondary {
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  font-family: var(--font-sans);
+}
+
+.welcome__primary {
+  width: 100%;
+  border-radius: 4px;
+  background: linear-gradient(100deg, var(--gold-core), var(--gold-highlight), var(--gold-core));
+  background-size: 220% 100%;
+  box-shadow: 0 0 32px rgba(201,168,76,0.18);
+  color: #080808;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 15px 18px;
+  text-transform: uppercase;
+  animation: welcomeCtaPulse 3.8s ease-in-out infinite;
+}
+
+.welcome__secondary {
+  align-self: center;
+  background: transparent;
+  color: rgba(237,237,236,0.42);
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.welcome__secondary:hover {
+  color: rgba(237,237,236,0.68);
+}
+
+@keyframes welcomeNameFade {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes welcomeCtaPulse {
+  0%, 100% {
+    background-position: 0% 50%;
+    box-shadow: 0 0 28px rgba(201,168,76,0.16);
+  }
+  50% {
+    background-position: 100% 50%;
+    box-shadow: 0 0 42px rgba(232,197,106,0.24);
+  }
+}
+
 .experiment-card__action {
   border: 1px solid rgba(201,168,76,0.18);
   border-radius: 999px;
