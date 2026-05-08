@@ -28,14 +28,53 @@ async function readError(response) {
   }
 }
 
+function requestSignalWithTimeout(signal, timeoutMs = 30000) {
+  const controller = new AbortController()
+  let timeoutId = null
+
+  function abortRequest() {
+    controller.abort()
+  }
+
+  if (signal?.aborted) {
+    controller.abort()
+  } else if (signal) {
+    signal.addEventListener('abort', abortRequest, { once: true })
+  }
+
+  if (timeoutMs > 0) {
+    timeoutId = setTimeout(abortRequest, timeoutMs)
+  }
+
+  return {
+    signal: controller.signal,
+    cleanup() {
+      if (timeoutId) clearTimeout(timeoutId)
+      if (signal) signal.removeEventListener('abort', abortRequest)
+    },
+  }
+}
+
 async function postJson(path, body, options = {}) {
   const authHeaders = await getAuthHeaders()
-  const response = await fetch(apiUrl(path), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders },
-    body: JSON.stringify(body),
-    signal: options.signal,
-  })
+  const requestSignal = requestSignalWithTimeout(options.signal, options.timeoutMs ?? 30000)
+  let response
+
+  try {
+    response = await fetch(apiUrl(path), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      body: JSON.stringify(body),
+      signal: requestSignal.signal,
+    })
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error(`Request timed out: ${path}`)
+    }
+    throw error
+  } finally {
+    requestSignal.cleanup()
+  }
 
   if (!response.ok) {
     throw new Error(await readError(response))
@@ -212,6 +251,7 @@ function isTransientNetworkError(error) {
     message.includes('network') ||
     message.includes('connection') ||
     message.includes('timeout') ||
+    message.includes('abort') ||
     message.includes('reset')
   )
 }
@@ -233,11 +273,13 @@ async function withTransientRetry(fn, { retries = 2, baseDelayMs = 250 } = {}) {
 }
 
 export async function generateEmbedding(text) {
-  const response = await withTransientRetry(() =>
-    openai.embeddings.create({
-      model: EMBED_MODEL,
-      input: text,
-    })
+  const response = await withTransientRetry(
+    () =>
+      openai.embeddings.create({
+        model: EMBED_MODEL,
+        input: text,
+      }, { timeoutMs: 7000 }),
+    { retries: 1, baseDelayMs: 200 }
   )
   return response.data[0].embedding
 }
