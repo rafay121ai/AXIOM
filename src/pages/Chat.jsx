@@ -7,7 +7,7 @@ import { clearStoredSessionToken, getStoredSessionToken, supabase } from '../lib
 import { openai, CHAT_MODEL, generateOpeningMessage, generateNodeOpeningMessage, buildSystemPrompt } from '../lib/openai'
 import { buildArtifactForResponse, getArtifactBuildSteps, getRequiredArtifactType, humanizeArtifactType } from '../lib/artifacts'
 import { routeQuestionMode, searchWikiForRoute, formatRouteContext, formatWikiContext } from '../lib/rag'
-import { searchPersonalMemory, formatNamedPatternsContext, formatPersonalMemoryContext, recordExperimentAvoidancePattern, updatePersonalMemory } from '../lib/personalMemory'
+import { searchPersonalMemory, formatNamedPatternsContext, formatPersonalMemoryContext, recordExperimentAvoidancePattern, recordExperimentResistancePattern, updatePersonalMemory } from '../lib/personalMemory'
 import { formatLiveSearchContext, liveSearch, shouldUseLiveSearch } from '../lib/liveSearch'
 import { getCachedTurnContext, setCachedTurnContext } from '../lib/sessionTurnContext'
 import { syncPersonalWiki } from '../lib/personalWiki'
@@ -20,6 +20,7 @@ const SIGNAL_MAP_HEADING_RE = /^(WHAT[’']?S COMING|HOW COMPANIES WIN|THE MONEY
 const MAX_SIGNAL_MAP_PROSE_CHARS = 760
 const EXPERIMENT_OUTCOME_CLARIFICATION =
   'What got in the way, was it something outside your control, or did you just not get to it?'
+const EXPERIMENT_CANCEL_REASON_QUESTION = "What's making this one not work?"
 
 function extractJsonCandidate(text = '') {
   const raw = String(text || '')
@@ -447,12 +448,60 @@ function looksLikeExperimentCancel(text = '') {
   return /\b(cancel this experiment|cancel the experiment|drop this experiment|skip this experiment|remove this experiment|i'?m not doing this)\b/i.test(text)
 }
 
+function looksLikeWeakExperimentResistance(text = '') {
+  return /\b(i'?m busy|too busy|busy rn|not right now|maybe later|another time|some other time|i'?ll do it another time|i'?ll do it later|maybe next week|next week|not today|don'?t feel like|no time|later|soon)\b/i.test(text)
+}
+
+function looksLikeRealExperimentConstraint(text = '') {
+  return /\b(outside my control|out of my control|couldn'?t|could not|can'?t|cannot|wasn'?t able|unable|blocked|customer didn'?t respond|client didn'?t respond|they didn'?t reply|no reply|sick|ill|emergency|family emergency|travel|flight|internet|power|server|access|account locked|someone else|dependency|supplier|bank|payment failed|waiting on|don'?t have access|resource constraint|genuine conflict|deadline conflict)\b/i.test(text)
+}
+
+function looksLikeCancelInsistence(text = '') {
+  return /\b(cancel it|cancel this|still cancel|i still want to cancel|skip it|drop it|remove it|i'?m not doing it|not doing this|no, cancel|just cancel)\b/i.test(text)
+}
+
+function experimentLabel(experiment = {}) {
+  return experiment.title || experiment.description || 'this experiment'
+}
+
+function buildExperimentNegotiation(experiment, stage = 'awaiting_reason') {
+  if (!experiment?.id) return null
+  return {
+    experiment_id: experiment.id,
+    experiment_title: experiment.title || '',
+    experiment_description: experiment.description || '',
+    stage,
+    started_at: new Date().toISOString(),
+  }
+}
+
+function buildCancellationPushback(experiment, reasonText = '') {
+  const label = experimentLabel(experiment)
+  const cost = experiment.success_condition
+    ? `If you skip it, "${experiment.success_condition}" stays untested.`
+    : `If you skip it, the question this experiment was supposed to answer stays open.`
+  const reason = reasonText ? ` "${String(reasonText).trim()}" is not enough reason to lose that signal.` : ''
+  return `${reason.trim()} ${cost} Keep "${label}" open and shrink the first move instead: what is the smallest version you can run today?`.trim()
+}
+
+function buildConstraintOffer(experiment) {
+  return `That constraint is real, so I am not going to pretend the original shape still fits. I would shrink "${experimentLabel(experiment)}" or swap it for a version you can run under the constraint. Which one do you want?`
+}
+
 function isAwaitingExperimentOutcomeClarification(list = []) {
   const lastAssistant = [...list]
     .reverse()
     .find((message) => message.role === 'assistant' && !message.streaming && message.content)
 
   return String(lastAssistant?.content || '').trim() === EXPERIMENT_OUTCOME_CLARIFICATION
+}
+
+function isAwaitingExperimentCancelReason(list = []) {
+  const lastAssistant = [...list]
+    .reverse()
+    .find((message) => message.role === 'assistant' && !message.streaming && message.content)
+
+  return String(lastAssistant?.content || '').trim() === EXPERIMENT_CANCEL_REASON_QUESTION
 }
 
 function classifyExperimentOutcomeReason(text = '') {
@@ -747,6 +796,7 @@ export default function Chat() {
   const initialInputSentRef = useRef(false)
   const postResponseQueueRef = useRef(Promise.resolve())
   const unresolvedExperimentRef = useRef(null)
+  const experimentNegotiationRef = useRef(null)
 
   const releaseSending = useCallback(() => {
     sendingRef.current = false
@@ -1098,6 +1148,7 @@ export default function Chat() {
         ...session,
         active_experiments: latestExperiments || session.active_experiments || [],
         unresolved_experiment: unresolvedExperimentRef.current,
+        experiment_negotiation: experimentNegotiationRef.current,
       }
       if (!isAwaitingExperimentOutcomeClarification(baseMessages)) {
         sessionForTurn = await checkAndUpdateGhosting(sessionForTurn)
@@ -1771,11 +1822,99 @@ export default function Chat() {
     return normalized
   }
 
+  async function recordResistanceAndSync(baseSession, experiment, text, reasonStrength) {
+    const memoryRecorded = await recordExperimentResistancePattern(baseSession, experiment, text, reasonStrength)
+    if (memoryRecorded) {
+      syncPersonalWiki(baseSession).then((synced) => {
+        if (synced) window.dispatchEvent(new CustomEvent('axiom-wiki-updated'))
+      }).catch((error) => {
+        console.error('Failed to sync wiki after experiment resistance pattern', error)
+      })
+    }
+  }
+
   async function maybeCaptureExperimentReport(text, baseSession, historyMessages = []) {
     const activeExperiments = (baseSession.active_experiments || []).filter((exp) => exp.status === 'active')
     if (activeExperiments.length === 0) return { session: baseSession, handled: false }
 
     const target = activeExperiments[0]
+    let negotiation = experimentNegotiationRef.current
+    if (!negotiation && isAwaitingExperimentCancelReason(historyMessages)) {
+      negotiation = buildExperimentNegotiation(target, 'awaiting_reason')
+      experimentNegotiationRef.current = negotiation
+    }
+    const negotiationTarget = negotiation?.experiment_id
+      ? activeExperiments.find((exp) => exp.id === negotiation.experiment_id) || target
+      : target
+
+    if (negotiation?.stage === 'awaiting_reason') {
+      const hasRealConstraint = looksLikeRealExperimentConstraint(text)
+      const reasonStrength = hasRealConstraint ? 'real' : 'weak'
+      await recordResistanceAndSync(baseSession, negotiationTarget, text, reasonStrength)
+
+      if (hasRealConstraint) {
+        experimentNegotiationRef.current = buildExperimentNegotiation(negotiationTarget, 'real_reason_offer')
+        return {
+          session: { ...baseSession, experiment_negotiation: experimentNegotiationRef.current },
+          handled: true,
+          assistantText: buildConstraintOffer(negotiationTarget),
+        }
+      }
+
+      experimentNegotiationRef.current = buildExperimentNegotiation(negotiationTarget, 'pushed_back')
+      return {
+        session: { ...baseSession, experiment_negotiation: experimentNegotiationRef.current },
+        handled: true,
+        assistantText: buildCancellationPushback(negotiationTarget, text),
+      }
+    }
+
+    if (negotiation?.stage === 'pushed_back') {
+      const hasRealConstraint = looksLikeRealExperimentConstraint(text)
+
+      if (hasRealConstraint) {
+        await recordResistanceAndSync(baseSession, negotiationTarget, text, 'real')
+        experimentNegotiationRef.current = buildExperimentNegotiation(negotiationTarget, 'real_reason_offer')
+        return {
+          session: { ...baseSession, experiment_negotiation: experimentNegotiationRef.current },
+          handled: true,
+          assistantText: buildConstraintOffer(negotiationTarget),
+        }
+      }
+
+      if (looksLikeCancelInsistence(text) || looksLikeWeakExperimentResistance(text) || looksLikeExperimentCancel(text)) {
+        await recordResistanceAndSync(baseSession, negotiationTarget, text, 'weak')
+        const updatedExperiment = await updateExperimentStatus(negotiationTarget.id, 'cancelled', text, 'didnt')
+        if (!updatedExperiment) {
+          return {
+            session: baseSession,
+            handled: true,
+            assistantText: 'I could not save that cancellation. Try once more before we move on.',
+          }
+        }
+
+        await recordExperimentAvoidancePattern(baseSession, negotiationTarget, text)
+        experimentNegotiationRef.current = null
+        const updatedExperiments = (baseSession.active_experiments || []).map((exp) =>
+          exp.id === negotiationTarget.id ? updatedExperiment : exp
+        )
+
+        return {
+          session: { ...baseSession, active_experiments: updatedExperiments, experiment_negotiation: null },
+          handled: true,
+          assistantText: 'I marked that as a choice not to do it, not a constraint. That matters because this is exactly where the pattern shows up.',
+        }
+      }
+    }
+
+    if (negotiation?.stage === 'real_reason_offer' && looksLikeCancelInsistence(text)) {
+      return {
+        session: { ...baseSession, experiment_negotiation: negotiation },
+        handled: true,
+        assistantText: buildConstraintOffer(negotiationTarget),
+      }
+    }
+
     const awaitingClarification = isAwaitingExperimentOutcomeClarification(historyMessages)
 
     if (awaitingClarification) {
@@ -1828,6 +1967,15 @@ export default function Chat() {
     }
 
     if (looksLikeExperimentCancel(text) || looksLikeExperimentFailureReport(text)) {
+      if (looksLikeExperimentCancel(text)) {
+        experimentNegotiationRef.current = buildExperimentNegotiation(target, 'awaiting_reason')
+        return {
+          session: { ...baseSession, experiment_negotiation: experimentNegotiationRef.current },
+          handled: true,
+          assistantText: EXPERIMENT_CANCEL_REASON_QUESTION,
+        }
+      }
+
       return {
         session: baseSession,
         handled: true,
@@ -1945,8 +2093,49 @@ export default function Chat() {
 
   async function cancelExperiment(experiment) {
     if (!experiment) return
-    setInput(`I need to cancel "${experiment.description}" because `)
-    requestAnimationFrame(() => textareaRef.current?.focus())
+    if (sendingRef.current) return
+
+    const negotiation = buildExperimentNegotiation(experiment, 'awaiting_reason')
+    experimentNegotiationRef.current = negotiation
+    setSession((prev) => prev ? { ...prev, experiment_negotiation: negotiation } : prev)
+
+    const optimisticId = `cancel-question-${Date.now()}`
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: optimisticId,
+        role: 'assistant',
+        content: EXPERIMENT_CANCEL_REASON_QUESTION,
+        streaming: false,
+        artifact: null,
+        experiment: null,
+        artifactPendingType: null,
+      },
+    ])
+
+    const { data, error } = await supabase
+      .from('messages')
+      .insert({
+        session_id: session.id,
+        thread_id: threadId,
+        role: 'assistant',
+        content: EXPERIMENT_CANCEL_REASON_QUESTION,
+      })
+      .select('id, created_at')
+      .single()
+
+    if (error) {
+      console.error('Failed to save experiment cancellation negotiation question', error)
+      return
+    }
+
+    setMessages((prev) =>
+      prev.map((message) =>
+        message.id === optimisticId
+          ? { ...message, id: data.id, created_at: data.created_at }
+          : message
+      )
+    )
   }
 
   // ── Textarea auto-grow ────────────────────────────────────────────────────

@@ -238,6 +238,37 @@ export async function recordExperimentAvoidancePattern(session, experiment, user
   }
 }
 
+export async function recordExperimentResistancePattern(session, experiment, userText = '', reasonStrength = 'weak') {
+  if (!session?.id || !session?.user_id || !experiment?.description) return false
+
+  const content = [
+    `User pushed back on the experiment "${experiment.description}".`,
+    `The stated reason was ${reasonStrength === 'real' ? 'a real constraint' : 'weak or vague resistance'}.`,
+    userText ? `Their explanation: ${String(userText).trim()}` : '',
+  ].filter(Boolean).join(' ')
+
+  try {
+    await upsertPersonalMemory(session.id, session.user_id, {
+      type: 'pattern',
+      content,
+      primary_pillar: 'human_mind',
+      secondary_pillars: experiment.pillar ? [normalizePillar(experiment.pillar)].filter(Boolean) : [],
+      pillar_confidence: 0.75,
+      importance: reasonStrength === 'real' ? 4 : 6,
+      confidence: 0.75,
+    })
+    return true
+  } catch (error) {
+    console.error('Failed to record experiment resistance pattern', {
+      error,
+      session_id: session.id,
+      experiment_id: experiment.id,
+      reason_strength: reasonStrength,
+    })
+    return false
+  }
+}
+
 export async function updatePersonalMemory(session, recentMessages, userMessage, assistantMessage) {
   if (!session?.id || !userMessage || !assistantMessage) return session
 
