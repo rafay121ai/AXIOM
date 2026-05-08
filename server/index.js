@@ -101,6 +101,12 @@ const supabaseAdmin = supabaseUrl && supabaseServiceKey
   ? createClient(supabaseUrl, supabaseServiceKey)
   : null
 
+function queueModelUsageLog(payload) {
+  logModelUsage(payload).catch((err) => {
+    console.error('[Usage Log]', err.message || err)
+  })
+}
+
 function estimateModelCost(model, usage = {}) {
   const pricing = MODEL_PRICING_PER_MILLION[model] || FALLBACK_MODEL_PRICING
   const promptTokens = Number(usage.prompt_tokens || 0)
@@ -335,17 +341,17 @@ app.post('/api/openai/embeddings', embeddingsRateLimit, async (req, res) => {
       model: 'text-embedding-3-small',
       input,
     })
-    await logModelUsage({
+    res.json(response)
+    queueModelUsageLog({
       userId: req.user.id,
       usageContext,
       model: 'text-embedding-3-small',
       usage: response.usage,
       latencyMs: Date.now() - startedAt,
     })
-    res.json(response)
   } catch (err) {
     console.error('[Embeddings]', err)
-    await logModelUsage({
+    queueModelUsageLog({
       userId: req.user?.id,
       usageContext,
       model: 'text-embedding-3-small',
@@ -388,14 +394,14 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
   try {
     if (!safePayload.stream) {
       const response = await openai.chat.completions.create(safePayload)
-      await logModelUsage({
+      res.json(response)
+      queueModelUsageLog({
         userId: req.user.id,
         usageContext,
         model,
         usage: response.usage,
         latencyMs: Date.now() - startedAt,
       })
-      res.json(response)
       return
     }
 
@@ -415,16 +421,16 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
       res.write(`${JSON.stringify({ type: 'chunk', data: chunk })}\n`)
     }
 
-    await logModelUsage({
+    res.write(`${JSON.stringify({ type: 'done' })}\n`)
+    res.end()
+
+    queueModelUsageLog({
       userId: req.user.id,
       usageContext,
       model,
       usage: finalUsage,
       latencyMs: Date.now() - startedAt,
     })
-
-    res.write(`${JSON.stringify({ type: 'done' })}\n`)
-    res.end()
 
     // Auto-increment jailbreak counter when AI signals a jailbreak event.
     // session_id ownership is verified before updating.
@@ -451,7 +457,7 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
   } catch (err) {
     console.error('[Chat]', err)
 
-    await logModelUsage({
+    queueModelUsageLog({
       userId: req.user?.id,
       usageContext,
       model,
