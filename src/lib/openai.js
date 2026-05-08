@@ -321,6 +321,7 @@ Rules:
 
 // ─── Opening Message ─────────────────────────────────────────────────────────
 export async function generateOpeningMessage(session, isNew) {
+  const unresolvedExperiment = session.unresolved_experiment || null
   const activeExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'active')
   const hasExperiment = activeExps.length > 0
   const recentExp = hasExperiment ? activeExps[activeExps.length - 1] : null
@@ -328,13 +329,20 @@ export async function generateOpeningMessage(session, isNew) {
   const contextLines = [
     `Private theory: ${session.axiom_profile}`,
     `Warning level: ${session.warning_level}`,
-    hasExperiment
-      ? `Active experiment: "${recentExp.description}" (${recentExp.window_hours}h window)`
-      : 'No active experiments.',
+    unresolvedExperiment
+      ? `Unresolved experiment: "${unresolvedExperiment.description}" — due ${unresolvedExperiment.due_at ? new Date(unresolvedExperiment.due_at).toLocaleDateString() : 'window passed'}`
+      : hasExperiment
+        ? `Active experiment: "${recentExp.description}" (${recentExp.window_hours}h window)`
+        : 'No active experiments.',
   ].join('\n')
 
   let directive
-  if (isNew) {
+  if (unresolvedExperiment) {
+    const dueLine = unresolvedExperiment.due_at
+      ? `It was due ${new Date(unresolvedExperiment.due_at).toLocaleDateString()}.`
+      : 'The window has passed.'
+    directive = `An experiment is unresolved and the user is returning: "${unresolvedExperiment.description}". ${dueLine} Open with 1-2 sentences that name this specific experiment and ask what happened. Not a check-in — accountability. Axiom remembers. Do not welcome them. Do not soften it. Lead with the experiment. Examples of the right tone: "You took this on. What happened?" or "That experiment ran out the window. Walk me through it." Use the exact experiment description in your opening — do not restate it generically.`
+  } else if (isNew) {
     directive = 'This is their first session. Generate a 1-2 sentence opening that names their most specific gap or pattern. It must be a direction, not a summary. Do not welcome them.'
   } else if (session.warning_level === 2) {
     directive = 'Warning level is 2. Open with a sharp, final warning in Axiom\'s voice. Direct and unambiguous.'
@@ -861,7 +869,7 @@ Rules:
 - secondary_pillars should include only genuinely relevant nearby pillars, maximum 2.
 - pillar_confidence must be 0-1 based on how clear the pillar ownership is.
 - If pillar ownership is unclear or pillar_confidence would be below 0.55, set primary_pillar to null, secondary_pillars to [], and pillar_confidence below 0.55. Low-confidence memories should become dim/unresolved graph nodes rather than being forced into a pillar.
-- importance must be an integer from 1 to 5.
+- importance must be an integer from 1 to 7. Use 7 only for explicit avoided-action patterns after an experiment report reveals the user chose not to act.
 - confidence must be a number from 0 to 1 based on how directly the user revealed it.
 - concept_progress: only populate entries if the conversation was in LEARNING MODE with an active roadmap. List each topic the user has been taught. concepts_completed must only include concepts where Axiom confirmed understanding via a transition message. concepts_remaining are the roadmap concepts not yet confirmed. If no learning roadmap is active, return an empty array.
 - concept_progress entries should be merged with existing entries — do not drop a topic just because it was not discussed this turn. Carry forward prior progress.`,
@@ -960,7 +968,14 @@ Their pillar weights: ${weightsText}
 Their active experiments:
 ${expsText}
 Active experiment count: ${activeExperimentCount}/2
-Their warning level: ${session.warning_level}
+${session.unresolved_experiment ? `
+UNRESOLVED_EXPERIMENT — OPEN ACCOUNTABILITY THREAD:
+Description: "${session.unresolved_experiment.description}"
+Was due: ${session.unresolved_experiment.due_at ? new Date(session.unresolved_experiment.due_at).toLocaleDateString() : 'window has passed'}
+Status: active, not reported back.
+
+This experiment is open and overdue. Axiom holds it. If the user brings it up or reports on it in this conversation, immediately shift to REPORT MODE and process what they say. If they continue without acknowledging it and the moment is right, pull the thread — ask what happened with it. Do not let it disappear.
+` : ''}Their warning level: ${session.warning_level}
 Jailbreak attempts this user has made across all sessions: ${session.jailbreak_attempts || 0}
 
 Personal memory retrieved for this message:
@@ -1464,6 +1479,23 @@ Triggers: user describes something happening to them, a decision they're facing,
 
 REPORT MODE — user describes what happened after an experiment or action.
 Triggers: "I did it", "I tried", "here's what happened", "it worked", "it didn't work", user reports back on a previous Axiom assignment or experiment.
+
+EXPERIMENT OUTCOME CLASSIFICATION
+When the user returns and reports that an experiment did not happen, stalled, failed to start, was cancelled, or did not get completed, Axiom must ask exactly one clarifying question before any memory or status update happens.
+
+The question should feel natural, not like a form. Use this shape:
+"What got in the way — was it something outside your control, or did you just not get to it?"
+
+Do not ask a second clarifying question. After the user answers, classify the outcome:
+- "couldnt": something outside the user's control made the experiment impossible or unreasonable.
+- "didnt": the user had enough agency to act but avoided, delayed, forgot, chose comfort, or did not get to it.
+- "ghosted": the experiment window expired and the user gave no report. This is automatic; do not ask the user to classify ghosting.
+
+If the answer is "couldnt", no strike and no pattern memory. Cancel the experiment with outcome_reason "couldnt" and offer to reset or replace it.
+
+If the answer is "didnt", treat it as behavioral evidence. The system records a pattern memory that names what was avoided and that it was a choice, with importance 7 and confidence 0.8. Then set outcome_reason "didnt".
+
+If the experiment is "ghosted", the system increments ghost_count and consecutive_miss_count and sets outcome_reason "ghosted" automatically.
 
 MID-SESSION MODE SWITCH
 Monitor every message for a mode shift. If the user starts in LEARNING MODE and then describes a real situation they're in, switch immediately to ACCOUNTABILITY MODE for that message. Do not finish the teaching turn. Switch, name the pattern in their situation, and proceed in the new mode. If they return to learning after, switch back. Always follow where the user is, not where the session started.

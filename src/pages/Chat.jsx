@@ -8,7 +8,7 @@ import { clearStoredSessionToken, getStoredSessionToken, supabase } from '../lib
 import { openai, CHAT_MODEL, generateOpeningMessage, generateNodeOpeningMessage, buildSystemPrompt } from '../lib/openai'
 import { buildArtifactForResponse, getArtifactBuildSteps, getRequiredArtifactType, humanizeArtifactType } from '../lib/artifacts'
 import { routeQuestionMode, searchWikiForRoute, formatRouteContext, formatWikiContext } from '../lib/rag'
-import { searchPersonalMemory, formatNamedPatternsContext, formatPersonalMemoryContext, updatePersonalMemory } from '../lib/personalMemory'
+import { searchPersonalMemory, formatNamedPatternsContext, formatPersonalMemoryContext, recordExperimentAvoidancePattern, updatePersonalMemory } from '../lib/personalMemory'
 import { formatLiveSearchContext, liveSearch, shouldUseLiveSearch } from '../lib/liveSearch'
 import { getCachedTurnContext, setCachedTurnContext } from '../lib/sessionTurnContext'
 import { syncPersonalWiki } from '../lib/personalWiki'
@@ -19,6 +19,8 @@ import { incrementAppSessionMessagesSent } from '../lib/appSessionTracker'
 const ARTIFACT_JSON_KEY_RE = /"(title|topic|core_shift|trend_state|what_is_happening_now|observed_moves|sections|forecast|frameworks|watch_points|source_weighting|confidence|counterforces|for_this_user)"\s*:/
 const SIGNAL_MAP_HEADING_RE = /^(WHAT[’']?S COMING|HOW COMPANIES WIN|THE MONEY GAME|THINK SHARPER)\s*$/gim
 const MAX_SIGNAL_MAP_PROSE_CHARS = 760
+const EXPERIMENT_OUTCOME_CLARIFICATION =
+  'What got in the way, was it something outside your control, or did you just not get to it?'
 
 function extractJsonCandidate(text = '') {
   const raw = String(text || '')
@@ -433,8 +435,36 @@ function looksLikeExperimentCompletion(text = '') {
   return /\b(i did it|i completed|completed it|finished it|i finished|ran the experiment|did the experiment|reporting back|here'?s what happened|i tested it)\b/i.test(text)
 }
 
+function looksLikeSuccessfulExperimentReport(text = '') {
+  return /\b(i did it|i completed|completed it|finished it|i finished|ran the experiment|did the experiment|i tested it|it worked|got it done)\b/i.test(text) &&
+    !looksLikeExperimentFailureReport(text)
+}
+
+function looksLikeExperimentFailureReport(text = '') {
+  return /\b(couldn'?t|could not|can'?t|cannot|wasn'?t able|unable|didn'?t do|did not do|didn'?t get to|did not get to|never got to|not done|didn'?t start|did not start|haven'?t started|missed it|skipped|put it off|procrastinated|forgot|avoided|too busy|got busy|cancel this experiment|cancel the experiment|drop this experiment|skip this experiment|i'?m not doing this)\b/i.test(text)
+}
+
 function looksLikeExperimentCancel(text = '') {
   return /\b(cancel this experiment|cancel the experiment|drop this experiment|skip this experiment|remove this experiment|i'?m not doing this)\b/i.test(text)
+}
+
+function isAwaitingExperimentOutcomeClarification(list = []) {
+  const lastAssistant = [...list]
+    .reverse()
+    .find((message) => message.role === 'assistant' && !message.streaming && message.content)
+
+  return String(lastAssistant?.content || '').trim() === EXPERIMENT_OUTCOME_CLARIFICATION
+}
+
+function classifyExperimentOutcomeReason(text = '') {
+  const clean = String(text || '').toLowerCase()
+  if (/\b(outside my control|out of my control|couldn'?t|could not|can'?t|cannot|wasn'?t able|unable|blocked|customer didn'?t respond|client didn'?t respond|they didn'?t reply|no reply|sick|ill|emergency|family emergency|travel|flight|internet|power|server|access|account locked|someone else|dependency|supplier|bank|payment failed)\b/i.test(clean)) {
+    return 'couldnt'
+  }
+  if (/\b(didn'?t|did not|just didn'?t|get to it|got to it|forgot|procrastinated|avoided|put it off|delayed|lazy|chose not|decided not|no reason|too busy|got busy|later|tomorrow|next week|kept thinking|overthinking)\b/i.test(clean)) {
+    return 'didnt'
+  }
+  return 'didnt'
 }
 
 function isLowSignalMemoryTurn(userText = '', assistantText = '') {
@@ -578,6 +608,7 @@ function normalizeExperiment(row) {
     cancelled_at: row.cancelled_at,
     ghosted_at: row.ghosted_at,
     outcome: row.outcome,
+    outcome_reason: row.outcome_reason,
     assignment_error: row.assignment_error || false,
     error_message: row.error_message || '',
   }
@@ -595,6 +626,27 @@ async function fetchSessionExperiments(sessionId) {
   return (data || []).map(normalizeExperiment)
 }
 
+function getUnresolvedExperiment(experiments, messages) {
+  const now = Date.now()
+  const active = (experiments || []).filter((e) => e.status === 'active')
+
+  // Primary: due_at has passed
+  const overdue = active.filter((e) => e.due_at && new Date(e.due_at).getTime() < now)
+  if (overdue.length > 0) {
+    return overdue.sort((a, b) => new Date(a.due_at) - new Date(b.due_at))[0]
+  }
+
+  // Secondary: user indicated completion in messages but outcome was never captured
+  const COMPLETION_RE = /\b(i did it|i completed|completed it|finished it|i finished|ran the experiment|did the experiment|reporting back|here'?s what happened|i tested it)\b/i
+  const userMsgs = (messages || []).filter((m) => m.role === 'user').slice(-15)
+  if (userMsgs.some((m) => COMPLETION_RE.test(m.content || ''))) {
+    const unresolved = active.filter((e) => !e.outcome)
+    if (unresolved.length > 0) return unresolved[unresolved.length - 1]
+  }
+
+  return null
+}
+
 async function checkAndUpdateGhosting(session) {
   const now = Date.now()
   const experiments = session.active_experiments || []
@@ -607,36 +659,25 @@ async function checkAndUpdateGhosting(session) {
   const updatedExperiments = experiments.map((exp) => {
     if (exp.status !== 'active') return exp
 
-    const assignedAt = new Date(exp.assigned_at).getTime()
-    const windowMs = exp.window_hours * 3600 * 1000
-    const expired = now - assignedAt > windowMs
-    const refs = exp.reference_count || 0
+    const dueAt = exp.due_at
+      ? new Date(exp.due_at).getTime()
+      : new Date(exp.assigned_at).getTime() + exp.window_hours * 3600 * 1000
+    const expired = now > dueAt
 
     if (!expired) return exp
 
-    if (refs < 2) {
-      // Increment reference count (this session is a reference)
-      changed = true
-      const updated = { ...exp, reference_count: refs + 1 }
-      rowUpdates.push({ id: exp.id, reference_count: updated.reference_count })
-      return updated
-    }
+    ghost_count++           // lifetime total, kept for analytics
+    consecutive_miss_count++ // consecutive streak, drives warning thresholds
+    changed = true
 
-    if (refs >= 2 && exp.status === 'active') {
-      // Ghost — no response after 2 references
-      ghost_count++           // lifetime total, kept for analytics
-      consecutive_miss_count++ // consecutive streak, drives warning thresholds
-      changed = true
+    if (consecutive_miss_count >= 4 && warning_level < 2) { warning_level = 2; changed = true }
+    else if (consecutive_miss_count >= 2 && warning_level < 1) { warning_level = 1; changed = true }
 
-      if (consecutive_miss_count >= 4 && warning_level < 2) { warning_level = 2; changed = true }
-      else if (consecutive_miss_count >= 2 && warning_level < 1) { warning_level = 1; changed = true }
+    const ghostedAt = new Date().toISOString()
+    const updated = { ...exp, status: 'ghosted', outcome_reason: 'ghosted', ghosted_at: ghostedAt }
+    rowUpdates.push({ id: exp.id, status: updated.status, outcome_reason: 'ghosted', ghosted_at: ghostedAt })
+    return updated
 
-      const updated = { ...exp, status: 'ghosted' }
-      rowUpdates.push({ id: exp.id, status: updated.status })
-      return updated
-    }
-
-    return exp
   })
 
   if (!changed) return session
@@ -649,6 +690,9 @@ async function checkAndUpdateGhosting(session) {
           .from('experiments')
           .update(updates)
           .eq('id', id)
+          .then(({ error }) => {
+            if (error) console.error('Failed to update ghosted experiment', { error, experiment_id: id })
+          })
       )
   )
 
@@ -658,7 +702,8 @@ async function checkAndUpdateGhosting(session) {
     warning_level,
   }
 
-  await supabase.from('sessions').update(updates).eq('id', session.id)
+  const { error: sessionUpdateError } = await supabase.from('sessions').update(updates).eq('id', session.id)
+  if (sessionUpdateError) console.error('Failed to update session ghost counts', { error: sessionUpdateError, session_id: session.id })
 
   return { ...session, ...updates, active_experiments: updatedExperiments }
 }
@@ -693,6 +738,7 @@ export default function Chat() {
   const initialInputAppliedRef = useRef(false)
   const initialInputSentRef = useRef(false)
   const postResponseQueueRef = useRef(Promise.resolve())
+  const unresolvedExperimentRef = useRef(null)
 
   const releaseSending = useCallback(() => {
     sendingRef.current = false
@@ -828,8 +874,18 @@ export default function Chat() {
       .update({ last_active: new Date().toISOString() })
       .eq('id', updatedSession.id)
 
-    setLoading(false)
     const normalizedMsgs = existing.map(normalizeMsg)
+
+    // Detect unresolved experiments before rendering so the opener and session
+    // context are correct from the first frame.
+    const unresolvedExperiment = getUnresolvedExperiment(tableExperiments || [], normalizedMsgs)
+    unresolvedExperimentRef.current = unresolvedExperiment
+    const sessionWithContext = unresolvedExperiment
+      ? { ...updatedSession, unresolved_experiment: unresolvedExperiment }
+      : updatedSession
+    if (unresolvedExperiment) setSession(sessionWithContext)
+
+    setLoading(false)
     setMessages(normalizedMsgs)
 
     // Seed the counter from DB so the pacing rule stays accurate across reconnects.
@@ -843,9 +899,9 @@ export default function Chat() {
     if (isNew && skipOpening) {
       // Brain input is a fresh intent. Let the user's first message lead.
     } else if (isNew && nodeContext) {
-      await streamNodeOpeningMessage(updatedSession, nodeContext, pulseNodeEntry)
+      await streamNodeOpeningMessage(sessionWithContext, nodeContext, pulseNodeEntry)
     } else if (isNew) {
-      await streamOpeningMessage(updatedSession)
+      await streamOpeningMessage(sessionWithContext)
     }
 
     if (!initialInput) {
@@ -1033,10 +1089,56 @@ export default function Chat() {
       let sessionForTurn = {
         ...session,
         active_experiments: latestExperiments || session.active_experiments || [],
+        unresolved_experiment: unresolvedExperimentRef.current,
+      }
+      if (!isAwaitingExperimentOutcomeClarification(baseMessages)) {
+        sessionForTurn = await checkAndUpdateGhosting(sessionForTurn)
       }
       if (latestExperiments) setSession(sessionForTurn)
 
-      sessionForTurn = await maybeCaptureExperimentReport(text, sessionForTurn)
+      const reportCapture = await maybeCaptureExperimentReport(text, sessionForTurn, baseMessages)
+      sessionForTurn = reportCapture.session
+      if (reportCapture.handled) {
+        const immediateAssistantText = reportCapture.assistantText
+        setSession(sessionForTurn)
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId
+              ? { ...m, content: immediateAssistantText, streaming: false, artifact: null, experiment: null, artifactPendingType: null }
+              : m
+          )
+        )
+
+        const { data: savedReportAssistant, error: reportInsertError } = await supabase
+          .from('messages')
+          .insert({
+            session_id: session.id,
+            thread_id: threadId,
+            role: 'assistant',
+            content: immediateAssistantText,
+          })
+          .select('id, created_at')
+          .single()
+
+        if (reportInsertError) {
+          console.error('Failed to save experiment outcome clarification message', reportInsertError)
+          throw reportInsertError
+        }
+
+        if (savedReportAssistant?.id) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId
+                ? { ...m, id: savedReportAssistant.id, created_at: savedReportAssistant.created_at }
+                : m
+            )
+          )
+        }
+
+        setAiMessageCount((prev) => prev + 1)
+        releaseSending()
+        return
+      }
 
       const incidentQuestion = isAwaitingConcreteIncident(baseMessages)
         ? followUpIncidentQuestion(text)
@@ -1571,10 +1673,14 @@ export default function Chat() {
     const sessionUpdates = shouldResetMissStreak ? { consecutive_miss_count: 0 } : {}
 
     if (Object.keys(sessionUpdates).length > 0) {
-      await supabase
+      const { error: sessionUpdateError } = await supabase
         .from('sessions')
         .update(sessionUpdates)
         .eq('id', baseSession.id)
+      if (sessionUpdateError) console.error('Failed to reset miss streak after experiment assignment', {
+        error: sessionUpdateError,
+        session_id: baseSession.id,
+      })
     }
 
     const updatedSession = { ...baseSession, ...sessionUpdates, active_experiments: updated }
@@ -1593,11 +1699,12 @@ export default function Chat() {
       ) || null
   }
 
-  async function updateExperimentStatus(experimentId, status, outcome = '') {
+  async function updateExperimentStatus(experimentId, status, outcome = '', outcomeReason = null) {
     if (!session || !experimentId) return null
 
     const now = new Date().toISOString()
     const updates = { status }
+    if (outcomeReason) updates.outcome_reason = outcomeReason
     if (status === 'completed') {
       updates.completed_at = now
       if (outcome) updates.outcome = outcome
@@ -1612,7 +1719,15 @@ export default function Chat() {
       .select('*')
       .single()
 
-    if (error) return null
+    if (error) {
+      console.error('Failed to update experiment status', {
+        error,
+        experiment_id: experimentId,
+        status,
+        outcome_reason: outcomeReason,
+      })
+      return null
+    }
 
     const normalized = normalizeExperiment(data)
     const sessionUpdates = status === 'completed' ? { consecutive_miss_count: 0 } : {}
@@ -1621,6 +1736,9 @@ export default function Chat() {
         .from('sessions')
         .update(sessionUpdates)
         .eq('id', session.id)
+        .then(({ error }) => {
+          if (error) console.error('Failed to update session after experiment status change', { error, session_id: session.id })
+        })
     }
 
     setSession((prev) => {
@@ -1645,29 +1763,71 @@ export default function Chat() {
     return normalized
   }
 
-  async function maybeCaptureExperimentReport(text, baseSession) {
+  async function maybeCaptureExperimentReport(text, baseSession, historyMessages = []) {
     const activeExperiments = (baseSession.active_experiments || []).filter((exp) => exp.status === 'active')
-    if (activeExperiments.length === 0) return baseSession
+    if (activeExperiments.length === 0) return { session: baseSession, handled: false }
 
     const target = activeExperiments[0]
-    const nextStatus = looksLikeExperimentCancel(text)
-      ? 'cancelled'
-      : looksLikeExperimentCompletion(text)
-        ? 'completed'
-        : null
+    const awaitingClarification = isAwaitingExperimentOutcomeClarification(historyMessages)
 
-    if (!nextStatus) return baseSession
-
-    const updatedExperiment = await updateExperimentStatus(target.id, nextStatus, text)
-    if (!updatedExperiment) return baseSession
-
-    return {
-      ...baseSession,
-      ...(nextStatus === 'completed' ? { consecutive_miss_count: 0 } : {}),
-      active_experiments: (baseSession.active_experiments || []).map((exp) =>
+    if (awaitingClarification) {
+      const outcomeReason = classifyExperimentOutcomeReason(text)
+      const updatedExperiment = await updateExperimentStatus(target.id, 'cancelled', text, outcomeReason)
+      if (!updatedExperiment) {
+        return {
+          session: baseSession,
+          handled: true,
+          assistantText: 'I could not save that experiment outcome. Try once more before we move on.',
+        }
+      }
+      const updatedExperiments = (baseSession.active_experiments || []).map((exp) =>
         exp.id === target.id ? updatedExperiment : exp
-      ),
+      )
+      const updatedSession = { ...baseSession, active_experiments: updatedExperiments }
+
+      if (outcomeReason === 'didnt') {
+        const memoryRecorded = await recordExperimentAvoidancePattern(baseSession, target, text)
+        if (memoryRecorded) {
+          syncPersonalWiki(updatedSession).then((synced) => {
+            if (synced) window.dispatchEvent(new CustomEvent('axiom-wiki-updated'))
+          }).catch((error) => {
+            console.error('Failed to sync wiki after experiment avoidance pattern', error)
+          })
+        }
+      }
+
+      const assistantText = outcomeReason === 'couldnt'
+        ? 'That is not a strike. The experiment was blocked, so I marked it as cancelled. We can either reset the same test or replace it with one that fits the constraint.'
+        : 'That one counts. I marked it as a choice, not a constraint. The useful part is that we now know what your avoidance reaches for when the work gets real.'
+
+      return { session: updatedSession, handled: true, assistantText }
     }
+
+    if (looksLikeSuccessfulExperimentReport(text)) {
+      const updatedExperiment = await updateExperimentStatus(target.id, 'completed', text)
+      if (!updatedExperiment) return { session: baseSession, handled: false }
+
+      return {
+        session: {
+          ...baseSession,
+          consecutive_miss_count: 0,
+          active_experiments: (baseSession.active_experiments || []).map((exp) =>
+            exp.id === target.id ? updatedExperiment : exp
+          ),
+        },
+        handled: false,
+      }
+    }
+
+    if (looksLikeExperimentCancel(text) || looksLikeExperimentFailureReport(text)) {
+      return {
+        session: baseSession,
+        handled: true,
+        assistantText: EXPERIMENT_OUTCOME_CLARIFICATION,
+      }
+    }
+
+    return { session: baseSession, handled: false }
   }
 
   function stopGeneration() {
@@ -1776,7 +1936,9 @@ export default function Chat() {
   }
 
   async function cancelExperiment(experiment) {
-    await updateExperimentStatus(experiment.id, 'cancelled', 'Cancelled from experiment card.')
+    if (!experiment) return
+    setInput(`I need to cancel "${experiment.description}" because `)
+    requestAnimationFrame(() => textareaRef.current?.focus())
   }
 
   // ── Textarea auto-grow ────────────────────────────────────────────────────
