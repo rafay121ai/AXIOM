@@ -32,6 +32,7 @@ export function hasSeenAxiomWelcome() {
 
 function compactWelcomeRead(value) {
   const cleaned = String(value || '')
+    .replace(/[\u2014\u2013]/g, ',')
     .replace(/\s+/g, ' ')
     .trim()
 
@@ -41,6 +42,23 @@ function compactWelcomeRead(value) {
 
   const firstSentence = cleaned.match(/^.*?[.!?](?=\s|$)/)?.[0]?.trim() || cleaned
   return firstSentence.length > 150 ? `${firstSentence.slice(0, 147).trim()}...` : firstSentence
+}
+
+function cleanSuggestedQuestion(value) {
+  const cleaned = String(value || '')
+    .replace(/[\u2014\u2013]/g, ',')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (
+    !cleaned ||
+    /^how can i\b/i.test(cleaned) ||
+    /\b(feels?|certain|regret|journey|clarity|aligned|authentic|unlock)\b/i.test(cleaned)
+  ) {
+    return 'What move am I delaying because I want certainty first?'
+  }
+
+  return cleaned.endsWith('?') ? cleaned : `${cleaned}?`
 }
 
 function firstNameForUser(user, row) {
@@ -109,11 +127,11 @@ export default function Welcome() {
         const generated = await generation
         if (cancelled) return
         setRead(compactWelcomeRead(generated.read))
-        setSuggestedQuestion(generated.suggested_question || 'What is the first move I am avoiding right now?')
+        setSuggestedQuestion(cleanSuggestedQuestion(generated.suggested_question))
       } catch {
         if (cancelled) return
         setRead('You already know the move you are circling.')
-        setSuggestedQuestion('What is the first move I am avoiding right now?')
+        setSuggestedQuestion('What move am I delaying because I want certainty first?')
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -135,6 +153,7 @@ export default function Welcome() {
         freshThread: true,
         threadId: crypto.randomUUID(),
         initialInput: suggestedQuestion,
+        autoSend: true,
         skipOpening: true,
       },
     })
@@ -169,23 +188,21 @@ export default function Welcome() {
         </header>
 
         <div className="welcome__copy">
-          <p>Ask what Bezos got right that everyone else missed. Ask what's actually happening in the market right now. Ask why your last pitch didn't land.</p>
-          <p>Axiom will have an answer. And it'll remember you asked.</p>
-          <p>Every session ends with one move. Small, real, time-bound. You don't get to skip it — but if it doesn't fit, make your case. Axiom listens. Just don't come with a weak excuse.</p>
-          <p>Every week Axiom gives you a read on where you are.</p>
+          <p>Bring the question you keep circling: what the market is doing, why the pitch missed, what Bezos saw before everyone else.</p>
+          <p>Axiom answers, then remembers the thread.</p>
+          <p>Every session ends with one move. You can challenge it. You cannot hand-wave it.</p>
+          <p>Every week, Axiom will give you a read on where you are.</p>
         </div>
 
         <div className="welcome__prompt-wrap">
           <div className="welcome__prompt-label">Start here:</div>
           <button type="button" className="welcome__prompt" onClick={startWithQuestion}>
-            {suggestedQuestion}
+            <span className="welcome__prompt-text">{suggestedQuestion}</span>
+            <span className="welcome__prompt-arrow" aria-hidden="true" />
           </button>
         </div>
 
         <div className="welcome__actions">
-          <button type="button" className="welcome__primary" onClick={startWithQuestion}>
-            Ask this first
-          </button>
           <button type="button" className="welcome__secondary" onClick={startFresh}>
             Start fresh
           </button>

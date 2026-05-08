@@ -337,17 +337,27 @@ Return only valid JSON. No markdown.
 
 Schema:
 {
-  "read": "One sharp sentence under 18 words. Personal and specific. No second sentence.",
-  "suggested_question": "One specific question this user could ask Axiom right now. It must be tied to their onboarding answers, not generic."
+  "read": "One sharp sentence under 16 words. Concrete, personal, specific. No second sentence.",
+  "suggested_question": "One specific question this user could ask Axiom right now. Direct, useful, tied to their real situation."
 }
 
 Rules:
 - Use the user's private theory and onboarding answers only.
 - Do not mention onboarding, profile, quiz, or data.
-- No generic founder advice.
+- No generic founder advice. No therapy language. No pseudo-profound phrasing.
 - The read should feel like a mentor entering with a precise read, not a product welcome.
-- The read must be a one-liner: under 18 words, one sentence, no line breaks, no metaphor, no em dash.
-- The suggested question should be written in first person, as the user would ask it.`,
+- The read must be a one-liner: under 16 words, one sentence, no line breaks, no metaphor, no em dash.
+- Avoid words like seek, hesitate, journey, clarity, irreversible, fear, judgment, tension, aligned, authentic, unlock, transform.
+- The suggested question should be written in first person, as the user would ask it.
+- The suggested question must be plain and decisive. Avoid "How can I", "feels", "certain", "regret", and vague self-help framing.
+- Strong suggested question examples:
+  "What decision am I delaying because I want certainty first?"
+  "Where am I using research to avoid making the move?"
+  "What would I do this week if I stopped optimizing the plan?"
+- Bad suggested question examples:
+  "How can I choose a starting point that feels certain?"
+  "How can I align with my authentic direction?"
+  "What journey should I take to unlock clarity?"`,
       },
       {
         role: 'user',
