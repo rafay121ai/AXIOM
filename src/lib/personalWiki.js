@@ -616,6 +616,7 @@ async function generateNodeLabel(memory) {
     label: 'node label',
     model: UTILITY_MODEL,
     maxCompletionTokens: 80,
+    usageContext: { call_type: 'memory_update' },
     messages: [
       {
         role: 'system',

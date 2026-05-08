@@ -12,6 +12,8 @@ import { searchPersonalMemory, formatNamedPatternsContext, formatPersonalMemoryC
 import { formatLiveSearchContext, liveSearch, shouldUseLiveSearch } from '../lib/liveSearch'
 import { getCachedTurnContext, setCachedTurnContext } from '../lib/sessionTurnContext'
 import { syncPersonalWiki } from '../lib/personalWiki'
+import { ensureConversationThread } from '../lib/conversationThreads'
+import { incrementAppSessionMessagesSent } from '../lib/appSessionTracker'
 
 // ─── Message Tag Parsing ─────────────────────────────────────────────────────
 const ARTIFACT_JSON_KEY_RE = /"(title|topic|core_shift|trend_state|what_is_happening_now|observed_moves|sections|forecast|frameworks|watch_points|source_weighting|confidence|counterforces|for_this_user)"\s*:/
@@ -764,10 +766,20 @@ export default function Chat() {
     }
 
     // Check and update ghosting state
-    const updatedSession = await checkAndUpdateGhosting(hydratedSession)
-    setSession(updatedSession)
+	    const updatedSession = await checkAndUpdateGhosting(hydratedSession)
+	    setSession(updatedSession)
 
-    // Fetch only the active thread. Default chat uses null thread_id; node taps
+	    if (threadId) {
+	      await ensureConversationThread({
+	        threadId,
+	        userId: user.id,
+	        sessionId: updatedSession.id,
+	        title: initialInput || nodeContext?.label || 'Branch thread',
+	        primaryPillar: nodeContext?.pillar || null,
+	      })
+	    }
+
+	    // Fetch only the active thread. Default chat uses null thread_id; node taps
     // create their own thread_id so they do not inherit the old transcript.
     let messagesQuery = supabase
       .from('messages')
@@ -971,10 +983,11 @@ export default function Chat() {
 
         if (userInsertError) throw userInsertError
 
-        if (savedUser?.id) {
-          const optimisticUserId = userMsgId
-          userMsgId = savedUser.id
-          persistedUserMessage = {
+	        if (savedUser?.id) {
+	          const optimisticUserId = userMsgId
+	          userMsgId = savedUser.id
+	          incrementAppSessionMessagesSent()
+	          persistedUserMessage = {
             id: savedUser.id,
             role: 'user',
             content: text,
@@ -1209,6 +1222,13 @@ export default function Chat() {
         messages: [{ role: 'system', content: systemPrompt }, ...history],
         stream: true,
         session_id: sessionForTurn.id,
+        usage_context: {
+          call_type: 'chat',
+          session_id: sessionForTurn.id,
+          thread_id: threadId,
+          message_id: userMsgId,
+          rag_chunks_used: wikiChunks.length,
+        },
       }, { signal: runAbort.signal })
 
       let streamDone = false

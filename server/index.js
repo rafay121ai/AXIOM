@@ -74,6 +74,22 @@ const LIVE_SEARCH_MAX_RESULTS = Math.min(
   Math.max(1, Number(process.env.LIVE_SEARCH_MAX_RESULTS) || 5)
 )
 
+const MODEL_PRICING_PER_MILLION = {
+  'gpt-4.1-mini': { input: 0.40, output: 1.60 },
+  'gpt-4.1-mini-2025-04-14': { input: 0.40, output: 1.60 },
+  'text-embedding-3-small': { input: 0.02, output: 0 },
+}
+const FALLBACK_MODEL_PRICING = MODEL_PRICING_PER_MILLION['gpt-4.1-mini']
+const USAGE_CALL_TYPES = new Set([
+  'chat',
+  'query_expansion',
+  'onboarding',
+  'session_notes',
+  'memory_update',
+  'artifact',
+  'embedding',
+])
+
 const supabaseUrl = process.env.VITE_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
@@ -84,6 +100,56 @@ if (!supabaseUrl || !supabaseServiceKey) {
 const supabaseAdmin = supabaseUrl && supabaseServiceKey
   ? createClient(supabaseUrl, supabaseServiceKey)
   : null
+
+function estimateModelCost(model, usage = {}) {
+  const pricing = MODEL_PRICING_PER_MILLION[model] || FALLBACK_MODEL_PRICING
+  const promptTokens = Number(usage.prompt_tokens || 0)
+  const completionTokens = Number(usage.completion_tokens || 0)
+  return ((promptTokens * pricing.input) + (completionTokens * pricing.output)) / 1_000_000
+}
+
+async function logModelUsage({
+  userId,
+  usageContext = {},
+  model,
+  usage = {},
+  latencyMs = null,
+  error = false,
+  errorDetails = null,
+}) {
+  if (!supabaseAdmin || !userId || !model) return
+
+  const callType = USAGE_CALL_TYPES.has(usageContext.call_type)
+    ? usageContext.call_type
+    : 'chat'
+  const promptTokens = Number(usage.prompt_tokens || 0)
+  const completionTokens = Number(usage.completion_tokens || 0)
+  const totalTokens = Number(usage.total_tokens || promptTokens + completionTokens || 0)
+
+  await supabaseAdmin
+    .from('model_usage_logs')
+    .insert({
+      user_id: userId,
+      session_id: usageContext.session_id || null,
+      thread_id: usageContext.thread_id || null,
+      message_id: usageContext.message_id || null,
+      model,
+      prompt_tokens: promptTokens,
+      completion_tokens: completionTokens,
+      total_tokens: totalTokens,
+      estimated_cost_usd: estimateModelCost(model, {
+        prompt_tokens: promptTokens,
+        completion_tokens: completionTokens,
+      }),
+      call_type: callType,
+      rag_chunks_used: Number(usageContext.rag_chunks_used || 0),
+      latency_ms: latencyMs,
+      error,
+      error_details: errorDetails ? String(errorDetails).slice(0, 1000) : null,
+    })
+    .throwOnError()
+    .catch((err) => console.error('[Usage Log]', err.message || err))
+}
 
 // ─── Auth middleware ──────────────────────────────────────────────────────────
 
@@ -248,6 +314,13 @@ app.post('/api/live-search', liveSearchRateLimit, async (req, res) => {
 })
 
 app.post('/api/openai/embeddings', embeddingsRateLimit, async (req, res) => {
+  const startedAt = Date.now()
+  const { usage_context } = req.body || {}
+  const usageContext = {
+    ...(usage_context && typeof usage_context === 'object' ? usage_context : {}),
+    call_type: 'embedding',
+  }
+
   try {
     const { input, model } = req.body || {}
     const inputIsValid =
@@ -262,15 +335,30 @@ app.post('/api/openai/embeddings', embeddingsRateLimit, async (req, res) => {
       model: 'text-embedding-3-small',
       input,
     })
+    await logModelUsage({
+      userId: req.user.id,
+      usageContext,
+      model: 'text-embedding-3-small',
+      usage: response.usage,
+      latencyMs: Date.now() - startedAt,
+    })
     res.json(response)
   } catch (err) {
     console.error('[Embeddings]', err)
+    await logModelUsage({
+      userId: req.user?.id,
+      usageContext,
+      model: 'text-embedding-3-small',
+      latencyMs: Date.now() - startedAt,
+      error: true,
+      errorDetails: err.message || 'Embedding request failed',
+    })
     res.status(err.status || 500).json({ error: err.message || 'Embedding request failed' })
   }
 })
 
 app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
-  const { messages, stream, max_completion_tokens, model, response_format, session_id } = req.body
+  const { messages, stream, max_completion_tokens, model, response_format, session_id, usage_context } = req.body
 
   if (!Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: 'Invalid messages' })
@@ -287,10 +375,26 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
     max_completion_tokens: Math.min(Number(max_completion_tokens) || 1000, 4000),
     ...(response_format ? { response_format } : {}),
   }
+  if (safePayload.stream) {
+    safePayload.stream_options = { include_usage: true }
+  }
+
+  const startedAt = Date.now()
+  const usageContext = {
+    ...(usage_context && typeof usage_context === 'object' ? usage_context : {}),
+    session_id: usage_context?.session_id || session_id || null,
+  }
 
   try {
     if (!safePayload.stream) {
       const response = await openai.chat.completions.create(safePayload)
+      await logModelUsage({
+        userId: req.user.id,
+        usageContext,
+        model,
+        usage: response.usage,
+        latencyMs: Date.now() - startedAt,
+      })
       res.json(response)
       return
     }
@@ -302,12 +406,22 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
 
     const streamResp = await openai.chat.completions.create(safePayload)
     let streamedContent = ''
+    let finalUsage = null
 
     for await (const chunk of streamResp) {
+      if (chunk.usage) finalUsage = chunk.usage
       const delta = chunk.choices?.[0]?.delta?.content || ''
       streamedContent += delta
       res.write(`${JSON.stringify({ type: 'chunk', data: chunk })}\n`)
     }
+
+    await logModelUsage({
+      userId: req.user.id,
+      usageContext,
+      model,
+      usage: finalUsage,
+      latencyMs: Date.now() - startedAt,
+    })
 
     res.write(`${JSON.stringify({ type: 'done' })}\n`)
     res.end()
@@ -336,6 +450,15 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
     }
   } catch (err) {
     console.error('[Chat]', err)
+
+    await logModelUsage({
+      userId: req.user?.id,
+      usageContext,
+      model,
+      latencyMs: Date.now() - startedAt,
+      error: true,
+      errorDetails: err.message || 'Chat request failed',
+    })
 
     if (res.headersSent) {
       res.write(`${JSON.stringify({ type: 'error', error: err.message || 'Chat request failed' })}\n`)

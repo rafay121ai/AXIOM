@@ -126,11 +126,12 @@ function parseJsonCandidate(text = '') {
   return JSON.parse(candidate || '{}')
 }
 
-async function repairJsonObject(rawText, label = 'json payload') {
+async function repairJsonObject(rawText, label = 'json payload', usageContext = null) {
   const response = await openai.chat.completions.create({
     model: CHAT_MODEL,
     response_format: { type: 'json_object' },
     max_completion_tokens: 1200,
+    ...(usageContext ? { usage_context: usageContext } : {}),
     messages: [
       {
         role: 'system',
@@ -161,6 +162,7 @@ export async function requestJsonObject({
   label = 'json payload',
   model = CHAT_MODEL,
   retries = 1,
+  usageContext = null,
 }) {
   let lastError = null
   let lastRaw = ''
@@ -170,6 +172,7 @@ export async function requestJsonObject({
       model,
       response_format: { type: 'json_object' },
       max_completion_tokens: maxCompletionTokens,
+      ...(usageContext ? { usage_context: usageContext } : {}),
       messages: attempt === 0
         ? messages
         : [
@@ -191,7 +194,7 @@ export async function requestJsonObject({
   }
 
   try {
-    return await repairJsonObject(lastRaw, label)
+    return await repairJsonObject(lastRaw, label, usageContext)
   } catch (repairError) {
     throw new Error(`Failed to parse ${label}: ${repairError?.message || lastError?.message || 'unknown parse error'}`)
   }
@@ -247,6 +250,7 @@ export async function generateAxiomProfile(qaPairs) {
 
   const response = await openai.chat.completions.create({
     model: PROFILE_MODEL,
+    usage_context: { call_type: 'onboarding' },
     messages: [
       {
         role: 'system',
@@ -302,6 +306,7 @@ export async function generateOpeningMessage(session, isNew) {
 
   const response = await openai.chat.completions.create({
     model: CHAT_MODEL,
+    usage_context: { call_type: 'chat', session_id: session.id },
     messages: [
       {
         role: 'system',
@@ -325,6 +330,7 @@ export async function generateBrainOverlayMessage(session) {
   const activeExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'active')
   const response = await openai.chat.completions.create({
     model: CHAT_MODEL,
+    usage_context: { call_type: 'session_notes', session_id: session.id },
     messages: [
       {
         role: 'system',
@@ -369,10 +375,14 @@ export async function generateStructuredArtifact({
   const spec = getArtifactProfile(artifactType)
   if (!spec) return null
 
-  return requestJsonObject({
-    label: `${spec.label || artifactType} artifact`,
-    maxCompletionTokens: spec.maxTokens || 600,
-    messages: [
+	  return requestJsonObject({
+	    label: `${spec.label || artifactType} artifact`,
+	    maxCompletionTokens: spec.maxTokens || 600,
+	    usageContext: {
+	      call_type: 'artifact',
+	      session_id: session?.id || null,
+	    },
+	    messages: [
       {
         role: 'system',
         content: `You generate only the JSON payload for Axiom's ${artifactType} artifact.
@@ -472,6 +482,10 @@ ${spec ? spec.rules.map((rule) => `- ${rule}`).join('\n') : ''}`
 
   const response = await openai.chat.completions.create({
     model: CHAT_MODEL,
+    usage_context: {
+      call_type: 'artifact',
+      session_id: session?.id || null,
+    },
     messages: [
       { role: 'system', content: systemPrompt },
       {
@@ -550,6 +564,7 @@ export async function generateWeeklyRead(session, recentMessages = []) {
 
   const response = await openai.chat.completions.create({
     model: UTILITY_MODEL,
+    usage_context: { call_type: 'session_notes', session_id: session.id },
     messages: [
       {
         role: 'system',
@@ -618,6 +633,7 @@ export async function generateNodeOpeningMessage(session, nodeContext, isPulseEn
   if (isPulseEntry) {
     const response = await openai.chat.completions.create({
       model: CHAT_MODEL,
+      usage_context: { call_type: 'chat', session_id: session.id },
       messages: [
         {
           role: 'system',
@@ -693,6 +709,7 @@ Context completeness: ${percent}%`,
 
   const response = await openai.chat.completions.create({
     model: CHAT_MODEL,
+    usage_context: { call_type: 'chat', session_id: session.id },
     messages: [
       {
         role: 'system',
@@ -739,6 +756,7 @@ export async function generateMemoryUpdate(session, recentMessages, userMessage,
   const parsed = await requestJsonObject({
     label: 'memory update',
     maxCompletionTokens: 500,
+    usageContext: { call_type: 'memory_update', session_id: session.id },
     messages: [
       {
         role: 'system',

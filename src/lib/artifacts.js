@@ -215,6 +215,10 @@ async function buildSignalMapProgressively({
       const partial = await requestJsonObject({
         label: `signal_map ${section.key}`,
         maxCompletionTokens: 220,
+        usageContext: {
+          call_type: 'artifact',
+          session_id: session?.id || null,
+        },
         messages: [
           {
             role: 'system',

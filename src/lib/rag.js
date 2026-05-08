@@ -400,6 +400,10 @@ export async function routeQuestionMode(query, session, nodeContext = null) {
     const parsed = await requestJsonObject({
       label: 'question router payload',
       maxCompletionTokens: 220,
+      usageContext: {
+        call_type: 'chat',
+        session_id: session?.id || null,
+      },
       messages: [
         {
           role: 'system',
@@ -543,6 +547,7 @@ async function expandQuery(query) {
   return cachedAsync(queryExpansionCache, cacheKey, async () => {
     const response = await openai.chat.completions.create({
       model: CHAT_MODEL,
+      usage_context: { call_type: 'query_expansion' },
       messages: [
         {
           role: 'system',
@@ -749,6 +754,7 @@ async function synthesizePrior(author, title, combinedText) {
   return cachedAsync(priorSynthesisCache, cacheKey, async () => {
     const response = await openai.chat.completions.create({
       model: CHAT_MODEL,
+      usage_context: { call_type: 'chat' },
       messages: [
         {
           role: 'system',
