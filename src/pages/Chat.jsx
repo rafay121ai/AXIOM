@@ -1143,7 +1143,29 @@ export default function Chat() {
         }
       }
 
-      const latestExperiments = await fetchSessionExperiments(session.id)
+      const turnCacheScope = nodeContext?.id
+        ? `node:${nodeContext.id}`
+        : nodeContext?.pillar
+          ? `pillar:${nodeContext.pillar}`
+          : 'chat'
+      const cachedTurnContext = getCachedTurnContext(session.id, text, turnCacheScope)
+      const routePromise = (cachedTurnContext?.route
+        ? Promise.resolve(cachedTurnContext.route)
+        : routeQuestionMode(text, {
+            ...session,
+            unresolved_experiment: unresolvedExperimentRef.current,
+            experiment_negotiation: experimentNegotiationRef.current,
+          }, nodeContext))
+        .then((value) => ({ ok: true, value }))
+        .catch((error) => ({ ok: false, error }))
+      const personalMemoriesPromise = (Array.isArray(cachedTurnContext?.personalMemories)
+        ? Promise.resolve(cachedTurnContext.personalMemories)
+        : searchPersonalMemory(session.user_id, text, 5))
+        .then((value) => ({ ok: true, value }))
+        .catch((error) => ({ ok: false, error }))
+      const latestExperimentsPromise = fetchSessionExperiments(session.id)
+
+      const latestExperiments = await latestExperimentsPromise
       let sessionForTurn = {
         ...session,
         active_experiments: latestExperiments || session.active_experiments || [],
@@ -1239,15 +1261,6 @@ export default function Chat() {
         return
       }
 
-      // RAG: retrieve source knowledge and personal memory for this turn.
-      // Current-session cache avoids re-embedding / re-searching the same topic
-      // during short follow-ups. It clears naturally when the browser session ends.
-      const turnCacheScope = nodeContext?.id
-        ? `node:${nodeContext.id}`
-        : nodeContext?.pillar
-          ? `pillar:${nodeContext.pillar}`
-          : 'chat'
-      const cachedTurnContext = getCachedTurnContext(sessionForTurn.id, text, turnCacheScope)
       let route = cachedTurnContext?.route || null
       let personalMemories = Array.isArray(cachedTurnContext?.personalMemories)
         ? cachedTurnContext.personalMemories
@@ -1266,10 +1279,14 @@ export default function Chat() {
         : ''
 
       if (!route || !personalMemories) {
-        const [freshRoute, freshPersonalMemories] = await Promise.all([
-          routeQuestionMode(text, sessionForTurn, nodeContext),
-          searchPersonalMemory(sessionForTurn.user_id, text, 5),
+        const [freshRouteResult, freshPersonalMemoriesResult] = await Promise.all([
+          routePromise,
+          personalMemoriesPromise,
         ])
+        if (!freshRouteResult.ok) throw freshRouteResult.error
+        if (!freshPersonalMemoriesResult.ok) throw freshPersonalMemoriesResult.error
+        const freshRoute = freshRouteResult.value
+        const freshPersonalMemories = freshPersonalMemoriesResult.value
         route = route || freshRoute
         personalMemories = personalMemories || freshPersonalMemories
       }
