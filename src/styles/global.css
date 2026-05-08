@@ -1620,14 +1620,14 @@ h1, h2, h3 {
 
 /* ─── Welcome Screen ─────────────────────────────────────────────────── */
 .welcome {
-  min-height: 100%;
+  min-height: 100dvh;
   width: 100%;
   background: #080808;
   color: var(--text-primary);
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  padding: clamp(42px, 7vh, 76px) 22px 56px;
+  padding: clamp(24px, 5vh, 52px) 22px;
   position: relative;
   overflow: auto;
 }
@@ -1659,7 +1659,7 @@ h1, h2, h3 {
   position: relative;
   z-index: 1;
   border-left: 1px solid rgba(201,168,76,0.2);
-  padding: 16px 0 48px clamp(22px, 5vw, 46px);
+  padding: 8px 0 10px clamp(22px, 5vw, 46px);
 }
 
 .welcome__loading {
@@ -1838,12 +1838,14 @@ h1, h2, h3 {
 
 @media (max-width: 640px) {
   .welcome {
-    padding: 30px 18px 38px;
+    align-items: center;
+    padding: max(20px, env(safe-area-inset-top)) 18px max(20px, env(safe-area-inset-bottom));
   }
 
   .welcome__shell {
     border-left: 0;
     padding-left: 0;
+    padding-bottom: 0;
   }
 
   .welcome__read {
@@ -1861,7 +1863,7 @@ h1, h2, h3 {
   .welcome__copy {
     font-size: 12.5px;
     line-height: 1.62;
-    margin-top: 22px;
+    margin-top: 20px;
   }
 
   .welcome__copy p + p {
@@ -1869,7 +1871,7 @@ h1, h2, h3 {
   }
 
   .welcome__prompt-wrap {
-    margin-top: 24px;
+    margin-top: 22px;
   }
 
   .welcome__prompt {
@@ -1883,7 +1885,7 @@ h1, h2, h3 {
   background: transparent;
   color: rgba(237,237,236,0.42);
   font-size: 12px;
-  padding: 4px 8px;
+  padding: 2px 8px 0;
 }
 
 .welcome__secondary:hover {
