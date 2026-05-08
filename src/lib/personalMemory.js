@@ -38,7 +38,7 @@ function normalizeMemory(memory) {
     ? Math.min(1, Math.max(0, memory.pillar_confidence))
     : 0.7
   const importance = Number.isInteger(memory?.importance)
-    ? Math.min(5, Math.max(1, memory.importance))
+    ? Math.min(7, Math.max(1, memory.importance))
     : 3
   const confidence = typeof memory?.confidence === 'number'
     ? Math.min(1, Math.max(0, memory.confidence))
@@ -155,7 +155,12 @@ async function upsertPersonalMemory(sessionId, userId, memory) {
           .from('personal_memories')
           .update(legacyUpdates)
           .eq('id', existing.id)
-        if (legacyError) return
+        if (legacyError) {
+          console.error('Failed to update personal memory', { error: legacyError, memory_id: existing.id })
+          return
+        }
+      } else {
+        console.error('Failed to update personal memory', { error, memory_id: existing.id })
       }
     }
     return
@@ -180,7 +185,12 @@ async function upsertPersonalMemory(sessionId, userId, memory) {
     if (/primary_pillar|secondary_pillars|pillar_confidence/.test(error.message || '')) {
       const { primary_pillar, secondary_pillars, pillar_confidence, ...legacyPayload } = payload
       const { error: legacyError } = await supabase.from('personal_memories').insert(legacyPayload)
-      if (legacyError) return
+      if (legacyError) {
+        console.error('Failed to insert personal memory', { error: legacyError, type: memory.type })
+        return
+      }
+    } else {
+      console.error('Failed to insert personal memory', { error, type: memory.type })
     }
   }
 }
@@ -195,6 +205,36 @@ async function savePersonalMemories(sessionId, userId, memories) {
     try {
       await upsertPersonalMemory(sessionId, userId, memory)
     } catch {}
+  }
+}
+
+export async function recordExperimentAvoidancePattern(session, experiment, userText = '') {
+  if (!session?.id || !session?.user_id || !experiment?.description) return false
+
+  const content = [
+    `User avoided the experiment "${experiment.description}".`,
+    'This was reported as a choice, not an external constraint.',
+    userText ? `Their explanation: ${String(userText).trim()}` : '',
+  ].filter(Boolean).join(' ')
+
+  try {
+    await upsertPersonalMemory(session.id, session.user_id, {
+      type: 'pattern',
+      content,
+      primary_pillar: 'human_mind',
+      secondary_pillars: experiment.pillar ? [normalizePillar(experiment.pillar)].filter(Boolean) : [],
+      pillar_confidence: 0.8,
+      importance: 7,
+      confidence: 0.8,
+    })
+    return true
+  } catch (error) {
+    console.error('Failed to record experiment avoidance pattern', {
+      error,
+      session_id: session.id,
+      experiment_id: experiment.id,
+    })
+    return false
   }
 }
 
