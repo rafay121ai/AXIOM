@@ -236,7 +236,7 @@ export default function MessageBubble({
       {status === 'interrupted' && (
         <div className="msg__status">Stopped</div>
       )}
-      {role === 'assistant' && copied && (
+      {copied && (
         <div className="msg__copy-toast">Copied</div>
       )}
       {renderedActions.length > 0 && (
@@ -260,7 +260,6 @@ export default function MessageBubble({
                     <rect x="5.1" y="5.1" width="8" height="8" rx="1.4" stroke="currentColor" strokeWidth="1.45" />
                     <path d="M2.8 10.7H2.4A1.4 1.4 0 0 1 1 9.3V2.4A1.4 1.4 0 0 1 2.4 1h6.9a1.4 1.4 0 0 1 1.4 1.4v.4" stroke="currentColor" strokeWidth="1.45" strokeLinecap="round" />
                   </svg>
-                  {role === 'user' && <span>{action.label}</span>}
                 </>
               ) : action.icon === 'edit' ? (
                 <>
@@ -268,7 +267,6 @@ export default function MessageBubble({
                     <path d="M9.7 2.7 13.3 6.3 5.4 14.2H1.8v-3.6L9.7 2.7Z" stroke="currentColor" strokeWidth="1.45" strokeLinejoin="round" />
                     <path d="M8.6 3.8 12.2 7.4" stroke="currentColor" strokeWidth="1.45" strokeLinecap="round" />
                   </svg>
-                  {role === 'user' && <span>{action.label}</span>}
                 </>
               ) : action.icon === 'regenerate' ? (
                 <>

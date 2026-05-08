@@ -622,14 +622,17 @@ function auditArtifact(userText, assistantText, artifact) {
 
 // Strip tag blocks from streaming display — tags are invisible while generating,
 // then resolved into rendered components once the stream ends.
+// The two-regex pattern per tag type handles both cases:
+//   1. Complete tag already in the buffer (lazy match to avoid over-consuming)
+//   2. Partial tag still arriving — catches from <tag to end of string before > lands
 function stripForDisplay(text, artifactType = null) {
   return sanitizeVisibleAssistantText(text, artifactType)
     .replace(/<artifact[^>]*>[\s\S]*?<\/artifact>/g, '')
-    .replace(/<artifact[^>]*>[\s\S]*/g, '')   // partial opening tag mid-stream
+    .replace(/<artifact[\s\S]*$/, '')
     .replace(/<book_ref>[\s\S]*?<\/book_ref>/g, '')
-    .replace(/<book_ref>[\s\S]*/g, '')         // legacy partial citation tag mid-stream
+    .replace(/<book_ref[\s\S]*$/, '')
     .replace(/<experiment>[\s\S]*?<\/experiment>/g, '')
-    .replace(/<experiment>[\s\S]*/g, '')        // partial opening tag mid-stream
+    .replace(/<experiment[\s\S]*$/, '')
     .replace(/\[JAILBREAK_REDIRECT\]\s*$/g, '')
     .trim()
 }
@@ -786,6 +789,7 @@ export default function Chat() {
   const [editText, setEditText] = useState('')
   const [loading, setLoading] = useState(true)
   const [aiMessageCount, setAiMessageCount] = useState(0) // assistant messages saved to DB this session
+  const [sessionAiMessageCount, setSessionAiMessageCount] = useState(0) // AI messages this browser session only, resets on mount
 
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
@@ -1007,6 +1011,7 @@ export default function Chat() {
     })
 
     setAiMessageCount(1)
+    setSessionAiMessageCount(1)
     setMessages((prev) =>
       prev.map((m) => (m.id === msgId ? { ...m, content, streaming: false } : m))
     )
@@ -1217,6 +1222,7 @@ export default function Chat() {
         }
 
         setAiMessageCount((prev) => prev + 1)
+        setSessionAiMessageCount((prev) => prev + 1)
         releaseSending()
         return
       }
@@ -1257,6 +1263,7 @@ export default function Chat() {
         }
 
         setAiMessageCount((prev) => prev + 1)
+        setSessionAiMessageCount((prev) => prev + 1)
         releaseSending()
         return
       }
@@ -1343,7 +1350,22 @@ export default function Chat() {
       const continuityContext = cachedTurnContext?.cacheHit
         ? `Conversation continuity: this turn is reusing ${cachedTurnContext.cacheHit === 'follow_up' ? 'the previous turn context for a short follow-up' : 'cached context for the same query'}. Treat it as the same terrain unless the user clearly changed topic. Do not restart from first principles. Signal continuity through smooth prose only, not labels or meta-language.`
         : ''
+      const activeExpsForCheckin = (sessionForTurn.active_experiments || []).filter((e) => e.status === 'active')
+      const inExperimentMode =
+        experimentNegotiationRef.current !== null ||
+        isAwaitingExperimentOutcomeClarification(baseMessages) ||
+        isAwaitingExperimentCancelReason(baseMessages)
+      const isCheckinTurn =
+        sessionAiMessageCount > 0 &&
+        sessionAiMessageCount % 3 === 0 &&
+        activeExpsForCheckin.length > 0 &&
+        !inExperimentMode
+      const checkinContext = isCheckinTurn
+        ? `EXPERIMENT CHECK-IN: This is a scheduled check-in turn. Before responding to the user's message, open with one direct sentence asking how their active experiment${activeExpsForCheckin.length > 1 ? 's are' : ' is'} going: ${activeExpsForCheckin.map((e) => e.title || e.description).filter(Boolean).join('; ')}. Make it feel like Axiom noticing naturally — not a system prompt, not a separate paragraph. One sentence, then respond to what they brought.`
+        : ''
+
       const routeContext = [
+        checkinContext,
         artifactRouteContext,
         continuityContext,
         visibleResponseContract(effectiveRoute, requiredArtifactType, shouldHoldExperiment),
@@ -1569,6 +1591,7 @@ export default function Chat() {
       }
 
       setAiMessageCount((prev) => prev + 1)
+      setSessionAiMessageCount((prev) => prev + 1)
 
       releaseSending()
 

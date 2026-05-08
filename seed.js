@@ -1161,6 +1161,48 @@ const SOURCES = [
     title: 'Lex Fridman — Daniel Kahneman', author: 'Lex Fridman',
     youtubeUrl: 'https://www.youtube.com/watch?v=UwwBG-MbniY',
   },
+  {
+    pillar: "think_sharper",
+    content_type: "book",
+    title: "Beyond Good and Evil",
+    author: "Friedrich Nietzsche",
+    filePath: "./sources/books/beyond-good-and-evil-nietzsche.pdf",
+  },
+  {
+    pillar: "think_sharper",
+    content_type: "book",
+    title: "Thus Spoke Zarathustra",
+    author: "Friedrich Nietzsche",
+    filePath: "./sources/books/thus-spoke-zarathustra-nietzsche.pdf",
+  },
+  {
+    pillar: "think_sharper",
+    content_type: "book",
+    title: "The Gay Science",
+    author: "Friedrich Nietzsche",
+    filePath: "./sources/books/gay-science-nietzsche.pdf",
+  },
+  {
+    pillar: "think_sharper",
+    content_type: "biography",
+    title: "Leonardo da Vinci",
+    author: "Walter Isaacson",
+    filePath: "./sources/books/leonardo-da-vinci-isaacson.pdf",
+  },
+  {
+    pillar: "think_sharper",
+    content_type: "book",
+    title: "The Notebooks of Leonardo da Vinci",
+    author: "Leonardo da Vinci",
+    filePath: "./sources/books/notebooks-leonardo-da-vinci.pdf",
+  },
+  {
+    pillar: "think_sharper",
+    content_type: "book",
+    title: "Lateral Thinking",
+    author: "Edward de Bono",
+    filePath: "./sources/books/lateral-thinking-de-bono.pdf",
+  },
 
   // ══════════════════════════════════════════════════════════════════════════
   // MOVE PEOPLE — Books
@@ -1912,7 +1954,7 @@ async function fetchYouTubeTranscript(videoId) {
     try {
       const { stdout, stderr } = await execFileAsync(
         pythonBin,
-        [helperPath, videoId],
+        [helperPath, '--stdout-json', videoId],
         {
           cwd: __dirname,
           env: process.env,

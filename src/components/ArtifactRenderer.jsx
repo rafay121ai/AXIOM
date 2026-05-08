@@ -203,10 +203,19 @@ function normalizeStep(item) {
   }
 }
 
-function normalizeRows(row) {
+function normalizeRows(row, headers = []) {
   if (row === true || row === false || row === null || row === undefined) return []
   if (Array.isArray(row)) return row.map(stringifyRenderable)
-  if (row && typeof row === 'object') return Object.values(row).map(stringifyRenderable)
+  if (row && typeof row === 'object') {
+    if (headers.length > 0) {
+      const keys = Object.keys(row)
+      return headers.map((h) => {
+        const key = keys.find((k) => k.toLowerCase() === h.toLowerCase()) ?? null
+        return stringifyRenderable(key !== null ? row[key] : undefined)
+      })
+    }
+    return Object.values(row).map(stringifyRenderable)
+  }
   return [stringifyRenderable(row)]
 }
 
@@ -412,9 +421,9 @@ function ComparisonTable({ data }) {
   const [selected, setSelected] = useState(null)
   const headers = asArray(data.headers).map(stringifyRenderable).filter(Boolean)
   const rows = asArray(data.rows)
-    .map(normalizeRows)
-    .map(row => row.slice(0, headers.length || row.length))
-    .filter(row => row.length > 0 && row.some(cell => cell && !/^(true|false)$/i.test(cell)))
+    .map((row) => normalizeRows(row, headers))
+    .map((row) => row.slice(0, headers.length || row.length))
+    .filter((row) => row.length > 0 && row.some((cell) => cell && !/^(true|false)$/i.test(cell)))
   const interactive = data.interactive === true
 
   return (
@@ -452,26 +461,77 @@ function ComparisonTable({ data }) {
 
 function FlowDiagram({ data }) {
   const [open, setOpen] = useState(null)
-  const steps = asArray(data.steps || data.items).map(normalizeStep)
+  const steps = asArray(data.steps || data.items).map(normalizeStep).filter((step) => step.label || step.description)
   const interactive = data.interactive === true
+  const activeIndex = open ?? 0
+  const activeStep = steps[activeIndex]
+
+  if (!steps.length) {
+    return null
+  }
 
   return (
-    <ArtifactShell title={data.title}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <ArtifactShell title={data.title} style={{ overflowX: 'auto' }}>
+      <div style={{ display: 'grid', gap: 14, minWidth: Math.min(620, Math.max(320, steps.length * 150)) }}>
+        <div style={{ alignItems: 'stretch', display: 'grid', gap: 0, gridTemplateColumns: `repeat(${steps.length}, minmax(132px, 1fr))` }}>
         {steps.map((step, index) => {
           const expanded = open === index || !interactive
+          const selected = interactive ? open === index : true
           return (
-            <button
-              key={index}
-              className={data.animate !== false ? 'axiom-animate-fade' : ''}
-              onClick={() => interactive && setOpen(open === index ? null : index)}
-              style={{ ...glassSurfaceStyle(expanded), animationDelay: `${index * 0.3}s`, color: TEXT, cursor: interactive ? 'pointer' : 'default', padding: '12px 14px', textAlign: 'left' }}
-            >
-              <div style={{ color: ACCENT, fontSize: 12, fontWeight: 700, marginBottom: expanded && step.description ? 6 : 0 }}>{index + 1}. {step.label}</div>
-              {expanded && step.description && <div style={{ color: MUTED, fontSize: 12, lineHeight: 1.55 }}>{step.description}</div>}
-            </button>
+            <div key={index} className={data.animate !== false ? `axiom-animate-fade ${stagger(index)}` : ''} style={{ animationDelay: `${index * 0.16}s`, display: 'grid', gap: 8, minWidth: 0 }}>
+              <div style={{ alignItems: 'center', display: 'grid', gridTemplateColumns: index === steps.length - 1 ? '1fr auto 1fr' : '1fr auto 1fr', minHeight: 28 }}>
+                <div style={{ borderTop: index === 0 ? '1px solid transparent' : `1px solid ${BORDER}` }} />
+                <button
+                  type="button"
+                  onClick={() => interactive && setOpen(open === index ? null : index)}
+                  style={{
+                    alignItems: 'center',
+                    background: selected ? GOLD_GRADIENT : SURFACE_GRADIENT,
+                    border: `1px solid ${selected ? 'rgba(212,168,67,0.55)' : BORDER}`,
+                    borderRadius: 999,
+                    boxShadow: selected ? GOLD_GLOW : 'none',
+                    color: selected ? '#080808' : TEXT,
+                    cursor: interactive ? 'pointer' : 'default',
+                    display: 'inline-flex',
+                    fontSize: 11,
+                    fontWeight: 900,
+                    height: 28,
+                    justifyContent: 'center',
+                    justifySelf: 'center',
+                    padding: 0,
+                    width: 28,
+                  }}
+                >
+                  {index + 1}
+                </button>
+                <div style={{ borderTop: index === steps.length - 1 ? '1px solid transparent' : `1px solid ${BORDER}` }} />
+              </div>
+              <button
+                type="button"
+                onClick={() => interactive && setOpen(open === index ? null : index)}
+                style={{
+                  ...glassSurfaceStyle(selected),
+                  alignContent: 'start',
+                  color: TEXT,
+                  cursor: interactive ? 'pointer' : 'default',
+                  display: 'grid',
+                  minHeight: 86,
+                  padding: '11px 12px',
+                  textAlign: 'left',
+                }}
+              >
+                <div style={{ color: selected ? ACCENT_HIGHLIGHT : ACCENT, fontSize: 12, fontWeight: 800, lineHeight: 1.35, overflowWrap: 'anywhere' }}>{step.label || `Step ${index + 1}`}</div>
+              </button>
+            </div>
           )
         })}
+        </div>
+        {activeStep?.description && (
+          <div style={{ ...glassSurfaceStyle(true), color: MUTED, fontSize: 12, lineHeight: 1.55, padding: '12px 14px' }}>
+            <span style={{ color: ACCENT, fontWeight: 800 }}>{activeStep.label || `Step ${activeIndex + 1}`}: </span>
+            {activeStep.description}
+          </div>
+        )}
       </div>
     </ArtifactShell>
   )
