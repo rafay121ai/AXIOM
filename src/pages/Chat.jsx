@@ -1227,7 +1227,7 @@ export default function Chat() {
           session_id: sessionForTurn.id,
           thread_id: threadId,
           message_id: userMsgId,
-          rag_chunks_used: wikiChunks.length,
+          rag_chunks_used: chunks.length,
         },
       }, { signal: runAbort.signal })
 
