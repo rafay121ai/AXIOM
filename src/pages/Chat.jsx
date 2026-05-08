@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import MessageBubble from '../components/MessageBubble'
 import ExperimentCard from '../components/ExperimentCard'
-import WarningCard from '../components/WarningCard'
 import ArtifactRenderer from '../components/ArtifactRenderer'
 import { clearStoredSessionToken, getStoredSessionToken, supabase } from '../lib/supabase'
 import { openai, CHAT_MODEL, generateOpeningMessage, generateNodeOpeningMessage, buildSystemPrompt } from '../lib/openai'
@@ -586,6 +585,12 @@ function stripForDisplay(text, artifactType = null) {
     .trim()
 }
 
+function warningLevelForCounts(ghostCount = 0, consecutiveMissCount = 0, currentLevel = 0) {
+  if (ghostCount >= 4 || consecutiveMissCount >= 5) return Math.max(currentLevel, 2)
+  if (ghostCount >= 2 || consecutiveMissCount >= 3) return Math.max(currentLevel, 1)
+  return currentLevel
+}
+
 // ─── Ghosting Check ──────────────────────────────────────────────────────────
 // Returns updated session if warning_level needs to change, otherwise null.
 function normalizeExperiment(row) {
@@ -670,15 +675,18 @@ async function checkAndUpdateGhosting(session) {
     consecutive_miss_count++ // consecutive streak, drives warning thresholds
     changed = true
 
-    if (consecutive_miss_count >= 4 && warning_level < 2) { warning_level = 2; changed = true }
-    else if (consecutive_miss_count >= 2 && warning_level < 1) { warning_level = 1; changed = true }
-
     const ghostedAt = new Date().toISOString()
     const updated = { ...exp, status: 'ghosted', outcome_reason: 'ghosted', ghosted_at: ghostedAt }
     rowUpdates.push({ id: exp.id, status: updated.status, outcome_reason: 'ghosted', ghosted_at: ghostedAt })
     return updated
 
   })
+
+  const thresholdWarningLevel = warningLevelForCounts(ghost_count, consecutive_miss_count, warning_level)
+  if (thresholdWarningLevel !== warning_level) {
+    warning_level = thresholdWarningLevel
+    changed = true
+  }
 
   if (!changed) return session
 

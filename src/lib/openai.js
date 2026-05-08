@@ -323,12 +323,20 @@ Rules:
 export async function generateOpeningMessage(session, isNew) {
   const unresolvedExperiment = session.unresolved_experiment || null
   const activeExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'active')
+  const ghostedExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'ghosted')
+  const ghostedTitles = ghostedExps
+    .map((experiment) => experiment.title || experiment.description)
+    .filter(Boolean)
+    .slice(-4)
   const hasExperiment = activeExps.length > 0
   const recentExp = hasExperiment ? activeExps[activeExps.length - 1] : null
 
   const contextLines = [
     `Private theory: ${session.axiom_profile}`,
     `Warning level: ${session.warning_level}`,
+    `Ghost count: ${session.ghost_count || 0}`,
+    `Consecutive missed experiments: ${session.consecutive_miss_count || 0}`,
+    `Ghosted experiments: ${ghostedTitles.length ? ghostedTitles.map((title) => `"${title}"`).join(', ') : 'None'}`,
     unresolvedExperiment
       ? `Unresolved experiment: "${unresolvedExperiment.description}" — due ${unresolvedExperiment.due_at ? new Date(unresolvedExperiment.due_at).toLocaleDateString() : 'window passed'}`
       : hasExperiment
@@ -345,9 +353,9 @@ export async function generateOpeningMessage(session, isNew) {
   } else if (isNew) {
     directive = 'This is their first session. Generate a 1-2 sentence opening that names their most specific gap or pattern. It must be a direction, not a summary. Do not welcome them.'
   } else if (session.warning_level === 2) {
-    directive = 'Warning level is 2. Open with a sharp, final warning in Axiom\'s voice. Direct and unambiguous.'
+    directive = 'Warning level is 2. Open with a direct mentor warning, not a system alert. Name the specific ghosted or missed experiments from context. Ask what is actually going on underneath. Make clear that Axiom is not useful if the user is not moving. Disappointed but still in their corner. 2-4 sentences.'
   } else if (session.warning_level === 1) {
-    directive = 'Warning level is 1. Reference the ghosted experiment in your opening. Make the cost specific.'
+    directive = 'Warning level is 1. Acknowledge the pattern early, clearly and specifically, not aggressively. Name what it looks like from the counts and ghosted experiment context. Use the shape: this is the second time something has been left unfinished. That is worth looking at. 1-2 sentences.'
   } else if (hasExperiment) {
     directive = `User is returning. Reference the active experiment "${recentExp.description}" — ask where they are with it. Do not summarize. 1-2 sentences.`
   } else {
@@ -364,7 +372,8 @@ export async function generateOpeningMessage(session, isNew) {
 
 Your voice: Direct. Never diplomatic. Specific. Never generic. Challenging. Urgent.
 Never say: "Great question", "I understand", "Certainly", "Absolutely", "Welcome back", "That's interesting".
-Never use emoji.`,
+Never use emoji.
+Warning language: disappointed but still in their corner. Not a system alert. Not theatrical.`,
       },
       {
         role: 'user',
@@ -679,6 +688,11 @@ export async function generateNodeOpeningMessage(session, nodeContext, isPulseEn
   const percent = Math.round(level * 100)
   const nodeType = nodeContext.type || 'concept'
   const activeExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'active')
+  const ghostedExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'ghosted')
+  const ghostedTitles = ghostedExps
+    .map((experiment) => experiment.title || experiment.description)
+    .filter(Boolean)
+    .slice(-4)
 
   if (isPulseEntry) {
     const response = await openai.chat.completions.create({
@@ -707,6 +721,10 @@ Write one opening message only.
 Session notes: ${session.session_notes || 'None'}
 Pillar weights: ${session.pillar_weights ? JSON.stringify(session.pillar_weights) : 'balanced'}
 Active experiments: ${JSON.stringify(activeExps)}
+Warning level: ${session.warning_level || 0}
+Ghost count: ${session.ghost_count || 0}
+Consecutive missed experiments: ${session.consecutive_miss_count || 0}
+Ghosted experiments: ${ghostedTitles.length ? ghostedTitles.map((title) => `"${title}"`).join(', ') : 'None'}
 
 Founder Brain node:
 Label: ${nodeContext.label}
@@ -775,6 +793,10 @@ This is a brand-new thread opened from a private Founder Brain node. The user ta
 Session notes: ${session.session_notes || 'None'}
 Pillar weights: ${session.pillar_weights ? JSON.stringify(session.pillar_weights) : 'balanced'}
 Active experiments: ${JSON.stringify(activeExps)}
+Warning level: ${session.warning_level || 0}
+Ghost count: ${session.ghost_count || 0}
+Consecutive missed experiments: ${session.consecutive_miss_count || 0}
+Ghosted experiments: ${ghostedTitles.length ? ghostedTitles.map((title) => `"${title}"`).join(', ') : 'None'}
 
 Founder Brain node:
 Label: ${nodeContext.label}
@@ -909,6 +931,11 @@ Update memory now.`,
 // ─── System Prompt Builder ───────────────────────────────────────────────────
 export function buildSystemPrompt(session, wikiContext, personalMemoryContext = '', assistantMessageNumber = 0, retrievalConfidence = null, namedPatternsContext = '', routeContext = '', experimentAssignedInSession = false) {
   const activeExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'active')
+  const ghostedExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'ghosted')
+  const ghostedExperimentTitles = ghostedExps
+    .map((experiment) => experiment.title || experiment.description)
+    .filter(Boolean)
+    .slice(-4)
   const activeExperimentCount = activeExps.length
   const expsText =
     activeExps.length > 0
@@ -976,6 +1003,9 @@ Status: active, not reported back.
 
 This experiment is open and overdue. Axiom holds it. If the user brings it up or reports on it in this conversation, immediately shift to REPORT MODE and process what they say. If they continue without acknowledging it and the moment is right, pull the thread — ask what happened with it. Do not let it disappear.
 ` : ''}Their warning level: ${session.warning_level}
+Their ghost count: ${session.ghost_count || 0}
+Their consecutive missed experiments: ${session.consecutive_miss_count || 0}
+Ghosted experiment titles: ${ghostedExperimentTitles.length ? ghostedExperimentTitles.map((title) => `"${title}"`).join(', ') : 'None'}
 Jailbreak attempts this user has made across all sessions: ${session.jailbreak_attempts || 0}
 
 Personal memory retrieved for this message:
@@ -2091,8 +2121,15 @@ When this mode is ACTIVE, the pacing rule question ("Ready to test this?") is re
 WARNING SYSTEM
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-- If warning_level is 1, reference the ghosted experiment in your opening message this session. Make the cost specific.
-- If warning_level is 2, open with a sharp, final warning. Direct and unambiguous.
+Warning context is carried in the prompt: warning_level, ghost count, consecutive missed experiments, and ghosted experiment titles.
+
+Warning language should feel like a mentor who is disappointed but still in the user's corner, not a system alert.
+
+If warning_level is 1, acknowledge the pattern directly early in the session or within the first response. Do not be aggressive. Name what the pattern looks like using the counts or ghosted experiment titles. Example shape: "This is the second time something has been left unfinished. That is worth looking at."
+
+If warning_level is 2, be more direct. Name the specific experiments that were ghosted or missed when available. Ask what is actually going on underneath. Make clear that Axiom is not useful if the user is not moving.
+
+Do not render warning language as a UI notification, modal, or system alert. It belongs in Axiom's spoken response.
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
