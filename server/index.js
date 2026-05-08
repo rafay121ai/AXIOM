@@ -132,7 +132,7 @@ async function logModelUsage({
   const completionTokens = Number(usage.completion_tokens || 0)
   const totalTokens = Number(usage.total_tokens || promptTokens + completionTokens || 0)
 
-  await supabaseAdmin
+  const { data, error: insertError } = await supabaseAdmin
     .from('model_usage_logs')
     .insert({
       user_id: userId,
@@ -153,8 +153,15 @@ async function logModelUsage({
       error,
       error_details: errorDetails ? String(errorDetails).slice(0, 1000) : null,
     })
-    .throwOnError()
-    .catch((err) => console.error('[Usage Log]', err.message || err))
+    .select('id, user_id, session_id, thread_id, message_id, model, total_tokens, estimated_cost_usd, call_type, error, created_at')
+    .single()
+
+  if (insertError) {
+    console.log('[Usage Log] insert error:', insertError)
+    return
+  }
+
+  console.log('[Usage Log] inserted row:', data)
 }
 
 // ─── Auth middleware ──────────────────────────────────────────────────────────
@@ -364,7 +371,17 @@ app.post('/api/openai/embeddings', embeddingsRateLimit, async (req, res) => {
 })
 
 app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
-  const { messages, stream, max_completion_tokens, model, response_format, session_id, usage_context } = req.body
+  const {
+    messages,
+    stream,
+    max_completion_tokens,
+    model,
+    response_format,
+    session_id,
+    thread_id,
+    message_id,
+    usage_context,
+  } = req.body
 
   if (!Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: 'Invalid messages' })
@@ -386,9 +403,14 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
   }
 
   const startedAt = Date.now()
+  const rawUsageContext = usage_context && typeof usage_context === 'object'
+    ? usage_context
+    : {}
   const usageContext = {
-    ...(usage_context && typeof usage_context === 'object' ? usage_context : {}),
-    session_id: usage_context?.session_id || session_id || null,
+    ...rawUsageContext,
+    session_id: rawUsageContext.session_id || rawUsageContext.sessionId || session_id || null,
+    thread_id: rawUsageContext.thread_id || rawUsageContext.threadId || thread_id || null,
+    message_id: rawUsageContext.message_id || rawUsageContext.messageId || message_id || null,
   }
 
   try {
