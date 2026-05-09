@@ -4,7 +4,7 @@ import MessageBubble from '../components/MessageBubble'
 import ExperimentCard from '../components/ExperimentCard'
 import ArtifactRenderer from '../components/ArtifactRenderer'
 import { clearStoredSessionToken, getStoredSessionToken, supabase } from '../lib/supabase'
-import { openai, CHAT_MODEL, generateOpeningMessage, generateNodeOpeningMessage, buildSystemPrompt } from '../lib/openai'
+import { openai, CHAT_MODEL, generateOpeningMessage, generateNodeOpeningMessage, buildSystemPrompt, getLastPromptDiagnostics } from '../lib/openai'
 import { buildArtifactForResponse, getArtifactBuildSteps, getRequiredArtifactType, humanizeArtifactType } from '../lib/artifacts'
 import { routeQuestionMode, searchWikiForRoute, formatRouteContext, formatWikiContext } from '../lib/rag'
 import { searchPersonalMemory, formatNamedPatternsContext, formatPersonalMemoryContext, recordExperimentAvoidancePattern, recordExperimentResistancePattern, updatePersonalMemory } from '../lib/personalMemory'
@@ -1096,7 +1096,7 @@ export default function Chat() {
     const markLatency = (label, extra = {}) => {
       if (!latencyEnabled) return
       const totalMs = Math.round(performance.now() - latencyStart)
-      const previousMs = latencyMarks.length ? latencyMarks[latencyMarks.length - 1].totalMs : 0
+      const previousMs = latencyMarks.length ? latencyMarks[latencyMarks.length - 1].total_ms : 0
       const row = {
         step: label,
         total_ms: totalMs,
@@ -1489,14 +1489,25 @@ export default function Chat() {
         retrievalConfidence,
         namedPatternsContext,
         routeContext,
-        experimentAssignedInSession
+        experimentAssignedInSession,
+        { latestUserMessage: text }
       )
       markLatency('prompt:built', {
         systemPromptChars: systemPrompt.length,
         historyMessages: history.length,
         combinedWikiContextChars: combinedWikiContext.length,
         personalMemoryContextChars: personalMemoryContext.length,
+        promptDiagnostics: getLastPromptDiagnostics(),
       })
+      const promptDiagnostics = getLastPromptDiagnostics()
+      if (promptDiagnostics?.overBudget) {
+        console.warn('[Axiom prompt budget]', {
+          totalChars: promptDiagnostics.totalChars,
+          budget: promptDiagnostics.budget,
+          flags: promptDiagnostics.flags,
+          moduleChars: promptDiagnostics.moduleChars,
+        })
+      }
 
       const runAbort = new AbortController()
       abortControllerRef.current = runAbort
