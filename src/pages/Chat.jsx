@@ -1088,6 +1088,36 @@ export default function Chat() {
     const baseMessages = historyMessages || messages
     let fullContent = ''
     let persistedUserMessage = reuseUserMessage
+    const latencyEnabled = true
+    const latencyStart = performance.now()
+    const latencyMarks = []
+    const latencyRunId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+    let latencySummaryPrinted = false
+    const markLatency = (label, extra = {}) => {
+      if (!latencyEnabled) return
+      const totalMs = Math.round(performance.now() - latencyStart)
+      const previousMs = latencyMarks.length ? latencyMarks[latencyMarks.length - 1].totalMs : 0
+      const row = {
+        step: label,
+        total_ms: totalMs,
+        delta_ms: totalMs - previousMs,
+        ...extra,
+      }
+      latencyMarks.push(row)
+      console.log(`[Axiom latency ${latencyRunId}] ${label}`, row)
+    }
+    const printLatencySummary = (status = 'complete') => {
+      if (!latencyEnabled || latencySummaryPrinted) return
+      latencySummaryPrinted = true
+      console.groupCollapsed(`[Axiom latency ${latencyRunId}] ${status} in ${Math.round(performance.now() - latencyStart)}ms`)
+      console.table(latencyMarks)
+      console.groupEnd()
+    }
+    markLatency('send:start', {
+      cached_thread_messages: baseMessages.length,
+      retryAttempt,
+      reuseUserMessage: Boolean(reuseUserMessage),
+    })
 
     setMessages((prev) => {
       const withoutReplacement = replaceAssistantId
@@ -1112,6 +1142,7 @@ export default function Chat() {
         assistantPlaceholder,
       ]
     })
+    markLatency('ui:optimistic_messages_rendered')
 
     try {
       if (!reuseUserMessage) {
@@ -1127,6 +1158,7 @@ export default function Chat() {
           .single()
 
         if (userInsertError) throw userInsertError
+        markLatency('supabase:user_message_saved')
 
 	        if (savedUser?.id) {
 	          const optimisticUserId = userMsgId
@@ -1169,8 +1201,16 @@ export default function Chat() {
         .then((value) => ({ ok: true, value }))
         .catch((error) => ({ ok: false, error }))
       const latestExperimentsPromise = fetchSessionExperiments(session.id)
+      markLatency('preflight:parallel_started', {
+        cacheHit: Boolean(cachedTurnContext),
+        routeCached: Boolean(cachedTurnContext?.route),
+        memoryCached: Array.isArray(cachedTurnContext?.personalMemories),
+      })
 
       const latestExperiments = await latestExperimentsPromise
+      markLatency('supabase:experiments_fetched', {
+        experimentCount: latestExperiments?.length || 0,
+      })
       let sessionForTurn = {
         ...session,
         active_experiments: latestExperiments || session.active_experiments || [],
@@ -1179,11 +1219,17 @@ export default function Chat() {
       }
       if (!isAwaitingExperimentOutcomeClarification(baseMessages)) {
         sessionForTurn = await checkAndUpdateGhosting(sessionForTurn)
+        markLatency('experiments:ghosting_checked')
+      } else {
+        markLatency('experiments:ghosting_skipped_outcome_clarification')
       }
       if (latestExperiments) setSession(sessionForTurn)
 
       const reportCapture = await maybeCaptureExperimentReport(text, sessionForTurn, baseMessages)
       sessionForTurn = reportCapture.session
+      markLatency('experiments:report_flow_checked', {
+        handled: Boolean(reportCapture.handled),
+      })
       if (reportCapture.handled) {
         const immediateAssistantText = reportCapture.assistantText
         setSession(sessionForTurn)
@@ -1210,6 +1256,7 @@ export default function Chat() {
           console.error('Failed to save experiment outcome clarification message', reportInsertError)
           throw reportInsertError
         }
+        markLatency('supabase:early_report_assistant_saved')
 
         if (savedReportAssistant?.id) {
           setMessages((prev) =>
@@ -1224,12 +1271,17 @@ export default function Chat() {
         setAiMessageCount((prev) => prev + 1)
         setSessionAiMessageCount((prev) => prev + 1)
         releaseSending()
+        markLatency('turn:released_early_report')
+        printLatencySummary('early-report-complete')
         return
       }
 
       const incidentQuestion = isAwaitingConcreteIncident(baseMessages)
         ? followUpIncidentQuestion(text)
         : firstPersonIncidentQuestion(text)
+      markLatency('incident_gate:checked', {
+        triggered: Boolean(incidentQuestion),
+      })
       if (incidentQuestion) {
         setMessages((prev) =>
           prev.map((m) =>
@@ -1251,6 +1303,7 @@ export default function Chat() {
           .single()
 
         if (incidentInsertError) throw incidentInsertError
+        markLatency('supabase:incident_assistant_saved')
 
         if (savedIncidentAssistant?.id) {
           setMessages((prev) =>
@@ -1265,6 +1318,8 @@ export default function Chat() {
         setAiMessageCount((prev) => prev + 1)
         setSessionAiMessageCount((prev) => prev + 1)
         releaseSending()
+        markLatency('turn:released_incident_gate')
+        printLatencySummary('incident-complete')
         return
       }
 
@@ -1297,6 +1352,11 @@ export default function Chat() {
         route = route || freshRoute
         personalMemories = personalMemories || freshPersonalMemories
       }
+      markLatency('preflight:route_and_memory_ready', {
+        routeMode: route?.mode,
+        artifactStrategy: route?.artifactStrategy || route?.artifact_strategy,
+        memoryCount: personalMemories?.length || 0,
+      })
 
       if (!chunks || !sources || retrievalConfidence === null || !pillarResults || wikiContext === null) {
         const wikiResult = await searchWikiForRoute(text, route, 3)
@@ -1305,19 +1365,46 @@ export default function Chat() {
         retrievalConfidence = wikiResult.confidence
         pillarResults = wikiResult.pillarResults
         wikiContext = await formatWikiContext(chunks, sources)
+        markLatency('rag:wiki_ready', {
+          chunks: chunks.length,
+          sources: sources.length,
+          retrievalConfidence,
+        })
+      } else {
+        markLatency('rag:wiki_cache_ready', {
+          chunks: chunks.length,
+          sources: sources.length,
+          retrievalConfidence,
+        })
       }
 
       const routedArtifactType = getRequiredArtifactType(route)
+      let liveSearchAttempted = false
       if (!liveSearchContext && shouldUseLiveSearch({
         text,
         retrievalConfidence,
         sourceCount: sources.length,
         requiredArtifactType: routedArtifactType,
       })) {
+        liveSearchAttempted = true
         try {
           const livePayload = await liveSearch(text, { numResults: 5 })
           liveSearchContext = formatLiveSearchContext(livePayload)
-        } catch {}
+          markLatency('live_search:ready', {
+            hasContext: Boolean(liveSearchContext),
+          })
+        } catch (error) {
+          markLatency('live_search:failed', {
+            message: error?.message || 'unknown',
+          })
+        }
+      }
+      if (!liveSearchAttempted) {
+        markLatency('live_search:skipped', {
+          retrievalConfidence,
+          sourceCount: sources.length,
+          requiredArtifactType: routedArtifactType,
+        })
       }
 
       if (!cachedTurnContext) {
@@ -1344,6 +1431,11 @@ export default function Chat() {
         route,
         cachedTurnContext,
         groundedSourceCount,
+        activeExperimentCount,
+      })
+      markLatency('response_plan:resolved', {
+        requiredArtifactType,
+        shouldHoldExperiment,
         activeExperimentCount,
       })
       const artifactRouteContext = formatRouteContext(effectiveRoute, pillarResults)
@@ -1399,6 +1491,12 @@ export default function Chat() {
         routeContext,
         experimentAssignedInSession
       )
+      markLatency('prompt:built', {
+        systemPromptChars: systemPrompt.length,
+        historyMessages: history.length,
+        combinedWikiContextChars: combinedWikiContext.length,
+        personalMemoryContextChars: personalMemoryContext.length,
+      })
 
       const runAbort = new AbortController()
       abortControllerRef.current = runAbort
@@ -1444,6 +1542,9 @@ export default function Chat() {
             return latestArtifact
           })
         : Promise.resolve(null)
+      if (requiredArtifactType) {
+        markLatency('artifact:build_started', { requiredArtifactType })
+      }
 
       // Stream response
       const stream = await openai.chat.completions.create({
@@ -1459,13 +1560,19 @@ export default function Chat() {
           rag_chunks_used: chunks.length,
         },
       }, { signal: runAbort.signal })
+      markLatency('openai:stream_created')
 
       let streamDone = false
+      let firstTokenSeen = false
 
       for await (const chunk of stream) {
         if (streamDone) break
         const choice = chunk.choices[0]
         const delta = choice?.delta?.content || ''
+        if (delta && !firstTokenSeen) {
+          firstTokenSeen = true
+          markLatency('openai:first_token')
+        }
         fullContent += delta
 
         if (choice?.finish_reason === 'stop' || choice?.finish_reason === 'length') {
@@ -1480,6 +1587,9 @@ export default function Chat() {
 
         if (streamDone) break
       }
+      markLatency('openai:stream_done', {
+        responseChars: fullContent.length,
+      })
 
       abortControllerRef.current = null
 
@@ -1506,6 +1616,11 @@ export default function Chat() {
       }
       experiment = parsed.experiment
       textDone = true
+      markLatency('response:parsed', {
+        hasArtifact: Boolean(artifact || latestArtifact),
+        hasExperiment: Boolean(experiment),
+        cleanTextChars: cleanText.length,
+      })
 
       setMessages((prev) =>
         prev.map((m) =>
@@ -1531,8 +1646,12 @@ export default function Chat() {
           } else {
             fullContent = cleanText
           }
+          markLatency('artifact:build_done', {
+            hasArtifact: Boolean(artifact?.data),
+          })
         } catch {
           fullContent = cleanText
+          markLatency('artifact:build_failed')
         }
       } else {
         artifact = parsed.artifact
@@ -1577,6 +1696,7 @@ export default function Chat() {
         .single()
 
       if (assistantInsertError) throw assistantInsertError
+      markLatency('supabase:assistant_message_saved')
 
       if (savedAssistant?.id) {
         const optimisticAssistantId = assistantMsgId
@@ -1594,13 +1714,19 @@ export default function Chat() {
       setSessionAiMessageCount((prev) => prev + 1)
 
       releaseSending()
+      markLatency('turn:released_main')
+      printLatencySummary('stream-complete')
 
       enqueuePostResponseUpdate(async () => {
+        const postStart = performance.now()
         let sessionForMemory = sessionForTurn
 
         try {
           if (experiment) {
             sessionForMemory = await assignExperiment(experiment, sessionForTurn)
+            console.log(`[Axiom latency ${latencyRunId}] post:experiment_assigned`, {
+              elapsed_ms: Math.round(performance.now() - postStart),
+            })
             const assigned = findMatchingExperiment(sessionForMemory.active_experiments, experiment)
             if (assigned) {
               const enrichedContent = `${cleanText}\n\n<experiment>\n${JSON.stringify(assigned)}\n</experiment>`
@@ -1633,9 +1759,15 @@ export default function Chat() {
 
           if (!shouldUpdateMemory) {
             setSession(sessionForMemory)
+            console.log(`[Axiom latency ${latencyRunId}] post:memory_skipped`, {
+              elapsed_ms: Math.round(performance.now() - postStart),
+            })
           } else {
             const updatedSession = await updatePersonalMemory(sessionForMemory, baseMessages, text, cleanText)
             setSession(updatedSession)
+            console.log(`[Axiom latency ${latencyRunId}] post:memory_updated`, {
+              elapsed_ms: Math.round(performance.now() - postStart),
+            })
             const token = getStoredSessionToken()
             if (token) {
               syncPersonalWiki(updatedSession).then((synced) => {
@@ -1650,9 +1782,16 @@ export default function Chat() {
           }
         } catch {
           setSession(sessionForMemory)
+          console.log(`[Axiom latency ${latencyRunId}] post:failed`, {
+            elapsed_ms: Math.round(performance.now() - postStart),
+          })
         }
       })
     } catch (err) {
+      markLatency('turn:error', {
+        name: err?.name,
+        message: err?.message,
+      })
       // AbortError is intentional (pagehide or component unmount) — don't show an error
       if (err.name === 'AbortError') {
         setMessages((prev) =>
@@ -1701,6 +1840,9 @@ export default function Chat() {
     } finally {
       abortControllerRef.current = null
       releaseSending()
+      if (fullContent.trim()) {
+        printLatencySummary('finalized')
+      }
     }
   }
 
