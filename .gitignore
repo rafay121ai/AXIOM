@@ -4,6 +4,10 @@ dist
 .env.*
 !.env.example
 .DS_Store
+scripts/__pycache__/
+scripts/output/
+supabase/.temp/
+sources/**/*.pdf
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
