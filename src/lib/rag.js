@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { knowledgeSupabase } from './knowledgeSupabase'
 import { generateEmbedding, openai, CHAT_MODEL, requestJsonObject } from './openai'
 import { isCurrentFactualLiveQuestion } from './liveSearchTriggers'
 
@@ -64,7 +64,12 @@ const MAX_CACHE_ENTRIES = 120
 const queryExpansionCache = new Map()
 const searchCache = new Map()
 const routerCache = new Map()
-const priorSynthesisCache = new Map()
+const CONCEPT_STATES = ['encountered', 'partial', 'absorbed']
+const CONCEPT_STATE_RANK = {
+  encountered: 1,
+  partial: 2,
+  absorbed: 3,
+}
 
 function stableStringify(value) {
   if (value === null || typeof value !== 'object') return JSON.stringify(value)
@@ -445,12 +450,34 @@ Selected node: ${nodeContext ? `${nodeContext.label} | pillar: ${nodeContext.pil
   })
 }
 
-export async function searchWikiForRoute(query, route, matchCount = 3) {
+function emitTiming(options, step, data = {}) {
+  if (typeof options?.onTiming === 'function') {
+    options.onTiming(step, data)
+  }
+}
+
+async function resolveQueryEmbedding(query, options = {}) {
+  const normalizedQuery = String(query || '').trim()
+  const sharedText = String(options.queryEmbeddingText || '').trim()
+  const canUseSharedEmbedding = sharedText && normalizedQuery === sharedText
+  if (canUseSharedEmbedding && options.queryEmbedding) return options.queryEmbedding
+  if (canUseSharedEmbedding && options.queryEmbeddingPromise) return options.queryEmbeddingPromise
+  if (canUseSharedEmbedding && typeof options.getQueryEmbedding === 'function') {
+    return options.getQueryEmbedding()
+  }
+
+  emitTiming(options, 'embedding:start')
+  const embedding = await generateEmbedding(query)
+  emitTiming(options, 'embedding:done')
+  return embedding
+}
+
+export async function searchWikiForRoute(query, route, matchCount = 3, options = {}) {
   const mode = route?.mode || 'single_pillar'
   const pillars = Array.isArray(route?.pillars) && route.pillars.length > 0 ? route.pillars : [null]
 
   if (mode === 'single_pillar') {
-    const result = await searchWiki(query, matchCount, pillars[0] || null)
+    const result = await searchWiki(query, matchCount, pillars[0] || null, options)
     return {
       ...result,
       pillarResults: {
@@ -461,7 +488,7 @@ export async function searchWikiForRoute(query, route, matchCount = 3) {
 
   const perPillarCount = mode === 'all_pillar_synthesis' ? 2 : Math.max(2, matchCount)
   const resultsByPillar = await Promise.all(
-    pillars.map((pillar) => searchWiki(query, perPillarCount, pillar))
+    pillars.map((pillar) => searchWiki(query, perPillarCount, pillar, options))
   )
   const pillarResults = Object.fromEntries(
     pillars.map((pillar, index) => [pillar, resultsByPillar[index]])
@@ -469,6 +496,7 @@ export async function searchWikiForRoute(query, route, matchCount = 3) {
 
   const chunkMap = new Map()
   const sourceMap = new Map()
+  const conceptMap = new Map()
   let confidence = 0
 
   for (const result of resultsByPillar) {
@@ -483,6 +511,9 @@ export async function searchWikiForRoute(query, route, matchCount = 3) {
     for (const source of result.sources || []) {
       sourceMap.set(sourceMatchKey(source), source)
     }
+    for (const concept of result.concepts || []) {
+      conceptMap.set(concept.id, concept)
+    }
   }
 
   const chunkLimit = mode === 'all_pillar_synthesis' ? 8 : mode === 'four_pillar_synthesis' ? 6 : 4
@@ -494,7 +525,19 @@ export async function searchWikiForRoute(query, route, matchCount = 3) {
     chunks.some((chunk) => sourceMatchKey(chunk) === sourceMatchKey(source))
   )
 
-  return { chunks, sources, confidence, pillarResults }
+  const selectedSourceIds = new Set(sources.map((source) => source.id).filter(Boolean))
+  const concepts = [...conceptMap.values()]
+    .filter((concept) => selectedSourceIds.has(concept.source_id))
+    .slice(0, 60)
+
+  emitTiming(options, 'concepts:merged', {
+    conceptCount: concepts.length,
+    absorbedCount: concepts.filter((concept) => concept.state === 'absorbed').length,
+    partialCount: concepts.filter((concept) => concept.state === 'partial').length,
+    encounteredCount: concepts.filter((concept) => concept.state === 'encountered').length,
+  })
+
+  return { chunks, sources, confidence, pillarResults, concepts }
 }
 
 function summarisePillarEvidence(pillar, result = {}) {
@@ -572,7 +615,7 @@ Example output: ["procrastination vs genuine disinterest", "resistance to finish
 }
 
 // ─── Search Against One Query ─────────────────────────────────────────────────
-async function searchSingleQuery(query, matchCount, filterPillar) {
+async function searchSingleQuery(query, matchCount, filterPillar, options = {}) {
   const cacheKey = stableStringify({
     query: String(query || '').trim(),
     matchCount,
@@ -581,11 +624,17 @@ async function searchSingleQuery(query, matchCount, filterPillar) {
 
   return cachedAsync(searchCache, cacheKey, async () => {
     try {
-      const embedding = await generateEmbedding(query)
-      const { data, error } = await supabase.rpc('match_wiki_chunks', {
+      const embedding = await resolveQueryEmbedding(query, options)
+      emitTiming(options, 'vector_search:start', { filterPillar, matchCount })
+      const { data, error } = await knowledgeSupabase.rpc('match_wiki_chunks', {
         query_embedding: embedding,
         match_count: matchCount,
         filter_pillar: filterPillar,
+      })
+      emitTiming(options, 'vector_search:done', {
+        filterPillar,
+        matchCount,
+        resultCount: data?.length || 0,
       })
       if (error) return []
       return data || []
@@ -595,13 +644,14 @@ async function searchSingleQuery(query, matchCount, filterPillar) {
   })
 }
 
-async function fetchSourcesForChunks(chunks) {
+async function fetchSourcesForChunks(chunks, options = {}) {
   if (!chunks || chunks.length === 0) return []
 
   const titles = [...new Set(chunks.map((chunk) => chunk.title).filter(Boolean))]
   if (titles.length === 0) return []
 
-  const { data, error } = await supabase
+  emitTiming(options, 'source_fetch:start', { titleCount: titles.length })
+  const { data, error } = await knowledgeSupabase
     .from('wiki_sources')
     .select(`
       id,
@@ -620,6 +670,10 @@ async function fetchSourcesForChunks(chunks) {
       summary_for_retrieval
     `)
     .in('title', titles)
+  emitTiming(options, 'source_fetch:done', {
+    titleCount: titles.length,
+    sourceCount: data?.length || 0,
+  })
 
   if (error) return []
 
@@ -629,27 +683,111 @@ async function fetchSourcesForChunks(chunks) {
     .sort((a, b) => sourceRank(b) - sourceRank(a))
 }
 
+async function fetchConceptsForSources(sources, options = {}) {
+  const userId = options.userId || options.user_id || null
+  const sourceIds = [...new Set((sources || []).map((source) => source.id).filter(Boolean))]
+  if (sourceIds.length === 0) return []
+
+  emitTiming(options, 'concepts:start', { sourceCount: sourceIds.length, hasUserId: Boolean(userId) })
+
+  const { data: concepts, error: conceptError } = await knowledgeSupabase
+    .from('source_learning_maps')
+    .select(`
+      id,
+      source_id,
+      concept_index,
+      concept_name,
+      concept_description,
+      why_it_matters,
+      absorbed_signal
+    `)
+    .in('source_id', sourceIds)
+    .order('source_id', { ascending: true })
+    .order('concept_index', { ascending: true })
+
+  if (conceptError || !concepts?.length) {
+    emitTiming(options, 'concepts:done', {
+      sourceCount: sourceIds.length,
+      conceptCount: 0,
+      stateCount: 0,
+      error: conceptError?.message,
+    })
+    if (conceptError) console.warn('[Axiom learning state] concept fetch failed', conceptError)
+    return []
+  }
+
+  let stateByConceptId = new Map()
+  if (userId) {
+    const conceptIds = concepts.map((concept) => concept.id)
+    const { data: states, error: stateError } = await knowledgeSupabase
+      .from('user_concept_states')
+      .select('concept_id,state,updated_at')
+      .eq('user_id', userId)
+      .in('concept_id', conceptIds)
+
+    if (stateError) {
+      console.warn('[Axiom learning state] state fetch failed', stateError)
+    } else {
+      stateByConceptId = new Map((states || []).map((state) => [state.concept_id, state]))
+    }
+  }
+
+  const hydrated = concepts.map((concept) => {
+    const userState = stateByConceptId.get(concept.id)
+    const state = CONCEPT_STATES.includes(userState?.state) ? userState.state : null
+    return {
+      ...concept,
+      state,
+      state_label: state || 'not_yet_encountered',
+      state_updated_at: userState?.updated_at || null,
+    }
+  })
+
+  emitTiming(options, 'concepts:done', {
+    sourceCount: sourceIds.length,
+    conceptCount: hydrated.length,
+    stateCount: stateByConceptId.size,
+    absorbedCount: hydrated.filter((concept) => concept.state === 'absorbed').length,
+    partialCount: hydrated.filter((concept) => concept.state === 'partial').length,
+    encounteredCount: hydrated.filter((concept) => concept.state === 'encountered').length,
+  })
+  console.info('[Axiom learning state] retrieved concepts', {
+    sourceCount: sourceIds.length,
+    conceptCount: hydrated.length,
+    states: hydrated.reduce((counts, concept) => {
+      const key = concept.state || 'not_yet_encountered'
+      counts[key] = (counts[key] || 0) + 1
+      return counts
+    }, {}),
+  })
+
+  return hydrated
+}
+
 // ─── Main Search ─────────────────────────────────────────────────────────────
 // Returns { chunks, sources, confidence } where confidence is the top similarity score.
 // If no chunk clears CONFIDENCE_THRESHOLD, returns { chunks: [], sources: [], confidence: 0 }.
-export async function searchWiki(query, matchCount = 3, filterPillar = null) {
-  const rawResults = await searchSingleQuery(query, matchCount * 3, filterPillar)
-  const rawSearch = await buildWikiSearchResult([rawResults], matchCount)
+export async function searchWiki(query, matchCount = 3, filterPillar = null, options = {}) {
+  const rawResults = await searchSingleQuery(query, matchCount * 3, filterPillar, options)
+  const rawSearch = await buildWikiSearchResult([rawResults], matchCount, options)
   if (rawSearch.confidence >= QUERY_EXPANSION_CONFIDENCE_FLOOR) {
     return rawSearch
   }
 
+  emitTiming(options, 'query_expansion:start', { confidence: rawSearch.confidence })
   const alternatives = await expandQuery(query)
+  emitTiming(options, 'query_expansion:done', { alternativeCount: alternatives.length })
   if (alternatives.length === 0) return rawSearch
 
   const expandedResultSets = await Promise.all(
-    alternatives.map((q) => searchSingleQuery(q, matchCount * 3, filterPillar))
+    alternatives.map((q) => searchSingleQuery(q, matchCount * 3, filterPillar, options))
   )
 
-  return buildWikiSearchResult([rawResults, ...expandedResultSets], matchCount)
+  return buildWikiSearchResult([rawResults, ...expandedResultSets], matchCount, options)
 }
 
-async function buildWikiSearchResult(resultSets, matchCount) {
+async function buildWikiSearchResult(resultSets, matchCount, options = {}) {
+  emitTiming(options, 'rerank:start', { resultSetCount: resultSets.length })
   // Merge — deduplicate by title, keep highest similarity per source
   const bestByTitle = new Map()
   for (const chunks of resultSets) {
@@ -665,14 +803,196 @@ async function buildWikiSearchResult(resultSets, matchCount) {
   const aboveThreshold = deduped.filter((c) => c.similarity >= CONFIDENCE_THRESHOLD)
 
   if (aboveThreshold.length === 0) {
+    emitTiming(options, 'rerank:done', {
+      candidateCount: deduped.length,
+      aboveThresholdCount: 0,
+    })
     return { chunks: [], sources: [], confidence: 0 }
   }
 
   const results = aboveThreshold.slice(0, matchCount)
   const confidence = results[0].similarity
-  const sources = await fetchSourcesForChunks(results)
+  emitTiming(options, 'rerank:done', {
+    candidateCount: deduped.length,
+    aboveThresholdCount: aboveThreshold.length,
+    selectedCount: results.length,
+    confidence,
+  })
+  const sources = await fetchSourcesForChunks(results, options)
+  const concepts = await fetchConceptsForSources(sources, options)
 
-  return { chunks: results, sources, confidence }
+  return { chunks: results, sources, confidence, concepts }
+}
+
+export function formatLearningStateContext(concepts = []) {
+  const uniqueConcepts = []
+  const seen = new Set()
+
+  for (const concept of concepts || []) {
+    if (!concept?.id || seen.has(concept.id)) continue
+    seen.add(concept.id)
+    uniqueConcepts.push(concept)
+  }
+
+  if (uniqueConcepts.length === 0) return ''
+
+  const byStateRank = [...uniqueConcepts].sort((a, b) => {
+    const rankDelta = (CONCEPT_STATE_RANK[b.state] || 0) - (CONCEPT_STATE_RANK[a.state] || 0)
+    if (rankDelta) return rankDelta
+    return String(a.concept_name || '').localeCompare(String(b.concept_name || ''))
+  })
+
+  const lines = byStateRank.slice(0, 40).map((concept) => {
+    const state = concept.state === 'absorbed'
+      ? 'absorbed'
+      : concept.state === 'partial'
+        ? 'partially understood'
+        : concept.state === 'encountered'
+          ? 'encountered'
+          : 'not yet encountered'
+    return `- ${concept.concept_name} — state: ${state}`
+  })
+
+  return `LEARNING STATE FOR THIS USER:
+${lines.join('\n')}
+
+Your job in this response:
+- If a concept is absorbed, use it naturally without explaining it from scratch
+- If a concept is partially understood, deepen it through the user's specific situation
+- If a concept has not been encountered, introduce it naturally through what the user just shared — never as a lesson, always as insight that fits their moment`
+}
+
+function normalizeStateAction(value) {
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+
+  if (['no_change', 'none', 'unchanged', 'no_state_change'].includes(normalized)) return null
+  if (['encountered', 'move_to_encountered', 'moved_to_encountered'].includes(normalized)) return 'encountered'
+  if (['partial', 'move_to_partial', 'moved_to_partial', 'partially_understood'].includes(normalized)) return 'partial'
+  if (['absorbed', 'move_to_absorbed', 'moved_to_absorbed'].includes(normalized)) return 'absorbed'
+  return null
+}
+
+function shouldApplyConceptState(currentState, nextState) {
+  if (!nextState) return false
+  return (CONCEPT_STATE_RANK[nextState] || 0) > (CONCEPT_STATE_RANK[currentState] || 0)
+}
+
+export async function updateConceptStatesAfterResponse({
+  userId,
+  concepts = [],
+  userMessage = '',
+  assistantMessage = '',
+  sessionId = null,
+} = {}) {
+  if (!userId || !Array.isArray(concepts) || concepts.length === 0 || !assistantMessage) {
+    console.info('[Axiom learning state] update skipped', {
+      hasUserId: Boolean(userId),
+      conceptCount: concepts?.length || 0,
+      hasAssistantMessage: Boolean(assistantMessage),
+    })
+    return { updated: 0, skipped: true }
+  }
+
+  const uniqueConcepts = []
+  const seen = new Set()
+  for (const concept of concepts) {
+    if (!concept?.id || seen.has(concept.id)) continue
+    seen.add(concept.id)
+    uniqueConcepts.push(concept)
+  }
+  if (uniqueConcepts.length === 0) return { updated: 0, skipped: true }
+
+  const payload = await requestJsonObject({
+    label: 'concept state update',
+    maxCompletionTokens: 1600,
+    usageContext: { call_type: 'concept_state_update', session_id: sessionId },
+    messages: [
+      {
+        role: 'system',
+        content: `You update a user's learning-state ledger for a mentorship app.
+Return only valid JSON.
+
+Schema:
+{
+  "updates": [
+    {
+      "concept_id": "uuid from the list",
+      "action": "no_state_change|encountered|moved_to_partial|moved_to_absorbed",
+      "reason": "brief reason"
+    }
+  ]
+}
+
+Rules:
+- Use only concept_id values from the provided list.
+- "encountered" means Axiom clearly introduced or used the concept in this response.
+- "moved_to_partial" means the response deepened the concept through the user's situation or application.
+- "moved_to_absorbed" is rare. Use it only if the response explicitly recognized demonstrated understanding or treated the concept as mastered.
+- Never downgrade a concept.
+- If the response did not materially use a concept, return no_state_change.`,
+      },
+      {
+        role: 'user',
+        content: `User message:
+${userMessage}
+
+Assistant response:
+${assistantMessage}
+
+Concepts in scope:
+${uniqueConcepts.slice(0, 60).map((concept) => `- id: ${concept.id}
+  name: ${concept.concept_name}
+  current_state: ${concept.state || 'not_yet_encountered'}
+  description: ${concept.concept_description}`).join('\n')}`,
+      },
+    ],
+  })
+
+  const updates = Array.isArray(payload?.updates) ? payload.updates : []
+  const conceptById = new Map(uniqueConcepts.map((concept) => [concept.id, concept]))
+  const rows = []
+
+  for (const update of updates) {
+    const conceptId = update?.concept_id
+    const concept = conceptById.get(conceptId)
+    if (!concept) continue
+    const nextState = normalizeStateAction(update.action)
+    if (!shouldApplyConceptState(concept.state, nextState)) continue
+    rows.push({
+      user_id: userId,
+      concept_id: conceptId,
+      state: nextState,
+      updated_at: new Date().toISOString(),
+    })
+  }
+
+  if (rows.length === 0) {
+    console.info('[Axiom learning state] no updates applied', {
+      conceptCount: uniqueConcepts.length,
+      modelUpdates: updates.length,
+    })
+    return { updated: 0, skipped: false }
+  }
+
+  const { error } = await knowledgeSupabase
+    .from('user_concept_states')
+    .upsert(rows, { onConflict: 'user_id,concept_id' })
+
+  if (error) throw error
+
+  console.info('[Axiom learning state] updates applied', {
+    updated: rows.length,
+    states: rows.reduce((counts, row) => {
+      counts[row.state] = (counts[row.state] || 0) + 1
+      return counts
+    }, {}),
+  })
+
+  return { updated: rows.length, skipped: false }
 }
 
 // ─── Internalized Priors ─────────────────────────────────────────────────────
@@ -711,8 +1031,13 @@ function formatSourceInterpretation(source) {
     .trim()
 }
 
-export async function formatWikiContext(chunks, sources = []) {
+export async function formatWikiContext(chunks, sources = [], options = {}) {
   if ((!chunks || chunks.length === 0) && (!sources || sources.length === 0)) return ''
+
+  emitTiming(options, 'wiki_format:start', {
+    chunkCount: chunks?.length || 0,
+    sourceCount: sources?.length || 0,
+  })
 
   // Group by (author, title) — merge key_frameworks from same source, skip null values
   const bySource = new Map()
@@ -734,51 +1059,25 @@ export async function formatWikiContext(chunks, sources = []) {
     if (interpreted) bySource.get(key).texts.push(interpreted)
   }
 
-  if (bySource.size === 0) return ''
-
-  // Synthesize each source into an internalized prior in parallel
-  const priors = await Promise.all(
-    [...bySource.values()].map(({ author, title, texts }) => {
-      // Cap combined text at 1200 chars to stay well inside token limits
-      const combinedText = texts.join('\n\n').slice(0, 1200)
-      return synthesizePrior(author, title, combinedText)
+  if (bySource.size === 0) {
+    emitTiming(options, 'wiki_format:done', {
+      sourceGroupCount: 0,
+      contextChars: 0,
     })
-  )
+    return ''
+  }
 
-  return priors.filter(Boolean).join('\n\n')
-}
-
-async function synthesizePrior(author, title, combinedText) {
-  const cacheKey = stableStringify({ author, title, combinedText })
-
-  return cachedAsync(priorSynthesisCache, cacheKey, async () => {
-    const response = await openai.chat.completions.create({
-      model: CHAT_MODEL,
-      usage_context: { call_type: 'chat' },
-      messages: [
-        {
-          role: 'system',
-          content: `You write internalized knowledge statements for a mentor AI named Axiom.
-
-Format (strict): Axiom knows from [Author], [Title]: [synthesis]
-
-Rules:
-- Maximum 2 sentences.
-- Write in Axiom's voice — direct, absorbed, opinionated. Not a quote. Not a summary. Something Axiom has internalized and would deploy from memory.
-- Capture the sharpest, most actionable insight from the source material.
-- Do not hedge. Do not use "suggests" or "argues". State it as fact Axiom holds.
-
-Author: ${author}
-Source: ${title}`,
-        },
-        { role: 'user', content: combinedText },
-      ],
-      max_completion_tokens: 120,
-    })
-    return response.choices[0].message.content.trim()
-  }).catch(() => {
-    // Fallback: reformat raw text without LLM — take first sentence only
-    const firstSentence = combinedText.split(/[.!?]/)[0].trim()
-    return `Axiom knows from ${author}, ${title}: ${firstSentence}.`
+  const priors = [...bySource.values()].map(({ author, title, texts }) => {
+    const combinedText = texts.join(' ').replace(/\s+/g, ' ').trim().slice(0, 800)
+    if (!combinedText) return ''
+    return `Axiom knows from ${author || 'Unknown author'}, ${title || 'Unknown source'}: ${combinedText}`
   })
+
+  const context = priors.filter(Boolean).join('\n\n')
+  emitTiming(options, 'wiki_format:done', {
+    sourceGroupCount: bySource.size,
+    contextChars: context.length,
+  })
+
+  return context
 }

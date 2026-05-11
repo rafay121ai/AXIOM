@@ -4,9 +4,16 @@ import MessageBubble from '../components/MessageBubble'
 import ExperimentCard from '../components/ExperimentCard'
 import ArtifactRenderer from '../components/ArtifactRenderer'
 import { clearStoredSessionToken, getStoredSessionToken, supabase } from '../lib/supabase'
-import { openai, CHAT_MODEL, generateOpeningMessage, generateNodeOpeningMessage, buildSystemPrompt, getLastPromptDiagnostics } from '../lib/openai'
+import { openai, CHAT_MODEL, generateEmbedding, generateOpeningMessage, generateNodeOpeningMessage, buildSystemPrompt, getLastPromptDiagnostics } from '../lib/openai'
 import { buildArtifactForResponse, getArtifactBuildSteps, getRequiredArtifactType, humanizeArtifactType } from '../lib/artifacts'
-import { routeQuestionMode, searchWikiForRoute, formatRouteContext, formatWikiContext } from '../lib/rag'
+import {
+  routeQuestionMode,
+  searchWikiForRoute,
+  formatRouteContext,
+  formatWikiContext,
+  formatLearningStateContext,
+  updateConceptStatesAfterResponse,
+} from '../lib/rag'
 import { searchPersonalMemory, formatNamedPatternsContext, formatPersonalMemoryContext, recordExperimentAvoidancePattern, recordExperimentResistancePattern, updatePersonalMemory } from '../lib/personalMemory'
 import { formatLiveSearchContext, liveSearch, shouldUseLiveSearch } from '../lib/liveSearch'
 import { getCachedTurnContext, setCachedTurnContext } from '../lib/sessionTurnContext'
@@ -1186,6 +1193,35 @@ export default function Chat() {
           ? `pillar:${nodeContext.pillar}`
           : 'chat'
       const cachedTurnContext = getCachedTurnContext(session.id, text, turnCacheScope)
+      let queryEmbeddingPromise = null
+      const getQueryEmbedding = () => {
+        if (!queryEmbeddingPromise) {
+          markLatency('rag:embedding_started')
+          queryEmbeddingPromise = generateEmbedding(text)
+            .then((embedding) => {
+              markLatency('rag:embedding_ready')
+              return embedding
+            })
+            .catch((error) => {
+              markLatency('rag:embedding_failed', {
+                message: error?.message || 'unknown',
+              })
+              throw error
+            })
+        }
+        return queryEmbeddingPromise
+      }
+      const ragTimingOptions = {
+        queryEmbeddingText: text,
+        getQueryEmbedding,
+        userId: session.user_id,
+        onTiming: (step, data = {}) => markLatency(`rag:${step}`, data),
+      }
+      const memoryTimingOptions = {
+        queryEmbeddingText: text,
+        getQueryEmbedding,
+        onTiming: (step, data = {}) => markLatency(`memory:${step}`, data),
+      }
       const routePromise = (cachedTurnContext?.route
         ? Promise.resolve(cachedTurnContext.route)
         : routeQuestionMode(text, {
@@ -1197,7 +1233,7 @@ export default function Chat() {
         .catch((error) => ({ ok: false, error }))
       const personalMemoriesPromise = (Array.isArray(cachedTurnContext?.personalMemories)
         ? Promise.resolve(cachedTurnContext.personalMemories)
-        : searchPersonalMemory(session.user_id, text, 5))
+        : searchPersonalMemory(session.user_id, text, 5, memoryTimingOptions))
         .then((value) => ({ ok: true, value }))
         .catch((error) => ({ ok: false, error }))
       const latestExperimentsPromise = fetchSessionExperiments(session.id)
@@ -1329,6 +1365,10 @@ export default function Chat() {
         : null
       let chunks = Array.isArray(cachedTurnContext?.chunks) ? cachedTurnContext.chunks : null
       let sources = Array.isArray(cachedTurnContext?.sources) ? cachedTurnContext.sources : null
+      let concepts = Array.isArray(cachedTurnContext?.concepts) ? cachedTurnContext.concepts : null
+      let learningStateContext = typeof cachedTurnContext?.learningStateContext === 'string'
+        ? cachedTurnContext.learningStateContext
+        : null
       let retrievalConfidence = Number.isFinite(cachedTurnContext?.retrievalConfidence)
         ? cachedTurnContext.retrievalConfidence
         : null
@@ -1358,22 +1398,32 @@ export default function Chat() {
         memoryCount: personalMemories?.length || 0,
       })
 
-      if (!chunks || !sources || retrievalConfidence === null || !pillarResults || wikiContext === null) {
-        const wikiResult = await searchWikiForRoute(text, route, 3)
+      if (!chunks || !sources || !concepts || retrievalConfidence === null || !pillarResults || wikiContext === null || learningStateContext === null) {
+        const wikiResult = await searchWikiForRoute(text, route, 3, ragTimingOptions)
         chunks = wikiResult.chunks
         sources = wikiResult.sources
+        concepts = wikiResult.concepts || []
         retrievalConfidence = wikiResult.confidence
         pillarResults = wikiResult.pillarResults
-        wikiContext = await formatWikiContext(chunks, sources)
+        wikiContext = await formatWikiContext(chunks, sources, ragTimingOptions)
+        learningStateContext = formatLearningStateContext(concepts)
         markLatency('rag:wiki_ready', {
           chunks: chunks.length,
           sources: sources.length,
+          concepts: concepts.length,
+          absorbedConcepts: concepts.filter((concept) => concept.state === 'absorbed').length,
+          partialConcepts: concepts.filter((concept) => concept.state === 'partial').length,
+          encounteredConcepts: concepts.filter((concept) => concept.state === 'encountered').length,
           retrievalConfidence,
         })
       } else {
         markLatency('rag:wiki_cache_ready', {
           chunks: chunks.length,
           sources: sources.length,
+          concepts: concepts.length,
+          absorbedConcepts: concepts.filter((concept) => concept.state === 'absorbed').length,
+          partialConcepts: concepts.filter((concept) => concept.state === 'partial').length,
+          encounteredConcepts: concepts.filter((concept) => concept.state === 'encountered').length,
           retrievalConfidence,
         })
       }
@@ -1413,9 +1463,11 @@ export default function Chat() {
           personalMemories,
           chunks,
           sources,
+          concepts,
           retrievalConfidence,
           pillarResults,
           wikiContext,
+          learningStateContext,
           liveSearchContext,
         }, turnCacheScope)
       }
@@ -1490,13 +1542,20 @@ export default function Chat() {
         namedPatternsContext,
         routeContext,
         experimentAssignedInSession,
-        { latestUserMessage: text }
+        {
+          latestUserMessage: text,
+          learningStateContext,
+          learningConcepts: concepts,
+        }
       )
       markLatency('prompt:built', {
         systemPromptChars: systemPrompt.length,
         historyMessages: history.length,
         combinedWikiContextChars: combinedWikiContext.length,
         personalMemoryContextChars: personalMemoryContext.length,
+        learningStateContextChars: learningStateContext.length,
+        learningConcepts: concepts.length,
+        absorbedLearningConcepts: concepts.filter((concept) => concept.state === 'absorbed').length,
         promptDiagnostics: getLastPromptDiagnostics(),
       })
       const promptDiagnostics = getLastPromptDiagnostics()
@@ -1680,6 +1739,13 @@ export default function Chat() {
         experiment = null
       }
 
+      if (experiment && !concepts.some((concept) => concept.state === 'absorbed')) {
+        console.info('[Axiom learning state] experiment blocked after parse: no absorbed in-scope concepts', {
+          conceptCount: concepts.length,
+        })
+        experiment = null
+      }
+
       if (experiment) {
         fullContent = `${fullContent}\n\n<experiment>\n${JSON.stringify(experiment)}\n</experiment>`
       }
@@ -1758,6 +1824,22 @@ export default function Chat() {
               )
             }
           }
+
+          updateConceptStatesAfterResponse({
+            userId: sessionForTurn.user_id,
+            concepts,
+            userMessage: text,
+            assistantMessage: cleanText,
+            sessionId: sessionForTurn.id,
+          }).then((result) => {
+            console.log(`[Axiom latency ${latencyRunId}] post:concept_state_updated`, {
+              elapsed_ms: Math.round(performance.now() - postStart),
+              updated: result?.updated || 0,
+              skipped: Boolean(result?.skipped),
+            })
+          }).catch((error) => {
+            console.error('[Axiom learning state] update failed', error)
+          })
 
           const assistantTurnCount = baseMessages.filter((message) =>
             message.role === 'assistant' && !message.streaming

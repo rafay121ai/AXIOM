@@ -1478,6 +1478,15 @@ Ghosted experiment titles: ${ghostedExperimentTitles.length ? ghostedExperimentT
     experimentAssignedInSession,
     hasLiveWebContext,
   })
+  const learningStateContext = String(promptOptions.learningStateContext || '').trim()
+  const learningConcepts = Array.isArray(promptOptions.learningConcepts) ? promptOptions.learningConcepts : []
+  const absorbedLearningConcepts = learningConcepts.filter((concept) => concept?.state === 'absorbed')
+  const hasAbsorbedLearningConcept = absorbedLearningConcepts.length > 0
+  const experimentWantedButBlockedByLearning =
+    promptFlags.includeExperimentRules && !hasAbsorbedLearningConcept
+  if (experimentWantedButBlockedByLearning) {
+    promptFlags.includeExperimentRules = false
+  }
 
   const promptModules = {
     security: buildSecurityRules(),
@@ -1487,6 +1496,7 @@ Ghosted experiment titles: ${ghostedExperimentTitles.length ? ghostedExperimentT
     pillarLens: buildPillarLensRules(),
     contextFirst: buildContextFirstRules(),
     profileRules: buildProfileRules(),
+    learningState: learningStateContext,
     artifactRules: promptFlags.includeArtifactRules ? buildArtifactRules() : '',
     bookRefRules: promptFlags.includeArtifactRules ? buildBookRefRules() : '',
   }
@@ -1552,6 +1562,14 @@ ${promptModules.pillarLens}
 ${promptModules.contextFirst}
 
 ${promptModules.profileRules}
+
+${learningStateContext ? `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LEARNING STATE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${learningStateContext}
+` : ''}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 EPISTEMIC HONESTY RULE
@@ -1878,6 +1896,16 @@ EXPERIMENT LIMIT REACHED
 Active experiment count is 2/2. Do not assign another experiment. Do not output an <experiment> tag. Do not create an experiment-shaped artifact, checklist, or section that functions like a new assignment.
 
 If application would be appropriate, say in plain language: "I have a real-world application for this, but I am holding it until one of your current experiments is completed or expires." Then ask for a report on the oldest active experiment or continue with a non-experiment question.
+` : experimentWantedButBlockedByLearning ? `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EXPERIMENT LEARNING GATE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Do not assign an experiment in this response. Do not output an <experiment> tag.
+
+Reason: none of the relevant learning-map concepts for this turn are marked absorbed for this user yet.
+
+If application seems appropriate, deepen the most relevant concept through the user's situation or ask the one question that would reveal whether they can apply it. The experiment comes only after at least one relevant concept is absorbed.
 ` : promptFlags.includeExperimentRules ? `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 EXPERIMENT RULES
