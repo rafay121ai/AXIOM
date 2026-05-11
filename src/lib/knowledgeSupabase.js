@@ -8,4 +8,11 @@ const knowledgeSupabaseAnonKey =
   import.meta.env.VITE_KNOWLEDGE_SUPABASE_ANON_KEY ||
   'placeholder'
 
+try {
+  const host = new URL(knowledgeSupabaseUrl).host
+  console.info('[Axiom knowledge Supabase]', { host })
+} catch {
+  console.info('[Axiom knowledge Supabase]', { host: 'invalid-url' })
+}
+
 export const knowledgeSupabase = createClient(knowledgeSupabaseUrl, knowledgeSupabaseAnonKey)

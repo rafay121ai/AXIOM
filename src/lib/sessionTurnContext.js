@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'axiom:session-turn-context:v1'
+const STORAGE_KEY = 'axiom:session-turn-context:v2'
 const TTL_MS = 45 * 60 * 1000
 const MAX_ENTRIES = 24
 
@@ -60,9 +60,17 @@ function isFresh(entry, now = Date.now()) {
   return entry?.createdAt && now - entry.createdAt < TTL_MS
 }
 
+function hasUsableRagPayload(payload = {}) {
+  if (!payload || typeof payload !== 'object') return false
+  const chunks = Array.isArray(payload.chunks) ? payload.chunks : []
+  const sources = Array.isArray(payload.sources) ? payload.sources : []
+  const confidence = Number(payload.retrievalConfidence || 0)
+  return chunks.length > 0 && sources.length > 0 && confidence > 0
+}
+
 function prune(entries, now = Date.now()) {
   return entries
-    .filter((entry) => isFresh(entry, now))
+    .filter((entry) => isFresh(entry, now) && hasUsableRagPayload(entry.payload))
     .sort((a, b) => b.createdAt - a.createdAt)
     .slice(0, MAX_ENTRIES)
 }
@@ -90,6 +98,7 @@ export function getCachedTurnContext(sessionId, text, scope = '') {
     store.last.sessionId === sessionId &&
     store.last.scope === compactScope(scope) &&
     isFresh(store.last, now) &&
+    hasUsableRagPayload(store.last.payload) &&
     isLikelyFollowUpTurn(text)
   ) {
     writeStore({ ...store, entries })
@@ -101,6 +110,8 @@ export function getCachedTurnContext(sessionId, text, scope = '') {
 }
 
 export function setCachedTurnContext(sessionId, text, payload, scope = '') {
+  if (!hasUsableRagPayload(payload)) return
+
   const now = Date.now()
   const normalizedScope = compactScope(scope)
   const key = cacheKey(sessionId, text, normalizedScope)
