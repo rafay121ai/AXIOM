@@ -5,283 +5,92 @@ import { generateAxiomProfile } from '../lib/openai'
 import { AXIOM_WELCOME_SEEN_KEY, markAxiomWelcomePending } from './Welcome'
 
 // ─── Question Pool ───────────────────────────────────────────────────────────
-const QUESTION_POOL = {
-  human_mind: [
-    {
-      id: 'HM1',
-      pillar: 'human_mind',
-      question: "When something doesn't go your way —",
-      answers: ['I push through it', 'I step back and think', 'I ask someone'],
-    },
-    {
-      id: 'HM2',
-      pillar: 'human_mind',
-      question: 'Most of your problems trace back to —',
-      answers: ['The same pattern repeating', 'Bad timing or bad luck', 'Other people'],
-    },
-    {
-      id: 'HM3',
-      pillar: 'human_mind',
-      question: "When you know what you need to do but don't do it, it's usually because —",
-      answers: ["You're lazy about it", 'You keep procrastinating', "You don't know where to start"],
-    },
-  ],
-  money_game: [
-    {
-      id: 'MG1',
-      pillar: 'money_game',
-      question: 'Money right now feels like —',
-      answers: ["A tool I'm figuring out", "Something I'm behind on", 'A conversation I avoid'],
-    },
-    {
-      id: 'MG2',
-      pillar: 'money_game',
-      question: 'When you see someone your age doing well financially —',
-      answers: ['You study what they did', 'You feel behind', 'You think they got lucky'],
-    },
-    {
-      id: 'MG3',
-      pillar: 'money_game',
-      question: 'Your relationship with spending is —',
-      answers: ['I think before I spend', 'I spend then regret', 'I avoid looking at my bank account'],
-    },
-  ],
-  how_companies_win: [
-    {
-      id: 'CW1',
-      pillar: 'how_companies_win',
-      question: 'When you see someone who built something —',
-      answers: ['You study how they think', 'You wonder what they know', 'You feel like you could do that too'],
-    },
-    {
-      id: 'CW2',
-      pillar: 'how_companies_win',
-      question: "When something isn't working in what you're building or planning —",
-      answers: ['You pivot fast', 'You push harder on the same thing', "You're not sure what to change"],
-    },
-    {
-      id: 'CW3',
-      pillar: 'how_companies_win',
-      question: 'You back yourself more on —',
-      answers: ['Ideas', 'People', 'Timing'],
-    },
-  ],
-  whats_coming: [
-    {
-      id: 'WC1',
-      pillar: 'whats_coming',
-      question: 'The future feels like —',
-      answers: ['Something to position for', 'Something hard to read', 'Something happening to you'],
-    },
-    {
-      id: 'WC2',
-      pillar: 'whats_coming',
-      question: 'When you hear about a new technology or trend —',
-      answers: ['You think about how to use it', 'You wait to see if it actually matters', 'You usually find out about it late'],
-    },
-    {
-      id: 'WC3',
-      pillar: 'whats_coming',
-      question: 'In 3 years you see yourself —',
-      answers: ['Exactly where you planned to be', 'Somewhere better than now but not sure where', 'Honestly not sure yet'],
-    },
-  ],
-  think_sharper: [
-    {
-      id: 'TS1',
-      pillar: 'think_sharper',
-      question: 'Big decisions usually come from —',
-      answers: ['My gut', 'Research and thinking', 'What people I trust say'],
-    },
-    {
-      id: 'TS2',
-      pillar: 'think_sharper',
-      question: "When you're wrong about something —",
-      answers: ['You admit it fast and move on', 'You take time to process it', "You double down until you're sure"],
-    },
-    {
-      id: 'TS3',
-      pillar: 'think_sharper',
-      question: 'The gap between where you are and where you want to be is a —',
-      answers: ['Time problem', 'Knowledge problem', 'Action problem'],
-    },
-  ],
-  move_people: [
-    {
-      id: 'MP1',
-      pillar: 'move_people',
-      question: 'In a group, you usually —',
-      answers: ['Drive the conversation', 'Listen and observe', 'Depends on the room'],
-    },
-    {
-      id: 'MP2',
-      pillar: 'move_people',
-      question: 'When you need someone to see your point of view —',
-      answers: ['You lay out the logic', 'You find the right moment and read the room', "You struggle to get them there"],
-    },
-    {
-      id: 'MP3',
-      pillar: 'move_people',
-      question: 'People usually come to you for —',
-      answers: ['Advice and direction', 'A honest opinion', "They don't really come to you yet"],
-    },
-  ],
-  closers: [
-    {
-      id: 'CL1',
-      pillar: 'closers',
-      question: 'The most honest thing about where you are right now —',
-      answers: [
-        'I know what I want, I just need to move faster',
-        "I'm moving but not sure it's the right direction",
-        "I haven't started yet but I'm ready",
-      ],
-    },
-    {
-      id: 'CL2',
-      pillar: 'closers',
-      question: 'The thing holding you back most right now is —',
-      answers: ['Yourself', 'Your circumstances', "You're not sure yet"],
-    },
-    {
-      id: 'CL3',
-      pillar: 'closers',
-      question: "You're here because —",
-      answers: [
-        "You're tired of knowing and not doing",
-        'You want to think better and move smarter',
-        "You're looking for something but can't name it yet",
-      ],
-    },
-  ],
-}
-
-const REGULAR_PILLARS = ['human_mind', 'money_game', 'how_companies_win', 'whats_coming', 'think_sharper', 'move_people']
+const QUESTIONS = [
+  {
+    id: 'T1',
+    pillar: 'how_companies_win',
+    type: 'tap',
+    question: "Right now I'm mainly focused on —",
+    answers: ['Building something', 'Figuring out my next move', 'Growing what already exists'],
+  },
+  {
+    id: 'T2',
+    pillar: 'how_companies_win',
+    type: 'tap',
+    question: "The stage I'm at is —",
+    answers: ['Just starting', 'Have something early', 'Already have traction'],
+  },
+  {
+    id: 'T3',
+    pillar: 'think_sharper',
+    type: 'tap',
+    question: 'The resource I feel most short on —',
+    answers: ['Time', 'Money', 'Knowledge', 'The right people'],
+  },
+  {
+    id: 'TB1',
+    pillar: 'how_companies_win',
+    type: 'text',
+    question: 'What are you working on right now?',
+    placeholder: 'building a startup, figuring out a career move, learning to invest...',
+    hint: 'Take your time with this one. The more specific you are, the better Axiom knows you.',
+  },
+  {
+    id: 'T4',
+    pillar: 'think_sharper',
+    type: 'tap',
+    question: "When I get advice I don't want —",
+    answers: ['Generic frameworks', 'Motivational talk', 'Someone to just agree with me'],
+  },
+  {
+    id: 'T5',
+    pillar: 'whats_coming',
+    type: 'tap',
+    question: 'When I hear about a new technology or trend —',
+    answers: ['I think about how to use it', 'I wait to see if it actually matters', 'I usually find out about it late'],
+  },
+  {
+    id: 'TB2',
+    pillar: 'think_sharper',
+    type: 'text',
+    question: "What's the decision or problem you're most stuck on right now?",
+    placeholder: 'could be about your product, your direction, your team, your money...',
+    hint: 'Take your time. This is the most important question in this onboarding.',
+  },
+  {
+    id: 'T6',
+    pillar: 'think_sharper',
+    type: 'tap',
+    question: 'The gap between where I am and where I want to be is a —',
+    answers: ['Time problem', 'Knowledge problem', 'Action problem'],
+  },
+  {
+    id: 'T7',
+    pillar: 'move_people',
+    type: 'tap',
+    question: 'I want Axiom to be —',
+    answers: ['Someone who challenges me', 'Someone who guides me', 'Someone who thinks with me'],
+  },
+  {
+    id: 'TB3',
+    pillar: 'how_companies_win',
+    type: 'text',
+    question: 'What have you already tried?',
+    placeholder: "what you've done, what worked, what didn't...",
+    hint: 'This helps Axiom skip what you already know and go straight to what actually helps.',
+  },
+]
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-function shuffle(arr) {
-  const a = [...arr]
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[a[i], a[j]] = [a[j], a[i]]
-  }
-  return a
-}
-
-function randomFrom(arr) {
-  return arr[Math.floor(Math.random() * arr.length)]
-}
-
-function weightedRandom(pillars, weights) {
-  const total = pillars.reduce((sum, p) => sum + (weights[p] || 1), 0)
-  let rand = Math.random() * total
-  for (const p of pillars) {
-    rand -= weights[p] || 1
-    if (rand <= 0) return p
-  }
-  return pillars[pillars.length - 1]
-}
-
-// Detect signal patterns in accumulated answers
-function detectSignals(answers, currentWeights) {
-  const w = { ...currentWeights }
-
-  const internalStruggleAnswers = new Set([
-    'I step back and think',
-    'You keep procrastinating',
-    "You don't know where to start",
-    'The same pattern repeating',
-    'Yourself',
-  ])
-  const financialFocusAnswers = new Set([
-    "Something I'm behind on",
-    'A conversation I avoid',
-    'You feel behind',
-    'You think they got lucky',
-    'I avoid looking at my bank account',
-  ])
-  const buildingAnswers = new Set([
-    'You study how they think',
-    'You wonder what they know',
-    'You feel like you could do that too',
-    'You pivot fast',
-    'You push harder on the same thing',
-  ])
-
-  for (const { answer } of answers) {
-    if (internalStruggleAnswers.has(answer)) w.human_mind = (w.human_mind || 1) + 0.6
-    if (financialFocusAnswers.has(answer))   w.money_game = (w.money_game || 1) + 0.6
-    if (buildingAnswers.has(answer))         w.how_companies_win = (w.how_companies_win || 1) + 0.6
-  }
-
-  return w
-}
-
 // Derive pillar_weights for session from completed answers
 function derivePillarWeights(answeredQuestions) {
   const weights = {}
   for (const { pillar } of answeredQuestions) {
-    if (pillar && pillar !== 'closers') {
+    if (pillar) {
       weights[pillar] = (weights[pillar] || 0) + 1
     }
   }
   return weights
-}
-
-// Select the next question given current state
-// answeredCount = number already answered (0-indexed next position)
-// pillarUsed: { pillar: count }
-// signalWeights: { pillar: weight }
-// usedIds: Set of question IDs already used
-function selectNextQuestion(answeredCount, pillarUsed, signalWeights, usedIds) {
-  const TOTAL_REGULAR = 9 // questions 0-8, question 9 is closer
-
-  if (answeredCount >= TOTAL_REGULAR) {
-    const availableClosers = QUESTION_POOL.closers.filter((q) => !usedIds.has(q.id))
-    return randomFrom(availableClosers)
-  }
-
-  const remaining = TOTAL_REGULAR - answeredCount
-  const uncoveredPillars = REGULAR_PILLARS.filter((p) => !(pillarUsed[p] > 0))
-
-  // Must cover all remaining uncovered pillars before taking bonus slots
-  if (uncoveredPillars.length >= remaining) {
-    // No slack — pick from uncovered only
-    const targetPillar = weightedRandom(uncoveredPillars, signalWeights)
-    const available = QUESTION_POOL[targetPillar].filter((q) => !usedIds.has(q.id))
-    if (available.length > 0) return randomFrom(available)
-  }
-
-  // Have slack — can take a bonus from a high-signal covered pillar
-  const eligible = REGULAR_PILLARS.filter((p) => (pillarUsed[p] || 0) < 2)
-  const takeBonusFromCovered =
-    uncoveredPillars.length < remaining - 1 &&
-    eligible.some((p) => pillarUsed[p] > 0) &&
-    Math.random() < 0.45
-
-  let targetPillar
-  if (takeBonusFromCovered) {
-    const coveredEligible = eligible.filter((p) => pillarUsed[p] > 0)
-    targetPillar = coveredEligible.length > 0
-      ? weightedRandom(coveredEligible, signalWeights)
-      : weightedRandom(uncoveredPillars, signalWeights)
-  } else if (uncoveredPillars.length > 0) {
-    targetPillar = weightedRandom(uncoveredPillars, signalWeights)
-  } else {
-    const stillEligible = eligible.length > 0 ? eligible : REGULAR_PILLARS
-    targetPillar = weightedRandom(stillEligible, signalWeights)
-  }
-
-  const available = QUESTION_POOL[targetPillar].filter((q) => !usedIds.has(q.id))
-  if (available.length > 0) return randomFrom(available)
-
-  // Fallback: any unused question
-  for (const p of shuffle(REGULAR_PILLARS)) {
-    const fallback = QUESTION_POOL[p].filter((q) => !usedIds.has(q.id))
-    if (fallback.length > 0) return randomFrom(fallback)
-  }
-
-  return null
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -291,26 +100,15 @@ export default function Onboarding() {
   const [authLoading, setAuthLoading] = useState(true)
   const [user, setUser] = useState(null)
   const [signingIn, setSigningIn] = useState(false)
-  const [questions, setQuestions] = useState([])          // built incrementally
+  const [questions] = useState(QUESTIONS)
   const [currentIndex, setCurrentIndex] = useState(0)
   const [answered, setAnswered] = useState([])            // { question, answer, pillar }
-  const [pillarUsed, setPillarUsed] = useState({})
-  const [signalWeights, setSignalWeights] = useState(
-    Object.fromEntries(REGULAR_PILLARS.map((p) => [p, 1]))
-  )
-  const [usedIds, setUsedIds] = useState(new Set())
+  const [textAnswer, setTextAnswer] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState(null)
 
   // Track animation key so re-mounting triggers fade
   const [slideKey, setSlideKey] = useState(0)
-
-  // Init first question
-  useEffect(() => {
-    const first = selectNextQuestion(0, {}, signalWeights, new Set())
-    setQuestions([first])
-    setUsedIds(new Set([first.id]))
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let mounted = true
@@ -395,30 +193,17 @@ export default function Onboarding() {
 
   async function handleAnswer(answerText) {
     const currentQ = questions[currentIndex]
+    const normalizedAnswer = typeof answerText === 'string' ? answerText.trim() : answerText
     const newAnswered = [
       ...answered,
-      { question: currentQ.question, answer: answerText, pillar: currentQ.pillar, id: currentQ.id },
+      { question: currentQ.question, answer: normalizedAnswer, pillar: currentQ.pillar, id: currentQ.id },
     ]
-    const newPillarUsed = {
-      ...pillarUsed,
-      [currentQ.pillar]: (pillarUsed[currentQ.pillar] || 0) + 1,
-    }
-    const newWeights = detectSignals(newAnswered, signalWeights)
-    const newUsedIds = new Set([...usedIds])
-
     setAnswered(newAnswered)
-    setPillarUsed(newPillarUsed)
-    setSignalWeights(newWeights)
+    setTextAnswer('')
 
     const nextIndex = currentIndex + 1
 
-    if (nextIndex < 10) {
-      const nextQ = selectNextQuestion(nextIndex, newPillarUsed, newWeights, newUsedIds)
-      if (nextQ) {
-        newUsedIds.add(nextQ.id)
-        setUsedIds(newUsedIds)
-        setQuestions((prev) => [...prev, nextQ])
-      }
+    if (nextIndex < questions.length) {
       setCurrentIndex(nextIndex)
       setSlideKey((k) => k + 1)
     } else {
@@ -568,17 +353,36 @@ export default function Onboarding() {
       {currentQ && (
         <div key={slideKey} className="onboarding__slide">
           <p className="onboarding__question">{currentQ.question}</p>
-          <div className="onboarding__answers">
-            {currentQ.answers.map((answer) => (
+          {currentQ.type === 'text' ? (
+            <>
+              <p className="onboarding__hint">{currentQ.hint}</p>
+              <textarea
+                className="onboarding__textarea"
+                placeholder={currentQ.placeholder}
+                value={textAnswer}
+                onChange={(event) => setTextAnswer(event.target.value)}
+              />
               <button
-                key={answer}
-                className="onboarding__answer"
-                onClick={() => handleAnswer(answer)}
+                className="onboarding__continue"
+                disabled={textAnswer.trim().length < 10}
+                onClick={() => handleAnswer(textAnswer)}
               >
-                {answer}
+                Continue
               </button>
-            ))}
-          </div>
+            </>
+          ) : (
+            <div className="onboarding__answers">
+              {currentQ.answers.map((answer) => (
+                <button
+                  key={answer}
+                  className="onboarding__answer"
+                  onClick={() => handleAnswer(answer)}
+                >
+                  {answer}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
