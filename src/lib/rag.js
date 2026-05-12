@@ -491,6 +491,27 @@ function emitTiming(options, step, data = {}) {
   }
 }
 
+async function getHistoricalAbsorbedConceptCount(userId, options = {}) {
+  if (!userId) return 0
+  if (!options._historicalAbsorbedConceptCountPromise) {
+    options._historicalAbsorbedConceptCountPromise = knowledgeSupabase
+      .from('user_concept_states')
+      .select('concept_id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('state', 'absorbed')
+      .then(({ count, error }) => {
+        if (error) {
+          console.warn('[Axiom learning state] historical absorbed fetch failed', error)
+          return 0
+        }
+        return count || 0
+      })
+      .catch(() => 0)
+  }
+
+  return options._historicalAbsorbedConceptCountPromise
+}
+
 async function resolveQueryEmbedding(query, options = {}) {
   const normalizedQuery = String(query || '').trim()
   const sharedText = String(options.queryEmbeddingText || '').trim()
@@ -516,8 +537,21 @@ export async function searchWikiForRoute(query, route, matchCount = 3, options =
 
   if (mode === 'single_pillar') {
     const result = await searchWiki(query, matchCount, pillars[0] || null, options)
+    const historicalAbsorbedConceptCount = await getHistoricalAbsorbedConceptCount(
+      options.userId || options.user_id || null,
+      options
+    )
+    emitTiming(options, 'concepts:merged', {
+      conceptCount: result.concepts?.length || 0,
+      absorbedCount: result.concepts?.filter((concept) => concept.state === 'absorbed').length || 0,
+      historicalAbsorbedCount: historicalAbsorbedConceptCount,
+      totalAbsorbedCount: (result.concepts?.filter((concept) => concept.state === 'absorbed').length || 0) + historicalAbsorbedConceptCount,
+      partialCount: result.concepts?.filter((concept) => concept.state === 'partial').length || 0,
+      encounteredCount: result.concepts?.filter((concept) => concept.state === 'encountered').length || 0,
+    })
     return {
       ...result,
+      historicalAbsorbedConceptCount,
       pillarResults: {
         [pillars[0] || 'unscoped']: result,
       },
@@ -567,15 +601,22 @@ export async function searchWikiForRoute(query, route, matchCount = 3, options =
   const concepts = [...conceptMap.values()]
     .filter((concept) => selectedSourceIds.has(concept.source_id))
     .slice(0, 60)
+  const historicalAbsorbedConceptCount = await getHistoricalAbsorbedConceptCount(
+    options.userId || options.user_id || null,
+    options
+  )
+  const currentAbsorbedConceptCount = concepts.filter((concept) => concept.state === 'absorbed').length
 
   emitTiming(options, 'concepts:merged', {
     conceptCount: concepts.length,
-    absorbedCount: concepts.filter((concept) => concept.state === 'absorbed').length,
+    absorbedCount: currentAbsorbedConceptCount,
+    historicalAbsorbedCount: historicalAbsorbedConceptCount,
+    totalAbsorbedCount: currentAbsorbedConceptCount + historicalAbsorbedConceptCount,
     partialCount: concepts.filter((concept) => concept.state === 'partial').length,
     encounteredCount: concepts.filter((concept) => concept.state === 'encountered').length,
   })
 
-  return { chunks, sources, confidence, pillarResults, concepts }
+  return { chunks, sources, confidence, pillarResults, concepts, historicalAbsorbedConceptCount }
 }
 
 function summarisePillarEvidence(pillar, result = {}) {

@@ -1396,6 +1396,9 @@ export default function Chat() {
       let retrievalConfidence = Number.isFinite(cachedTurnContext?.retrievalConfidence)
         ? cachedTurnContext.retrievalConfidence
         : null
+      let historicalAbsorbedConceptCount = Number.isFinite(cachedTurnContext?.historicalAbsorbedConceptCount)
+        ? cachedTurnContext.historicalAbsorbedConceptCount
+        : 0
       let pillarResults = cachedTurnContext?.pillarResults || null
       let wikiContext = typeof cachedTurnContext?.wikiContext === 'string'
         ? cachedTurnContext.wikiContext
@@ -1433,6 +1436,7 @@ export default function Chat() {
         chunks = wikiResult.chunks
         sources = wikiResult.sources
         concepts = wikiResult.concepts || []
+        historicalAbsorbedConceptCount = Number(wikiResult.historicalAbsorbedConceptCount || 0)
         retrievalConfidence = wikiResult.confidence
         pillarResults = wikiResult.pillarResults
         wikiContext = await formatWikiContext(chunks, sources, ragTimingOptions)
@@ -1442,6 +1446,8 @@ export default function Chat() {
           sources: sources.length,
           concepts: concepts.length,
           absorbedConcepts: concepts.filter((concept) => concept.state === 'absorbed').length,
+          historicalAbsorbedConcepts: historicalAbsorbedConceptCount,
+          totalAbsorbedConcepts: concepts.filter((concept) => concept.state === 'absorbed').length + historicalAbsorbedConceptCount,
           partialConcepts: concepts.filter((concept) => concept.state === 'partial').length,
           encounteredConcepts: concepts.filter((concept) => concept.state === 'encountered').length,
           retrievalConfidence,
@@ -1452,6 +1458,8 @@ export default function Chat() {
           sources: sources.length,
           concepts: concepts.length,
           absorbedConcepts: concepts.filter((concept) => concept.state === 'absorbed').length,
+          historicalAbsorbedConcepts: historicalAbsorbedConceptCount,
+          totalAbsorbedConcepts: concepts.filter((concept) => concept.state === 'absorbed').length + historicalAbsorbedConceptCount,
           partialConcepts: concepts.filter((concept) => concept.state === 'partial').length,
           encounteredConcepts: concepts.filter((concept) => concept.state === 'encountered').length,
           retrievalConfidence,
@@ -1495,6 +1503,7 @@ export default function Chat() {
           sources,
           concepts,
           retrievalConfidence,
+          historicalAbsorbedConceptCount,
           pillarResults,
           wikiContext,
           learningStateContext,
@@ -1769,9 +1778,10 @@ export default function Chat() {
         experiment = null
       }
 
-      if (experiment && !concepts.some((concept) => concept.state === 'absorbed')) {
+      if (experiment && concepts.filter((concept) => concept.state === 'absorbed').length + historicalAbsorbedConceptCount <= 0) {
         console.info('[Axiom learning state] experiment blocked after parse: no absorbed in-scope concepts', {
           conceptCount: concepts.length,
+          historicalAbsorbedConceptCount,
         })
         experiment = null
       }
