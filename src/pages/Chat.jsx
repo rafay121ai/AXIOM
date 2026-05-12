@@ -538,8 +538,14 @@ function isLowSignalMemoryTurn(userText = '', assistantText = '') {
   return user.length < 18 && !/\b(i|me|my|we|our|did|tried|built|launched|sold|failed|decided|feel|think|want|need)\b/i.test(user)
 }
 
+function isPracticalMemoryContinuation(userText = '') {
+  return /\b(how do i|how should i|who should i|where do i|what should i|next|reach out|find|choose|decide)\b/i.test(String(userText || ''))
+}
+
 function shouldRunMemoryUpdate(userText = '', assistantText = '', options = {}) {
-  if (isLowSignalMemoryTurn(userText, assistantText)) return false
+  if (isLowSignalMemoryTurn(userText, assistantText)) {
+    return { run: false, reason: 'low_signal_turn' }
+  }
 
   const user = String(userText || '').trim()
   const wordCount = user.split(/\s+/).filter(Boolean).length
@@ -549,11 +555,17 @@ function shouldRunMemoryUpdate(userText = '', assistantText = '', options = {}) 
     looksLikeExperimentCompletion(user) ||
     looksLikeExperimentCancel(user) ||
     /\b(i decided|we decided|decided to|my goal|new goal|i want to|i need to|we need to|i prefer|my preference|from now on|i'?m going to|i am going to)\b/i.test(user)
+  const practicalContinuation = isPracticalMemoryContinuation(user)
 
-  if (wordCount < 15 && !importantTurn) return false
-  if (importantTurn) return true
+  if (importantTurn) return { run: true, reason: 'important_turn' }
+  if (practicalContinuation) return { run: true, reason: 'practical_continuation' }
+  if (wordCount < 8) return { run: false, reason: 'short_non_important_turn' }
 
-  return Number(options.assistantTurnCount || 0) % 3 === 0
+  if (Number(options.assistantTurnCount || 0) % 3 === 0) {
+    return { run: true, reason: 'third_turn_cadence' }
+  }
+
+  return { run: false, reason: 'cadence_throttled' }
 }
 
 function artifactLooksLikeExperiment(artifact) {
@@ -1844,22 +1856,25 @@ export default function Chat() {
           const assistantTurnCount = baseMessages.filter((message) =>
             message.role === 'assistant' && !message.streaming
           ).length + 1
-          const shouldUpdateMemory = shouldRunMemoryUpdate(text, cleanText, {
+          const memoryDecision = shouldRunMemoryUpdate(text, cleanText, {
             assistantTurnCount,
             nodeContext,
             experiment,
           })
 
-          if (!shouldUpdateMemory) {
+          if (!memoryDecision.run) {
             setSession(sessionForMemory)
             console.log(`[Axiom latency ${latencyRunId}] post:memory_skipped`, {
               elapsed_ms: Math.round(performance.now() - postStart),
+              reason: memoryDecision.reason,
+              assistant_turn_count: assistantTurnCount,
             })
           } else {
             const updatedSession = await updatePersonalMemory(sessionForMemory, baseMessages, text, cleanText)
             setSession(updatedSession)
             console.log(`[Axiom latency ${latencyRunId}] post:memory_updated`, {
               elapsed_ms: Math.round(performance.now() - postStart),
+              reason: memoryDecision.reason,
             })
             const token = getStoredSessionToken()
             if (token) {

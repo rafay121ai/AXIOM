@@ -25,7 +25,7 @@ import { isCurrentFactualLiveQuestion } from './liveSearchTriggers'
 // values than a classifier-style confidence score. Empirical source-specific
 // tests in this corpus put strong hits around 0.35-0.45.
 const CONFIDENCE_THRESHOLD = 0.30
-const QUERY_EXPANSION_CONFIDENCE_FLOOR = 0.38
+const QUERY_EXPANSION_CONFIDENCE_FLOOR = 0.28
 const ROUTER_MODES = new Set([
   'single_pillar',
   'two_pillar',
