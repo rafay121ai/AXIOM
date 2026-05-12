@@ -951,6 +951,12 @@ async function persistConceptStateRows(rows) {
       const data = await response.json()
       message = data?.error || message
     } catch {}
+
+    if (response.status === 503 && /knowledge service not configured/i.test(message)) {
+      console.warn('[Axiom learning state] update skipped: knowledge service not configured')
+      return { updated: 0, skipped: true, reason: 'knowledge_service_not_configured' }
+    }
+
     throw new Error(message)
   }
 
@@ -1074,6 +1080,7 @@ ${uniqueConcepts.slice(0, 60).map((concept) => `- id: ${concept.id}
   }
 
   const result = await persistConceptStateRows(rows)
+  if (result?.skipped) return { ...result, transitions }
 
   console.info('[Axiom learning state] updates applied', {
     updated: result?.updated || rows.length,
