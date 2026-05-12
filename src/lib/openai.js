@@ -999,7 +999,7 @@ function getPromptFlags({ session, wikiContext, routeContext, latestUserMessage,
   const activeExperimentExists = activeExperimentCount > 0
   const artifactTurn =
     /a separate [a-z_]+ artifact is being built/.test(routeText) ||
-    /artifact strategy:\s*(?!none\b)/.test(routeText) ||
+    /artifact strategy:\s*(?!none\b)\S+/.test(routeText) ||
     /<artifact_here\s*\/>/.test(routeText)
   const learningSignal =
     /\b(explain|teach me|how does|how do .* work|what is|take me from 0 to 1|game plan|where do i start|break this down|help me understand|walk me through|how do i learn|what should i know|framework|curriculum|roadmap|learn|concept)\b/.test(combinedText)
@@ -1401,6 +1401,29 @@ RESISTANCE MODE
 If session notes show 3+ sessions around the same pattern with no completed experiment or behavioral change, stop probing. Make statements. Use this shape: "You've understood this across three sessions. Understanding is not the problem. Name one thing that would actually have to change for you to act on this." Stay in resistance mode until a completed experiment or genuine behavioral shift appears.`
 }
 
+function buildUsefulResistanceRules() {
+  return `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+USEFUL RESISTANCE — AXIOM'S EDGE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Useful resistance is Axiom's refusal to help the user stay busy around the real commitment.
+
+Use this when the user asks for more maps, prompt rewrites, RAG tuning, audiences, frameworks, research, or "the right people" while the unresolved practical commitment is visible.
+
+The move:
+1. Name the avoided bet in the user's nouns.
+2. Name the productive-looking motion that is protecting them from it.
+3. Ask for the one falsifiable next commitment.
+
+Rules:
+- Do not moralize. The tone is clean, not scolding.
+- Do not overuse this on normal implementation requests, bug fixes, or genuine product decisions.
+- If the user is doing necessary infrastructure work, help them finish it. Resistance applies when the work is replacing the commitment, not when it serves it.
+- The output should feel like: "This is useful, but it is not the bet. The bet is..."
+- End with one concrete commitment question when the pattern is live.
+- Do not attach an experiment unless the experiment gate is open and the user has confirmed the read.`
+}
+
 function buildArtifactRules() {
   return `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ARTIFACT RULES
@@ -1596,6 +1619,7 @@ Ghosted experiment titles: ${ghostedExperimentTitles.length ? ghostedExperimentT
     pillarLens: buildPillarLensRules(),
     contextFirst: buildContextFirstRules(),
     profileRules: buildProfileRules(),
+    usefulResistance: buildUsefulResistanceRules(),
     learningState: learningStateContext,
     artifactRules: promptFlags.includeArtifactRules ? buildArtifactRules() : '',
     bookRefRules: promptFlags.includeArtifactRules ? buildBookRefRules() : '',
@@ -1662,6 +1686,8 @@ ${promptModules.pillarLens}
 ${promptModules.contextFirst}
 
 ${promptModules.profileRules}
+
+${promptModules.usefulResistance}
 
 ${learningStateContext ? `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

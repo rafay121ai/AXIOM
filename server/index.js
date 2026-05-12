@@ -86,6 +86,7 @@ const USAGE_CALL_TYPES = new Set([
   'onboarding',
   'session_notes',
   'memory_update',
+  'concept_state_update',
   'artifact',
   'embedding',
 ])
@@ -99,6 +100,19 @@ if (!supabaseUrl || !supabaseServiceKey) {
 
 const supabaseAdmin = supabaseUrl && supabaseServiceKey
   ? createClient(supabaseUrl, supabaseServiceKey)
+  : null
+
+const knowledgeSupabaseUrl = process.env.VITE_KNOWLEDGE_SUPABASE_URL
+const knowledgeSupabaseServiceKey =
+  process.env.KNOWLEDGE_SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.VITE_KNOWLEDGE_SUPABASE_SERVICE_ROLE_KEY
+
+if (!knowledgeSupabaseUrl || !knowledgeSupabaseServiceKey) {
+  console.warn('[Axiom API] Missing knowledge Supabase service credentials — knowledge writes will not function')
+}
+
+const knowledgeSupabaseAdmin = knowledgeSupabaseUrl && knowledgeSupabaseServiceKey
+  ? createClient(knowledgeSupabaseUrl, knowledgeSupabaseServiceKey)
   : null
 
 function queueModelUsageLog(payload) {
@@ -205,6 +219,14 @@ const liveSearchRateLimit = rateLimit({
   legacyHeaders: false,
 })
 
+const knowledgeWriteRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  message: { error: 'Too many knowledge updates, please slow down.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
 // ─── Global middleware ────────────────────────────────────────────────────────
 
 const corsOptions = {
@@ -219,12 +241,32 @@ app.use(express.json({ limit: '1mb' }))
 app.use('/api/openai', requireAuth)
 app.use('/api/session', requireAuth)
 app.use('/api/live-search', requireAuth)
+app.use('/api/knowledge', requireAuth)
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true })
 })
+
+const CONCEPT_STATES = new Set(['encountered', 'partial', 'absorbed'])
+
+function cleanConceptStateRows(rows, userId) {
+  if (!Array.isArray(rows)) return []
+
+  return rows
+    .map((row) => ({
+      user_id: userId,
+      concept_id: typeof row?.concept_id === 'string' ? row.concept_id.trim() : '',
+      state: typeof row?.state === 'string' ? row.state.trim().toLowerCase() : '',
+      updated_at: new Date().toISOString(),
+    }))
+    .filter((row) =>
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(row.concept_id) &&
+      CONCEPT_STATES.has(row.state)
+    )
+    .slice(0, 60)
+}
 
 function cleanDomainList(value) {
   if (!Array.isArray(value)) return []
@@ -323,6 +365,35 @@ app.post('/api/live-search', liveSearchRateLimit, async (req, res) => {
   } catch (err) {
     console.error('[Live Search]', err)
     res.status(err.status || 500).json({ error: err.message || 'Live search failed' })
+  }
+})
+
+app.post('/api/knowledge/concept-states', knowledgeWriteRateLimit, async (req, res) => {
+  if (!knowledgeSupabaseAdmin) {
+    return res.status(503).json({ error: 'Knowledge service not configured' })
+  }
+
+  const rows = cleanConceptStateRows(req.body?.rows, req.user.id)
+  if (rows.length === 0) {
+    return res.status(400).json({ error: 'No valid concept state updates' })
+  }
+
+  try {
+    const { error } = await knowledgeSupabaseAdmin
+      .from('user_concept_states')
+      .upsert(rows, { onConflict: 'user_id,concept_id' })
+
+    if (error) throw error
+    return res.json({
+      updated: rows.length,
+      states: rows.reduce((counts, row) => {
+        counts[row.state] = (counts[row.state] || 0) + 1
+        return counts
+      }, {}),
+    })
+  } catch (error) {
+    console.error('[Axiom knowledge] concept state write failed', error)
+    return res.status(500).json({ error: 'Failed to update concept states' })
   }
 })
 

@@ -1,6 +1,19 @@
 import { knowledgeSupabase } from './knowledgeSupabase'
 import { generateEmbedding, openai, CHAT_MODEL, requestJsonObject } from './openai'
 import { isCurrentFactualLiveQuestion } from './liveSearchTriggers'
+import { supabase } from './supabase'
+
+const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
+
+function apiUrl(path) {
+  return `${API_BASE}${path}`
+}
+
+async function getAuthHeaders() {
+  const { data } = await supabase.auth.getSession()
+  const token = data.session?.access_token
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
 
 // ─── Similarity Search ───────────────────────────────────────────────────────
 // Requires the match_wiki_chunks function in Supabase:
@@ -193,6 +206,16 @@ const QUESTION_SHAPE_RULES = [
       pillars: ['human_mind', 'think_sharper'],
       artifactStrategy: 'behavior_loop',
       rationale: 'Psychological stuckness is a defensive loop. Use a behavior loop artifact.',
+    }),
+  },
+  {
+    matches: (lower) =>
+      /\b(motion|commitment|commit|bet on|willing to bet|judged|started? .*did not finish|started? .*didn'?t finish|did not finish|didn'?t finish|slipping away|avoid commitment|avoidance|drifting back|keep drifting|finish what|unfinished)\b/.test(lower),
+    build: () => ({
+      mode: 'two_pillar',
+      pillars: ['human_mind', 'think_sharper'],
+      artifactStrategy: 'none',
+      rationale: 'Commitment and unfinished-motion accountability question. Use human pattern plus decision quality, no router call needed.',
     }),
   },
   {
@@ -914,6 +937,26 @@ function shouldApplyConceptState(currentState, nextState) {
   return (CONCEPT_STATE_RANK[nextState] || 0) > (CONCEPT_STATE_RANK[currentState] || 0)
 }
 
+async function persistConceptStateRows(rows) {
+  const authHeaders = await getAuthHeaders()
+  const response = await fetch(apiUrl('/api/knowledge/concept-states'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders },
+    body: JSON.stringify({ rows }),
+  })
+
+  if (!response.ok) {
+    let message = response.statusText
+    try {
+      const data = await response.json()
+      message = data?.error || message
+    } catch {}
+    throw new Error(message)
+  }
+
+  return response.json()
+}
+
 export async function updateConceptStatesAfterResponse({
   userId,
   concepts = [],
@@ -1011,21 +1054,17 @@ ${uniqueConcepts.slice(0, 60).map((concept) => `- id: ${concept.id}
     return { updated: 0, skipped: false }
   }
 
-  const { error } = await knowledgeSupabase
-    .from('user_concept_states')
-    .upsert(rows, { onConflict: 'user_id,concept_id' })
-
-  if (error) throw error
+  const result = await persistConceptStateRows(rows)
 
   console.info('[Axiom learning state] updates applied', {
-    updated: rows.length,
-    states: rows.reduce((counts, row) => {
+    updated: result?.updated || rows.length,
+    states: result?.states || rows.reduce((counts, row) => {
       counts[row.state] = (counts[row.state] || 0) + 1
       return counts
     }, {}),
   })
 
-  return { updated: rows.length, skipped: false }
+  return { updated: result?.updated || rows.length, skipped: false }
 }
 
 // ─── Internalized Priors ─────────────────────────────────────────────────────
