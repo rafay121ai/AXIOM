@@ -1006,10 +1006,17 @@ Schema:
 Rules:
 - Use only concept_id values from the provided list.
 - "encountered" means Axiom clearly introduced or used the concept in this response.
-- "moved_to_partial" means the response deepened the concept through the user's situation or application.
-- "moved_to_absorbed" is rare. Use it only if the response explicitly recognized demonstrated understanding or treated the concept as mastered.
+- "moved_to_partial" means the concept appears in the assistant response AND the user's reply engages with it directly, even briefly. Passive reading does not count. Active engagement does.
+- "moved_to_absorbed" means the concept is being actively used, not just received. Classify absorbed when ANY ONE of these signals is present:
+  1. The user applies the concept to their own specific situation in a way that shows they understand the mechanism, not just the label.
+  2. The user proposes a concrete action, test, or decision directly derived from the concept.
+  3. The user challenges or refines the concept based on their situation. Pushback that shows understanding counts as absorbed.
+  4. The assistant explicitly confirms demonstrated understanding with phrases like "that is crisp enough to test", "that is the right edge", "that is usable", or equivalent language.
+- Absorbed does not require all four signals. One strong signal is enough.
+- Prefer moved_to_absorbed over moved_to_partial when the user is applying, acting from, or refining the mechanism.
 - Never downgrade a concept.
-- If the response did not materially use a concept, return no_state_change.`,
+- If the response did not materially use a concept and the user did not engage it, return no_state_change.
+- The reason must name the exact signal that triggered the transition, such as "user applied mechanism to Axiom onboarding" or "assistant confirmed understanding as usable".`,
       },
       {
         role: 'user',
@@ -1023,7 +1030,8 @@ Concepts in scope:
 ${uniqueConcepts.slice(0, 60).map((concept) => `- id: ${concept.id}
   name: ${concept.concept_name}
   current_state: ${concept.state || 'not_yet_encountered'}
-  description: ${concept.concept_description}`).join('\n')}`,
+  description: ${concept.concept_description}
+  source_absorbed_signal: ${concept.absorbed_signal || 'None provided'}`).join('\n')}`,
       },
     ],
   })
@@ -1031,6 +1039,7 @@ ${uniqueConcepts.slice(0, 60).map((concept) => `- id: ${concept.id}
   const updates = Array.isArray(payload?.updates) ? payload.updates : []
   const conceptById = new Map(uniqueConcepts.map((concept) => [concept.id, concept]))
   const rows = []
+  const transitions = []
 
   for (const update of updates) {
     const conceptId = update?.concept_id
@@ -1038,11 +1047,21 @@ ${uniqueConcepts.slice(0, 60).map((concept) => `- id: ${concept.id}
     if (!concept) continue
     const nextState = normalizeStateAction(update.action)
     if (!shouldApplyConceptState(concept.state, nextState)) continue
+    const reason = typeof update.reason === 'string'
+      ? update.reason.trim().slice(0, 240)
+      : ''
     rows.push({
       user_id: userId,
       concept_id: conceptId,
       state: nextState,
       updated_at: new Date().toISOString(),
+    })
+    transitions.push({
+      concept_id: conceptId,
+      concept_name: concept.concept_name || '',
+      from: concept.state || 'not_yet_encountered',
+      to: nextState,
+      reason,
     })
   }
 
@@ -1062,9 +1081,10 @@ ${uniqueConcepts.slice(0, 60).map((concept) => `- id: ${concept.id}
       counts[row.state] = (counts[row.state] || 0) + 1
       return counts
     }, {}),
+    transitions,
   })
 
-  return { updated: result?.updated || rows.length, skipped: false }
+  return { updated: result?.updated || rows.length, skipped: false, transitions }
 }
 
 // ─── Internalized Priors ─────────────────────────────────────────────────────

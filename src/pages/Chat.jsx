@@ -1866,6 +1866,7 @@ export default function Chat() {
               elapsed_ms: Math.round(performance.now() - postStart),
               updated: result?.updated || 0,
               skipped: Boolean(result?.skipped),
+              transitions: result?.transitions || [],
             })
           }).catch((error) => {
             console.error('[Axiom learning state] update failed', error)
