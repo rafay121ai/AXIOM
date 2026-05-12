@@ -26,6 +26,7 @@ import { isCurrentFactualLiveQuestion } from './liveSearchTriggers'
 // tests in this corpus put strong hits around 0.35-0.45.
 const CONFIDENCE_THRESHOLD = 0.30
 const QUERY_EXPANSION_CONFIDENCE_FLOOR = 0.28
+const EXPANDED_QUERY_SEARCH_LIMIT = 1
 const ROUTER_MODES = new Set([
   'single_pillar',
   'two_pillar',
@@ -61,6 +62,7 @@ const ARTIFACT_STRATEGIES = new Set([
 ])
 const CACHE_TTL_MS = 5 * 60 * 1000
 const MAX_CACHE_ENTRIES = 120
+const embeddingCache = new Map()
 const queryExpansionCache = new Map()
 const searchCache = new Map()
 const routerCache = new Map()
@@ -466,10 +468,13 @@ async function resolveQueryEmbedding(query, options = {}) {
     return options.getQueryEmbedding()
   }
 
-  emitTiming(options, 'embedding:start')
-  const embedding = await generateEmbedding(query)
-  emitTiming(options, 'embedding:done')
-  return embedding
+  const cacheKey = normalizedQuery.toLowerCase()
+  return cachedAsync(embeddingCache, cacheKey, async () => {
+    emitTiming(options, 'embedding:start')
+    const embedding = await generateEmbedding(normalizedQuery)
+    emitTiming(options, 'embedding:done')
+    return embedding
+  })
 }
 
 export async function searchWikiForRoute(query, route, matchCount = 3, options = {}) {
@@ -774,8 +779,17 @@ export async function searchWiki(query, matchCount = 3, filterPillar = null, opt
     return rawSearch
   }
 
+  if (rawResults.length === 0) {
+    emitTiming(options, 'query_expansion:skipped', {
+      reason: 'no_initial_candidates',
+      confidence: rawSearch.confidence,
+      filterPillar,
+    })
+    return rawSearch
+  }
+
   emitTiming(options, 'query_expansion:start', { confidence: rawSearch.confidence })
-  const alternatives = await expandQuery(query)
+  const alternatives = (await expandQuery(query)).slice(0, EXPANDED_QUERY_SEARCH_LIMIT)
   emitTiming(options, 'query_expansion:done', { alternativeCount: alternatives.length })
   if (alternatives.length === 0) return rawSearch
 
