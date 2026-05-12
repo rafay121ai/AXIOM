@@ -312,12 +312,19 @@ async function upsertNode(sessionId, rawNode, index = 0) {
   const node = normalizeNode(rawNode, index)
   if (!node) return null
 
-  const { data: existingMatches, error: selectError } = await supabase
+  let existingQuery = supabase
     .from('personal_wiki_nodes')
     .select('*')
     .eq('session_id', sessionId)
-    .eq('summary', node.summary)
     .eq('type', node.type)
+
+  if (node.type === 'pillar') {
+    existingQuery = existingQuery.eq('label', node.label)
+  } else {
+    existingQuery = existingQuery.eq('summary', node.summary)
+  }
+
+  const { data: existingMatches, error: selectError } = await existingQuery
     .order('updated_at', { ascending: false })
     .limit(1)
 
