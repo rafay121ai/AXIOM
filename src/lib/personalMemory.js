@@ -56,22 +56,51 @@ function normalizeMemory(memory) {
   }
 }
 
-export async function searchPersonalMemory(userId, query, matchCount = 5) {
+function emitTiming(options, step, data = {}) {
+  if (typeof options?.onTiming === 'function') {
+    options.onTiming(step, data)
+  }
+}
+
+async function resolveQueryEmbedding(query, options = {}) {
+  const normalizedQuery = String(query || '').trim()
+  const sharedText = String(options.queryEmbeddingText || '').trim()
+  const canUseSharedEmbedding = sharedText && normalizedQuery === sharedText
+  if (canUseSharedEmbedding && options.queryEmbedding) return options.queryEmbedding
+  if (canUseSharedEmbedding && options.queryEmbeddingPromise) return options.queryEmbeddingPromise
+  if (canUseSharedEmbedding && typeof options.getQueryEmbedding === 'function') {
+    return options.getQueryEmbedding()
+  }
+
+  emitTiming(options, 'embedding:start')
+  const embedding = await generateEmbedding(query)
+  emitTiming(options, 'embedding:done')
+  return embedding
+}
+
+export async function searchPersonalMemory(userId, query, matchCount = 5, options = {}) {
   if (!userId || !query) return []
 
   try {
-    const embedding = await generateEmbedding(query)
+    const embedding = await resolveQueryEmbedding(query, options)
+    emitTiming(options, 'vector_search:start', { matchCount })
     const { data, error } = await supabase.rpc('match_personal_memories', {
       query_embedding: embedding,
       match_user_id: userId,
       match_count: matchCount,
       similarity_threshold: 0.35,
     })
+    emitTiming(options, 'vector_search:done', {
+      matchCount,
+      resultCount: data?.length || 0,
+    })
 
     if (error) return []
 
     const memories = data || []
+    emitTiming(options, 'mark_used:start', { memoryCount: memories.length })
     await markMemoriesUsed(memories.map((memory) => memory.id).filter(Boolean))
+    emitTiming(options, 'mark_used:done', { memoryCount: memories.length })
     return memories
   } catch {
     return []
