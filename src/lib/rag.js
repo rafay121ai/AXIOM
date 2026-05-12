@@ -238,6 +238,16 @@ const QUESTION_SHAPE_RULES = [
   },
   {
     matches: (lower) =>
+      /\b(first 10 users?|first ten users?|early users?|stick around|retention|retain|activation|onboarding|churn|user acquisition|get .*users?|keep .*users?)\b/.test(lower),
+    build: () => ({
+      mode: 'two_pillar',
+      pillars: ['how_companies_win', 'move_people'],
+      artifactStrategy: 'none',
+      rationale: 'Early-user retention question. Combine product wedge with user persuasion, no router call needed.',
+    }),
+  },
+  {
+    matches: (lower) =>
       /\b(life|career|next 5 years|next five years|who should i become|what should i do with my)\b/.test(lower),
     build: ({ lower }) => ({
       mode: 'all_pillar_synthesis',
@@ -776,6 +786,15 @@ export async function searchWiki(query, matchCount = 3, filterPillar = null, opt
   const rawResults = await searchSingleQuery(query, matchCount * 3, filterPillar, options)
   const rawSearch = await buildWikiSearchResult([rawResults], matchCount, options)
   if (rawSearch.confidence >= QUERY_EXPANSION_CONFIDENCE_FLOOR) {
+    return rawSearch
+  }
+
+  if (!options.allowQueryExpansion) {
+    emitTiming(options, 'query_expansion:skipped', {
+      reason: 'disabled_for_turn',
+      confidence: rawSearch.confidence,
+      filterPillar,
+    })
     return rawSearch
   }
 

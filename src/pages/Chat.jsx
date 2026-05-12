@@ -320,6 +320,18 @@ function asksForExperimentOrApplication(text = '') {
   return /\b(experiment|practical|apply|application|next step|next move|what should i do|what do i do|do today|try today|test this|real[- ]world)\b/i.test(text)
 }
 
+function shouldAllowQueryExpansionForTurn(text = '', route = null) {
+  const clean = String(text || '').toLowerCase()
+  const explicitSourceDepth =
+    /\b(sources?|cite|citation|book|essay|paper|study|case study|examples?|framework|mental model|teach|explain|what is|how does|why does|research|evidence|where did|current|latest|recent|news|forecast|prediction|what'?s coming|signals?)\b/.test(clean)
+  const routeNeedsDepth =
+    route?.mode === 'four_pillar_synthesis' ||
+    route?.mode === 'all_pillar_synthesis' ||
+    Boolean(getRequiredArtifactType(route))
+
+  return explicitSourceDepth || routeNeedsDepth
+}
+
 function explicitArtifactTypeForText(text = '') {
   const clean = String(text || '').toLowerCase()
   if (EXPLICIT_SIGNAL_MAP_REQUEST_RE.test(clean)) return 'signal_map'
@@ -1408,6 +1420,12 @@ export default function Chat() {
         routeMode: route?.mode,
         artifactStrategy: route?.artifactStrategy || route?.artifact_strategy,
         memoryCount: personalMemories?.length || 0,
+      })
+      ragTimingOptions.allowQueryExpansion = shouldAllowQueryExpansionForTurn(text, route)
+      markLatency('rag:query_expansion_policy', {
+        allowed: ragTimingOptions.allowQueryExpansion,
+        routeMode: route?.mode,
+        artifactStrategy: route?.artifactStrategy || route?.artifact_strategy,
       })
 
       if (!chunks || !sources || !concepts || retrievalConfidence === null || !pillarResults || wikiContext === null || learningStateContext === null) {
