@@ -12,7 +12,7 @@ import Exa from 'exa-js'
 import OpenAI from 'openai'
 import { createClient } from '@supabase/supabase-js'
 import rateLimit from 'express-rate-limit'
-import { validateExperimentQuality } from '../src/lib/experimentQuality.js'
+import { validateExperimentQuality } from './experimentQuality.js'
 
 const app = express()
 const port = process.env.PORT || 3001
