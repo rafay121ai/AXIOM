@@ -564,11 +564,7 @@ test('smoke: minimum deploy flows work end to end', { timeout: TEST_TIMEOUT_MS }
   })
 
   await t.test('Brain graph', async () => {
-    const nodeAId = crypto.randomUUID()
-    const nodeBId = crypto.randomUUID()
-    const nodePayload = (id, label, summary) => ({
-      id,
-      session_id: state.sessionId,
+    const nodePayload = (label, summary) => ({
       label,
       type: 'goal',
       pillar: 'think_sharper',
@@ -581,29 +577,31 @@ test('smoke: minimum deploy flows work end to end', { timeout: TEST_TIMEOUT_MS }
       z: 0,
     })
 
-    const { data: nodes, error: nodesError } = await mainAuthed
-      .from('personal_wiki_nodes')
-      .upsert([
-        nodePayload(nodeAId, 'Smoke Node A', 'Smoke node A summary.'),
-        nodePayload(nodeBId, 'Smoke Node B', 'Smoke node B summary.'),
-      ], { onConflict: 'id' })
-      .select('*')
-    assert.ifError(nodesError)
-    assert.equal(nodes.length, 2)
+    const nodeA = await apiPost('/api/personal-wiki/nodes', {
+      session_id: state.sessionId,
+      node: nodePayload('Smoke Node A', 'Smoke node A summary.'),
+    })
+    const nodeB = await apiPost('/api/personal-wiki/nodes', {
+      session_id: state.sessionId,
+      node: nodePayload('Smoke Node B', 'Smoke node B summary.'),
+    })
+    assert.equal(nodeA.response.status, 200)
+    assert.equal(nodeB.response.status, 200)
+    assert.ok(nodeA.json.node?.id)
+    assert.ok(nodeB.json.node?.id)
 
-    const { data: edge, error: edgeError } = await mainAuthed
-      .from('personal_wiki_edges')
-      .insert({
-        session_id: state.sessionId,
-        source_node_id: nodeAId,
-        target_node_id: nodeBId,
-        relationship: 'related_to',
-        weight: 0.7,
-      })
-      .select('*')
-      .single()
-    assert.ifError(edgeError)
-    assert.equal(edge.source_node_id, nodeAId)
-    assert.equal(edge.target_node_id, nodeBId)
+    const edge = await apiPost('/api/personal-wiki/edges', {
+      session_id: state.sessionId,
+      source_node_id: nodeA.json.node.id,
+      target_node_id: nodeB.json.node.id,
+      relationship: 'related_to',
+      weight: 0.7,
+    })
+    assert.equal(edge.response.status, 200)
+    assert.equal(edge.json.edge.source_node_id, nodeA.json.node.id)
+    assert.equal(edge.json.edge.target_node_id, nodeB.json.node.id)
+
+    const accessed = await apiPost(`/api/personal-wiki/nodes/${nodeA.json.node.id}/accessed`, {})
+    assert.equal(accessed.response.status, 200)
   })
 })

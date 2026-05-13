@@ -250,6 +250,8 @@ app.use('/api/session', requireAuth)
 app.use('/api/live-search', requireAuth)
 app.use('/api/knowledge', requireAuth)
 app.use('/api/experiments', requireAuth)
+app.use('/api/personal-wiki', requireAuth)
+app.use('/api/admin', requireAuth)
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
@@ -258,6 +260,11 @@ app.get('/health', (_req, res) => {
 })
 
 const CONCEPT_STATES = new Set(['encountered', 'partial', 'absorbed'])
+const PERSONAL_WIKI_TYPES = new Set(['pillar', 'concept', 'pattern', 'goal', 'blind_spot', 'experiment', 'belief', 'decision', 'contradiction'])
+const PERSONAL_WIKI_PILLARS = new Set(['psychology', 'economics', 'human_mind', 'money_game', 'how_companies_win', 'whats_coming', 'think_sharper', 'move_people'])
+const PERSONAL_WIKI_STATUSES = new Set(['seed', 'dim', 'active', 'bright', 'ghosted', 'resolved'])
+const PERSONAL_WIKI_RELATIONSHIPS = new Set(['belongs_to', 'causes', 'shows_up_as', 'tested_by', 'tests', 'contradicts', 'strengthens', 'resolved_by', 'related_to'])
+const STATUS_RANK = { bright: 3, active: 2, ghosted: 1, dim: 0, seed: 0, resolved: 0 }
 
 function cleanConceptStateRows(rows, userId) {
   if (!Array.isArray(rows)) return []
@@ -274,6 +281,118 @@ function cleanConceptStateRows(rows, userId) {
       CONCEPT_STATES.has(row.state)
     )
     .slice(0, 60)
+}
+
+async function assertSessionOwner(sessionId, userId) {
+  const { data: session, error } = await supabaseAdmin
+    .from('sessions')
+    .select('id,user_id')
+    .eq('id', sessionId)
+    .single()
+
+  if (error || !session) return { ok: false, status: 404, error: 'Session not found' }
+  if (session.user_id !== userId) return { ok: false, status: 403, error: 'Forbidden' }
+  return { ok: true, session }
+}
+
+function cleanWikiNode(rawNode = {}) {
+  const type = String(rawNode.type || 'concept').trim()
+  const pillar = String(rawNode.pillar || '').trim()
+  const status = String(rawNode.status || 'dim').trim()
+  const importance = Number(rawNode.importance)
+  const confidence = Number(rawNode.confidence)
+  const x = Number(rawNode.x)
+  const y = Number(rawNode.y)
+  const z = Number(rawNode.z)
+
+  return {
+    label: String(rawNode.label || '').trim().slice(0, 120),
+    type: PERSONAL_WIKI_TYPES.has(type) ? type : 'concept',
+    pillar: PERSONAL_WIKI_PILLARS.has(pillar) ? pillar : null,
+    summary: String(rawNode.summary || '').trim().slice(0, 1400),
+    status: PERSONAL_WIKI_STATUSES.has(status) ? status : 'dim',
+    importance: Number.isFinite(importance) ? Math.min(5, Math.max(1, Math.round(importance))) : 3,
+    confidence: Number.isFinite(confidence) ? Math.min(1, Math.max(0, confidence)) : 0.7,
+    x: Number.isFinite(x) ? x : 0,
+    y: Number.isFinite(y) ? y : 0,
+    z: Number.isFinite(z) ? z : 0,
+  }
+}
+
+function uniqueWikiLabel(label, existingLabels = new Set()) {
+  const clean = String(label || '').trim()
+  const candidates = [
+    clean,
+    `${clean} Signal`,
+    `${clean} Context`,
+    `${clean} Practice`,
+    `${clean} Path`,
+  ].filter(Boolean)
+
+  return candidates.find((candidate) => !existingLabels.has(candidate.toLowerCase())) || clean
+}
+
+function isAdminUser(user) {
+  const allowed = String(process.env.ADMIN_USER_IDS || process.env.ADMIN_EMAILS || '')
+    .split(',')
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean)
+  if (!allowed.length) return false
+  return allowed.includes(String(user?.id || '').toLowerCase()) ||
+    allowed.includes(String(user?.email || '').toLowerCase())
+}
+
+async function countRows(client, table, query = (q) => q) {
+  if (!client) return null
+  const { count, error } = await query(client.from(table).select('*', { count: 'exact', head: true }))
+  if (error) return { error: error.message }
+  return count || 0
+}
+
+async function getKnowledgeIntegrity() {
+  if (!knowledgeSupabaseAdmin) return { configured: false }
+
+  const [
+    chunkCount,
+    sourceCount,
+    missingSourceId,
+    learningMapCount,
+  ] = await Promise.all([
+    countRows(knowledgeSupabaseAdmin, 'wiki_chunks'),
+    countRows(knowledgeSupabaseAdmin, 'wiki_sources'),
+    countRows(knowledgeSupabaseAdmin, 'wiki_chunks', (q) => q.is('source_id', null)),
+    countRows(knowledgeSupabaseAdmin, 'source_learning_maps'),
+  ])
+
+  let orphanChunkCount = 0
+  let orphanLearningMapCount = 0
+  try {
+    const { data: sources } = await knowledgeSupabaseAdmin.from('wiki_sources').select('id')
+    const sourceIds = new Set((sources || []).map((source) => source.id))
+    const { data: chunks } = await knowledgeSupabaseAdmin.from('wiki_chunks').select('source_id').not('source_id', 'is', null)
+    orphanChunkCount = (chunks || []).filter((chunk) => !sourceIds.has(chunk.source_id)).length
+    const { data: maps } = await knowledgeSupabaseAdmin.from('source_learning_maps').select('source_id')
+    orphanLearningMapCount = (maps || []).filter((map) => !sourceIds.has(map.source_id)).length
+  } catch (error) {
+    return {
+      configured: true,
+      chunkCount,
+      sourceCount,
+      missingSourceId,
+      learningMapCount,
+      integrity_error: error.message,
+    }
+  }
+
+  return {
+    configured: true,
+    chunkCount,
+    sourceCount,
+    missingSourceId,
+    orphanChunkCount,
+    learningMapCount,
+    orphanLearningMapCount,
+  }
 }
 
 function normalizeExperimentPillarForStorage(pillar) {
@@ -463,6 +582,281 @@ app.post('/api/knowledge/concept-states', knowledgeWriteRateLimit, async (req, r
   } catch (error) {
     console.error('[Axiom knowledge] concept state write failed', error)
     return res.status(500).json({ error: 'Failed to update concept states' })
+  }
+})
+
+app.post('/api/personal-wiki/nodes', async (req, res) => {
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Personal wiki service not configured' })
+
+  const sessionId = String(req.body?.session_id || '').trim()
+  const node = cleanWikiNode(req.body?.node)
+  if (!sessionId || !node.label) return res.status(400).json({ error: 'Missing session or node label' })
+
+  const ownership = await assertSessionOwner(sessionId, req.user.id)
+  if (!ownership.ok) return res.status(ownership.status).json({ error: ownership.error })
+
+  try {
+    let existingQuery = supabaseAdmin
+      .from('personal_wiki_nodes')
+      .select('*')
+      .eq('session_id', sessionId)
+      .eq('type', node.type)
+
+    existingQuery = node.type === 'pillar'
+      ? existingQuery.eq('label', node.label)
+      : existingQuery.eq('summary', node.summary)
+
+    const { data: existingMatches, error: selectError } = await existingQuery
+      .order('updated_at', { ascending: false })
+      .limit(1)
+
+    if (selectError) throw selectError
+    const existing = existingMatches?.[0] || null
+
+    if (existing) {
+      let nextLabel = node.label || existing.label
+      if (nextLabel && nextLabel !== existing.label) {
+        const { data: labelMatches } = await supabaseAdmin
+          .from('personal_wiki_nodes')
+          .select('id,label')
+          .eq('session_id', sessionId)
+          .eq('type', node.type)
+
+        const existingLabels = new Set((labelMatches || [])
+          .filter((match) => match.id !== existing.id)
+          .map((match) => String(match.label || '').trim().toLowerCase()))
+        nextLabel = uniqueWikiLabel(nextLabel, existingLabels)
+      }
+
+      const updates = {
+        label: nextLabel,
+        pillar: node.pillar || existing.pillar,
+        summary: node.summary || existing.summary,
+        status: (STATUS_RANK[existing.status] ?? 0) >= (STATUS_RANK[node.status] ?? 0) ? existing.status : node.status,
+        importance: Math.max(existing.importance || 1, node.importance),
+        confidence: Math.max(existing.confidence || 0, node.confidence),
+        updated_at: new Date().toISOString(),
+        last_activated_at: node.status === 'active' ? new Date().toISOString() : existing.last_activated_at,
+      }
+
+      const { data, error } = await supabaseAdmin
+        .from('personal_wiki_nodes')
+        .update(updates)
+        .eq('id', existing.id)
+        .select()
+        .single()
+
+      if (error) throw error
+      return res.json({ node: data })
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('personal_wiki_nodes')
+      .insert({ session_id: sessionId, ...node })
+      .select()
+      .single()
+
+    if (error) throw error
+    return res.json({ node: data })
+  } catch (error) {
+    console.error('[Personal Wiki] node upsert failed', error)
+    return res.status(500).json({ error: 'Failed to upsert personal wiki node' })
+  }
+})
+
+app.post('/api/personal-wiki/edges', async (req, res) => {
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Personal wiki service not configured' })
+
+  const sessionId = String(req.body?.session_id || '').trim()
+  const sourceNodeId = String(req.body?.source_node_id || '').trim()
+  const targetNodeId = String(req.body?.target_node_id || '').trim()
+  const relationship = String(req.body?.relationship || 'related_to').trim()
+  const weight = Number(req.body?.weight)
+
+  if (!sessionId || !sourceNodeId || !targetNodeId || sourceNodeId === targetNodeId) {
+    return res.status(400).json({ error: 'Invalid edge payload' })
+  }
+  if (!PERSONAL_WIKI_RELATIONSHIPS.has(relationship)) {
+    return res.status(400).json({ error: 'Invalid edge relationship' })
+  }
+
+  const ownership = await assertSessionOwner(sessionId, req.user.id)
+  if (!ownership.ok) return res.status(ownership.status).json({ error: ownership.error })
+
+  try {
+    const { data: nodes, error: nodesError } = await supabaseAdmin
+      .from('personal_wiki_nodes')
+      .select('id')
+      .eq('session_id', sessionId)
+      .in('id', [sourceNodeId, targetNodeId])
+
+    if (nodesError) throw nodesError
+    if ((nodes || []).length !== 2) return res.status(400).json({ error: 'Edge nodes must belong to the session' })
+
+    const safeWeight = Number.isFinite(weight) ? Math.min(1, Math.max(0, weight)) : 0.5
+    const { data: existing, error: selectError } = await supabaseAdmin
+      .from('personal_wiki_edges')
+      .select('*')
+      .eq('session_id', sessionId)
+      .eq('source_node_id', sourceNodeId)
+      .eq('target_node_id', targetNodeId)
+      .eq('relationship', relationship)
+      .maybeSingle()
+
+    if (selectError) throw selectError
+
+    if (existing) {
+      const { data, error } = await supabaseAdmin
+        .from('personal_wiki_edges')
+        .update({
+          weight: Math.min(1, Math.max(existing.weight || 0, safeWeight)),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id)
+        .select()
+        .single()
+
+      if (error) throw error
+      return res.json({ edge: data })
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('personal_wiki_edges')
+      .insert({
+        session_id: sessionId,
+        source_node_id: sourceNodeId,
+        target_node_id: targetNodeId,
+        relationship,
+        weight: safeWeight,
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+    return res.json({ edge: data })
+  } catch (error) {
+    console.error('[Personal Wiki] edge upsert failed', error)
+    return res.status(500).json({ error: 'Failed to upsert personal wiki edge' })
+  }
+})
+
+app.post('/api/personal-wiki/nodes/:id/accessed', async (req, res) => {
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Personal wiki service not configured' })
+
+  const nodeId = String(req.params.id || '').trim()
+  if (!nodeId || nodeId.startsWith('fallback-') || nodeId.startsWith('virtual-pillar-')) {
+    return res.status(400).json({ error: 'Invalid node id' })
+  }
+
+  try {
+    const { data: node, error: nodeError } = await supabaseAdmin
+      .from('personal_wiki_nodes')
+      .select('id,session_id')
+      .eq('id', nodeId)
+      .single()
+
+    if (nodeError || !node) return res.status(404).json({ error: 'Node not found' })
+    const ownership = await assertSessionOwner(node.session_id, req.user.id)
+    if (!ownership.ok) return res.status(ownership.status).json({ error: ownership.error })
+
+    const { error } = await supabaseAdmin
+      .from('personal_wiki_nodes')
+      .update({
+        status: 'bright',
+        last_activated_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', nodeId)
+
+    if (error) throw error
+    return res.json({ ok: true })
+  } catch (error) {
+    console.error('[Personal Wiki] access update failed', error)
+    return res.status(500).json({ error: 'Failed to mark node accessed' })
+  }
+})
+
+app.get('/api/admin/diagnostics', async (req, res) => {
+  if (!isAdminUser(req.user)) return res.status(403).json({ error: 'Forbidden' })
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Admin diagnostics not configured' })
+
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+
+  try {
+    const [
+      sessions24h,
+      messages24h,
+      experimentsActive,
+      usageRows,
+      knowledge,
+    ] = await Promise.all([
+      countRows(supabaseAdmin, 'sessions', (q) => q.gte('created_at', since)),
+      countRows(supabaseAdmin, 'messages', (q) => q.gte('created_at', since)),
+      countRows(supabaseAdmin, 'experiments', (q) => q.eq('status', 'active')),
+      supabaseAdmin
+        .from('model_usage_logs')
+        .select('call_type,total_tokens,estimated_cost_usd,latency_ms,error,created_at')
+        .gte('created_at', since)
+        .order('created_at', { ascending: false })
+        .limit(200),
+      getKnowledgeIntegrity(),
+    ])
+
+    const usage = usageRows.error ? [] : (usageRows.data || [])
+    const usageSummary = usage.reduce((summary, row) => {
+      const key = row.call_type || 'unknown'
+      summary.by_call_type[key] = summary.by_call_type[key] || {
+        count: 0,
+        total_tokens: 0,
+        estimated_cost_usd: 0,
+        errors: 0,
+        avg_latency_ms: 0,
+      }
+      const bucket = summary.by_call_type[key]
+      bucket.count += 1
+      bucket.total_tokens += Number(row.total_tokens || 0)
+      bucket.estimated_cost_usd += Number(row.estimated_cost_usd || 0)
+      bucket.errors += row.error ? 1 : 0
+      bucket.avg_latency_ms += Number(row.latency_ms || 0)
+      summary.total_cost_usd += Number(row.estimated_cost_usd || 0)
+      summary.total_tokens += Number(row.total_tokens || 0)
+      summary.errors += row.error ? 1 : 0
+      return summary
+    }, {
+      total_calls: usage.length,
+      total_tokens: 0,
+      total_cost_usd: 0,
+      errors: 0,
+      by_call_type: {},
+    })
+
+    for (const bucket of Object.values(usageSummary.by_call_type)) {
+      bucket.avg_latency_ms = bucket.count ? Math.round(bucket.avg_latency_ms / bucket.count) : 0
+      bucket.estimated_cost_usd = Number(bucket.estimated_cost_usd.toFixed(6))
+    }
+    usageSummary.total_cost_usd = Number(usageSummary.total_cost_usd.toFixed(6))
+
+    return res.json({
+      window_hours: 24,
+      app: {
+        sessions_created: sessions24h,
+        messages_created: messages24h,
+        active_experiments: experimentsActive,
+      },
+      usage: usageSummary,
+      knowledge,
+      recent_errors: usage
+        .filter((row) => row.error)
+        .slice(0, 20)
+        .map((row) => ({
+          call_type: row.call_type,
+          created_at: row.created_at,
+          latency_ms: row.latency_ms,
+        })),
+    })
+  } catch (error) {
+    console.error('[Admin Diagnostics] failed', error)
+    return res.status(500).json({ error: 'Failed to load diagnostics' })
   }
 })
 

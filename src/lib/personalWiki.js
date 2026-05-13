@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { requestJsonObject, UTILITY_MODEL } from './openai'
+import { postApiJson } from './api'
 
 const DISPLAY_PILLARS = [
   'human_mind',
@@ -311,72 +312,15 @@ function normalizeNode(rawNode, index = 0) {
 async function upsertNode(sessionId, rawNode, index = 0) {
   const node = normalizeNode(rawNode, index)
   if (!node) return null
-
-  let existingQuery = supabase
-    .from('personal_wiki_nodes')
-    .select('*')
-    .eq('session_id', sessionId)
-    .eq('type', node.type)
-
-  if (node.type === 'pillar') {
-    existingQuery = existingQuery.eq('label', node.label)
-  } else {
-    existingQuery = existingQuery.eq('summary', node.summary)
+  try {
+    const result = await postApiJson('/api/personal-wiki/nodes', {
+      session_id: sessionId,
+      node,
+    })
+    return result?.node || null
+  } catch {
+    return null
   }
-
-  const { data: existingMatches, error: selectError } = await existingQuery
-    .order('updated_at', { ascending: false })
-    .limit(1)
-
-  if (selectError) return null
-
-  const existing = existingMatches?.[0] || null
-
-  if (existing) {
-    let nextLabel = node.label || existing.label
-    if (nextLabel && nextLabel !== existing.label) {
-      const { data: labelMatches } = await supabase
-        .from('personal_wiki_nodes')
-        .select('id, label')
-        .eq('session_id', sessionId)
-        .eq('type', node.type)
-
-      const existingLabels = new Set((labelMatches || [])
-        .filter((match) => match.id !== existing.id)
-        .map((match) => String(match.label || '').trim().toLowerCase()))
-      nextLabel = uniqueLabelCandidate(nextLabel, existingLabels)
-    }
-
-    const updates = {
-      label: nextLabel,
-      pillar: node.pillar || existing.pillar,
-      summary: node.summary || existing.summary,
-      status: (STATUS_RANK[existing.status] ?? 0) >= (STATUS_RANK[node.status] ?? 0) ? existing.status : node.status,
-      importance: Math.max(existing.importance || 1, node.importance),
-      confidence: Math.max(existing.confidence || 0, node.confidence),
-      updated_at: new Date().toISOString(),
-      last_activated_at: node.status === 'active' ? new Date().toISOString() : existing.last_activated_at,
-    }
-
-    const { data, error } = await supabase
-      .from('personal_wiki_nodes')
-      .update(updates)
-      .eq('id', existing.id)
-      .select()
-      .single()
-
-    if (error) return existing
-    return data
-  }
-
-  const { data, error } = await supabase
-    .from('personal_wiki_nodes')
-    .insert({ session_id: sessionId, ...node })
-    .select()
-    .single()
-
-  if (error) return null
-  return data
 }
 
 async function findExistingNodeBySummary(sessionId, summary, type) {
@@ -397,39 +341,15 @@ async function findExistingNodeBySummary(sessionId, summary, type) {
 
 async function upsertEdge(sessionId, source, target, relationship = 'related_to', weight = 0.5) {
   if (!source?.id || !target?.id || source.id === target.id) return
-
-  const { data: existing, error: selectError } = await supabase
-    .from('personal_wiki_edges')
-    .select('*')
-    .eq('session_id', sessionId)
-    .eq('source_node_id', source.id)
-    .eq('target_node_id', target.id)
-    .eq('relationship', relationship)
-    .maybeSingle()
-
-  if (selectError) return
-
-  if (existing) {
-    const { error } = await supabase
-      .from('personal_wiki_edges')
-      .update({
-        weight: Math.min(1, Math.max(existing.weight || 0, weight)),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', existing.id)
-
-    return
-  }
-
-  const { error } = await supabase.from('personal_wiki_edges').insert({
-    session_id: sessionId,
-    source_node_id: source.id,
-    target_node_id: target.id,
-    relationship,
-    weight,
-  })
-
-  if (error) return
+  try {
+    await postApiJson('/api/personal-wiki/edges', {
+      session_id: sessionId,
+      source_node_id: source.id,
+      target_node_id: target.id,
+      relationship,
+      weight,
+    })
+  } catch {}
 }
 
 function buildDisplayRoots(sessionId = null) {
@@ -723,71 +643,9 @@ async function fetchSessionExperiments(sessionId) {
 
 export async function backfillNodeLabels(sessionId) {
   if (!sessionId) return
-
-  const { data: nodes, error: nodesError } = await supabase
-    .from('personal_wiki_nodes')
-        .select('id, label, summary, type, pillar')
-    .eq('session_id', sessionId)
-
-  if (nodesError) return
-
-  const brokenNodes = (nodes || []).filter((node) =>
-    node?.summary && isBrokenNodeLabel(node.label, node.summary)
-  )
-
-  if (!brokenNodes.length) return
-
-  const { data: sessionRow } = await supabase
-    .from('sessions')
-    .select('user_id')
-    .eq('id', sessionId)
-    .maybeSingle()
-
-  const userId = sessionRow?.user_id
-  if (!userId) return
-
-  const { data: memories, error: memoriesError } = await supabase
-    .from('personal_memories')
-    .select('id, content, type, primary_pillar, importance, confidence')
-    .eq('user_id', userId)
-
-  if (memoriesError) return
-
-  for (const node of brokenNodes) {
-    const nodeLabel = String(node.label || '').replace('...', '').trim()
-    const match = (memories || []).find(m =>
-      m.content.startsWith(nodeLabel) ||
-      nodeLabel.startsWith(m.content.slice(0, 30))
-    ) || {
-      type: node.type,
-      primary_pillar: node.pillar || null,
-      content: node.summary,
-    }
-
-    try {
-      const label = await generateNodeLabel(match)
-      const existingLabels = new Set((nodes || [])
-        .filter((candidate) => candidate.id !== node.id && candidate.type === node.type)
-        .map((candidate) => String(candidate.label || '').trim().toLowerCase()))
-      const uniqueLabel = uniqueLabelCandidate(label, existingLabels)
-
-      await supabase
-        .from('personal_wiki_nodes')
-        .update({ label: uniqueLabel, updated_at: new Date().toISOString() })
-        .eq('id', node.id)
-    } catch {
-      const fallbackLabel = fallbackMemoryLabel(match)
-      const existingLabels = new Set((nodes || [])
-        .filter((candidate) => candidate.id !== node.id && candidate.type === node.type)
-        .map((candidate) => String(candidate.label || '').trim().toLowerCase()))
-      const uniqueLabel = uniqueLabelCandidate(fallbackLabel, existingLabels)
-
-      await supabase
-        .from('personal_wiki_nodes')
-        .update({ label: uniqueLabel, updated_at: new Date().toISOString() })
-        .eq('id', node.id)
-    }
-  }
+  // Label repair now happens naturally on the next server-owned node upsert.
+  // Keep this function as a compatibility no-op so old callers do not write
+  // personal wiki rows directly from the browser.
 }
 
 export async function syncPersonalWiki(session) {
@@ -861,17 +719,9 @@ export async function syncPersonalWiki(session) {
 
 export async function markWikiNodeAccessed(nodeId) {
   if (!nodeId || String(nodeId).startsWith('fallback-') || String(nodeId).startsWith('virtual-pillar-')) return
-
-  const { error } = await supabase
-    .from('personal_wiki_nodes')
-    .update({
-      status: 'bright',
-      last_activated_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', nodeId)
-
-  if (error) return
+  try {
+    await postApiJson(`/api/personal-wiki/nodes/${nodeId}/accessed`, {})
+  } catch {}
 }
 
 export async function getPersonalWikiGraph(sessionId) {

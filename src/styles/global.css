@@ -56,6 +56,14 @@
 html, body, #root {
   height: 100%;
   width: 100%;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+button,
+textarea,
+input {
+  font: inherit;
 }
 
 body {
@@ -374,10 +382,52 @@ h1, h2, h3 {
 }
 
 @media (max-width: 640px) {
+  .onboarding {
+    padding: 72px 18px max(24px, env(safe-area-inset-bottom));
+    justify-content: flex-start;
+    overflow-y: auto;
+  }
+
   .onboarding__wordmark {
     top: 24px;
     left: 24px;
     font-size: 20px;
+  }
+
+  .onboarding__progress {
+    top: 32px;
+    max-width: calc(100vw - 120px);
+    overflow: hidden;
+  }
+
+  .onboarding__slide {
+    gap: 24px;
+    margin: auto 0;
+  }
+
+  .onboarding__question {
+    font-size: 24px;
+    line-height: 1.28;
+  }
+
+  .onboarding__hint {
+    margin: -10px auto -4px;
+    font-size: 13px;
+  }
+
+  .onboarding__answer {
+    min-height: 52px;
+    height: auto;
+    padding: 13px 15px;
+  }
+
+  .onboarding__textarea {
+    min-height: 132px;
+    font-size: 16px;
+  }
+
+  .onboarding__auth-title {
+    font-size: 32px;
   }
 }
 
@@ -1204,7 +1254,7 @@ h1, h2, h3 {
   .brain__read--floating {
     top: 86px;
     width: min(360px, 88vw);
-    font-size: 18px;
+    font-size: 13px;
   }
 
   .brain__overlay-message {
@@ -2065,6 +2115,70 @@ h1, h2, h3 {
   font-size: 14px;
   line-height: 1.6;
   color: var(--text-primary);
+}
+
+@media (max-width: 640px) {
+  .chat__header {
+    height: 52px;
+    padding: 0 16px;
+  }
+
+  .chat__messages {
+    padding: 22px 14px 24px;
+    gap: 22px;
+  }
+
+  .chat__messages-inner {
+    gap: 6px;
+  }
+
+  .chat__input-wrap {
+    padding: 10px 12px max(14px, env(safe-area-inset-bottom));
+  }
+
+  .chat__input-inner {
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .chat__textarea {
+    font-size: 16px;
+    max-height: 132px;
+  }
+
+  .msg,
+  .msg__status,
+  .experiment-card,
+  .warning-card {
+    max-width: 94%;
+  }
+
+  .msg--user {
+    padding: 10px 13px;
+  }
+
+  .msg-edit {
+    width: min(94%, 560px);
+  }
+
+  .experiment-card,
+  .warning-card {
+    padding: 13px 14px;
+  }
+
+  .experiment-card__topline {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .experiment-card__actions {
+    gap: 8px;
+  }
+
+  .experiment-card__action {
+    min-height: 32px;
+  }
 }
 
 @keyframes artifactFadeIn {
