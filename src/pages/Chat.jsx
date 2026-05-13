@@ -444,6 +444,102 @@ function resolveTurnResponsePlan({
   }
 }
 
+function classifyPromptResponseMode({
+  text = '',
+  session = {},
+  activeExperimentCount = 0,
+  inExperimentMode = false,
+} = {}) {
+  const userText = String(text || '').toLowerCase()
+  const learningSignal =
+    /\b(explain|teach me|how does|how do .* work|what is|take me from 0 to 1|game plan|where do i start|break this down|help me understand|walk me through|how do i learn|what should i know|framework|curriculum|roadmap|learn|concept)\b/.test(userText)
+  const reportSignal =
+    /\b(i did it|i tried|here'?s what happened|it worked|it didn'?t work|didn'?t do|did not do|couldn'?t|could not|missed it|skipped|forgot|reported back|outcome)\b/.test(userText)
+  const cancelSignal =
+    /\b(cancel|skip|drop|postpone|busy|later|not now|don'?t want to|i'?m not doing this)\b/.test(userText)
+  const accountabilitySignal =
+    /\b(i|we|my|our)\b[\s\S]{0,120}\b(stuck|avoid|avoiding|keep|can'?t|cannot|struggling|procrastinating|decision|should i|need to|problem|frustrated|not getting|failed|missed|scared|afraid|hesitating|still thinking|maybe next week|soon|not yet|figuring it out|need more time)\b/.test(userText)
+  const applicationSignal = asksForExperimentOrApplication(userText)
+
+  if (session?.unresolved_experiment || reportSignal) return 'report'
+  if (inExperimentMode || cancelSignal) return 'experiment_negotiation'
+  if (accountabilitySignal || applicationSignal || Number(session?.warning_level || 0) > 0) return 'accountability'
+  if (learningSignal) return 'learning'
+  if (activeExperimentCount > 0) return 'continuity'
+  return 'terrain'
+}
+
+function resolvePromptControl({
+  text = '',
+  session = {},
+  effectiveRoute = null,
+  requiredArtifactType = null,
+  shouldHoldExperiment = false,
+  activeExperimentCount = 0,
+  experimentAssignedInSession = false,
+  concepts = [],
+  historicalAbsorbedConceptCount = 0,
+  hasLiveWebContext = false,
+  inExperimentMode = false,
+  retrievalConfidence = null,
+} = {}) {
+  const currentAbsorbedCount = concepts.filter((concept) => concept.state === 'absorbed').length
+  const totalAbsorbedConceptCount = currentAbsorbedCount + Number(historicalAbsorbedConceptCount || 0)
+  const responseMode = classifyPromptResponseMode({ text, session, activeExperimentCount, inExperimentMode })
+  const wantsApplication = asksForExperimentOrApplication(text)
+  const wantsCancellation = /\b(cancel|skip|drop|postpone|busy|later|not now|don'?t want to|i'?m not doing this)\b/i.test(text)
+  const wantsSources = /\b(sources?|cite|citation|where did|where is this from|when were these released|how current|released|dated|date unknown|what data|knowledge base|retrieved|search)\b/i.test(text)
+  const activeLimitReached = activeExperimentCount >= 2
+  const experimentRelevant =
+    wantsApplication ||
+    ['accountability', 'report', 'experiment_negotiation'].includes(responseMode) ||
+    experimentAssignedInSession
+  let canAssignExperiment = experimentRelevant && !activeLimitReached && totalAbsorbedConceptCount > 0
+  let experimentBlockReason = null
+
+  if (experimentRelevant && activeLimitReached) {
+    canAssignExperiment = false
+    experimentBlockReason = 'active_experiment_limit'
+  } else if (experimentRelevant && totalAbsorbedConceptCount <= 0) {
+    canAssignExperiment = false
+    experimentBlockReason = 'no_absorbed_concept'
+  } else if (!experimentRelevant) {
+    canAssignExperiment = false
+    experimentBlockReason = 'not_application_turn'
+  }
+
+  const usefulResistanceSignal =
+    ['accountability', 'experiment_negotiation'].includes(responseMode) ||
+    wantsCancellation ||
+    /\b(rag|maps?|prompt rewrites?|frameworks?|research|right people|audience|more sources?|more context|another build|build loop|tuning)\b/i.test(text)
+
+  return {
+    routeMode: effectiveRoute?.mode || 'single_pillar',
+    responseMode,
+    activeExperimentCount,
+    currentAbsorbedConceptCount,
+    historicalAbsorbedConceptCount: Number(historicalAbsorbedConceptCount || 0),
+    totalAbsorbedConceptCount,
+    canAssignExperiment,
+    experimentBlockReason,
+    shouldHoldExperiment,
+    requiredArtifactType,
+    includeArtifactRules: Boolean(requiredArtifactType),
+    includeExperimentRules: canAssignExperiment,
+    includeExperimentLimitRules: activeLimitReached,
+    includeLearningGateRules: experimentBlockReason === 'no_absorbed_concept',
+    includePostExperimentRules: Boolean(experimentAssignedInSession),
+    includeLearningModeRules: responseMode === 'learning',
+    includeAccountabilityModeRules: responseMode === 'accountability',
+    includeReportModeRules: responseMode === 'report',
+    includeReportRules: responseMode === 'report',
+    includeCancellationRules: responseMode === 'experiment_negotiation',
+    includeUsefulResistanceRules: usefulResistanceSignal,
+    includeFullCitationRules: Boolean(wantsSources || hasLiveWebContext || retrievalConfidence >= 0.3),
+    includeLiveCurrentRules: Boolean(hasLiveWebContext),
+  }
+}
+
 function needsCurrentSourceGrounding(text = '') {
   const lower = String(text || '').toLowerCase()
   const currentAffairs = /\b(geopolitics|geopolitical|us[- ]china|china|united states|america|beijing|washington|tariff|sanction|export control|semiconductor controls|taiwan|war|military|election|policy|regulation|diplomacy)\b/.test(lower)
@@ -1547,6 +1643,21 @@ export default function Chat() {
       const checkinContext = isCheckinTurn
         ? `EXPERIMENT CHECK-IN: This is a scheduled check-in turn. Before responding to the user's message, open with one direct sentence asking how their active experiment${activeExpsForCheckin.length > 1 ? 's are' : ' is'} going: ${activeExpsForCheckin.map((e) => e.title || e.description).filter(Boolean).join('; ')}. Make it feel like Axiom noticing naturally — not a system prompt, not a separate paragraph. One sentence, then respond to what they brought.`
         : ''
+      const experimentAssignedInSession = baseMessages.some((m) => m.experiment != null)
+      const promptControl = resolvePromptControl({
+        text,
+        session: sessionForTurn,
+        effectiveRoute,
+        requiredArtifactType,
+        shouldHoldExperiment,
+        activeExperimentCount,
+        experimentAssignedInSession,
+        concepts,
+        historicalAbsorbedConceptCount,
+        hasLiveWebContext: Boolean(liveSearchContext),
+        inExperimentMode,
+        retrievalConfidence,
+      })
 
       const routeContext = [
         checkinContext,
@@ -1571,8 +1682,6 @@ export default function Chat() {
 
       history.push({ role: 'user', content: text })
 
-      const experimentAssignedInSession = baseMessages.some((m) => m.experiment != null)
-
       const systemPrompt = buildSystemPrompt(
         sessionForTurn,
         combinedWikiContext,
@@ -1586,6 +1695,7 @@ export default function Chat() {
           latestUserMessage: text,
           learningStateContext,
           learningConcepts: concepts,
+          promptControl,
         }
       )
       markLatency('prompt:built', {
@@ -1596,6 +1706,7 @@ export default function Chat() {
         learningStateContextChars: learningStateContext.length,
         learningConcepts: concepts.length,
         absorbedLearningConcepts: concepts.filter((concept) => concept.state === 'absorbed').length,
+        promptControl,
         promptDiagnostics: getLastPromptDiagnostics(),
       })
       const promptDiagnostics = getLastPromptDiagnostics()

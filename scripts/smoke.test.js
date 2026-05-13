@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process'
 import { setTimeout as delay } from 'node:timers/promises'
 import dotenv from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
+import { buildSystemPrompt } from '../src/lib/openai.js'
 
 dotenv.config()
 
@@ -226,6 +227,99 @@ async function cleanup() {
 }
 
 after(cleanup)
+
+function promptFixtureControl(overrides = {}) {
+  return {
+    routeMode: 'single_pillar',
+    responseMode: 'terrain',
+    activeExperimentCount: 0,
+    currentAbsorbedConceptCount: 0,
+    historicalAbsorbedConceptCount: 0,
+    totalAbsorbedConceptCount: 0,
+    canAssignExperiment: false,
+    experimentBlockReason: 'not_application_turn',
+    shouldHoldExperiment: false,
+    requiredArtifactType: null,
+    includeArtifactRules: false,
+    includeExperimentRules: false,
+    includeExperimentLimitRules: false,
+    includeLearningGateRules: false,
+    includePostExperimentRules: false,
+    includeLearningModeRules: false,
+    includeAccountabilityModeRules: false,
+    includeReportModeRules: false,
+    includeReportRules: false,
+    includeCancellationRules: false,
+    includeUsefulResistanceRules: false,
+    includeFullCitationRules: false,
+    includeLiveCurrentRules: false,
+    ...overrides,
+  }
+}
+
+function buildPromptFixture({ message, promptControl, learningStateContext = '', learningConcepts = [] }) {
+  const session = {
+    id: '00000000-0000-0000-0000-000000000001',
+    user_id: '00000000-0000-0000-0000-000000000002',
+    axiom_profile: 'User overbuilds to avoid committing.',
+    session_notes: 'User keeps returning to infrastructure instead of one falsifiable customer/user bet.',
+    active_experiments: [],
+    warning_level: 0,
+    ghost_count: 0,
+    consecutive_miss_count: 0,
+  }
+
+  return buildSystemPrompt(
+    session,
+    '',
+    '',
+    1,
+    0.5,
+    '',
+    'Mode: single_pillar\nSelected pillar: think_sharper\nArtifact strategy: none',
+    false,
+    {
+      latestUserMessage: message,
+      learningStateContext,
+      learningConcepts,
+      promptControl,
+    }
+  )
+}
+
+test('smoke: prompt budgets stay bounded', () => {
+  const normalPrompt = buildPromptFixture({
+    message: 'What should I think about this?',
+    promptControl: promptFixtureControl(),
+  })
+  assert.ok(normalPrompt.length < 25000, `normal prompt too large: ${normalPrompt.length}`)
+
+  const accountabilityPrompt = buildPromptFixture({
+    message: 'I keep overbuilding instead of picking one user.',
+    learningConcepts: [{ state: 'absorbed' }],
+    promptControl: promptFixtureControl({
+      responseMode: 'accountability',
+      currentAbsorbedConceptCount: 1,
+      totalAbsorbedConceptCount: 1,
+      canAssignExperiment: true,
+      experimentBlockReason: null,
+      includeExperimentRules: true,
+      includeAccountabilityModeRules: true,
+      includeUsefulResistanceRules: true,
+    }),
+  })
+  assert.ok(accountabilityPrompt.length < 25000, `accountability prompt too large: ${accountabilityPrompt.length}`)
+
+  const learningPrompt = buildPromptFixture({
+    message: 'Teach me decision making.',
+    learningStateContext: 'Concept: Opportunity Cost\nState: encountered',
+    promptControl: promptFixtureControl({
+      responseMode: 'learning',
+      includeLearningModeRules: true,
+    }),
+  })
+  assert.ok(learningPrompt.length < 30000, `learning prompt too large: ${learningPrompt.length}`)
+})
 
 test('smoke: minimum deploy flows work end to end', { timeout: TEST_TIMEOUT_MS }, async (t) => {
   await startApiIfNeeded()
