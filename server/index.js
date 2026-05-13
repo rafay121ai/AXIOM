@@ -12,6 +12,7 @@ import Exa from 'exa-js'
 import OpenAI from 'openai'
 import { createClient } from '@supabase/supabase-js'
 import rateLimit from 'express-rate-limit'
+import { validateExperimentQuality } from '../src/lib/experimentQuality.js'
 
 const app = express()
 const port = process.env.PORT || 3001
@@ -311,6 +312,7 @@ function cleanExperimentPayload(value = {}) {
     description,
     pillar,
     topic: String(experiment.topic || '').trim().slice(0, 120) || null,
+    hypothesis: String(experiment.hypothesis || '').trim().slice(0, 1200) || null,
     window_hours: Number.isFinite(windowHours) && windowHours > 0
       ? Math.min(336, Math.round(windowHours))
       : 48,
@@ -502,6 +504,16 @@ app.post('/api/experiments', experimentWriteRateLimit, async (req, res) => {
       return res.status(409).json({ error: 'Active experiment limit reached' })
     }
 
+    const quality = validateExperimentQuality(experiment)
+    if (!quality.ok) {
+      return res.status(400).json({
+        rejected: true,
+        reason: quality.reason,
+        hint: quality.hint,
+        details: quality.details || {},
+      })
+    }
+
     const assignedAt = new Date()
     const dueAt = new Date(assignedAt.getTime() + experiment.window_hours * 3600 * 1000)
 
@@ -523,7 +535,11 @@ app.post('/api/experiments', experimentWriteRateLimit, async (req, res) => {
         success_condition: experiment.success_condition,
         assigned_at: assignedAt.toISOString(),
         due_at: dueAt.toISOString(),
-        metadata: experiment.original,
+        metadata: {
+          ...experiment.original,
+          hypothesis: experiment.hypothesis,
+          quality_checked_at: assignedAt.toISOString(),
+        },
       })
       .select('*')
       .single()

@@ -21,6 +21,7 @@ import { syncPersonalWiki } from '../lib/personalWiki'
 import { ensureConversationThread } from '../lib/conversationThreads'
 import { incrementAppSessionMessagesSent } from '../lib/appSessionTracker'
 import { postApiJson } from '../lib/api'
+import { validateExperimentQuality } from '../lib/experimentQuality'
 
 // ─── Message Tag Parsing ─────────────────────────────────────────────────────
 const ARTIFACT_JSON_KEY_RE = /"(title|topic|core_shift|trend_state|what_is_happening_now|observed_moves|sections|forecast|frameworks|watch_points|source_weighting|confidence|counterforces|for_this_user)"\s*:/
@@ -139,6 +140,15 @@ function parseExperiment(text) {
 
   if (!experiment || typeof experiment !== 'object') {
     return { cleanText: text, experiment: null }
+  }
+
+  const quality = validateExperimentQuality(experiment)
+  if (!quality.ok) {
+    console.info('[Axiom experiment] rejected parsed experiment', {
+      reason: quality.reason,
+      hint: quality.hint,
+    })
+    return { cleanText, experiment: null }
   }
 
   return { cleanText, experiment }
@@ -781,6 +791,7 @@ function normalizeExperiment(row) {
     status: row.status,
     pillar: row.pillar,
     topic: row.topic,
+    hypothesis: row.hypothesis || row.metadata?.hypothesis || '',
     window_hours: row.window_hours,
     reference_count: row.reference_count || 0,
     how_to_do_it: row.how_to_do_it,
@@ -2110,6 +2121,7 @@ export default function Chat() {
     const newExp = {
       ...experiment,
       pillar: storagePillar || experiment.pillar || null,
+      hypothesis: experiment.hypothesis || '',
       window_hours: windowHours,
       assigned_at: assignedAt.toISOString(),
       due_at: dueAt.toISOString(),
@@ -2128,6 +2140,15 @@ export default function Chat() {
         },
       })
     } catch (error) {
+      if (error?.data?.rejected) {
+        console.info('[Axiom experiment] server rejected experiment', {
+          reason: error.data.reason,
+          hint: error.data.hint,
+          experiment,
+        })
+        return baseSession
+      }
+
       console.error('Failed to assign experiment', {
         error: error?.message || error,
         experiment,

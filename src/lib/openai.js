@@ -1633,12 +1633,9 @@ Code has blocked experiment assignment because no relevant absorbed concept is a
 EXPERIMENT OUTPUT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Code has opened the experiment gate. Assign one experiment only if the response has enough concrete user context to make it executable.
+Experiment gate open. Assign one concrete test only.
 
-Quality bar:
-- The experiment must be startable within 10 minutes.
-- It must test one real behavior, decision, conversation, company, signal, or number.
-- Do not repeat operational steps in the prose. Put them only inside the tag.
+Must start within 10 minutes and include a falsifiable hypothesis tied to success_condition. Put steps only inside the tag.
 
 Append exactly this tag after the prose:
 <experiment>
@@ -1646,6 +1643,7 @@ Append exactly this tag after the prose:
   "title": "4-6 word plain label. No verbs like try or do.",
   "pillar": "One of: Human Mind, Money Game, How Companies Win, What's Coming, Think Sharper, Move People.",
   "description": "One specific sentence naming the exact task.",
+  "hypothesis": "Must contain whether plus the testable claim.",
   "window_hours": 48,
   "how_to_do_it": "Concrete steps. Name the moment, action, and context.",
   "real_world_example": "Specific example of someone doing the task.",

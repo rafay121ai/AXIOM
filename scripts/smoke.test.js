@@ -5,6 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import dotenv from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
 import { buildSystemPrompt } from '../src/lib/openai.js'
+import { validateExperimentQuality } from '../src/lib/experimentQuality.js'
 
 dotenv.config()
 
@@ -227,6 +228,61 @@ async function cleanup() {
 }
 
 after(cleanup)
+
+function validExperimentFixture(overrides = {}) {
+  return {
+    title: 'Zara Price Signal',
+    pillar: 'Move People',
+    description: 'Send Zara the $49 offer and ask if she would pay this week.',
+    hypothesis: 'This test will reveal whether Zara sees the $49 offer as urgent enough to pay for this week.',
+    window_hours: 48,
+    how_to_do_it: 'Open WhatsApp and send Zara the $49 offer with one direct yes-or-no question.',
+    real_world_example: 'A founder messages Zara on WhatsApp with a $49 offer and asks for a yes-or-no answer by Friday.',
+    what_to_notice: 'Notice whether Zara answers the price directly or dodges the buying decision.',
+    success_condition: 'Zara replies yes or no to the $49 offer on WhatsApp.',
+    ...overrides,
+  }
+}
+
+test('Experiment quality validator rejects vague behavior-change tests', () => {
+  assert.equal(validateExperimentQuality(validExperimentFixture()).ok, true)
+
+  assert.equal(
+    validateExperimentQuality(validExperimentFixture({ hypothesis: '' })).reason,
+    'missing_hypothesis'
+  )
+  assert.equal(
+    validateExperimentQuality(validExperimentFixture({ hypothesis: 'This tests urgency.' })).reason,
+    'invalid_hypothesis'
+  )
+  assert.equal(
+    validateExperimentQuality(validExperimentFixture({ how_to_do_it: 'Reflect on the offer and think about why it matters.' })).reason,
+    'missing_specific_action'
+  )
+  assert.equal(
+    validateExperimentQuality(validExperimentFixture({ real_world_example: 'Imagine someone who asks a customer about an offer.' })).reason,
+    'hypothetical_example'
+  )
+  assert.equal(
+    validateExperimentQuality(validExperimentFixture({ success_condition: 'You feel clearer about the decision.' })).reason,
+    'vague_success_condition'
+  )
+  assert.equal(
+    validateExperimentQuality(validExperimentFixture({
+      how_to_do_it: 'Send a message to someone in your network asking about the offer.',
+      real_world_example: 'A founder messages someone in their network about an offer.',
+      success_condition: 'Someone replies yes or no to the offer.',
+    })).reason,
+    'missing_real_world_target'
+  )
+  assert.equal(
+    validateExperimentQuality(validExperimentFixture({
+      hypothesis: 'This test will reveal whether Zara would pay for the offer this week.',
+      success_condition: 'The note contains one pricing assumption and one disconfirming signal.',
+    })).reason,
+    'hypothesis_success_mismatch'
+  )
+})
 
 function promptFixtureControl(overrides = {}) {
   return {
@@ -483,16 +539,7 @@ test('smoke: minimum deploy flows work end to end', { timeout: TEST_TIMEOUT_MS }
   await t.test('Experiments', async () => {
     const created = await apiPost('/api/experiments', {
       session_id: state.sessionId,
-      experiment: {
-        title: 'Smoke Decision Test',
-        pillar: 'Think Sharper',
-        description: 'Write down one live decision and the evidence that would change it.',
-        window_hours: 48,
-        how_to_do_it: 'Open a note and write the decision, current belief, and one disconfirming signal.',
-        real_world_example: 'A founder writes the pricing decision and the customer reply that would change it.',
-        what_to_notice: 'Notice whether the evidence is measurable or vague.',
-        success_condition: 'The note contains one decision and one disconfirming signal.',
-      },
+      experiment: validExperimentFixture(),
     })
     assert.equal(created.response.status, 200)
     assert.ok(created.json.experiment?.id)

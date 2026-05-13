@@ -15,9 +15,9 @@ async function getAuthHeaders() {
 async function readError(response) {
   try {
     const data = await response.json()
-    return data?.error || response.statusText
+    return data || { error: response.statusText }
   } catch {
-    return response.statusText
+    return { error: response.statusText }
   }
 }
 
@@ -30,7 +30,11 @@ export async function postApiJson(path, body = {}) {
   })
 
   if (!response.ok) {
-    throw new Error(await readError(response))
+    const data = await readError(response)
+    const error = new Error(data?.error || data?.reason || response.statusText)
+    error.status = response.status
+    error.data = data
+    throw error
   }
 
   return response.json()
