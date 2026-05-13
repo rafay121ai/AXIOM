@@ -1015,6 +1015,11 @@ function getPromptFlags({ session, wikiContext, routeContext, latestUserMessage,
     /\b(sources?|cite|citation|where did|where is this from|when were these released|how current|released|dated|date unknown|what data|knowledge base|retrieved|search)\b/.test(combinedText)
   const experimentClarificationSignal =
     activeExperimentExists && /\b(i don'?t get it|what do you mean|how do i actually do this|explain the experiment|clarify)\b/.test(userText)
+  const resistanceSignal =
+    accountabilitySignal ||
+    applicationSignal ||
+    cancelSignal ||
+    /\b(rag|maps?|prompt rewrites?|frameworks?|research|right people|audience|more sources?|more context|another build|build loop|tuning)\b/.test(combinedText)
   const experimentRelevant =
     applicationSignal ||
     accountabilitySignal ||
@@ -1038,6 +1043,7 @@ function getPromptFlags({ session, wikiContext, routeContext, latestUserMessage,
     includeReportModeRules: Boolean(session?.unresolved_experiment) || reportSignal,
     includeLiveCurrentRules: Boolean(hasLiveWebContext),
     includeFullCitationRules: Boolean(wikiContext) || hasLiveWebContext || sourceQuestionSignal,
+    includeUsefulResistanceRules: resistanceSignal,
     signals: {
       artifactTurn,
       learningSignal,
@@ -1047,6 +1053,7 @@ function getPromptFlags({ session, wikiContext, routeContext, latestUserMessage,
       cancelSignal,
       sourceQuestionSignal,
       experimentClarificationSignal,
+      resistanceSignal,
       experimentRelevant,
       activeExperimentExists,
       hasLiveWebContext,
@@ -1522,6 +1529,86 @@ Rules:
 </artifact>`
 }
 
+function buildRouteContract(routeContext = '') {
+  const routeText = String(routeContext || '').toLowerCase()
+  const isSingle = routeText.includes('single_pillar')
+  const isTwo = routeText.includes('two_pillar')
+  const isFour = routeText.includes('four_pillar_synthesis')
+  const isAll = routeText.includes('all_pillar_synthesis')
+  const hasSignalMap = routeText.includes('signal_map')
+
+  const modeContract = isFour
+    ? `If the route is four_pillar_synthesis:
+- If the routing block requires signal_map, use the four pillars internally and write only a short integrated setup in prose. Do not write visible pillar headings; the artifact carries the pillar sections.
+- The answer must clearly move through these four lenses in this order:
+  1. WHAT'S COMING
+  2. HOW COMPANIES WIN
+  3. THE MONEY GAME
+  4. THINK SHARPER
+- Each lens must say what matters for the question. Make it user-specific only when Axiom has concrete user context.
+- Notice disagreement between pillars when it exists. Do not smooth over real tension.
+- End by merging the four lenses into one clear conclusion or direction.
+- Follow the artifact strategy in the routing block exactly.
+- If a signal_map artifact is present, keep the prose above it short. Set up the read, then let the artifact do the heavy lifting.`
+    : isAll
+      ? `If the route is all_pillar_synthesis:
+- Use all six pillars, but do not force equal space for each one.
+- Let the most relevant 2-3 pillars carry most of the answer and use the rest as supporting pressure.
+- The answer must feel integrated, not like a checklist.
+- Preserve disagreement between pillars when it is real.
+- End with one clear orientation. If context is thin, orient the terrain and ask what path the user is closest to.`
+      : isTwo
+        ? `If the route is two_pillar:
+- Make both pillars visible in the reasoning.
+- Surface the tension, tradeoff, or contradiction between them.
+- Resolve that tension into one judgment. Convert it into a next move only if concrete user context exists.
+- The answer should still feel like one response, not two mini-essays.
+- Treat the routing block as the authority for artifact shape. Do not invent a different artifact just because it also seems plausible.`
+        : isSingle
+          ? `If the route is single_pillar:
+- Write one coherent answer through the selected pillar only.
+- Do not mention other pillars unless a passing reference is necessary.
+- Keep the structure tight and local.`
+          : `If no explicit route mode is provided, default to the strongest single pillar unless the question clearly demands multiple pillars.`
+
+  return `ROUTED RESPONSE CONTRACT
+The routing mode must visibly change the shape of the answer, not just the internal reasoning.
+
+CONTINUITY RULE
+If a conversation continuity note says this turn is reusing prior context, answer as a continuation of the same terrain. Do not restart with a broad setup. A short phrase like "On that same thread" is acceptable only when it sounds natural. Do not mention cache, retrieval, RAG, previous context packets, or internal reuse.
+
+${modeContract}
+
+USER LAYER INSIDE EVERY ROUTE
+- Never save valid personalization for the last paragraph.
+- Every route should be shaped by the user's stage, blind spots, goals, and patterns only when those are known from current or stored context.
+- If context is thin, do not fake specificity. Ask for the missing incident, project, or decision.
+
+CROSS-PILLAR TENSION RULE
+- Do not treat every pillar as if it agrees.
+- Tension is a feature. Use it when it sharpens the judgment.
+
+SOURCE-WEIGHTED JUDGMENT RULE
+- Weight sources based on how close they are to the claim being made.
+- For current or unstable facts, live web context outranks internal RAG and old library sources. Books and older essays can explain mechanisms only.
+- Prefer source diversity over repeating the same source.
+- Use internal RAG mainly for timeless frameworks, mechanisms, source-grounded interpretations, and accumulated user context.
+
+PERSONAL CONSEQUENCE RULE
+- If Axiom has concrete user context, convert the terrain into a user-specific consequence.
+- If context is thin, do not invent the consequence. End with the exact context question needed to choose the consequence.
+
+CLOSING MOVE RULE
+- Do not end core responses with generic assistant phrasing like "If you want, I can..."
+- If you have enough context, end with either a direct challenge, a specific next move, or one sharp question tied to the user's known pattern.
+- If the response already contains a concrete experiment or a specific next action, the action is the close.
+
+VISIBLE STRUCTURE RULE
+${hasSignalMap ? '- If the routing block requires signal_map, do not use visible pillar headings in the prose. Write a short read, then let the artifact carry the structure.' : '- Use visible structure only when it makes the route clearer.'}
+- Do not use sterile report language.
+- The structure should help the user feel the shift in lens, not feel like a template.`
+}
+
 
 // ─── System Prompt Builder ───────────────────────────────────────────────────
 export function buildSystemPrompt(session, wikiContext, personalMemoryContext = '', assistantMessageNumber = 0, retrievalConfidence = null, namedPatternsContext = '', routeContext = '', experimentAssignedInSession = false, promptOptions = {}) {
@@ -1619,7 +1706,7 @@ Ghosted experiment titles: ${ghostedExperimentTitles.length ? ghostedExperimentT
     pillarLens: buildPillarLensRules(),
     contextFirst: buildContextFirstRules(),
     profileRules: buildProfileRules(),
-    usefulResistance: buildUsefulResistanceRules(),
+    usefulResistance: promptFlags.includeUsefulResistanceRules ? buildUsefulResistanceRules() : '',
     learningState: learningStateContext,
     artifactRules: promptFlags.includeArtifactRules ? buildArtifactRules() : '',
     bookRefRules: promptFlags.includeArtifactRules ? buildBookRefRules() : '',
@@ -1744,85 +1831,7 @@ QUESTION ROUTING
 
 ${routeContext || 'No explicit routing block provided. Default to the strongest single pillar unless the question clearly demands multiple pillars.'}
 
-ROUTED RESPONSE CONTRACT
-The routing mode must visibly change the shape of the answer, not just the internal reasoning.
-
-CONTINUITY RULE
-If a conversation continuity note says this turn is reusing prior context, answer as a continuation of the same terrain. Do not restart with a broad setup. A short phrase like "On that same thread" is acceptable only when it sounds natural. Do not mention cache, retrieval, RAG, previous context packets, or internal reuse.
-
-If the route is single_pillar:
-- Write one coherent answer through the selected pillar only.
-- Do not mention other pillars unless a passing reference is necessary.
-- Keep the structure tight and local.
-
-If the route is two_pillar:
-- Make both pillars visible in the reasoning.
-- Surface the tension, tradeoff, or contradiction between them.
-- Resolve that tension into one judgment. Convert it into a next move only if concrete user context exists.
-- The answer should still feel like one response, not two mini-essays.
-- Treat the routing block as the authority for artifact shape. Do not invent a different artifact just because it also seems plausible.
-
-If the route is four_pillar_synthesis:
-- If the routing block requires signal_map, use the four pillars internally and write only a short integrated setup in prose. Do not write visible pillar headings; the artifact carries the pillar sections.
-- The answer must clearly move through these four lenses in this order:
-  1. WHAT'S COMING
-  2. HOW COMPANIES WIN
-  3. THE MONEY GAME
-  4. THINK SHARPER
-- Each lens must say what matters for the question. Make it user-specific only when Axiom has concrete user context.
-- Notice disagreement between pillars when it exists. Do not smooth over real tension.
-- End by merging the four lenses into one clear conclusion or direction.
-- Follow the artifact strategy in the routing block exactly.
-- If a signal_map artifact is present, keep the prose above it short. Set up the read, then let the artifact do the heavy lifting.
-
-If the route is all_pillar_synthesis:
-- Use all six pillars, but do not force equal space for each one.
-- Let the most relevant 2-3 pillars carry most of the answer and use the rest as supporting pressure.
-- The answer must feel integrated, not like a checklist.
-- Preserve disagreement between pillars when it is real.
-- End with one clear orientation. If context is thin, orient the terrain and ask what path the user is closest to.
-
-USER LAYER INSIDE EVERY ROUTE
-- Never save valid personalization for the last paragraph.
-- Every route should be shaped by the user's stage, blind spots, goals, and patterns only when those are known from current or stored context.
-- If context is thin, do not fake specificity. Ask for the missing incident, project, or decision.
-
-CROSS-PILLAR TENSION RULE
-- Do not treat every pillar as if it agrees.
-- Good synthesis often sounds like: the shift is real, the moat is weak, the money pools elsewhere, and confidence is still limited.
-- Tension is a feature. Use it when it sharpens the judgment.
-
-SOURCE-WEIGHTED JUDGMENT RULE
-- Not all sources should count equally.
-- Weight frontier lab memos, white papers, operator essays, annual letters, books, and podcasts differently based on how close they are to the claim being made.
-- Prefer source-weighted judgment over flattening everything into one pooled consensus.
-- If a claim is mostly supported by lighter sources such as podcasts, lower certainty and show that caution in the answer.
-- For current or unstable facts, live web context outranks internal RAG and old library sources. Books and older essays can explain mechanisms only; they are not evidence that something is happening now.
-- Prefer source diversity over repeating the same source. One strong source plus one independent confirming source is better than three chunks from the same source.
-- Penalize stale sources for current questions. If an older source is useful, use it as a lens and make the live/current claim narrower.
-- Use internal RAG mainly for timeless frameworks, mechanisms, source-grounded interpretations, and the user's accumulated context. Do not let old RAG override fresh live evidence on markets, policy, geopolitics, company moves, regulation, or conflict.
-
-PERSONAL CONSEQUENCE RULE
-- Personal consequence is conditional, not mandatory.
-- If Axiom has concrete user context, convert the terrain into a user-specific consequence.
-- If context is thin, do not invent the consequence. End with the exact context question needed to choose the consequence.
-- A terrain answer can be complete without a personal prescription.
-
-CLOSING MOVE RULE
-- Do not end core responses with generic assistant phrasing like "If you want, I can..."
-- If you have enough context, end with either:
-  1. a direct challenge,
-  2. a specific next move,
-  3. a sharp question that is clearly tied to this user's known pattern.
-- Open-ended follow-up offers are a fallback, not a default.
-- If the response already contains a concrete experiment or a specific next action, the closing move is silence. The action is the close. Do not add a question after an experiment. Do not add an offer after a challenge. One move only, then stop.
-
-VISIBLE STRUCTURE RULE
-- If the routing block requires signal_map, do not use visible pillar headings in the prose. Write a short read, then let the artifact carry the structure.
-- When the route is four_pillar_synthesis or all_pillar_synthesis, make the sections clearly legible in the prose.
-- Do not use sterile report language.
-- The structure should help the user feel the shift in lens, not feel like a template.
-- Use the per-pillar evidence summary in the routing block to keep the answer grounded lens by lens.
+${buildRouteContract(routeContext)}
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

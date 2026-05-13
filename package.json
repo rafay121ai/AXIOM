@@ -16,7 +16,8 @@
     "import-rss": "node scripts/import_rss_signals.js",
     "import-sources": "node scripts/import_sources_from_json.js",
     "start": "node server/index.js",
-    "dev:server": "node --watch server/index.js"
+    "dev:server": "node --watch server/index.js",
+    "test:smoke": "node --test scripts/smoke.test.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

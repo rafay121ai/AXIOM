@@ -20,6 +20,7 @@ import { getCachedTurnContext, setCachedTurnContext } from '../lib/sessionTurnCo
 import { syncPersonalWiki } from '../lib/personalWiki'
 import { ensureConversationThread } from '../lib/conversationThreads'
 import { incrementAppSessionMessagesSent } from '../lib/appSessionTracker'
+import { postApiJson } from '../lib/api'
 
 // ─── Message Tag Parsing ─────────────────────────────────────────────────────
 const ARTIFACT_JSON_KEY_RE = /"(title|topic|core_shift|trend_state|what_is_happening_now|observed_moves|sections|forecast|frameworks|watch_points|source_weighting|confidence|counterforces|for_this_user)"\s*:/
@@ -2005,32 +2006,19 @@ export default function Chat() {
       reference_count: 0,
     }
 
-    const { data, error } = await supabase
-      .from('experiments')
-      .insert({
+    let result
+    try {
+      result = await postApiJson('/api/experiments', {
         session_id: baseSession.id,
-        user_id: baseSession.user_id,
-        title: experiment.title || null,
-        description: experiment.description,
-        status: 'active',
-        pillar: storagePillar,
-        topic: experiment.topic || null,
-        window_hours: windowHours,
-        reference_count: 0,
-        how_to_do_it: experiment.how_to_do_it || null,
-        real_world_example: experiment.real_world_example || null,
-        what_to_notice: experiment.what_to_notice || null,
-        success_condition: experiment.success_condition || null,
-        assigned_at: assignedAt.toISOString(),
-        due_at: dueAt.toISOString(),
-        metadata: experiment,
+        experiment: {
+          ...experiment,
+          pillar: storagePillar || experiment.pillar || null,
+          window_hours: windowHours,
+        },
       })
-      .select('*')
-      .single()
-
-    if (error) {
+    } catch (error) {
       console.error('Failed to assign experiment', {
-        error,
+        error: error?.message || error,
         experiment,
         session_id: baseSession.id,
         user_id: baseSession.user_id,
@@ -2047,19 +2035,8 @@ export default function Chat() {
       return updatedSession
     }
 
-    const updated = [...activeExps, normalizeExperiment(data || newExp)]
-    const sessionUpdates = shouldResetMissStreak ? { consecutive_miss_count: 0 } : {}
-
-    if (Object.keys(sessionUpdates).length > 0) {
-      const { error: sessionUpdateError } = await supabase
-        .from('sessions')
-        .update(sessionUpdates)
-        .eq('id', baseSession.id)
-      if (sessionUpdateError) console.error('Failed to reset miss streak after experiment assignment', {
-        error: sessionUpdateError,
-        session_id: baseSession.id,
-      })
-    }
+    const updated = [...activeExps, normalizeExperiment(result?.experiment || newExp)]
+    const sessionUpdates = result?.session_updates || (shouldResetMissStreak ? { consecutive_miss_count: 0 } : {})
 
     const updatedSession = { ...baseSession, ...sessionUpdates, active_experiments: updated }
     setSession(updatedSession)
@@ -2080,26 +2057,16 @@ export default function Chat() {
   async function updateExperimentStatus(experimentId, status, outcome = '', outcomeReason = null) {
     if (!session || !experimentId) return null
 
-    const now = new Date().toISOString()
-    const updates = { status }
-    if (outcomeReason) updates.outcome_reason = outcomeReason
-    if (status === 'completed') {
-      updates.completed_at = now
-      if (outcome) updates.outcome = outcome
-    }
-    if (status === 'cancelled') updates.cancelled_at = now
-    if (status === 'ghosted') updates.ghosted_at = now
-
-    const { data, error } = await supabase
-      .from('experiments')
-      .update(updates)
-      .eq('id', experimentId)
-      .select('*')
-      .single()
-
-    if (error) {
+    let result
+    try {
+      result = await postApiJson(`/api/experiments/${experimentId}/status`, {
+        status,
+        outcome,
+        outcome_reason: outcomeReason,
+      })
+    } catch (error) {
       console.error('Failed to update experiment status', {
-        error,
+        error: error?.message || error,
         experiment_id: experimentId,
         status,
         outcome_reason: outcomeReason,
@@ -2107,17 +2074,8 @@ export default function Chat() {
       return null
     }
 
-    const normalized = normalizeExperiment(data)
-    const sessionUpdates = status === 'completed' ? { consecutive_miss_count: 0 } : {}
-    if (Object.keys(sessionUpdates).length > 0) {
-      await supabase
-        .from('sessions')
-        .update(sessionUpdates)
-        .eq('id', session.id)
-        .then(({ error }) => {
-          if (error) console.error('Failed to update session after experiment status change', { error, session_id: session.id })
-        })
-    }
+    const normalized = normalizeExperiment(result?.experiment)
+    const sessionUpdates = result?.session_updates || (status === 'completed' ? { consecutive_miss_count: 0 } : {})
 
     setSession((prev) => {
       if (!prev) return prev

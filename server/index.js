@@ -103,9 +103,7 @@ const supabaseAdmin = supabaseUrl && supabaseServiceKey
   : null
 
 const knowledgeSupabaseUrl = process.env.VITE_KNOWLEDGE_SUPABASE_URL
-const knowledgeSupabaseServiceKey =
-  process.env.KNOWLEDGE_SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.VITE_KNOWLEDGE_SUPABASE_SERVICE_ROLE_KEY
+const knowledgeSupabaseServiceKey = process.env.KNOWLEDGE_SUPABASE_SERVICE_ROLE_KEY
 
 if (!knowledgeSupabaseUrl || !knowledgeSupabaseServiceKey) {
   console.warn('[Axiom API] Missing knowledge Supabase service credentials — knowledge writes will not function')
@@ -227,6 +225,14 @@ const knowledgeWriteRateLimit = rateLimit({
   legacyHeaders: false,
 })
 
+const experimentWriteRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  message: { error: 'Too many experiment updates, please slow down.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
 // ─── Global middleware ────────────────────────────────────────────────────────
 
 const corsOptions = {
@@ -242,6 +248,7 @@ app.use('/api/openai', requireAuth)
 app.use('/api/session', requireAuth)
 app.use('/api/live-search', requireAuth)
 app.use('/api/knowledge', requireAuth)
+app.use('/api/experiments', requireAuth)
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
@@ -266,6 +273,66 @@ function cleanConceptStateRows(rows, userId) {
       CONCEPT_STATES.has(row.state)
     )
     .slice(0, 60)
+}
+
+function normalizeExperimentPillarForStorage(pillar) {
+  const normalized = String(pillar || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[’']/g, '')
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+
+  const aliases = {
+    the_human_mind: 'human_mind',
+    human_mind: 'human_mind',
+    money_game: 'money_game',
+    the_money_game: 'money_game',
+    how_companies_win: 'how_companies_win',
+    whats_coming: 'whats_coming',
+    what_s_coming: 'whats_coming',
+    think_sharper: 'think_sharper',
+    move_people: 'move_people',
+  }
+
+  return aliases[normalized] || null
+}
+
+function cleanExperimentPayload(value = {}) {
+  const experiment = value && typeof value === 'object' ? value : {}
+  const description = String(experiment.description || '').trim().slice(0, 1200)
+  const windowHours = Number(experiment.window_hours)
+  const pillar = normalizeExperimentPillarForStorage(experiment.pillar)
+
+  return {
+    original: experiment,
+    title: String(experiment.title || '').trim().slice(0, 120) || null,
+    description,
+    pillar,
+    topic: String(experiment.topic || '').trim().slice(0, 120) || null,
+    window_hours: Number.isFinite(windowHours) && windowHours > 0
+      ? Math.min(336, Math.round(windowHours))
+      : 48,
+    how_to_do_it: String(experiment.how_to_do_it || '').trim().slice(0, 2400) || null,
+    real_world_example: String(experiment.real_world_example || '').trim().slice(0, 1600) || null,
+    what_to_notice: String(experiment.what_to_notice || '').trim().slice(0, 1600) || null,
+    success_condition: String(experiment.success_condition || '').trim().slice(0, 1000) || null,
+  }
+}
+
+function cleanExperimentStatusPayload(value = {}) {
+  const body = value && typeof value === 'object' ? value : {}
+  const status = String(body.status || '').trim().toLowerCase()
+  const outcome = String(body.outcome || '').trim().slice(0, 2000)
+  const outcomeReason = String(body.outcome_reason || '').trim().toLowerCase()
+  const allowedOutcomeReasons = new Set(['couldnt', 'didnt', 'ghosted'])
+
+  return {
+    status,
+    outcome,
+    outcome_reason: allowedOutcomeReasons.has(outcomeReason) ? outcomeReason : null,
+  }
 }
 
 function cleanDomainList(value) {
@@ -394,6 +461,167 @@ app.post('/api/knowledge/concept-states', knowledgeWriteRateLimit, async (req, r
   } catch (error) {
     console.error('[Axiom knowledge] concept state write failed', error)
     return res.status(500).json({ error: 'Failed to update concept states' })
+  }
+})
+
+app.post('/api/experiments', experimentWriteRateLimit, async (req, res) => {
+  if (!supabaseAdmin) {
+    return res.status(503).json({ error: 'Experiment service not configured' })
+  }
+
+  const sessionId = String(req.body?.session_id || '').trim()
+  const experiment = cleanExperimentPayload(req.body?.experiment)
+  if (!sessionId || !experiment.description) {
+    return res.status(400).json({ error: 'Missing experiment session or description' })
+  }
+
+  try {
+    const { data: session, error: sessionError } = await supabaseAdmin
+      .from('sessions')
+      .select('id,user_id,consecutive_miss_count')
+      .eq('id', sessionId)
+      .single()
+
+    if (sessionError || !session) {
+      return res.status(404).json({ error: 'Session not found' })
+    }
+    if (session.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Forbidden' })
+    }
+
+    const { data: existingExperiments, error: existingError } = await supabaseAdmin
+      .from('experiments')
+      .select('id,status')
+      .eq('session_id', sessionId)
+      .eq('user_id', req.user.id)
+
+    if (existingError) throw existingError
+
+    const activeExperiments = (existingExperiments || []).filter((item) => item.status === 'active')
+    if (activeExperiments.length >= 2) {
+      return res.status(409).json({ error: 'Active experiment limit reached' })
+    }
+
+    const assignedAt = new Date()
+    const dueAt = new Date(assignedAt.getTime() + experiment.window_hours * 3600 * 1000)
+
+    const { data, error } = await supabaseAdmin
+      .from('experiments')
+      .insert({
+        session_id: sessionId,
+        user_id: req.user.id,
+        title: experiment.title,
+        description: experiment.description,
+        status: 'active',
+        pillar: experiment.pillar,
+        topic: experiment.topic,
+        window_hours: experiment.window_hours,
+        reference_count: 0,
+        how_to_do_it: experiment.how_to_do_it,
+        real_world_example: experiment.real_world_example,
+        what_to_notice: experiment.what_to_notice,
+        success_condition: experiment.success_condition,
+        assigned_at: assignedAt.toISOString(),
+        due_at: dueAt.toISOString(),
+        metadata: experiment.original,
+      })
+      .select('*')
+      .single()
+
+    if (error) throw error
+
+    const sessionUpdates = (existingExperiments || []).some((item) => item.status === 'ghosted')
+      ? { consecutive_miss_count: 0 }
+      : {}
+
+    if (Object.keys(sessionUpdates).length > 0) {
+      const { error: updateError } = await supabaseAdmin
+        .from('sessions')
+        .update(sessionUpdates)
+        .eq('id', sessionId)
+        .eq('user_id', req.user.id)
+
+      if (updateError) throw updateError
+    }
+
+    return res.json({ experiment: data, session_updates: sessionUpdates })
+  } catch (error) {
+    console.error('[Experiments] assignment failed', error)
+    return res.status(500).json({ error: error.message || 'Failed to assign experiment' })
+  }
+})
+
+app.post('/api/experiments/:id/status', experimentWriteRateLimit, async (req, res) => {
+  if (!supabaseAdmin) {
+    return res.status(503).json({ error: 'Experiment service not configured' })
+  }
+
+  const experimentId = String(req.params.id || '').trim()
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(experimentId)) {
+    return res.status(400).json({ error: 'Invalid experiment id' })
+  }
+
+  const payload = cleanExperimentStatusPayload(req.body)
+  const allowedStatuses = new Set(['completed', 'cancelled', 'ghosted', 'reset', 'replaced'])
+  if (!allowedStatuses.has(payload.status)) {
+    return res.status(400).json({ error: 'Invalid experiment status' })
+  }
+
+  try {
+    const { data: existing, error: existingError } = await supabaseAdmin
+      .from('experiments')
+      .select('id,session_id,user_id')
+      .eq('id', experimentId)
+      .single()
+
+    if (existingError || !existing) {
+      return res.status(404).json({ error: 'Experiment not found' })
+    }
+    if (existing.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Forbidden' })
+    }
+
+    const now = new Date().toISOString()
+    const updates = { status: payload.status }
+    if (payload.outcome_reason) updates.outcome_reason = payload.outcome_reason
+    if (payload.status === 'completed') {
+      updates.completed_at = now
+      if (payload.outcome) updates.outcome = payload.outcome
+    }
+    if (payload.status === 'cancelled') {
+      updates.cancelled_at = now
+      if (payload.outcome) updates.outcome = payload.outcome
+    }
+    if (payload.status === 'ghosted') updates.ghosted_at = now
+
+    const { data, error } = await supabaseAdmin
+      .from('experiments')
+      .update(updates)
+      .eq('id', experimentId)
+      .eq('user_id', req.user.id)
+      .select('*')
+      .single()
+
+    if (error) throw error
+
+    const sessionUpdates = payload.status === 'completed'
+      ? { consecutive_miss_count: 0 }
+      : {}
+
+    if (Object.keys(sessionUpdates).length > 0) {
+      const { error: updateError } = await supabaseAdmin
+        .from('sessions')
+        .update(sessionUpdates)
+        .eq('id', existing.session_id)
+        .eq('user_id', req.user.id)
+
+      if (updateError) throw updateError
+    }
+
+    return res.json({ experiment: data, session_updates: sessionUpdates })
+  } catch (error) {
+    console.error('[Experiments] status update failed', error)
+    return res.status(500).json({ error: error.message || 'Failed to update experiment' })
   }
 })
 

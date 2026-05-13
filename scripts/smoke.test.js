@@ -1,0 +1,468 @@
+import { after, test } from 'node:test'
+import assert from 'node:assert/strict'
+import { spawn } from 'node:child_process'
+import { setTimeout as delay } from 'node:timers/promises'
+import dotenv from 'dotenv'
+import { createClient } from '@supabase/supabase-js'
+
+dotenv.config()
+
+const TEST_PORT = Number(process.env.SMOKE_TEST_PORT || 3911)
+const API_BASE = (process.env.SMOKE_API_URL || `http://localhost:${TEST_PORT}`).replace(/\/$/, '')
+const SHOULD_SPAWN_API = !process.env.SMOKE_API_URL
+const TEST_TIMEOUT_MS = Number(process.env.SMOKE_TEST_TIMEOUT_MS || 120000)
+
+const requiredEnv = [
+  'VITE_SUPABASE_URL',
+  'VITE_SUPABASE_ANON_KEY',
+  'SUPABASE_SERVICE_ROLE_KEY',
+  'VITE_KNOWLEDGE_SUPABASE_URL',
+  'KNOWLEDGE_SUPABASE_SERVICE_ROLE_KEY',
+  'OPENAI_API_KEY',
+]
+
+assert.ok(
+  !process.env.VITE_KNOWLEDGE_SUPABASE_SERVICE_ROLE_KEY,
+  'Remove VITE_KNOWLEDGE_SUPABASE_SERVICE_ROLE_KEY from .env; rename it to KNOWLEDGE_SUPABASE_SERVICE_ROLE_KEY so the service key is server-only.'
+)
+
+for (const key of requiredEnv) {
+  assert.ok(process.env[key], `Missing required smoke-test env var: ${key}`)
+}
+
+const mainAdmin = createClient(
+  process.env.VITE_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  { auth: { persistSession: false } }
+)
+
+const mainAuthed = createClient(
+  process.env.VITE_SUPABASE_URL,
+  process.env.VITE_SUPABASE_ANON_KEY,
+  { auth: { persistSession: false } }
+)
+
+const otherAuthed = createClient(
+  process.env.VITE_SUPABASE_URL,
+  process.env.VITE_SUPABASE_ANON_KEY,
+  { auth: { persistSession: false } }
+)
+
+const knowledgeAdmin = createClient(
+  process.env.VITE_KNOWLEDGE_SUPABASE_URL,
+  process.env.KNOWLEDGE_SUPABASE_SERVICE_ROLE_KEY,
+  { auth: { persistSession: false } }
+)
+
+const state = {
+  apiProcess: null,
+  accessToken: null,
+  userId: null,
+  otherUserId: null,
+  sessionId: null,
+  sessionToken: null,
+  messageIds: [],
+  experimentIds: [],
+  conceptIds: [],
+}
+
+function smokeEmail(prefix) {
+  return `${prefix}-${Date.now()}-${crypto.randomUUID()}@example.com`
+}
+
+async function waitForApi() {
+  const deadline = Date.now() + 20000
+  let lastError = null
+
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(`${API_BASE}/health`)
+      if (response.ok) return
+      lastError = new Error(`Health returned ${response.status}`)
+    } catch (error) {
+      lastError = error
+    }
+    await delay(350)
+  }
+
+  throw lastError || new Error('API did not become healthy')
+}
+
+async function startApiIfNeeded() {
+  if (!SHOULD_SPAWN_API) {
+    await waitForApi()
+    return
+  }
+
+  state.apiProcess = spawn(process.execPath, ['server/index.js'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      PORT: String(TEST_PORT),
+      FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+
+  let stderr = ''
+  state.apiProcess.stderr.on('data', (chunk) => {
+    stderr += chunk.toString()
+  })
+
+  state.apiProcess.on('exit', (code) => {
+    if (code && code !== 0) {
+      console.error(`[smoke] API exited with ${code}\n${stderr}`)
+    }
+  })
+
+  await waitForApi()
+}
+
+async function createTestUser(client, prefix) {
+  const email = smokeEmail(prefix)
+  const password = `Smoke-${crypto.randomUUID()}-1a!`
+
+  const { data: created, error: createError } = await mainAdmin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { given_name: 'Smoke' },
+  })
+  assert.ifError(createError)
+  assert.ok(created?.user?.id, 'created test auth user')
+
+  const { data: signedIn, error: signInError } = await client.auth.signInWithPassword({
+    email,
+    password,
+  })
+  assert.ifError(signInError)
+  assert.ok(signedIn?.user?.id, 'signed in test auth user')
+  assert.ok(signedIn?.session?.access_token, 'received access token')
+
+  return {
+    id: signedIn.user.id,
+    email,
+    accessToken: signedIn.session.access_token,
+  }
+}
+
+async function apiPost(path, body, token = state.accessToken) {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+  })
+  const text = await response.text()
+  const json = text ? JSON.parse(text) : null
+  return { response, json }
+}
+
+async function readNdjsonStream(response) {
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let content = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() || ''
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim()
+      if (!line) continue
+      const event = JSON.parse(line)
+      if (event.type === 'chunk') {
+        content += event.data?.choices?.[0]?.delta?.content || ''
+      }
+      if (event.type === 'error') throw new Error(event.error)
+    }
+  }
+
+  if (buffer.trim()) {
+    const event = JSON.parse(buffer)
+    if (event.type === 'chunk') {
+      content += event.data?.choices?.[0]?.delta?.content || ''
+    }
+    if (event.type === 'error') throw new Error(event.error)
+  }
+
+  return content
+}
+
+async function cleanup() {
+  if (state.sessionId) {
+    await mainAdmin.from('personal_wiki_edges').delete().eq('session_id', state.sessionId)
+    await mainAdmin.from('personal_wiki_nodes').delete().eq('session_id', state.sessionId)
+    await mainAdmin.from('experiments').delete().eq('session_id', state.sessionId)
+    await mainAdmin.from('messages').delete().eq('session_id', state.sessionId)
+    await mainAdmin.from('weekly_reads').delete().eq('session_id', state.sessionId)
+    await mainAdmin.from('conversation_threads').delete().eq('session_id', state.sessionId)
+    await mainAdmin.from('sessions').delete().eq('id', state.sessionId)
+  }
+
+  if (state.userId) {
+    await knowledgeAdmin.from('user_concept_states').delete().eq('user_id', state.userId)
+    await mainAdmin.from('app_sessions').delete().eq('user_id', state.userId)
+    await mainAdmin.from('personal_memories').delete().eq('user_id', state.userId)
+    await mainAdmin.from('users').delete().eq('id', state.userId)
+    await mainAdmin.auth.admin.deleteUser(state.userId)
+  }
+
+  if (state.otherUserId) {
+    await mainAdmin.from('users').delete().eq('id', state.otherUserId)
+    await mainAdmin.auth.admin.deleteUser(state.otherUserId)
+  }
+
+  if (state.apiProcess) {
+    state.apiProcess.kill('SIGTERM')
+    await delay(250)
+  }
+}
+
+after(cleanup)
+
+test('smoke: minimum deploy flows work end to end', { timeout: TEST_TIMEOUT_MS }, async (t) => {
+  await startApiIfNeeded()
+
+  await t.test('Auth and session', async () => {
+    const testUser = await createTestUser(mainAuthed, 'axiom-smoke')
+    state.userId = testUser.id
+    state.accessToken = testUser.accessToken
+
+    const { data: authData, error: authError } = await mainAuthed.auth.getUser()
+    assert.ifError(authError)
+    assert.equal(authData.user.id, state.userId)
+
+    const { error: userError } = await mainAuthed.from('users').upsert(
+      { id: state.userId, email: testUser.email, first_name: 'Smoke' },
+      { onConflict: 'id' }
+    )
+    assert.ifError(userError)
+
+    state.sessionToken = crypto.randomUUID()
+    const sessionPayload = {
+      session_token: state.sessionToken,
+      user_id: state.userId,
+      onboarding_answers: [{ question: 'Smoke question?', answer: 'Smoke answer.' }],
+      pillar_weights: { think_sharper: 3, human_mind: 2 },
+      axiom_profile: 'Smoke test profile.',
+      active_experiments: [],
+      ghost_count: 0,
+      consecutive_miss_count: 0,
+      warning_level: 0,
+    }
+
+    const { data: session, error: sessionError } = await mainAuthed
+      .from('sessions')
+      .insert(sessionPayload)
+      .select('*')
+      .single()
+    assert.ifError(sessionError)
+    assert.equal(session.user_id, state.userId)
+    assert.equal(session.session_token, state.sessionToken)
+    assert.equal(session.warning_level, 0)
+    state.sessionId = session.id
+  })
+
+  await t.test('Chat', async () => {
+    const { data: userMessage, error: userMessageError } = await mainAuthed
+      .from('messages')
+      .insert({
+        session_id: state.sessionId,
+        role: 'user',
+        content: 'Smoke test user message.',
+      })
+      .select('*')
+      .single()
+    assert.ifError(userMessageError)
+    assert.equal(userMessage.role, 'user')
+    state.messageIds.push(userMessage.id)
+
+    const streamResponse = await fetch(`${API_BASE}/api/openai/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${state.accessToken}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4.1-mini',
+        stream: true,
+        max_completion_tokens: 16,
+        usage_context: { call_type: 'chat', session_id: state.sessionId },
+        messages: [
+          { role: 'system', content: 'Reply with exactly SMOKE_OK.' },
+          { role: 'user', content: 'Run smoke.' },
+        ],
+      }),
+    })
+    assert.equal(streamResponse.status, 200)
+    const assistantContent = await readNdjsonStream(streamResponse)
+    assert.match(assistantContent, /SMOKE_OK/)
+
+    const { data: assistantMessage, error: assistantMessageError } = await mainAuthed
+      .from('messages')
+      .insert({
+        session_id: state.sessionId,
+        role: 'assistant',
+        content: assistantContent,
+      })
+      .select('*')
+      .single()
+    assert.ifError(assistantMessageError)
+    assert.equal(assistantMessage.role, 'assistant')
+    assert.ok(assistantMessage.content.length > 0)
+    state.messageIds.push(assistantMessage.id)
+  })
+
+  let embedding = null
+  let retrievedChunk = null
+
+  await t.test('RAG', async () => {
+    const embeddingResult = await apiPost('/api/openai/embeddings', {
+      model: 'text-embedding-3-small',
+      input: 'decision making incentives startup strategy',
+      usage_context: { call_type: 'embedding', session_id: state.sessionId },
+    })
+    assert.equal(embeddingResult.response.status, 200)
+    embedding = embeddingResult.json.data?.[0]?.embedding
+    assert.equal(Array.isArray(embedding), true)
+    assert.equal(embedding.length, 1536)
+
+    const { data: chunks, error: chunkError } = await knowledgeAdmin.rpc('match_wiki_chunks', {
+      query_embedding: embedding,
+      match_count: 3,
+      filter_pillar: null,
+    })
+    assert.ifError(chunkError)
+    assert.ok((chunks || []).length > 0, 'wiki chunk search returns results')
+    retrievedChunk = chunks[0]
+
+    const { data: chunkRows, error: chunkRowsError } = await knowledgeAdmin
+      .from('wiki_chunks')
+      .select('id,source_id,title,author')
+      .eq('id', retrievedChunk.id)
+    assert.ifError(chunkRowsError)
+    assert.ok(chunkRows?.[0]?.source_id, 'retrieved chunk has source_id')
+
+    const { data: source, error: sourceError } = await knowledgeAdmin
+      .from('wiki_sources')
+      .select('id,title,author,pillar,source_quality')
+      .eq('id', chunkRows[0].source_id)
+      .single()
+    assert.ifError(sourceError)
+    assert.ok(source.title, 'source metadata includes title')
+  })
+
+  await t.test('Concept states', async () => {
+    const { data: concept, error: conceptError } = await knowledgeAdmin
+      .from('source_learning_maps')
+      .select('id,concept_name')
+      .limit(1)
+      .single()
+    assert.ifError(conceptError)
+    assert.ok(concept?.id)
+    state.conceptIds.push(concept.id)
+
+    const valid = await apiPost('/api/knowledge/concept-states', {
+      rows: [{ concept_id: concept.id, state: 'encountered' }],
+    })
+    assert.equal(valid.response.status, 200)
+    assert.equal(valid.json.updated, 1)
+
+    const unauthorized = await apiPost('/api/knowledge/concept-states', {
+      rows: [{ concept_id: concept.id, state: 'encountered' }],
+    }, null)
+    assert.equal(unauthorized.response.status, 401)
+
+    const invalid = await apiPost('/api/knowledge/concept-states', {
+      rows: [{ concept_id: concept.id, state: 'not_a_state' }],
+    })
+    assert.equal(invalid.response.status, 400)
+  })
+
+  await t.test('Experiments', async () => {
+    const created = await apiPost('/api/experiments', {
+      session_id: state.sessionId,
+      experiment: {
+        title: 'Smoke Decision Test',
+        pillar: 'Think Sharper',
+        description: 'Write down one live decision and the evidence that would change it.',
+        window_hours: 48,
+        how_to_do_it: 'Open a note and write the decision, current belief, and one disconfirming signal.',
+        real_world_example: 'A founder writes the pricing decision and the customer reply that would change it.',
+        what_to_notice: 'Notice whether the evidence is measurable or vague.',
+        success_condition: 'The note contains one decision and one disconfirming signal.',
+      },
+    })
+    assert.equal(created.response.status, 200)
+    assert.ok(created.json.experiment?.id)
+    assert.equal(created.json.experiment.user_id, state.userId)
+    state.experimentIds.push(created.json.experiment.id)
+
+    const completed = await apiPost(`/api/experiments/${created.json.experiment.id}/status`, {
+      status: 'completed',
+      outcome: 'Smoke completed.',
+    })
+    assert.equal(completed.response.status, 200)
+    assert.equal(completed.json.experiment.status, 'completed')
+
+    const otherUser = await createTestUser(otherAuthed, 'axiom-smoke-other')
+    state.otherUserId = otherUser.id
+
+    const forbidden = await apiPost(`/api/experiments/${created.json.experiment.id}/status`, {
+      status: 'cancelled',
+      outcome: 'Should not work.',
+    }, otherUser.accessToken)
+    assert.equal(forbidden.response.status, 403)
+  })
+
+  await t.test('Brain graph', async () => {
+    const nodeAId = crypto.randomUUID()
+    const nodeBId = crypto.randomUUID()
+    const nodePayload = (id, label, summary) => ({
+      id,
+      session_id: state.sessionId,
+      label,
+      type: 'goal',
+      pillar: 'think_sharper',
+      summary,
+      status: 'active',
+      importance: 3,
+      confidence: 0.8,
+      x: 0,
+      y: 0,
+      z: 0,
+    })
+
+    const { data: nodes, error: nodesError } = await mainAuthed
+      .from('personal_wiki_nodes')
+      .upsert([
+        nodePayload(nodeAId, 'Smoke Node A', 'Smoke node A summary.'),
+        nodePayload(nodeBId, 'Smoke Node B', 'Smoke node B summary.'),
+      ], { onConflict: 'id' })
+      .select('*')
+    assert.ifError(nodesError)
+    assert.equal(nodes.length, 2)
+
+    const { data: edge, error: edgeError } = await mainAuthed
+      .from('personal_wiki_edges')
+      .insert({
+        session_id: state.sessionId,
+        source_node_id: nodeAId,
+        target_node_id: nodeBId,
+        relationship: 'related_to',
+        weight: 0.7,
+      })
+      .select('*')
+      .single()
+    assert.ifError(edgeError)
+    assert.equal(edge.source_node_id, nodeAId)
+    assert.equal(edge.target_node_id, nodeBId)
+  })
+})
