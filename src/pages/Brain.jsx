@@ -86,6 +86,31 @@ function brainCacheKey(sessionToken) {
   return `axiom_brain_graph:${sessionToken}`
 }
 
+function brainSyncKey(sessionToken) {
+  return `axiom_brain_synced_at:${sessionToken}`
+}
+
+function hasRealGraphNodes(graph) {
+  return (graph?.nodes || []).some((node) => node?.type && node.type !== 'pillar' && !String(node.id || '').startsWith('fallback-'))
+}
+
+function shouldSyncBrainGraph(sessionToken, graph) {
+  if (!sessionToken) return false
+  if (!hasRealGraphNodes(graph)) return true
+  try {
+    const syncedAt = Number(localStorage.getItem(brainSyncKey(sessionToken)) || 0)
+    return !syncedAt || Date.now() - syncedAt > 10 * 60 * 1000
+  } catch {
+    return true
+  }
+}
+
+function markBrainGraphSynced(sessionToken) {
+  try {
+    if (sessionToken) localStorage.setItem(brainSyncKey(sessionToken), String(Date.now()))
+  } catch {}
+}
+
 function readBrainCache(sessionToken) {
   try {
     const cached = localStorage.getItem(brainCacheKey(sessionToken))
@@ -510,7 +535,16 @@ function cleanNodeLabel(value = '') {
     .replace(/\.\.\.$/, '')
     .replace(/^the user\s+(wants|needs|is trying|is working|has been trying)\s+/i, '')
     .trim()
-  return /^untitled\s+node$/i.test(clean) ? '' : clean
+  if (/^untitled\s+node\b/i.test(clean)) return ''
+  return clean
+}
+
+function isUsableStoredLabel(label = '') {
+  const clean = cleanNodeLabel(label)
+  if (!clean) return false
+  if (/^(user|the user|onboarding signal)\b/i.test(clean)) return false
+  if (/[.!?]/.test(clean)) return false
+  return clean.split(/\s+/).filter(Boolean).length <= 6
 }
 
 function displayPillarName(pillar = '') {
@@ -526,7 +560,9 @@ function displayNodeTitle(node) {
   if (/(e-guide|e guide|eguides|e-guides)/.test(lower) && /(pakistani|female content creator|content creators|website)/.test(lower)) {
     return 'Creator E-Guide Website'
   }
-  const label = cleanNodeLabel(node.label) || cleanNodeLabel(summary) || 'Untitled node'
+  const label = isUsableStoredLabel(node.label)
+    ? cleanNodeLabel(node.label)
+    : cleanNodeLabel(summary) || 'Untitled node'
   const words = label.split(/\s+/).filter(Boolean)
   return words.length > 5 ? sentenceCase(label) : titleCase(label)
 }
@@ -1034,10 +1070,16 @@ export default function Brain() {
         writeBrainCache(sessionToken, existingGraph)
       }
 
+      if (!shouldSyncBrainGraph(sessionToken, existingGraph)) {
+        if (!cancelled) setGraphReady(true)
+        return
+      }
+
       syncPersonalWiki(sessionData).then(async (synced) => {
         if (!cancelled && synced.nodes.length > 0) {
           setGraph(normalizeBrainGraph(synced))
           writeBrainCache(sessionToken, synced)
+          markBrainGraphSynced(sessionToken)
           setGraphReady(true)
         }
 

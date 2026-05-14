@@ -275,7 +275,8 @@ const LABEL_STOP_WORDS = new Set([
 
 function stripInvalidLabel(value = '') {
   const clean = String(value || '').replace(/\s+/g, ' ').trim()
-  return /^untitled\s+node$/i.test(clean) ? '' : clean
+  if (/^untitled\s+node\b/i.test(clean)) return ''
+  return clean
 }
 
 function titleCase(value = '') {
@@ -285,10 +286,26 @@ function titleCase(value = '') {
     .trim()
     .toLowerCase()
     .replace(/\b[a-z]/g, (char) => char.toUpperCase())
+    .replace(/\bAi\b/g, 'AI')
+    .replace(/\bMvp\b/g, 'MVP')
+    .replace(/\bGpt\b/g, 'GPT')
+    .replace(/\bChatgpt\b/g, 'ChatGPT')
+}
+
+function isUsableStoredLabel(label = '') {
+  const clean = stripInvalidLabel(label)
+  if (!clean) return false
+  if (/^(user|the user|onboarding signal)\b/i.test(clean)) return false
+  if (/[.!?]/.test(clean)) return false
+  const words = clean.split(/\s+/).filter(Boolean)
+  if (words.length > 6) return false
+  return true
 }
 
 function shortNodeLabel(label = '', summary = '') {
   const safeLabel = stripInvalidLabel(label)
+  if (isUsableStoredLabel(safeLabel)) return titleCase(safeLabel)
+
   const text = `${safeLabel} ${summary || ''}`.replace(/\s+/g, ' ').trim()
   const lower = text.toLowerCase()
 
