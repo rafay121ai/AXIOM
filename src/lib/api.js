@@ -13,7 +13,13 @@ export function apiUrl(path) {
 
 async function getAuthHeaders() {
   const { data } = await supabase.auth.getSession()
-  const token = data.session?.access_token
+  let token = data.session?.access_token
+
+  if (!token) {
+    const { data: refreshed } = await supabase.auth.refreshSession()
+    token = refreshed.session?.access_token
+  }
+
   if (!token) {
     throw new Error('No active auth session')
   }
