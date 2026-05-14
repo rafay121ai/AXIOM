@@ -100,8 +100,24 @@ const USAGE_CALL_TYPES = new Set([
 const supabaseUrl = process.env.VITE_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
+function getJwtRole(token) {
+  try {
+    const [, payload] = String(token || '').split('.')
+    if (!payload) return null
+    const decoded = Buffer.from(payload.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')
+    return JSON.parse(decoded)?.role || null
+  } catch {
+    return null
+  }
+}
+
+const supabaseServiceKeyRole = getJwtRole(supabaseServiceKey)
+const hasAppServiceRoleKey = supabaseServiceKeyRole === 'service_role'
+
 if (!supabaseUrl || !supabaseServiceKey) {
   console.warn('[Axiom API] Missing Supabase credentials — auth and jailbreak endpoints will not function')
+} else if (!hasAppServiceRoleKey) {
+  console.warn('[Axiom API] SUPABASE_SERVICE_ROLE_KEY is not a service_role key — server-owned writes may fail RLS')
 }
 
 const supabaseAdmin = supabaseUrl && supabaseServiceKey
@@ -655,6 +671,12 @@ app.post('/api/knowledge/concept-states', knowledgeWriteRateLimit, async (req, r
 
 app.post('/api/personal-memories', knowledgeWriteRateLimit, async (req, res) => {
   if (!supabaseAdmin) return res.status(503).json({ error: 'Personal memory service not configured' })
+  if (!hasAppServiceRoleKey) {
+    return res.status(503).json({
+      error: 'Personal memory service role key is invalid',
+      hint: 'Set SUPABASE_SERVICE_ROLE_KEY to the main app Supabase service_role key in Railway.',
+    })
+  }
 
   const sessionId = String(req.body?.session_id || '').trim()
   const memory = cleanPersonalMemory(req.body?.memory)
@@ -725,6 +747,12 @@ app.post('/api/personal-memories', knowledgeWriteRateLimit, async (req, res) => 
 
 app.get('/api/personal-memories', knowledgeWriteRateLimit, async (req, res) => {
   if (!supabaseAdmin) return res.status(503).json({ error: 'Personal memory service not configured' })
+  if (!hasAppServiceRoleKey) {
+    return res.status(503).json({
+      error: 'Personal memory service role key is invalid',
+      hint: 'Set SUPABASE_SERVICE_ROLE_KEY to the main app Supabase service_role key in Railway.',
+    })
+  }
 
   const limit = Math.min(25, Math.max(1, Number(req.query?.limit) || 10))
 
@@ -746,6 +774,12 @@ app.get('/api/personal-memories', knowledgeWriteRateLimit, async (req, res) => {
 
 app.post('/api/personal-memories/mark-used', knowledgeWriteRateLimit, async (req, res) => {
   if (!supabaseAdmin) return res.status(503).json({ error: 'Personal memory service not configured' })
+  if (!hasAppServiceRoleKey) {
+    return res.status(503).json({
+      error: 'Personal memory service role key is invalid',
+      hint: 'Set SUPABASE_SERVICE_ROLE_KEY to the main app Supabase service_role key in Railway.',
+    })
+  }
 
   const memoryIds = cleanUuidList(req.body?.memory_ids)
   if (memoryIds.length === 0) return res.status(400).json({ error: 'No valid memory ids' })
