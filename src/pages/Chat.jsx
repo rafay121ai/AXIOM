@@ -527,7 +527,7 @@ function resolvePromptControl({
     routeMode: effectiveRoute?.mode || 'single_pillar',
     responseMode,
     activeExperimentCount,
-    currentAbsorbedConceptCount,
+    currentAbsorbedConceptCount: currentAbsorbedCount,
     historicalAbsorbedConceptCount: Number(historicalAbsorbedConceptCount || 0),
     totalAbsorbedConceptCount,
     canAssignExperiment,
