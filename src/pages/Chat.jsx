@@ -20,7 +20,7 @@ import { getCachedTurnContext, setCachedTurnContext } from '../lib/sessionTurnCo
 import { syncPersonalWiki } from '../lib/personalWiki'
 import { ensureConversationThread } from '../lib/conversationThreads'
 import { incrementAppSessionMessagesSent } from '../lib/appSessionTracker'
-import { postApiJson } from '../lib/api'
+import { getApiJson, postApiJson } from '../lib/api'
 import { validateExperimentQuality } from '../lib/experimentQuality'
 
 // ─── Message Tag Parsing ─────────────────────────────────────────────────────
@@ -824,15 +824,12 @@ function normalizeExperiment(row) {
 }
 
 async function fetchSessionExperiments(sessionId) {
-  const { data, error } = await supabase
-    .from('experiments')
-    .select('*')
-    .eq('session_id', sessionId)
-    .order('assigned_at', { ascending: true })
-
-  if (error) return null
-
-  return (data || []).map(normalizeExperiment)
+  try {
+    const payload = await getApiJson(`/api/experiments?session_id=${encodeURIComponent(sessionId)}&limit=50`)
+    return (payload?.experiments || []).map(normalizeExperiment)
+  } catch {
+    return null
+  }
 }
 
 function getUnresolvedExperiment(experiments, messages) {

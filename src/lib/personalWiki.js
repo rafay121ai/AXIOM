@@ -629,16 +629,12 @@ async function nodeFromExperiment(experiment, index, existingLabel = '') {
 }
 
 async function fetchSessionExperiments(sessionId) {
-  const { data, error } = await supabase
-    .from('experiments')
-    .select('description, status, pillar, window_hours, assigned_at')
-    .eq('session_id', sessionId)
-    .order('assigned_at', { ascending: false })
-    .limit(10)
-
-  if (error) return null
-
-  return data || []
+  try {
+    const payload = await getApiJson(`/api/experiments?session_id=${encodeURIComponent(sessionId)}&limit=10`)
+    return payload?.experiments || []
+  } catch {
+    return null
+  }
 }
 
 export async function backfillNodeLabels(sessionId) {

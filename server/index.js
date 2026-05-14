@@ -1187,6 +1187,35 @@ app.post('/api/experiments', experimentWriteRateLimit, async (req, res) => {
   }
 })
 
+app.get('/api/experiments', experimentWriteRateLimit, async (req, res) => {
+  if (!supabaseAdmin) {
+    return res.status(503).json({ error: 'Experiment service not configured' })
+  }
+
+  const sessionId = String(req.query?.session_id || '').trim()
+  if (!sessionId) return res.status(400).json({ error: 'Missing session_id' })
+
+  try {
+    const ownership = await assertSessionOwner(sessionId, req.user.id)
+    if (!ownership.ok) return res.status(ownership.status).json({ error: ownership.error })
+
+    const limit = Math.min(50, Math.max(1, Number(req.query?.limit) || 50))
+    const { data, error } = await supabaseAdmin
+      .from('experiments')
+      .select('*')
+      .eq('session_id', sessionId)
+      .eq('user_id', req.user.id)
+      .order('assigned_at', { ascending: true })
+      .limit(limit)
+
+    if (error) throw error
+    return res.json({ experiments: data || [] })
+  } catch (error) {
+    console.error('[Experiments] list failed', error)
+    return res.status(500).json({ error: 'Failed to load experiments' })
+  }
+})
+
 app.post('/api/experiments/:id/status', experimentWriteRateLimit, async (req, res) => {
   if (!supabaseAdmin) {
     return res.status(503).json({ error: 'Experiment service not configured' })
