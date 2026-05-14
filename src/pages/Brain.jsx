@@ -490,6 +490,10 @@ function titleCase(value = '') {
     .trim()
     .toLowerCase()
     .replace(/\b[a-z]/g, char => char.toUpperCase())
+    .replace(/\bAi\b/g, 'AI')
+    .replace(/\bMvp\b/g, 'MVP')
+    .replace(/\bGpt\b/g, 'GPT')
+    .replace(/\bChatgpt\b/g, 'ChatGPT')
 }
 
 function sentenceCase(value = '') {
@@ -518,6 +522,36 @@ function displayNodeTitle(node) {
   const label = cleanNodeLabel(node.label || node.summary || 'Untitled node')
   const words = label.split(/\s+/).filter(Boolean)
   return words.length > 5 ? sentenceCase(label) : titleCase(label)
+}
+
+const NODE_DEFINITIONS = {
+  'automation sales gap': 'You can build AI automations, but the urgent constraint is finding buyers and making sales visible.',
+  'axiom differentiation bet': 'The open question is whether Axiom changes founder behavior, not whether it merely sounds smarter than ChatGPT.',
+  'cold outreach resistance': 'Sales resistance is the point where technical ability stops mattering until a real buyer is contacted.',
+  'august revenue target': 'The live constraint is turning skill into at least $5,000 before August 1 through paid demand, not more building.',
+  'paid pilot path': 'A free diagnostic becomes useful only if it exposes one workflow leak that can turn into a paid pilot.',
+  'agency buyer test': 'A solo agency owner with visible overload is a sharper first buyer than an abstract market segment.',
+  'buyer offer focus': 'One buyer type, one painful task, and one specific offer beats a broad pipeline right now.',
+}
+
+function cleanNodeSummary(value = '') {
+  return String(value)
+    .replace(/^onboarding signal:\s*/i, '')
+    .replace(/\s+/g, ' ')
+    .replace(/^what are you working on right now\??\s*/i, '')
+    .replace(/^the user\s+/i, 'You ')
+    .trim()
+}
+
+function displayNodeSummary(node) {
+  if (!node || node.type === 'pillar') return ''
+  const title = displayNodeTitle(node).toLowerCase()
+  if (NODE_DEFINITIONS[title]) return NODE_DEFINITIONS[title]
+
+  const summary = cleanNodeSummary(node.summary)
+  if (!summary) return ''
+  if (summary.length <= 190) return summary
+  return `${summary.slice(0, 187).trim()}...`
 }
 
 function displayNodeType(type = '') {
@@ -1611,8 +1645,8 @@ export default function Brain() {
           <div className="brain__node-title">
             {displayNodeTitle(activeNode)}
           </div>
-          {!activeIsPillar && activeNode.summary && (
-            <div className="brain__node-summary">{activeNode.summary}</div>
+          {!activeIsPillar && displayNodeSummary(activeNode) && (
+            <div className="brain__node-summary">{displayNodeSummary(activeNode)}</div>
           )}
           <button onClick={() => startFromNode(activeNode)}>Let's Move</button>
         </div>
