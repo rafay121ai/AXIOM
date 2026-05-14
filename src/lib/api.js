@@ -9,7 +9,10 @@ export function apiUrl(path) {
 async function getAuthHeaders() {
   const { data } = await supabase.auth.getSession()
   const token = data.session?.access_token
-  return token ? { Authorization: `Bearer ${token}` } : {}
+  if (!token) {
+    throw new Error('No active auth session')
+  }
+  return { Authorization: `Bearer ${token}` }
 }
 
 async function readError(response) {

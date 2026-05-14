@@ -304,6 +304,42 @@ const PERSONAL_WIKI_PILLARS = new Set(['psychology', 'economics', 'human_mind', 
 const PERSONAL_WIKI_STATUSES = new Set(['seed', 'dim', 'active', 'bright', 'ghosted', 'resolved'])
 const PERSONAL_WIKI_RELATIONSHIPS = new Set(['belongs_to', 'causes', 'shows_up_as', 'tested_by', 'tests', 'contradicts', 'strengthens', 'resolved_by', 'related_to'])
 const STATUS_RANK = { bright: 3, active: 2, ghosted: 1, dim: 0, seed: 0, resolved: 0 }
+const DISPLAY_ROOT_NODES = [
+  ['The Human Mind', 'human_mind', 'Identity, fear, behavior, avoidance, resilience, and the inner mechanics of action.'],
+  ['The Money Game', 'money_game', 'Incentives, value capture, capital, buyers, pricing, and economic reality.'],
+  ['How Companies Win', 'how_companies_win', 'Strategy, distribution, moats, product leverage, management, and execution.'],
+  ["What's Coming", 'whats_coming', 'Technology shifts, macro change, geopolitics, energy, and future-facing pressure.'],
+  ['Think Sharper', 'think_sharper', 'Reasoning quality, mental models, uncertainty, truth-seeking, and decision clarity.'],
+  ['Move People', 'move_people', 'Persuasion, writing, narrative, negotiation, speaking, and influence.'],
+].map(([label, pillar, summary], index) => ({
+  label,
+  type: 'pillar',
+  pillar,
+  summary,
+  status: 'seed',
+  importance: 5,
+  confidence: 0.9,
+  x: index < 3 ? -0.55 : 0.55,
+  y: -0.35 + (index % 3) * 0.35,
+  z: 0,
+}))
+const MEMORY_TYPE_TO_NODE_TYPE = {
+  goal: 'goal',
+  pattern: 'pattern',
+  belief: 'belief',
+  experiment_result: 'experiment',
+  preference: 'belief',
+  decision: 'decision',
+  fact: 'concept',
+}
+const DISPLAY_PILLAR_KEYWORDS = {
+  human_mind: /\b(fear|avoid|identity|stress|confidence|rejection|procrastinat|anxiety|status|self|emotion|habit|motivation|discipline|shame|resilience)\b/g,
+  money_game: /\b(money|price|pricing|buyer|market|revenue|cost|capital|profit|wealth|invest|valuation|incentive|demand|customer|cashflow|offer|sales|outreach)\b/g,
+  how_companies_win: /\b(company|startup|distribution|moat|strategy|product|growth|retention|network|platform|management|culture|hiring|execution|competition|founder)\b/g,
+  whats_coming: /\b(ai|automation|geopolitic|macro|future|energy|climate|demographic|population|technology|trend|china|war|currency|inflation|reshoring)\b/g,
+  think_sharper: /\b(reason|reasoning|belief|model|models|bayes|forecast|prediction|disagree|evidence|truth|clarity|judgment|decision|think)\b/g,
+  move_people: /\b(persuade|persuasion|write|writing|speak|speaking|narrative|story|influence|negotiat|audience|rhetoric|presentation|pitch|message|dm|email)\b/g,
+}
 
 function cleanConceptStateRows(rows, userId) {
   if (!Array.isArray(rows)) return []
@@ -414,6 +450,183 @@ function uniqueWikiLabel(label, existingLabels = new Set()) {
   ].filter(Boolean)
 
   return candidates.find((candidate) => !existingLabels.has(candidate.toLowerCase())) || clean
+}
+
+function inferWikiPillar(text = '', fallback = null) {
+  if (PERSONAL_MEMORY_PILLARS.has(fallback)) return fallback
+  const lower = String(text || '').toLowerCase()
+  let best = null
+  let bestScore = 0
+  for (const [pillar, regex] of Object.entries(DISPLAY_PILLAR_KEYWORDS)) {
+    const score = (lower.match(regex) || []).length
+    if (score > bestScore) {
+      best = pillar
+      bestScore = score
+    }
+  }
+  return best || fallback || null
+}
+
+function wikiNodePosition(index, pillar) {
+  const side = ['money_game', 'how_companies_win', 'whats_coming'].includes(pillar) ? 1 : -1
+  const ring = 0.44 + (index % 4) * 0.11
+  const angle = -1.2 + (index % 7) * 0.42
+  return {
+    x: side * ring * Math.cos(angle),
+    y: ring * Math.sin(angle),
+    z: 0.18 * Math.sin(index * 1.7),
+  }
+}
+
+function titleCase(value = '') {
+  return String(value)
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+    .replace(/\b[a-z]/g, (char) => char.toUpperCase())
+}
+
+function fallbackNodeLabel(content = '') {
+  const words = String(content || '')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/^the user\s+/i, '')
+    .replace(/\b(the user|a pattern of|tendency to|wants to|needs to|is trying to|has been trying to)\b/gi, ' ')
+    .replace(/[^a-z0-9\s-]/gi, ' ')
+    .split(/\s+/)
+    .map((word) => word.trim())
+    .filter((word) => word.length > 2 && !['about', 'after', 'again', 'because', 'before', 'being', 'building', 'could', 'from', 'have', 'into', 'need', 'needs', 'that', 'their', 'this', 'toward', 'trying', 'user', 'wants', 'when', 'with', 'would'].includes(word.toLowerCase()))
+    .slice(0, 4)
+  return titleCase(words.join(' ')) || 'Untitled Node'
+}
+
+async function getPersonalWikiGraphRows(sessionId) {
+  const [nodesResult, edgesResult] = await Promise.all([
+    supabaseAdmin
+      .from('personal_wiki_nodes')
+      .select('*')
+      .eq('session_id', sessionId),
+    supabaseAdmin
+      .from('personal_wiki_edges')
+      .select('*')
+      .eq('session_id', sessionId),
+  ])
+
+  if (nodesResult.error) throw nodesResult.error
+  if (edgesResult.error) throw edgesResult.error
+  return { nodes: nodesResult.data || [], edges: edgesResult.data || [] }
+}
+
+async function upsertWikiNodeForSession(sessionId, rawNode, index = 0) {
+  const pos = wikiNodePosition(index, rawNode?.pillar)
+  const node = cleanWikiNode({ ...pos, ...rawNode })
+  if (!node.label) return null
+
+  let existingQuery = supabaseAdmin
+    .from('personal_wiki_nodes')
+    .select('*')
+    .eq('session_id', sessionId)
+    .eq('type', node.type)
+
+  existingQuery = node.type === 'pillar'
+    ? existingQuery.eq('label', node.label)
+    : existingQuery.eq('summary', node.summary)
+
+  const { data: matches, error: selectError } = await existingQuery
+    .order('updated_at', { ascending: false })
+    .limit(1)
+
+  if (selectError) throw selectError
+  const existing = matches?.[0] || null
+  if (existing) {
+    const updates = {
+      label: node.label || existing.label,
+      pillar: node.pillar || existing.pillar,
+      summary: node.summary || existing.summary,
+      status: (STATUS_RANK[existing.status] ?? 0) >= (STATUS_RANK[node.status] ?? 0) ? existing.status : node.status,
+      importance: Math.max(existing.importance || 1, node.importance),
+      confidence: Math.max(existing.confidence || 0, node.confidence),
+      updated_at: new Date().toISOString(),
+      last_activated_at: node.status === 'active' ? new Date().toISOString() : existing.last_activated_at,
+    }
+    const { data, error } = await supabaseAdmin
+      .from('personal_wiki_nodes')
+      .update(updates)
+      .eq('id', existing.id)
+      .select()
+      .single()
+    if (error) throw error
+    return data
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('personal_wiki_nodes')
+    .insert({ session_id: sessionId, ...node })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+async function upsertWikiEdgeForSession(sessionId, source, target, relationship = 'related_to', weight = 0.5) {
+  if (!source?.id || !target?.id || source.id === target.id) return null
+  const safeWeight = Number.isFinite(weight) ? Math.min(1, Math.max(0, weight)) : 0.5
+  const { data: existing, error: selectError } = await supabaseAdmin
+    .from('personal_wiki_edges')
+    .select('*')
+    .eq('session_id', sessionId)
+    .eq('source_node_id', source.id)
+    .eq('target_node_id', target.id)
+    .eq('relationship', relationship)
+    .maybeSingle()
+  if (selectError) throw selectError
+  if (existing) {
+    const { data, error } = await supabaseAdmin
+      .from('personal_wiki_edges')
+      .update({ weight: Math.max(existing.weight || 0, safeWeight), updated_at: new Date().toISOString() })
+      .eq('id', existing.id)
+      .select()
+      .single()
+    if (error) throw error
+    return data
+  }
+  const { data, error } = await supabaseAdmin
+    .from('personal_wiki_edges')
+    .insert({ session_id: sessionId, source_node_id: source.id, target_node_id: target.id, relationship, weight: safeWeight })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+function nodeFromMemory(memory = {}, index = 0) {
+  if (memory.type === 'pattern' && ((memory.confidence ?? 0) < 0.65 || (memory.importance ?? 0) < 3)) return null
+  const pillarConfidence = Number(memory.pillar_confidence ?? 0.7)
+  const hasConfidentPillar = memory.primary_pillar && pillarConfidence >= 0.55
+  const pillar = hasConfidentPillar ? inferWikiPillar(memory.content, memory.primary_pillar) : null
+  return {
+    label: fallbackNodeLabel(memory.content),
+    type: MEMORY_TYPE_TO_NODE_TYPE[memory.type] || 'concept',
+    pillar,
+    summary: memory.content,
+    status: hasConfidentPillar ? 'active' : 'dim',
+    importance: memory.importance || 3,
+    confidence: memory.confidence ?? 0.7,
+  }
+}
+
+function nodeFromExperiment(experiment = {}) {
+  const description = String(experiment.description || '')
+  const summary = `${description} (${experiment.window_hours || 48}h window)`
+  return {
+    label: fallbackNodeLabel(description),
+    type: 'experiment',
+    pillar: inferWikiPillar(description, experiment.pillar || null),
+    summary,
+    status: experiment.status === 'ghosted' ? 'ghosted' : 'active',
+    importance: 4,
+    confidence: 0.8,
+  }
 }
 
 function isAdminUser(user) {
@@ -963,6 +1176,83 @@ app.post('/api/personal-wiki/edges', async (req, res) => {
   } catch (error) {
     console.error('[Personal Wiki] edge upsert failed', error)
     return res.status(500).json({ error: 'Failed to upsert personal wiki edge' })
+  }
+})
+
+app.get('/api/personal-wiki/graph', async (req, res) => {
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Personal wiki service not configured' })
+
+  const sessionId = String(req.query?.session_id || '').trim()
+  if (!sessionId) return res.status(400).json({ error: 'Missing session_id' })
+
+  const ownership = await assertSessionOwner(sessionId, req.user.id)
+  if (!ownership.ok) return res.status(ownership.status).json({ error: ownership.error })
+
+  try {
+    const graph = await getPersonalWikiGraphRows(sessionId)
+    return res.json({ graph })
+  } catch (error) {
+    console.error('[Personal Wiki] graph load failed', error)
+    return res.status(500).json({ error: 'Failed to load personal wiki graph' })
+  }
+})
+
+app.post('/api/personal-wiki/sync', async (req, res) => {
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Personal wiki service not configured' })
+
+  const sessionId = String(req.body?.session_id || '').trim()
+  if (!sessionId) return res.status(400).json({ error: 'Missing session_id' })
+
+  const ownership = await assertSessionOwner(sessionId, req.user.id)
+  if (!ownership.ok) return res.status(ownership.status).json({ error: ownership.error })
+
+  try {
+    const roots = []
+    for (let i = 0; i < DISPLAY_ROOT_NODES.length; i += 1) {
+      const root = await upsertWikiNodeForSession(sessionId, DISPLAY_ROOT_NODES[i], i)
+      if (root) roots.push(root)
+    }
+
+    const rootForPillar = (pillar) => roots.find((root) => root.pillar === pillar)
+
+    const { data: memories, error: memoriesError } = await supabaseAdmin
+      .from('personal_memories')
+      .select('id,type,content,importance,confidence,primary_pillar,secondary_pillars,pillar_confidence,updated_at')
+      .eq('user_id', req.user.id)
+      .order('updated_at', { ascending: false })
+      .limit(10)
+    if (memoriesError) throw memoriesError
+
+    for (let i = 0; i < (memories || []).length; i += 1) {
+      const memoryNode = nodeFromMemory(memories[i], i + 8)
+      if (!memoryNode) continue
+      const node = await upsertWikiNodeForSession(sessionId, memoryNode, i + 8)
+      const root = rootForPillar(node?.pillar || memories[i].primary_pillar)
+      await upsertWikiEdgeForSession(sessionId, node, root, 'belongs_to', 0.55)
+    }
+
+    const { data: experiments, error: experimentsError } = await supabaseAdmin
+      .from('experiments')
+      .select('*')
+      .eq('session_id', sessionId)
+      .eq('user_id', req.user.id)
+      .order('assigned_at', { ascending: false })
+      .limit(10)
+    if (experimentsError) throw experimentsError
+
+    for (let i = 0; i < (experiments || []).length; i += 1) {
+      const experimentNode = nodeFromExperiment(experiments[i])
+      if (!experimentNode) continue
+      const node = await upsertWikiNodeForSession(sessionId, experimentNode, i + 20)
+      const root = rootForPillar(node?.pillar || experiments[i].pillar)
+      await upsertWikiEdgeForSession(sessionId, node, root, 'tested_by', 0.7)
+    }
+
+    const graph = await getPersonalWikiGraphRows(sessionId)
+    return res.json({ graph })
+  } catch (error) {
+    console.error('[Personal Wiki] sync failed', error)
+    return res.status(500).json({ error: 'Failed to sync personal wiki graph' })
   }
 })
 

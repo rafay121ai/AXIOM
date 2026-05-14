@@ -1,5 +1,3 @@
-import { supabase } from './supabase'
-import { requestJsonObject, UTILITY_MODEL } from './openai'
 import { getApiJson, postApiJson } from './api'
 
 const DISPLAY_PILLARS = [
@@ -309,49 +307,6 @@ function normalizeNode(rawNode, index = 0) {
   }
 }
 
-async function upsertNode(sessionId, rawNode, index = 0) {
-  const node = normalizeNode(rawNode, index)
-  if (!node) return null
-  try {
-    const result = await postApiJson('/api/personal-wiki/nodes', {
-      session_id: sessionId,
-      node,
-    })
-    return result?.node || null
-  } catch {
-    return null
-  }
-}
-
-async function findExistingNodeBySummary(sessionId, summary, type) {
-  if (!sessionId || !summary || !type) return null
-
-  const { data, error } = await supabase
-    .from('personal_wiki_nodes')
-    .select('id, label, summary, type')
-    .eq('session_id', sessionId)
-    .eq('summary', summary)
-    .eq('type', type)
-    .order('updated_at', { ascending: false })
-    .limit(1)
-
-  if (error) return null
-  return data?.[0] || null
-}
-
-async function upsertEdge(sessionId, source, target, relationship = 'related_to', weight = 0.5) {
-  if (!source?.id || !target?.id || source.id === target.id) return
-  try {
-    await postApiJson('/api/personal-wiki/edges', {
-      session_id: sessionId,
-      source_node_id: source.id,
-      target_node_id: target.id,
-      relationship,
-      weight,
-    })
-  } catch {}
-}
-
 function buildDisplayRoots(sessionId = null) {
   return DISPLAY_ROOT_NODES.map((node) => ({
     ...node,
@@ -439,204 +394,6 @@ function seedNodesFromSession(session) {
   return nodes
 }
 
-const FALLBACK_LABEL_STOPWORDS = new Set([
-  'about',
-  'after',
-  'again',
-  'also',
-  'appears',
-  'around',
-  'because',
-  'before',
-  'being',
-  'building',
-  'could',
-  'find',
-  'from',
-  'have',
-  'into',
-  'need',
-  'needs',
-  'one',
-  'pick',
-  'single',
-  'that',
-  'their',
-  'thing',
-  'this',
-  'toward',
-  'trying',
-  'user',
-  'wants',
-  'when',
-  'with',
-  'would',
-])
-
-function fallbackTitleCase(value = '') {
-  return String(value)
-    .replace(/[-_]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase()
-    .replace(/\b[a-z]/g, char => char.toUpperCase())
-}
-
-function fallbackMemoryLabel(memory = {}) {
-  const content = String(memory.content || '')
-    .replace(/\([^)]*\)/g, ' ')
-    .replace(/\b\d+h\s*window\b/gi, ' ')
-    .replace(/^the user\s+/i, '')
-    .replace(/\b(the user|a pattern of|tendency to|wants to|needs to|is trying to|has been trying to)\b/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-
-  if (/\bhardest to copy|competitors.*copy|copy after\b/i.test(content)) {
-    return 'Hardest-To-Copy Advantage'
-  }
-  if (/\bcompany\b/i.test(content) && /\badmire|building toward|competitor/i.test(content)) {
-    return 'Company Advantage'
-  }
-  if (/\bfriendship|friend\b/i.test(content)) {
-    return 'Friendship Practice'
-  }
-  if (/\bidentity|defend|defended\b/i.test(content)) {
-    return 'Defended Identity'
-  }
-
-  const words = content
-    .replace(/[^a-z0-9\s-]/gi, ' ')
-    .split(/\s+/)
-    .map(word => word.trim())
-    .filter(word => word.length > 2 && !FALLBACK_LABEL_STOPWORDS.has(word.toLowerCase()))
-    .slice(0, 4)
-
-  return fallbackTitleCase(words.join(' ')) || 'Untitled Node'
-}
-
-function isBrokenNodeLabel(label = '', summary = '') {
-  const clean = String(label || '').trim()
-  return (
-    !clean ||
-    clean.endsWith('...') ||
-    clean === summary ||
-    clean.toLowerCase().startsWith('the user') ||
-    clean.length > 40
-  )
-}
-
-function uniqueLabelCandidate(label, existingLabels = new Set()) {
-  const clean = String(label || '').trim()
-  const candidates = [
-    clean,
-    `${clean} Signal`,
-    `${clean} Context`,
-    `${clean} Practice`,
-    `${clean} Path`,
-  ].filter(Boolean)
-
-  return candidates.find((candidate) => !existingLabels.has(candidate.toLowerCase())) || clean
-}
-
-async function generateNodeLabel(memory) {
-  const parsed = await requestJsonObject({
-    label: 'node label',
-    model: UTILITY_MODEL,
-    maxCompletionTokens: 80,
-    usageContext: { call_type: 'memory_update' },
-    messages: [
-      {
-        role: 'system',
-        content: 'You generate short, sharp titles for knowledge graph nodes. Return only valid JSON: { "label": "..." }. No markdown. No preamble.',
-      },
-      {
-        role: 'user',
-        content: `Generate a node label for this memory:
-Type: ${memory.type}
-Pillar: ${memory.primary_pillar || 'unknown'}
-Content: ${memory.content}
-
-Rules:
-- 2 to 5 words maximum
-- Title case
-- Must be a noun phrase, not a sentence
-- Capture the core concept, not the full detail
-- No verbs like 'wants', 'is trying', 'has been'
-- No filler words like 'the user', 'a pattern of', 'tendency to'
-- Examples of good labels: 'Compounding Mindset', 'Fear of Market Feedback', 'Execution Over Planning', 'Recurring Pivot Impulse'`,
-      },
-    ],
-  })
-
-  const label = typeof parsed.label === 'string' ? parsed.label.trim() : ''
-  if (!label) throw new Error('Empty generated node label')
-  return label
-}
-
-async function nodeFromMemory(memory, index) {
-  if (memory.type === 'pattern' && ((memory.confidence ?? 0) < 0.65 || (memory.importance ?? 0) < 3)) {
-    return null
-  }
-
-  let label = fallbackMemoryLabel(memory)
-  try {
-    label = await generateNodeLabel(memory)
-  } catch {}
-
-  const pillarConfidence = Number(memory.pillar_confidence ?? 0.7)
-  const hasConfidentPillar = memory.primary_pillar && pillarConfidence >= 0.55
-  const pillar = hasConfidentPillar ? inferStoragePillar(memory.content, memory.primary_pillar) : null
-  return normalizeNode({
-    label,
-    type: MEMORY_TYPE_TO_NODE_TYPE[memory.type] || 'concept',
-    pillar,
-    allowPillarInference: hasConfidentPillar,
-    summary: memory.content,
-    status: hasConfidentPillar ? 'active' : 'dim',
-    importance: memory.importance || 3,
-    confidence: memory.confidence ?? 0.7,
-  }, index)
-}
-
-async function nodeFromExperiment(experiment, index, existingLabel = '') {
-  const summary = `${experiment.description} (${experiment.window_hours}h window)`
-  let label = fallbackMemoryLabel({
-    type: 'experiment_result',
-    primary_pillar: experiment.pillar || null,
-    content: experiment.description,
-  })
-  if (existingLabel && !isBrokenNodeLabel(existingLabel, summary)) {
-    label = existingLabel
-  } else {
-    try {
-      label = await generateNodeLabel({
-        type: 'experiment_result',
-        primary_pillar: experiment.pillar || null,
-        content: experiment.description,
-      })
-    } catch {}
-  }
-
-  return normalizeNode({
-    label,
-    type: 'experiment',
-    pillar: inferStoragePillar(experiment.description, experiment.pillar || null),
-    summary,
-    status: experiment.status === 'ghosted' ? 'ghosted' : 'active',
-    importance: 4,
-    confidence: 0.8,
-  }, index)
-}
-
-async function fetchSessionExperiments(sessionId) {
-  try {
-    const payload = await getApiJson(`/api/experiments?session_id=${encodeURIComponent(sessionId)}&limit=10`)
-    return payload?.experiments || []
-  } catch {
-    return null
-  }
-}
-
 export async function backfillNodeLabels(sessionId) {
   if (!sessionId) return
   // Label repair now happens naturally on the next server-owned node upsert.
@@ -648,52 +405,10 @@ export async function syncPersonalWiki(session) {
   if (!session?.id) return { nodes: [], edges: [] }
 
   try {
-    const roots = []
-    for (let i = 0; i < DISPLAY_ROOT_NODES.length; i++) {
-      const root = await upsertNode(session.id, DISPLAY_ROOT_NODES[i], i)
-      if (root) roots.push(root)
-    }
-
-    const seedNodes = seedNodesFromSession(session)
-    for (let i = 0; i < seedNodes.length; i++) {
-      const node = await upsertNode(session.id, seedNodes[i], i + 2)
-      const root = roots.find((r) => r.pillar === node?.pillar)
-      await upsertEdge(session.id, node, root, 'belongs_to', 0.45)
-    }
-
-    let memories = []
-    try {
-      const memoryPayload = await getApiJson('/api/personal-memories?limit=10')
-      memories = Array.isArray(memoryPayload?.memories) ? memoryPayload.memories : []
-    } catch {}
-
-    for (let i = 0; i < memories.length; i++) {
-      const memory = memories[i]
-      const memoryNode = await nodeFromMemory(memory, i + 8)
-      if (!memoryNode) continue
-      const node = await upsertNode(session.id, memoryNode, i + 8)
-      const pillarKey = node?.pillar || memory.primary_pillar
-      const root = roots.find((r) => r.pillar === pillarKey)
-      if (node?.id && root?.id) {
-        await upsertEdge(session.id, node, root, 'belongs_to', 0.55)
-      }
-    }
-
-    const tableExperiments = await fetchSessionExperiments(session.id)
-    const experiments = tableExperiments || session.active_experiments || []
-    for (let i = 0; i < experiments.length; i++) {
-      const summary = `${experiments[i].description} (${experiments[i].window_hours}h window)`
-      const existing = await findExistingNodeBySummary(session.id, summary, 'experiment')
-      const node = await upsertNode(
-        session.id,
-        await nodeFromExperiment(experiments[i], i + 20, existing?.label || ''),
-        i + 20
-      )
-      const root = roots.find((r) => r.pillar === node?.pillar)
-      await upsertEdge(session.id, node, root, 'tested_by', 0.7)
-    }
-
-    return getPersonalWikiGraph(session.id)
+    const payload = await postApiJson('/api/personal-wiki/sync', {
+      session_id: session.id,
+    })
+    return buildDisplayGraph(payload?.graph || {}, session.id)
   } catch {
     return fallbackGraph(session)
   }
@@ -710,18 +425,8 @@ export async function getPersonalWikiGraph(sessionId) {
   if (!sessionId) return { nodes: [], edges: [] }
 
   try {
-    const { data, error } = await supabase.rpc('get_personal_wiki_graph', {
-      match_session_id: sessionId,
-    })
-
-    if (error) {
-      return { nodes: [], edges: [] }
-    }
-
-    return buildDisplayGraph({
-      nodes: data?.nodes || [],
-      edges: data?.edges || [],
-    }, sessionId)
+    const payload = await getApiJson(`/api/personal-wiki/graph?session_id=${encodeURIComponent(sessionId)}`)
+    return buildDisplayGraph(payload?.graph || {}, sessionId)
   } catch {
     return { nodes: [], edges: [] }
   }
