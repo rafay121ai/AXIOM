@@ -100,8 +100,8 @@ export async function searchPersonalMemory(userId, query, matchCount = 5, option
 
     const memories = data || []
     emitTiming(options, 'mark_used:start', { memoryCount: memories.length })
-    await markMemoriesUsed(memories.map((memory) => memory.id).filter(Boolean))
-    emitTiming(options, 'mark_used:done', { memoryCount: memories.length })
+    markMemoriesUsed(memories.map((memory) => memory.id).filter(Boolean))
+      .finally(() => emitTiming(options, 'mark_used:done', { memoryCount: memories.length }))
     return memories
   } catch {
     return []

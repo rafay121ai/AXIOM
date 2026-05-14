@@ -331,6 +331,16 @@ function asksForExperimentOrApplication(text = '') {
   return /\b(experiment|practical|apply|application|next step|next move|what should i do|what do i do|do today|try today|test this|real[- ]world)\b/i.test(text)
 }
 
+function isConcreteRevenueActionTurn(text = '') {
+  const clean = String(text || '').toLowerCase()
+  const hasRevenuePressure =
+    /\b(make \$?\d+|\$\d+|revenue|sales|sell|selling|paid pilot|close clients?|client acquisition|pipeline|cold outreach|outreach|buyers?|buyer|lead follow[- ]?up|by august|by \w+ \d{1,2})\b/.test(clean)
+  const hasConcreteAction =
+    /\b(send|message|dm|email|call|reach out|pick|choose|audit|offer|diagnostic|pilot|today|first target|one person|one buyer|exact outreach)\b/.test(clean)
+
+  return hasRevenuePressure && hasConcreteAction
+}
+
 function shouldAllowQueryExpansionForTurn(text = '', route = null) {
   const clean = String(text || '').toLowerCase()
   const explicitSourceDepth =
@@ -497,20 +507,22 @@ function resolvePromptControl({
   const totalAbsorbedConceptCount = currentAbsorbedCount + Number(historicalAbsorbedConceptCount || 0)
   const responseMode = classifyPromptResponseMode({ text, session, activeExperimentCount, inExperimentMode })
   const wantsApplication = asksForExperimentOrApplication(text)
+  const concreteRevenueActionTurn = isConcreteRevenueActionTurn(text)
   const wantsCancellation = /\b(cancel|skip|drop|postpone|busy|later|not now|don'?t want to|i'?m not doing this)\b/i.test(text)
   const wantsSources = /\b(sources?|cite|citation|where did|where is this from|when were these released|how current|released|dated|date unknown|what data|knowledge base|retrieved|search)\b/i.test(text)
   const activeLimitReached = activeExperimentCount >= 2
   const experimentRelevant =
     wantsApplication ||
+    concreteRevenueActionTurn ||
     ['accountability', 'report', 'experiment_negotiation'].includes(responseMode) ||
     experimentAssignedInSession
-  let canAssignExperiment = experimentRelevant && !activeLimitReached && totalAbsorbedConceptCount > 0
+  let canAssignExperiment = experimentRelevant && !activeLimitReached && (totalAbsorbedConceptCount > 0 || concreteRevenueActionTurn)
   let experimentBlockReason = null
 
   if (experimentRelevant && activeLimitReached) {
     canAssignExperiment = false
     experimentBlockReason = 'active_experiment_limit'
-  } else if (experimentRelevant && totalAbsorbedConceptCount <= 0) {
+  } else if (experimentRelevant && totalAbsorbedConceptCount <= 0 && !concreteRevenueActionTurn) {
     canAssignExperiment = false
     experimentBlockReason = 'no_absorbed_concept'
   } else if (!experimentRelevant) {
@@ -530,6 +542,7 @@ function resolvePromptControl({
     currentAbsorbedConceptCount: currentAbsorbedCount,
     historicalAbsorbedConceptCount: Number(historicalAbsorbedConceptCount || 0),
     totalAbsorbedConceptCount,
+    concreteRevenueActionTurn,
     canAssignExperiment,
     experimentBlockReason,
     shouldHoldExperiment,
@@ -1901,10 +1914,15 @@ export default function Chat() {
         experiment = null
       }
 
-      if (experiment && concepts.filter((concept) => concept.state === 'absorbed').length + historicalAbsorbedConceptCount <= 0) {
+      if (
+        experiment &&
+        concepts.filter((concept) => concept.state === 'absorbed').length + historicalAbsorbedConceptCount <= 0 &&
+        !promptControl?.concreteRevenueActionTurn
+      ) {
         console.info('[Axiom learning state] experiment blocked after parse: no absorbed in-scope concepts', {
           conceptCount: concepts.length,
           historicalAbsorbedConceptCount,
+          concreteRevenueActionTurn: promptControl?.concreteRevenueActionTurn,
         })
         experiment = null
       }

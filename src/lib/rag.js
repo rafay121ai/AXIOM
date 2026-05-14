@@ -156,6 +156,16 @@ function isCurrentFactualQuestion(lower = '') {
 const QUESTION_SHAPE_RULES = [
   {
     matches: (lower) =>
+      /\b(cold outreach|outreach|sales pipeline|pipeline|sell|selling|sales|lead follow[- ]?up|leads?|buyers?|buyer|paid pilot|pilot|close clients?|client acquisition|make \$?\d+|make money|revenue goal|revenue deadline|by august|by \w+ \d{1,2})\b/.test(lower),
+    build: () => ({
+      mode: 'two_pillar',
+      pillars: ['move_people', 'money_game'],
+      artifactStrategy: 'none',
+      rationale: 'Revenue/outreach action turn. Combine buyer persuasion with money pressure; keep it concrete and prose-first.',
+    }),
+  },
+  {
+    matches: (lower) =>
       isCurrentFactualQuestion(lower) &&
       !wantsExplicitArtifact(lower),
     build: () => ({
