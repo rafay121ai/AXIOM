@@ -273,6 +273,11 @@ const LABEL_STOP_WORDS = new Set([
   'would',
 ])
 
+function stripInvalidLabel(value = '') {
+  const clean = String(value || '').replace(/\s+/g, ' ').trim()
+  return /^untitled\s+node$/i.test(clean) ? '' : clean
+}
+
 function titleCase(value = '') {
   return String(value || '')
     .replace(/[-_]+/g, ' ')
@@ -283,9 +288,16 @@ function titleCase(value = '') {
 }
 
 function shortNodeLabel(label = '', summary = '') {
-  const text = `${label || ''} ${summary || ''}`.replace(/\s+/g, ' ').trim()
+  const safeLabel = stripInvalidLabel(label)
+  const text = `${safeLabel} ${summary || ''}`.replace(/\s+/g, ' ').trim()
   const lower = text.toLowerCase()
 
+  if (/putting an offer in front of buyers before polishing it in private/.test(lower)) {
+    return 'Market Contact'
+  }
+  if (/(e-guide|e guide|eguides|e-guides)/.test(lower) && /(pakistani|female content creator|content creators|website)/.test(lower)) {
+    return 'Creator E-Guide Website'
+  }
   if (/\baxiom\b/.test(lower) && /(different from chatgpt|better wrapper|mentor app|mvp stage)/.test(lower)) {
     return 'Axiom Differentiation Bet'
   }

@@ -505,11 +505,12 @@ function sentenceCase(value = '') {
 }
 
 function cleanNodeLabel(value = '') {
-  return String(value)
+  const clean = String(value)
     .replace(/\s+/g, ' ')
     .replace(/\.\.\.$/, '')
     .replace(/^the user\s+(wants|needs|is trying|is working|has been trying)\s+/i, '')
     .trim()
+  return /^untitled\s+node$/i.test(clean) ? '' : clean
 }
 
 function displayPillarName(pillar = '') {
@@ -519,7 +520,13 @@ function displayPillarName(pillar = '') {
 function displayNodeTitle(node) {
   if (!node) return ''
   if (node.type === 'pillar') return displayPillarName(node.pillar)
-  const label = cleanNodeLabel(node.label || node.summary || 'Untitled node')
+  const summary = cleanNodeSummary(node.summary)
+  const lower = `${node.label || ''} ${summary}`.toLowerCase()
+  if (/putting an offer in front of buyers before polishing it in private/.test(lower)) return 'Market Contact'
+  if (/(e-guide|e guide|eguides|e-guides)/.test(lower) && /(pakistani|female content creator|content creators|website)/.test(lower)) {
+    return 'Creator E-Guide Website'
+  }
+  const label = cleanNodeLabel(node.label) || cleanNodeLabel(summary) || 'Untitled node'
   const words = label.split(/\s+/).filter(Boolean)
   return words.length > 5 ? sentenceCase(label) : titleCase(label)
 }
@@ -532,6 +539,8 @@ const NODE_DEFINITIONS = {
   'paid pilot path': 'A free diagnostic becomes useful only if it exposes one workflow leak that can turn into a paid pilot.',
   'agency buyer test': 'A solo agency owner with visible overload is a sharper first buyer than an abstract market segment.',
   'buyer offer focus': 'One buyer type, one painful task, and one specific offer beats a broad pipeline right now.',
+  'market contact': 'Buyer contact is the test: put the offer in front of someone before polishing it further in private.',
+  'creator e-guide website': 'A past build aimed at Pakistani female content creators, useful only if it produced buyer evidence.',
 }
 
 function cleanNodeSummary(value = '') {

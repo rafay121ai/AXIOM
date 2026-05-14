@@ -515,10 +515,21 @@ const LABEL_STOP_WORDS = new Set([
   'would',
 ])
 
+function stripInvalidLabel(value = '') {
+  const clean = String(value || '').replace(/\s+/g, ' ').trim()
+  return /^untitled\s+node$/i.test(clean) ? '' : clean
+}
+
 function fallbackNodeLabel(content = '') {
-  const text = String(content || '').replace(/\s+/g, ' ').trim()
+  const text = stripInvalidLabel(content).replace(/\s+/g, ' ').trim()
   const lower = text.toLowerCase()
 
+  if (/putting an offer in front of buyers before polishing it in private/.test(lower)) {
+    return 'Market Contact'
+  }
+  if (/(e-guide|e guide|eguides|e-guides)/.test(lower) && /(pakistani|female content creator|content creators|website)/.test(lower)) {
+    return 'Creator E-Guide Website'
+  }
   if (/\baxiom\b/.test(lower) && /(different from chatgpt|better wrapper|mentor app|mvp stage)/.test(lower)) {
     return 'Axiom Differentiation Bet'
   }
@@ -541,7 +552,7 @@ function fallbackNodeLabel(content = '') {
     return 'Buyer Offer Focus'
   }
 
-  const words = String(content || '')
+  const words = text
     .replace(/^onboarding signal:\s*/i, '')
     .replace(/^[^:?.!]{0,90}[:?.!]\s*/, '')
     .replace(/\([^)]*\)/g, ' ')
