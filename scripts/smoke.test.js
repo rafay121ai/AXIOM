@@ -509,6 +509,46 @@ test('smoke: minimum deploy flows work end to end', { timeout: TEST_TIMEOUT_MS }
     assert.ok(source.title, 'source metadata includes title')
   })
 
+  await t.test('Personal memories', async () => {
+    const inserted = await apiPost('/api/personal-memories', {
+      session_id: state.sessionId,
+      memory: {
+        type: 'goal',
+        content: `Smoke user wants to validate one pricing assumption ${crypto.randomUUID()}.`,
+        primary_pillar: 'money_game',
+        secondary_pillars: ['think_sharper'],
+        pillar_confidence: 0.8,
+        importance: 4,
+        confidence: 0.85,
+      },
+      embedding,
+    })
+    assert.equal(inserted.response.status, 200)
+    assert.ok(inserted.json.memory?.id)
+    assert.equal(inserted.json.memory.user_id, state.userId)
+    assert.equal(inserted.json.memory.session_id, state.sessionId)
+
+    const marked = await apiPost('/api/personal-memories/mark-used', {
+      memory_ids: [inserted.json.memory.id],
+    })
+    assert.equal(marked.response.status, 200)
+    assert.equal(marked.json.updated, 1)
+
+    const unauthorized = await apiPost('/api/personal-memories', {
+      session_id: state.sessionId,
+      memory: { type: 'goal', content: 'Should not write.' },
+      embedding,
+    }, null)
+    assert.equal(unauthorized.response.status, 401)
+
+    const invalid = await apiPost('/api/personal-memories', {
+      session_id: state.sessionId,
+      memory: { type: 'goal', content: '' },
+      embedding: [1, 2, 3],
+    })
+    assert.equal(invalid.response.status, 400)
+  })
+
   await t.test('Concept states', async () => {
     const { data: concept, error: conceptError } = await knowledgeAdmin
       .from('source_learning_maps')

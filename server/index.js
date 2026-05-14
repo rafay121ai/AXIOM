@@ -250,6 +250,7 @@ app.use('/api/session', requireAuth)
 app.use('/api/live-search', requireAuth)
 app.use('/api/knowledge', requireAuth)
 app.use('/api/experiments', requireAuth)
+app.use('/api/personal-memories', requireAuth)
 app.use('/api/personal-wiki', requireAuth)
 app.use('/api/admin', requireAuth)
 
@@ -260,6 +261,23 @@ app.get('/health', (_req, res) => {
 })
 
 const CONCEPT_STATES = new Set(['encountered', 'partial', 'absorbed'])
+const PERSONAL_MEMORY_TYPES = new Set([
+  'goal',
+  'pattern',
+  'belief',
+  'experiment_result',
+  'preference',
+  'decision',
+  'fact',
+])
+const PERSONAL_MEMORY_PILLARS = new Set([
+  'human_mind',
+  'money_game',
+  'how_companies_win',
+  'whats_coming',
+  'think_sharper',
+  'move_people',
+])
 const PERSONAL_WIKI_TYPES = new Set(['pillar', 'concept', 'pattern', 'goal', 'blind_spot', 'experiment', 'belief', 'decision', 'contradiction'])
 const PERSONAL_WIKI_PILLARS = new Set(['psychology', 'economics', 'human_mind', 'money_game', 'how_companies_win', 'whats_coming', 'think_sharper', 'move_people'])
 const PERSONAL_WIKI_STATUSES = new Set(['seed', 'dim', 'active', 'bright', 'ghosted', 'resolved'])
@@ -281,6 +299,51 @@ function cleanConceptStateRows(rows, userId) {
       CONCEPT_STATES.has(row.state)
     )
     .slice(0, 60)
+}
+
+function normalizePersonalMemoryPillar(value) {
+  const pillar = typeof value === 'string' ? value.trim() : ''
+  return PERSONAL_MEMORY_PILLARS.has(pillar) ? pillar : null
+}
+
+function cleanEmbedding(value) {
+  if (!Array.isArray(value) || value.length !== 1536) return null
+  const embedding = value.map((item) => Number(item))
+  return embedding.every((item) => Number.isFinite(item)) ? embedding : null
+}
+
+function cleanUuidList(value, limit = 30) {
+  if (!Array.isArray(value)) return []
+  return [...new Set(value.map((item) => String(item || '').trim()))]
+    .filter((item) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item))
+    .slice(0, limit)
+}
+
+function cleanPersonalMemory(rawMemory = {}) {
+  const memory = rawMemory && typeof rawMemory === 'object' ? rawMemory : {}
+  const type = String(memory.type || 'fact').trim()
+  const content = String(memory.content || '').trim().replace(/\s+/g, ' ').slice(0, 1400)
+  const primaryPillar = normalizePersonalMemoryPillar(memory.primary_pillar)
+  const secondaryPillars = Array.isArray(memory.secondary_pillars)
+    ? [...new Set(memory.secondary_pillars.map(normalizePersonalMemoryPillar).filter(Boolean))]
+      .filter((pillar) => pillar !== primaryPillar)
+      .slice(0, 2)
+    : []
+  const pillarConfidence = Number(memory.pillar_confidence)
+  const importance = Number(memory.importance)
+  const confidence = Number(memory.confidence)
+
+  if (!content) return null
+
+  return {
+    type: PERSONAL_MEMORY_TYPES.has(type) ? type : 'fact',
+    content,
+    primary_pillar: primaryPillar,
+    secondary_pillars: secondaryPillars,
+    pillar_confidence: Number.isFinite(pillarConfidence) ? Math.min(1, Math.max(0, pillarConfidence)) : 0.7,
+    importance: Number.isFinite(importance) ? Math.min(7, Math.max(1, Math.round(importance))) : 3,
+    confidence: Number.isFinite(confidence) ? Math.min(1, Math.max(0, confidence)) : 0.7,
+  }
 }
 
 async function assertSessionOwner(sessionId, userId) {
@@ -582,6 +645,109 @@ app.post('/api/knowledge/concept-states', knowledgeWriteRateLimit, async (req, r
   } catch (error) {
     console.error('[Axiom knowledge] concept state write failed', error)
     return res.status(500).json({ error: 'Failed to update concept states' })
+  }
+})
+
+app.post('/api/personal-memories', knowledgeWriteRateLimit, async (req, res) => {
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Personal memory service not configured' })
+
+  const sessionId = String(req.body?.session_id || '').trim()
+  const memory = cleanPersonalMemory(req.body?.memory)
+  const embedding = cleanEmbedding(req.body?.embedding)
+
+  if (!sessionId || !memory || !embedding) {
+    return res.status(400).json({ error: 'Invalid personal memory payload' })
+  }
+
+  const ownership = await assertSessionOwner(sessionId, req.user.id)
+  if (!ownership.ok) return res.status(ownership.status).json({ error: ownership.error })
+
+  try {
+    const { data: matches, error: matchError } = await supabaseAdmin.rpc('find_similar_personal_memory', {
+      query_embedding: embedding,
+      match_user_id: req.user.id,
+      match_type: memory.type,
+      similarity_threshold: 0.82,
+    })
+
+    if (matchError) throw matchError
+    const existing = matches?.[0] || null
+
+    if (existing) {
+      const existingImportance = Number(existing.importance) || 1
+      const existingConfidence = Number(existing.confidence) || 0.7
+      const updates = {
+        content: memory.content.length >= String(existing.content || '').length ? memory.content : existing.content,
+        importance: Math.max(existingImportance, memory.importance),
+        confidence: Math.min(1, Math.max(existingConfidence, memory.confidence)),
+        primary_pillar: memory.primary_pillar || existing.primary_pillar || null,
+        secondary_pillars: memory.secondary_pillars.length ? memory.secondary_pillars : existing.secondary_pillars || [],
+        pillar_confidence: Math.max(Number(existing.pillar_confidence) || 0, memory.pillar_confidence || 0.7),
+        embedding,
+        updated_at: new Date().toISOString(),
+      }
+
+      const { data, error } = await supabaseAdmin
+        .from('personal_memories')
+        .update(updates)
+        .eq('id', existing.id)
+        .eq('user_id', req.user.id)
+        .select()
+        .single()
+
+      if (error) throw error
+      return res.json({ memory: data, action: 'updated' })
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('personal_memories')
+      .insert({
+        session_id: sessionId,
+        user_id: req.user.id,
+        ...memory,
+        embedding,
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+    return res.json({ memory: data, action: 'inserted' })
+  } catch (error) {
+    console.error('[Personal Memory] upsert failed', error)
+    return res.status(500).json({ error: 'Failed to upsert personal memory' })
+  }
+})
+
+app.post('/api/personal-memories/mark-used', knowledgeWriteRateLimit, async (req, res) => {
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Personal memory service not configured' })
+
+  const memoryIds = cleanUuidList(req.body?.memory_ids)
+  if (memoryIds.length === 0) return res.status(400).json({ error: 'No valid memory ids' })
+
+  try {
+    const { data: memories, error: selectError } = await supabaseAdmin
+      .from('personal_memories')
+      .select('id,use_count')
+      .eq('user_id', req.user.id)
+      .in('id', memoryIds)
+
+    if (selectError) throw selectError
+    const now = new Date().toISOString()
+    await Promise.all((memories || []).map((memory) =>
+      supabaseAdmin
+        .from('personal_memories')
+        .update({
+          use_count: Number(memory.use_count || 0) + 1,
+          last_used_at: now,
+        })
+        .eq('id', memory.id)
+        .eq('user_id', req.user.id)
+    ))
+
+    return res.json({ updated: memories?.length || 0 })
+  } catch (error) {
+    console.error('[Personal Memory] mark used failed', error)
+    return res.status(500).json({ error: 'Failed to mark personal memories used' })
   }
 })
 

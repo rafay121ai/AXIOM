@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { generateEmbedding, generateMemoryUpdate } from './openai'
+import { postApiJson } from './api'
 
 const MEMORY_TYPES = new Set([
   'goal',
@@ -132,96 +133,22 @@ export function formatNamedPatternsContext(memories) {
 async function markMemoriesUsed(memoryIds) {
   if (!memoryIds.length) return
 
-  const { error } = await supabase.rpc('mark_personal_memories_used', {
-    memory_ids: memoryIds,
-  })
-
-  if (error) return
-}
-
-async function findSimilarMemory(userId, memory, embedding) {
-  const { data, error } = await supabase.rpc('find_similar_personal_memory', {
-    query_embedding: embedding,
-    match_user_id: userId,
-    match_type: memory.type,
-    similarity_threshold: 0.82,
-  })
-
-  if (error) return null
-
-  return data?.[0] || null
+  try {
+    await postApiJson('/api/personal-memories/mark-used', {
+      memory_ids: memoryIds,
+    })
+  } catch {}
 }
 
 async function upsertPersonalMemory(sessionId, userId, memory) {
   if (!userId) return
 
   const embedding = await generateEmbedding(memory.content)
-  const existing = await findSimilarMemory(userId, memory, embedding)
-
-  if (existing) {
-    const existingImportance = existing.importance || 1
-    const existingConfidence = typeof existing.confidence === 'number' ? existing.confidence : 0.7
-    const updates = {
-      content: memory.content.length >= existing.content.length ? memory.content : existing.content,
-      importance: Math.max(existingImportance, memory.importance),
-      confidence: Math.min(1, Math.max(existingConfidence, memory.confidence)),
-      primary_pillar: memory.primary_pillar || existing.primary_pillar || null,
-      secondary_pillars: memory.secondary_pillars || existing.secondary_pillars || [],
-      pillar_confidence: Math.max(Number(existing.pillar_confidence) || 0, memory.pillar_confidence || 0.7),
-      embedding,
-      updated_at: new Date().toISOString(),
-    }
-
-    const { error } = await supabase
-      .from('personal_memories')
-      .update(updates)
-      .eq('id', existing.id)
-
-    if (error) {
-      if (/primary_pillar|secondary_pillars|pillar_confidence/.test(error.message || '')) {
-        const { primary_pillar, secondary_pillars, pillar_confidence, ...legacyUpdates } = updates
-        const { error: legacyError } = await supabase
-          .from('personal_memories')
-          .update(legacyUpdates)
-          .eq('id', existing.id)
-        if (legacyError) {
-          console.error('Failed to update personal memory', { error: legacyError, memory_id: existing.id })
-          return
-        }
-      } else {
-        console.error('Failed to update personal memory', { error, memory_id: existing.id })
-      }
-    }
-    return
-  }
-
-  const payload = {
+  await postApiJson('/api/personal-memories', {
     session_id: sessionId,
-    user_id: userId,
-    type: memory.type,
-    content: memory.content,
-    importance: memory.importance,
-    confidence: memory.confidence,
-    primary_pillar: memory.primary_pillar,
-    secondary_pillars: memory.secondary_pillars,
-    pillar_confidence: memory.pillar_confidence,
+    memory,
     embedding,
-  }
-
-  const { error } = await supabase.from('personal_memories').insert(payload)
-
-  if (error) {
-    if (/primary_pillar|secondary_pillars|pillar_confidence/.test(error.message || '')) {
-      const { primary_pillar, secondary_pillars, pillar_confidence, ...legacyPayload } = payload
-      const { error: legacyError } = await supabase.from('personal_memories').insert(legacyPayload)
-      if (legacyError) {
-        console.error('Failed to insert personal memory', { error: legacyError, type: memory.type })
-        return
-      }
-    } else {
-      console.error('Failed to insert personal memory', { error, type: memory.type })
-    }
-  }
+  })
 }
 
 async function savePersonalMemories(sessionId, userId, memories) {
