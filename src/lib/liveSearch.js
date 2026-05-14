@@ -6,9 +6,7 @@ import {
   wantsLiveSearchForText,
 } from './liveSearchTriggers'
 
-const API_BASE = (import.meta.env.PROD && !import.meta.env.VITE_FORCE_CROSS_ORIGIN_API
-  ? ''
-  : (import.meta.env.VITE_API_URL || '').replace(/\/$/, ''))
+const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
 
 function apiUrl(path) {
   return `${API_BASE}${path}`

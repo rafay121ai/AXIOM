@@ -245,6 +245,96 @@ const DISPLAY_PILLAR_KEYWORDS = {
   move_people: /\b(persuade|persuasion|write|writing|speak|speaking|narrative|story|influence|negotiat|audience|rhetoric|presentation|pitch)\b/g,
 }
 
+const LABEL_STOP_WORDS = new Set([
+  'about',
+  'after',
+  'again',
+  'because',
+  'before',
+  'being',
+  'build',
+  'building',
+  'could',
+  'currently',
+  'from',
+  'have',
+  'into',
+  'need',
+  'needs',
+  'that',
+  'their',
+  'this',
+  'toward',
+  'trying',
+  'user',
+  'wants',
+  'when',
+  'with',
+  'would',
+])
+
+function titleCase(value = '') {
+  return String(value || '')
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+    .replace(/\b[a-z]/g, (char) => char.toUpperCase())
+}
+
+function shortNodeLabel(label = '', summary = '') {
+  const text = `${label || ''} ${summary || ''}`.replace(/\s+/g, ' ').trim()
+  const lower = text.toLowerCase()
+
+  if (/\baxiom\b/.test(lower) && /(different from chatgpt|better wrapper|mentor app|mvp stage)/.test(lower)) {
+    return 'Axiom Differentiation Bet'
+  }
+  if (/(automation|automations|software)/.test(lower) && /(no sales|sales pipeline|cold outreach|buyer|revenue)/.test(lower)) {
+    return 'Automation Sales Gap'
+  }
+  if (/(cold outreach|outreach)/.test(lower) && /(hate|avoid|resistance|sales)/.test(lower)) {
+    return 'Cold Outreach Resistance'
+  }
+  if (/(\$?5,?000|5000|august 1|august)/.test(lower) && /(revenue|make|earn|sales|money)/.test(lower)) {
+    return 'August Revenue Target'
+  }
+  if (/(workflow audit|free diagnostic|paid pilot|first version)/.test(lower)) {
+    return 'Paid Pilot Path'
+  }
+  if (/(solo agency|agency owner|overwhelmed)/.test(lower)) {
+    return 'Agency Buyer Test'
+  }
+  if (/(one buyer|buyer type|painful task|one offer)/.test(lower)) {
+    return 'Buyer Offer Focus'
+  }
+
+  const clean = text
+    .replace(/^onboarding signal:\s*/i, '')
+    .replace(/^[^:?.!]{0,90}[:?.!]\s*/, '')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/^the user\s+/i, '')
+    .replace(/\b(the user|a pattern of|tendency to|wants to|needs to|is trying to|has been trying to|can build|is working on)\b/gi, ' ')
+    .replace(/[^a-z0-9\s-]/gi, ' ')
+
+  const words = clean
+    .split(/\s+/)
+    .map((word) => word.trim())
+    .filter((word) => word.length > 2 && !LABEL_STOP_WORDS.has(word.toLowerCase()))
+    .slice(0, 4)
+
+  return titleCase(words.join(' ')) || 'Untitled Node'
+}
+
+function compactNodeSummary(summary = '') {
+  const clean = String(summary || '')
+    .replace(/^onboarding signal:\s*/i, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (clean.length <= 190) return clean
+  return `${clean.slice(0, 187).trim()}...`
+}
+
 function countMatches(regex, text) {
   const matches = text.match(regex)
   return matches ? matches.length : 0
@@ -286,7 +376,7 @@ function nodePosition(index, pillar) {
 }
 
 function normalizeNode(rawNode, index = 0) {
-  const label = typeof rawNode?.label === 'string' ? rawNode.label.trim() : ''
+  const label = shortNodeLabel(rawNode?.label, rawNode?.summary)
   if (!label) return null
 
   const shouldInferPillar = rawNode.allowPillarInference !== false
@@ -297,7 +387,7 @@ function normalizeNode(rawNode, index = 0) {
     label,
     type: rawNode.type || 'concept',
     pillar,
-    summary: rawNode.summary || '',
+    summary: compactNodeSummary(rawNode.summary || ''),
     status: rawNode.status || 'dim',
     importance: Math.min(5, Math.max(1, rawNode.importance || 3)),
     confidence: Math.min(1, Math.max(0, rawNode.confidence ?? 0.7)),
@@ -347,6 +437,8 @@ function buildDisplayGraph(graph, sessionId = null) {
       const { pillar, pillar_source } = deriveDisplayPillar(node)
       return {
         ...node,
+        label: shortNodeLabel(node.label, node.summary),
+        summary: compactNodeSummary(node.summary),
         pillar,
         pillar_source,
       }
@@ -381,10 +473,10 @@ function seedNodesFromSession(session) {
     const text = `${qa.question || ''} ${qa.answer || ''}`
     const pillar = inferStoragePillar(text, qa.pillar || null)
     nodes.push({
-      label: qa.answer || qa.question,
+      label: shortNodeLabel(qa.answer || qa.question, text),
       type: 'concept',
       pillar,
-      summary: qa.question ? `Onboarding signal: ${qa.question} ${qa.answer || ''}` : 'Onboarding signal',
+      summary: qa.answer || qa.question || 'Onboarding signal',
       status: 'seed',
       importance: 2,
       confidence: 0.55,

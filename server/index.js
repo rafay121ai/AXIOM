@@ -487,15 +487,70 @@ function titleCase(value = '') {
     .replace(/\b[a-z]/g, (char) => char.toUpperCase())
 }
 
+const LABEL_STOP_WORDS = new Set([
+  'about',
+  'after',
+  'again',
+  'because',
+  'before',
+  'being',
+  'build',
+  'building',
+  'could',
+  'currently',
+  'from',
+  'have',
+  'into',
+  'need',
+  'needs',
+  'that',
+  'their',
+  'this',
+  'toward',
+  'trying',
+  'user',
+  'wants',
+  'when',
+  'with',
+  'would',
+])
+
 function fallbackNodeLabel(content = '') {
+  const text = String(content || '').replace(/\s+/g, ' ').trim()
+  const lower = text.toLowerCase()
+
+  if (/\baxiom\b/.test(lower) && /(different from chatgpt|better wrapper|mentor app|mvp stage)/.test(lower)) {
+    return 'Axiom Differentiation Bet'
+  }
+  if (/(automation|automations|software)/.test(lower) && /(no sales|sales pipeline|cold outreach|buyer|revenue)/.test(lower)) {
+    return 'Automation Sales Gap'
+  }
+  if (/(cold outreach|outreach)/.test(lower) && /(hate|avoid|resistance|sales)/.test(lower)) {
+    return 'Cold Outreach Resistance'
+  }
+  if (/(\$?5,?000|5000|august 1|august)/.test(lower) && /(revenue|make|earn|sales|money)/.test(lower)) {
+    return 'August Revenue Target'
+  }
+  if (/(workflow audit|free diagnostic|paid pilot|first version)/.test(lower)) {
+    return 'Paid Pilot Path'
+  }
+  if (/(solo agency|agency owner|overwhelmed)/.test(lower)) {
+    return 'Agency Buyer Test'
+  }
+  if (/(one buyer|buyer type|painful task|one offer)/.test(lower)) {
+    return 'Buyer Offer Focus'
+  }
+
   const words = String(content || '')
+    .replace(/^onboarding signal:\s*/i, '')
+    .replace(/^[^:?.!]{0,90}[:?.!]\s*/, '')
     .replace(/\([^)]*\)/g, ' ')
     .replace(/^the user\s+/i, '')
-    .replace(/\b(the user|a pattern of|tendency to|wants to|needs to|is trying to|has been trying to)\b/gi, ' ')
+    .replace(/\b(the user|a pattern of|tendency to|wants to|needs to|is trying to|has been trying to|can build|is working on)\b/gi, ' ')
     .replace(/[^a-z0-9\s-]/gi, ' ')
     .split(/\s+/)
     .map((word) => word.trim())
-    .filter((word) => word.length > 2 && !['about', 'after', 'again', 'because', 'before', 'being', 'building', 'could', 'from', 'have', 'into', 'need', 'needs', 'that', 'their', 'this', 'toward', 'trying', 'user', 'wants', 'when', 'with', 'would'].includes(word.toLowerCase()))
+    .filter((word) => word.length > 2 && !LABEL_STOP_WORDS.has(word.toLowerCase()))
     .slice(0, 4)
   return titleCase(words.join(' ')) || 'Untitled Node'
 }

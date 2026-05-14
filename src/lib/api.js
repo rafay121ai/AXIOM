@@ -1,7 +1,6 @@
 import { supabase } from './supabase'
 
 function resolveApiBase() {
-  if (import.meta.env.PROD && !import.meta.env.VITE_FORCE_CROSS_ORIGIN_API) return ''
   return (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
 }
 
