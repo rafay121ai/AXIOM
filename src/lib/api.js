@@ -1,6 +1,11 @@
 import { supabase } from './supabase'
 
-const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
+function resolveApiBase() {
+  if (import.meta.env.PROD && !import.meta.env.VITE_FORCE_CROSS_ORIGIN_API) return ''
+  return (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
+}
+
+const API_BASE = resolveApiBase()
 
 export function apiUrl(path) {
   return `${API_BASE}${path}`

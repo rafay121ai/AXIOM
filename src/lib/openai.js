@@ -8,7 +8,9 @@ export const EMBED_MODEL = 'text-embedding-3-small'
 const WIKI_CONTEXT_CONFIDENCE_FLOOR = 0.30
 
 const viteEnv = import.meta.env || {}
-const API_BASE = (viteEnv.VITE_API_URL || '').replace(/\/$/, '')
+const API_BASE = (viteEnv.PROD && !viteEnv.VITE_FORCE_CROSS_ORIGIN_API
+  ? ''
+  : (viteEnv.VITE_API_URL || '').replace(/\/$/, ''))
 
 function apiUrl(path) {
   return `${API_BASE}${path}`
