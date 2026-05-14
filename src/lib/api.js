@@ -39,3 +39,21 @@ export async function postApiJson(path, body = {}) {
 
   return response.json()
 }
+
+export async function getApiJson(path) {
+  const authHeaders = await getAuthHeaders()
+  const response = await fetch(apiUrl(path), {
+    method: 'GET',
+    headers: { ...authHeaders },
+  })
+
+  if (!response.ok) {
+    const data = await readError(response)
+    const error = new Error(data?.error || data?.reason || response.statusText)
+    error.status = response.status
+    error.data = data
+    throw error
+  }
+
+  return response.json()
+}

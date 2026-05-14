@@ -26,6 +26,10 @@ if (!frontendUrl) {
 const allowedOrigins = new Set([
   frontendUrl,
   'https://axiom-delta-pied.vercel.app',
+  ...String(process.env.FRONTEND_URLS || '')
+    .split(',')
+    .map((origin) => origin.trim().replace(/\/$/, ''))
+    .filter(Boolean),
 ])
 
 function corsOrigin(origin, callback) {
@@ -34,6 +38,7 @@ function corsOrigin(origin, callback) {
 
   const normalizedOrigin = origin.trim().replace(/\/$/, '')
   if (allowedOrigins.has(normalizedOrigin)) return callback(null, true)
+  if (/^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(normalizedOrigin)) return callback(null, true)
 
   return callback(new Error(`CORS blocked origin: ${origin}`))
 }
@@ -715,6 +720,27 @@ app.post('/api/personal-memories', knowledgeWriteRateLimit, async (req, res) => 
   } catch (error) {
     console.error('[Personal Memory] upsert failed', error)
     return res.status(500).json({ error: 'Failed to upsert personal memory' })
+  }
+})
+
+app.get('/api/personal-memories', knowledgeWriteRateLimit, async (req, res) => {
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Personal memory service not configured' })
+
+  const limit = Math.min(25, Math.max(1, Number(req.query?.limit) || 10))
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('personal_memories')
+      .select('id,type,content,importance,confidence,primary_pillar,secondary_pillars,pillar_confidence,updated_at,use_count')
+      .eq('user_id', req.user.id)
+      .order('updated_at', { ascending: false })
+      .limit(limit)
+
+    if (error) throw error
+    return res.json({ memories: data || [] })
+  } catch (error) {
+    console.error('[Personal Memory] list failed', error)
+    return res.status(500).json({ error: 'Failed to load personal memories' })
   }
 })
 

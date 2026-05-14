@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import { requestJsonObject, UTILITY_MODEL } from './openai'
-import { postApiJson } from './api'
+import { getApiJson, postApiJson } from './api'
 
 const DISPLAY_PILLARS = [
   'human_mind',
@@ -665,35 +665,21 @@ export async function syncPersonalWiki(session) {
       await upsertEdge(session.id, node, root, 'belongs_to', 0.45)
     }
 
-    let { data: memories, error: memoriesError } = await supabase
-      .from('personal_memories')
-      .select('id, type, content, importance, confidence, primary_pillar, secondary_pillars, pillar_confidence, updated_at')
-      .eq('user_id', session.user_id)
-      .order('updated_at', { ascending: false })
-      .limit(10)
+    let memories = []
+    try {
+      const memoryPayload = await getApiJson('/api/personal-memories?limit=10')
+      memories = Array.isArray(memoryPayload?.memories) ? memoryPayload.memories : []
+    } catch {}
 
-    if (memoriesError && /primary_pillar|secondary_pillars|pillar_confidence/.test(memoriesError.message || '')) {
-      const fallback = await supabase
-        .from('personal_memories')
-        .select('id, type, content, importance, confidence, updated_at')
-        .eq('user_id', session.user_id)
-        .order('updated_at', { ascending: false })
-        .limit(10)
-      memories = fallback.data
-      memoriesError = fallback.error
-    }
-
-    if (!memoriesError) {
-      for (let i = 0; i < (memories || []).length; i++) {
-        const memory = memories[i]
-        const memoryNode = await nodeFromMemory(memory, i + 8)
-        if (!memoryNode) continue
-        const node = await upsertNode(session.id, memoryNode, i + 8)
-        const pillarKey = node?.pillar || memory.primary_pillar
-        const root = roots.find((r) => r.pillar === pillarKey)
-        if (node?.id && root?.id) {
-          await upsertEdge(session.id, node, root, 'belongs_to', 0.55)
-        }
+    for (let i = 0; i < memories.length; i++) {
+      const memory = memories[i]
+      const memoryNode = await nodeFromMemory(memory, i + 8)
+      if (!memoryNode) continue
+      const node = await upsertNode(session.id, memoryNode, i + 8)
+      const pillarKey = node?.pillar || memory.primary_pillar
+      const root = roots.find((r) => r.pillar === pillarKey)
+      if (node?.id && root?.id) {
+        await upsertEdge(session.id, node, root, 'belongs_to', 0.55)
       }
     }
 
