@@ -524,6 +524,9 @@ function fallbackNodeLabel(content = '') {
   const text = stripInvalidLabel(content).replace(/\s+/g, ' ').trim()
   const lower = text.toLowerCase()
 
+  if (/starting things? and not finishing/.test(lower) || /habit of starting/.test(lower) || /still trying to figure out .*not finishing/.test(lower)) {
+    return 'Unfinished Build Loop'
+  }
   if (/putting an offer in front of buyers before polishing it in private/.test(lower)) {
     return 'Market Contact'
   }

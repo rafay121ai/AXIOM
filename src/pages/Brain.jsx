@@ -9,6 +9,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { clearStoredSessionToken, getStoredSessionToken, supabase } from '../lib/supabase'
 import { ensureCurrentWeeklyRead, fetchLatestWeeklyRead } from '../lib/sessionReads'
 import { backfillNodeLabels, fallbackGraph, getPersonalWikiGraph, markWikiNodeAccessed, syncPersonalWiki } from '../lib/personalWiki'
+import { deriveBrainLabel, deriveBrainSummary, titleCaseBrainLabel } from '../../shared/brainThemes'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -509,16 +510,7 @@ function getHaloTexture() {
 }
 
 function titleCase(value = '') {
-  return String(value)
-    .replace(/_/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase()
-    .replace(/\b[a-z]/g, char => char.toUpperCase())
-    .replace(/\bAi\b/g, 'AI')
-    .replace(/\bMvp\b/g, 'MVP')
-    .replace(/\bGpt\b/g, 'GPT')
-    .replace(/\bChatgpt\b/g, 'ChatGPT')
+  return titleCaseBrainLabel(value)
 }
 
 function sentenceCase(value = '') {
@@ -554,17 +546,7 @@ function displayPillarName(pillar = '') {
 function displayNodeTitle(node) {
   if (!node) return ''
   if (node.type === 'pillar') return displayPillarName(node.pillar)
-  const summary = cleanNodeSummary(node.summary)
-  const lower = `${node.label || ''} ${summary}`.toLowerCase()
-  if (/putting an offer in front of buyers before polishing it in private/.test(lower)) return 'Market Contact'
-  if (/(e-guide|e guide|eguides|e-guides)/.test(lower) && /(pakistani|female content creator|content creators|website)/.test(lower)) {
-    return 'Creator E-Guide Website'
-  }
-  const label = isUsableStoredLabel(node.label)
-    ? cleanNodeLabel(node.label)
-    : cleanNodeLabel(summary) || 'Untitled node'
-  const words = label.split(/\s+/).filter(Boolean)
-  return words.length > 5 ? sentenceCase(label) : titleCase(label)
+  return deriveBrainLabel(node.label, node.summary)
 }
 
 const NODE_DEFINITIONS = {
@@ -590,13 +572,7 @@ function cleanNodeSummary(value = '') {
 
 function displayNodeSummary(node) {
   if (!node || node.type === 'pillar') return ''
-  const title = displayNodeTitle(node).toLowerCase()
-  if (NODE_DEFINITIONS[title]) return NODE_DEFINITIONS[title]
-
-  const summary = cleanNodeSummary(node.summary)
-  if (!summary) return ''
-  if (summary.length <= 190) return summary
-  return `${summary.slice(0, 187).trim()}...`
+  return deriveBrainSummary(node.label, node.summary)
 }
 
 function displayNodeType(type = '') {

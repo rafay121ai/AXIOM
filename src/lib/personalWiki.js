@@ -1,4 +1,5 @@
 import { getApiJson, postApiJson } from './api'
+import { deriveBrainLabel, deriveBrainSummary, isUsableBrainLabel, titleCaseBrainLabel } from '../../shared/brainThemes'
 
 const DISPLAY_PILLARS = [
   'human_mind',
@@ -280,88 +281,19 @@ function stripInvalidLabel(value = '') {
 }
 
 function titleCase(value = '') {
-  return String(value || '')
-    .replace(/[-_]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase()
-    .replace(/\b[a-z]/g, (char) => char.toUpperCase())
-    .replace(/\bAi\b/g, 'AI')
-    .replace(/\bMvp\b/g, 'MVP')
-    .replace(/\bGpt\b/g, 'GPT')
-    .replace(/\bChatgpt\b/g, 'ChatGPT')
+  return titleCaseBrainLabel(value)
 }
 
 function isUsableStoredLabel(label = '') {
-  const clean = stripInvalidLabel(label)
-  if (!clean) return false
-  if (/^(user|the user|onboarding signal)\b/i.test(clean)) return false
-  if (/[.!?]/.test(clean)) return false
-  const words = clean.split(/\s+/).filter(Boolean)
-  if (words.length > 6) return false
-  return true
+  return isUsableBrainLabel(label)
 }
 
 function shortNodeLabel(label = '', summary = '') {
-  const safeLabel = stripInvalidLabel(label)
-  if (isUsableStoredLabel(safeLabel)) return titleCase(safeLabel)
-
-  const text = `${safeLabel} ${summary || ''}`.replace(/\s+/g, ' ').trim()
-  const lower = text.toLowerCase()
-
-  if (/putting an offer in front of buyers before polishing it in private/.test(lower)) {
-    return 'Market Contact'
-  }
-  if (/(e-guide|e guide|eguides|e-guides)/.test(lower) && /(pakistani|female content creator|content creators|website)/.test(lower)) {
-    return 'Creator E-Guide Website'
-  }
-  if (/\baxiom\b/.test(lower) && /(different from chatgpt|better wrapper|mentor app|mvp stage)/.test(lower)) {
-    return 'Axiom Differentiation Bet'
-  }
-  if (/(automation|automations|software)/.test(lower) && /(no sales|sales pipeline|cold outreach|buyer|revenue)/.test(lower)) {
-    return 'Automation Sales Gap'
-  }
-  if (/(cold outreach|outreach)/.test(lower) && /(hate|avoid|resistance|sales)/.test(lower)) {
-    return 'Cold Outreach Resistance'
-  }
-  if (/(\$?5,?000|5000|august 1|august)/.test(lower) && /(revenue|make|earn|sales|money)/.test(lower)) {
-    return 'August Revenue Target'
-  }
-  if (/(workflow audit|free diagnostic|paid pilot|first version)/.test(lower)) {
-    return 'Paid Pilot Path'
-  }
-  if (/(solo agency|agency owner|overwhelmed)/.test(lower)) {
-    return 'Agency Buyer Test'
-  }
-  if (/(one buyer|buyer type|painful task|one offer)/.test(lower)) {
-    return 'Buyer Offer Focus'
-  }
-
-  const clean = text
-    .replace(/^onboarding signal:\s*/i, '')
-    .replace(/^[^:?.!]{0,90}[:?.!]\s*/, '')
-    .replace(/\([^)]*\)/g, ' ')
-    .replace(/^the user\s+/i, '')
-    .replace(/\b(the user|a pattern of|tendency to|wants to|needs to|is trying to|has been trying to|can build|is working on)\b/gi, ' ')
-    .replace(/[^a-z0-9\s-]/gi, ' ')
-
-  const words = clean
-    .split(/\s+/)
-    .map((word) => word.trim())
-    .filter((word) => word.length > 2 && !LABEL_STOP_WORDS.has(word.toLowerCase()))
-    .slice(0, 4)
-
-  return titleCase(words.join(' ')) || 'Untitled Node'
+  return deriveBrainLabel(label, summary)
 }
 
 function compactNodeSummary(summary = '') {
-  const clean = String(summary || '')
-    .replace(/^onboarding signal:\s*/i, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-
-  if (clean.length <= 190) return clean
-  return `${clean.slice(0, 187).trim()}...`
+  return deriveBrainSummary('', summary)
 }
 
 function countMatches(regex, text) {
