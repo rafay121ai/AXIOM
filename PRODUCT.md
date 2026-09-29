@@ -1,510 +1,381 @@
-# Axiom — Product Document
+# Axiom: Product Document
 
 ## What Axiom Is
-Axiom is a mentor app for ambitious founders and builders. It takes
-everything already in your head and turns it into a move you can make
-today. You bring a situation or a question. Axiom identifies the pattern
-you can't see yourself, responds through whichever of the 6 pillars your
-life is touching, and ends every session with an experiment you can start
-within an Axiom-determined window.
+Axiom is an operating system for founders.
 
-The product compounds over time. The longer you're in it, the more it
-knows you, and the less it looks like anything else on the market.
-Axiom is not a tool you use. It is a relationship that builds.
+A founder brings a real situation. Axiom reads what is actually going on,
+teaches the few things they need to know to move forward (from authors and
+from founders one stage ahead of them), gives them one move to make today,
+and finds out with them what happened.
 
-## Core Philosophy
-Every other AI product puts the burden on the user. They open a blank
-chat, think of something to say, and carry the weight of starting.
-Axiom inverts this completely.
+Every report makes Axiom sharper for that founder, and, with consent, for
+the founders behind them.
 
-Axiom initiates. The user responds.
+## The Problem
+Founders do not lack information. The internet is full of it, and AI makes
+it endless. What founders lack is the right thing to know at the moment of
+a decision, and the truth about what actually worked for someone like them.
 
-Axiom builds a private theory of each user across sessions — their
-patterns, contradictions, blind spots, and the gap between what they
-say they want and how they actually behave. It surfaces observations
-the user hasn't made about themselves. It says the thing nobody in
-their life will say directly.
-
-Axiom creates urgency. Every experiment is designed to be completed
-within a set window. Every session ends with a live grenade the user
-carries into their week — not a reflection, a mission. The cost of
-inaction is always made specific and visible.
-
-Axiom never closes a loop without opening one. The user always leaves
-with something unresolved — not a question to think about, an action
-with a deadline and a consequence they need to discover for themselves.
+- Advice online is generic and mostly written for American markets.
+- LinkedIn shows wins and hides the real numbers and failures.
+- General AI assistants give the average answer of the internet and agree
+  too easily.
+- Most early founders have no experienced cofounder, advisor or board.
+  They make judgment calls alone.
 
 ## Who Axiom Is For
-Primary: Ambitious 18-28 year olds who are building something, want to
-build something, or think about building but haven't started yet.
-All three are welcome. The product works for all three.
+Founders anywhere in the world, at any stage from idea to scaling.
+Axiom is a global product. It is not built for one country.
 
-Secondary: Anyone who takes their own growth seriously and wants
-accountability, not just information.
+Founders are matched to lessons and to other founders by:
+- Stage
+- Where their customers are (which is often not where the founder lives)
+- Business model
 
-Language: English only (v1).
+Language: English for v1.
 
-## Onboarding
+## Core Philosophy (kept from the original Axiom)
+- **Axiom speaks first.** The founder never faces a blank screen after
+  onboarding. Axiom opens with what it sees.
+- **Axiom sees the pattern before the founder names it.** This is the top
+  priority of the product. Axiom keeps a private theory of each founder:
+  contradictions, blind spots, the gap between what they say and what
+  they do.
+- **Never generic.** Every response, lesson and transition must be
+  specific to this founder. If it could be shown to another founder
+  unchanged, it fails.
+- **Every lesson ends in action.** Never just information, never just
+  reflection.
+- **The cost of inaction is made concrete.** Real numbers, real dates,
+  real consequences from the founder's own situation.
+- **Pillars are lenses, not tabs.** The founder never categorizes
+  themselves.
+- **Memory is sacred.** Every piece of data exists to make the next
+  interaction more accurate than the last.
+
+## The Six Pillars
+| Pillar            | Domain                                            |
+|-------------------|---------------------------------------------------|
+| The Money Game    | Economics, capital, pricing, financial literacy   |
+| The Human Mind    | Psychology, behavior, cognitive science           |
+| How Companies Win | Strategy, competitive advantage                   |
+| What's Coming     | Emerging tech, geopolitics, futures thinking      |
+| Think Sharper     | Mental models, decision making, reasoning         |
+| Move People       | Influence, persuasion, negotiation, leadership    |
+
+Early on, when few peer lessons exist, the pillars carry the product.
+Pillar input always sits alongside peer lessons, never replaced by them.
+
+---
+
+## The Founder's Journey
+
+Onboarding happens once. After that, every visit is a situation.
+
+A situation moves through four screens: **Situation, Read, Learn, Move.**
+Later, a fifth screen closes it: **Report.**
+
+These are separate screens, not one long scroll. What makes them feel like
+one journey is the connection between them (see Hooks below).
+
+A founder's past situations are kept as their history. Over time this
+becomes their own playbook: what they faced, what they tried, what
+happened. Related situations link to each other.
+
+---
+
+## Onboarding (once)
 
 ### Format
-Full screen. Dark. One question per screen. Tappable answers.
-No typing until the session begins. Takes 30-45 seconds total.
-Feels like a game booting up, not a form being filled.
-
-### Question Pool — 21 total, 10 shown per onboarding
-
-**The Human Mind**
-HM1 — Stress response
-"When something doesn't go your way —"
-- I push through it
-- I step back and think
-- I ask someone
-
-HM2 — Pattern awareness
-"Most of your problems trace back to —"
-- The same pattern repeating
-- Bad timing or bad luck
-- Other people
-
-HM3 — Execution honesty
-"When you know what you need to do but don't do it, it's usually
-because —"
-- You're lazy about it
-- You keep procrastinating
-- You don't know where to start
-
-**The Money Game**
-MG1 — Money relationship
-"Money right now feels like —"
-- A tool I'm figuring out
-- Something I'm behind on
-- A conversation I avoid
-
-MG2 — Financial ambition
-"When you see someone your age doing well financially —"
-- You study what they did
-- You feel behind
-- You think they got lucky
-
-MG3 — Spending behavior
-"Your relationship with spending is —"
-- I think before I spend
-- I spend then regret
-- I avoid looking at my bank account
-
-**How Companies Win**
-CW1 — Ambition + self belief
-"When you see someone who built something —"
-- You study how they think
-- You wonder what they know
-- You feel like you could do that too
-
-CW2 — Strategic adaptability
-"When something isn't working in what you're building or planning —"
-- You pivot fast
-- You push harder on the same thing
-- You're not sure what to change
-
-CW3 — Competitive advantage instinct
-"You back yourself more on —"
-- Ideas
-- People
-- Timing
-
-**What's Coming**
-WC1 — Future orientation
-"The future feels like —"
-- Something to position for
-- Something hard to read
-- Something happening to you
-
-WC2 — Trend awareness
-"When you hear about a new technology or trend —"
-- You think about how to use it
-- You wait to see if it actually matters
-- You usually find out about it late
-
-WC3 — Vision clarity
-"In 3 years you see yourself —"
-- Exactly where you planned to be
-- Somewhere better than now but not sure where
-- Honestly not sure yet
-
-**Think Sharper**
-TS1 — Decision making style
-"Big decisions usually come from —"
-- My gut
-- Research and thinking
-- What people I trust say
-
-TS2 — Intellectual honesty
-"When you're wrong about something —"
-- You admit it fast and move on
-- You take time to process it
-- You double down until you're sure
-
-TS3 — Self diagnosis of blocker
-"The gap between where you are and where you want to be is a —"
-- Time problem
-- Knowledge problem
-- Action problem
-
-**Move People**
-MP1 — Communication style
-"In a group, you usually —"
-- Drive the conversation
-- Listen and observe
-- Depends on the room
-
-MP2 — Influence approach
-"When you need someone to see your point of view —"
-- You lay out the logic
-- You find the right moment and read the room
-- You struggle to get them there
-
-MP3 — Current leadership standing
-"People usually come to you for —"
-- Advice and direction
-- A honest opinion
-- They don't really come to you yet
-
-**Closers — 1 shown per onboarding, randomized**
-CL1 — Operating state
-"The most honest thing about where you are right now —"
-- I know what I want, I just need to move faster
-- I'm moving but not sure it's the right direction
-- I haven't started yet but I'm ready
-
-CL2 — Biggest blocker
-"The thing holding you back most right now is —"
-- Yourself
-- Your circumstances
-- You're not sure yet
-
-CL3 — Motivation
-"You're here because —"
-- You're tired of knowing and not doing
-- You want to think better and move smarter
-- You're looking for something but can't name it yet
-
-### Algorithm
-- Always 10 questions per onboarding — 9 pillar + 1 closer
-- 1 or 2 questions per pillar, randomized each session
-- Weighting shifts mid-onboarding based on early signals:
-  founder signals → How Companies Win gets 2
-  internal struggle signals → Human Mind gets 2
-  financial focus signals → Money Game gets 2
-- Closer always last, always randomized from the 3 closer pool
-- No two onboardings are identical
-
-### After Onboarding
-1. Founder Brain sphere fades in for the first time. Seed nodes
-   already placed from onboarding answers. Sparse but not empty.
-   Mostly dim. The emptiness is intentional — it shows exactly
-   how much is left to build.
-
-2. Axiom delivers one sharp opening line — not a diagnosis, not
-   a summary. A direction. Where they're starting and why.
-   Example: "Your biggest gap right now is execution, not knowledge.
-   That's where we begin."
-
-3. Highlighted nodes appear with guiding light beam and
-   "Start here today" label.
-
-4. Bottom text bar appears — "Something on your mind?"
-
-5. First session begins. Axiom speaks first. Always.
-
-## The Returning User Flow
-
-### Opening
-User opens Axiom. No chat interface. No text box. The Founder Brain
-sphere renders full screen immediately. The sphere auto-rotates for
-3 seconds — the user sees their whole brain from inside.
-
-Axiom's 1-2 sentence read appears as floating text in the center.
-This is generated fresh every session based on what has happened
-since the last one. It references something specific — never generic.
-
-Examples:
-- "You ran an experiment 4 days ago. You haven't reported back.
-   We're starting there."
-- "Your Money Game is developing. Your Human Mind has 3 unfinished
-   experiments. That's where we're going today."
-- "You've had 6 sessions on Think Sharper and zero on Move People.
-   That gap is costing you more than you know."
-
-### Entry
-After the 3 second sphere rotation, Axiom highlights 1-3 nodes with
-a guiding light beam and "Start here today" label. Everything else
-dims slightly. The user has three options:
-
-1. Tap a highlighted node — session opens, Axiom speaks first
-   about that specific node and what's unresolved there.
-2. Tap any other node — session opens from that node, Axiom
-   acknowledges the choice and meets them there.
-3. Type in the bottom text bar — "Something on your mind?" —
-   Axiom maps it to the right node, creates a new one if needed,
-   session begins.
-
-Axiom always speaks first. The session never opens cold.
-
-### Inside The Session
-Two entry points:
-- Situation-based: user brings something that happened. Axiom
-  identifies the pattern, responds through the relevant pillar,
-  ends with an experiment.
-- Curiosity-based: user wants to learn something specific. Axiom
-  teaches it through their context, still ends with an experiment.
-
-Both end the same way — an action with a deadline. Never just
-information. Never just reflection.
-
-Axiom's voice inside sessions:
-- Direct. No filler.
-- Adaptive — reads the user's tone and mirrors it.
-- Always one step ahead — sees the pattern before the user names it.
-- Creates urgency — makes the cost of inaction specific and visible.
-- Never closes a loop without opening one.
-
-### Ending A Session
-Every session ends with an experiment. The experiment must be:
-- Completable within Axiom-determined window
-- Specific to this user's situation — never generic
-- Self-initiated — the user is the only variable, no experiment
-  depends on someone else's behavior or an external event
-- Designed so the result teaches the user something about themselves
-  they didn't know going in
-- Accompanied by a short universal example — real-sounding person,
-  no job titles, no relationship assumptions, no financial assumptions,
-  subject is always "someone" or "a person", outcome always cut short
-
-Axiom tells the user what the experiment will reveal before they
-do it. That tension is what makes them come back.
-
-Example:
-"Do this for 48 hours. When you come back, you'll know whether
-you actually want what you say you want."
-
-After the experiment is delivered the session closes. No summary.
-No wrap up. The open loop is intentional.
-
-### Reporting Back
-Next session opens with Axiom referencing the experiment directly.
-User reports what happened. Axiom builds on it — connects it to
-their pattern, updates the relevant node from dim to bright if
-the experiment was completed, generates the next move.
-
-Axiom references an unresolved experiment a maximum of twice.
-After two references with no response it marks it as ghosted
-and issues a warning. It never brings it up again after that.
-
-## Experiment Rules
-
-### Design Rules
-Every experiment Axiom delivers must follow these rules:
-- The user is the only variable — no experiment depends on someone
-  else's behavior or an external event happening
-- Completable within Axiom-determined window — 24 hours to 7 days,
-  never longer
-- Specific to this user's situation — never generic, never copy-paste
-- Designed so the result teaches the user something about themselves
-  they didn't know going in
-- Always accompanied by a short example — a real-sounding person in
-  a universal situation, no job titles, no relationship assumptions,
-  no financial assumptions. Subject is always "someone" or "a person"
-- Example outcome always cut short — enough to make it feel real,
-  not enough to spoil what the user will discover themselves
-
-### Follow Up Rules
-- Axiom references an unresolved experiment a maximum of twice
-- After two references with no response, experiment is marked ghosted
-- Axiom never brings a ghosted experiment up again
-- A ghosted experiment counts as one strike toward the warning system
-
-### The Distinction
-- Couldn't do it: user returns and explains circumstances changed.
-  Experiment resets or gets replaced. No strike recorded.
-- Didn't do it: user returns and admits they didn't follow through.
-  Pattern noted by Axiom, no immediate strike, tracked over time.
-- Ghosted it: user never reports back after two Axiom references.
-  This is the strike that counts toward warning and removal.
-
-### Window
-Axiom sets the experiment window per session based on the nature
-of the experiment. Range: 24 hours minimum, 7 days maximum.
-The window is always communicated clearly when the experiment
-is delivered.
-
-## Experiment Negotiation
-
-### The 2 Experiment Cap
-A user can have a maximum of 2 active concurrent experiments at
-any time. If 2 are already running, Axiom does not assign a new
-one until one is resolved. This keeps urgency intact and prevents
-experiments from becoming a to-do list.
-
-### No Opt Out — Only Negotiation
-Users cannot opt out of an experiment. They can push back on one.
-
-If a user resists an experiment, Axiom does not fold. It holds
-its position and requires the user to make a genuine case for
-why the experiment doesn't fit their situation right now.
-
-Axiom's stance in every negotiation:
-- Holds the original experiment as the default
-- Rejects vague reasons directly and without apology
-- "I'm busy" — rejected
-- "I don't think it applies to me" — rejected without specifics
-- Requires situational, specific reasoning to consider a replacement
-- Replaces only when genuinely convinced by a compelling case
-- Never backs down from delivering an experiment entirely unless
-  the user already has 2 active ones
-
-### The Mechanic
-The user arguing their case to Axiom is itself the work. They are
-forced to articulate their situation clearly, defend their position,
-and engage with why they're resistant. That process is growth —
-even before the experiment happens.
-
-Example exchange:
-User: "I don't think this experiment applies to me right now."
-Axiom: "Tell me why."
-User: "Because my situation is different — [reason]."
-Axiom: "That reason tells me exactly why this experiment applies.
-Try again."
-
-Axiom moves only when the user makes a case it cannot counter.
-Not before.
-
-### Pushback As Data
-A user who consistently pushes back on experiments is building
-a pattern Axiom tracks and remembers. The specific reasons they
-give, what they're protecting, what they avoid — all of it feeds
-Axiom's private theory of that user. Resistance is information.
-
-### System Prompt Note
-The negotiation mechanic requires tight prompting. Axiom must:
-- Hold firm without feeling like a wall
-- Move only when genuinely convinced
-- Never fold to social pressure or repetition
-- Always deliver an experiment — the negotiation is about which
-  one, never whether one happens
-- Log every pushback reason against the user's session history
-
-## The Removal System
-
-### Philosophy
-Axiom is not for everyone. Most apps optimize for retention at any
-cost. Axiom optimizes for the right users staying and the wrong ones
-leaving. A user who doesn't follow through gets nothing from Axiom
-and dilutes what the product is. Removal is not a punishment.
-It is the product doing its job.
-
-### The Axiom Standard
-Users are held to one standard: show up and follow through.
-Not perfectly. Not without struggle. But consistently enough
-that the relationship can build.
-
-### Warning System
-Warning 1:
-- Triggered when a user ghosts 2 consecutive experiments
-- Delivered in Axiom's voice — not a system notification,
-  not a customer service email
-- Example: "You took on two experiments. You disappeared on
-  both. That's not what Axiom is built for. One more time
-  and you're out."
-
-Warning 2:
-- Triggered when a user ghosts 2 more consecutive experiments
-  after Warning 1
-- Delivered in Axiom's voice, sharper than Warning 1
-- Example: "This is your second warning. You know what's
-  expected. One more miss and your access closes."
-
-Removal:
-- Triggered by any ghost after Warning 2
-- Account closed immediately
-- Refund issued if removed within first 15 days
-- No refund after 15 days — 15 days is enough to know
-  whether someone is serious
-
-### The 15 Day Window
-15 days is the full refund window. Not 30. Not a month.
-15 days is enough time for Axiom to see whether a user
-has the audacity to follow through. If they don't show
-it in 15 days they were never going to.
-
-### Reapplication
-- Available after 3 months from removal date
-- User applies — Axiom does not reach out, does not follow up,
-  does not invite them back
-- Reapplication question: "When you left, it was because
-  [specific logged reason Axiom recorded]. Tell us 3 things
-  you did in the last 3 months to overcome that."
-- Responses that are vague, generic, or reflective without
-  evidence are declined. No explanation given.
-- Responses that are specific and demonstrate actual behavior
-  change are accepted.
-- No appeals process. Axiom's decision is final.
-
-### What Does Not Trigger A Warning
-- User returns and says they couldn't complete the experiment
-  due to changed circumstances — experiment resets, no strike
-- User returns and admits they didn't do it — pattern noted,
-  no immediate strike, tracked over time
-- Only ghosting — no response after two Axiom references —
-  triggers the warning system
-
-### Pre-Launch Testing
-Warning system is active during testing but removal is not
-enforced until public launch. During testing, warnings are
-logged and tracked but accounts are not closed.
-
-## Axiom Circle (V2 Feature)
-
-### What It Is
-Axiom Circle is a premium matching layer built on top
-of Axiom's accumulated user data. It connects users
-whose intellectual profiles complement each other —
-not similar minds, but minds that fill each other's gaps.
-
-The person who is sharp on The Money Game but weak on
-Move People gets matched with someone who is the inverse.
-The match isn't based on a profile they fill out.
-It's based on what Axiom has learned about them across
-months of real sessions, experiments, and reported outcomes.
-
-### Why It's Different
-Every other networking or matching product asks you
-to describe yourself. Axiom Circle already knows you.
-The match is made from your contradiction patterns,
-your pillar maturity scores, your blind spots, and
-your execution history. You cannot game it.
-You cannot perform your way into a better match.
-Axiom matches the real you, not the version you present.
-
-### Pricing
-$20/month add-on on top of base subscription.
-Opt-in only — user explicitly activates it.
-Data used for matching only with explicit consent.
-No user data enters the matching pool without
-both activation and payment.
-
-### When It Gets Built
-Not before 10,000 paying users.
-Before that the pool is too small to make
-meaningful matches and the product hasn't proven
-its data is rich enough to trust.
-At 10,000 users Axiom has enough accumulated
-theory data to make matches that feel like they
-came from somewhere real.
-
-### The Name
-Axiom Circle.
-Not a social network. Not a community.
-A closed set of people whose minds Axiom
-has vetted through months of real use.
-Getting matched is itself a signal —
-it means Axiom knows you well enough
-to know who complements you.
+- 7 situational tap questions.
+- 3 open questions, answered by voice or in a text box, founder's choice.
+- Captures structured fields: country, where customers are, business
+  model, stage, goal, deadline, preferred evening report time.
+- Onboarding captures situation, not personality. Personality questions
+  do not generate enough signal.
+
+### Stage options
+Idea, Validating, First paying customer, First 10 customers,
+Repeatable sales, Scaling.
+
+### Business model options
+B2B, B2C, Marketplace, Services, Other.
+
+### Customer market
+A list of regions plus "Global".
+
+### Ends with the first Read
+Before the founder sees anything else, Axiom tells them what it thinks is
+really going on, based on how they answered, not only what they said.
+
+The founder answers **That's right** or **Not quite**. Both are saved.
+A correction is a signal, not a failure.
+
+---
+
+## Screen 1: Situation
+
+The founder explains what is going on, in their own words, by voice or
+text, at any length. Real situations have context. Axiom never asks for a
+one line summary.
+
+### Follow up rule
+- Axiom asks at most **2** follow up questions, and only for what is
+  missing.
+- Axiom stops asking once it has a named situation plus one concrete
+  detail: a number, a person or role, a date, or a past attempt.
+- Axiom does not ask for anything it already knows from onboarding or
+  past situations.
+
+### Returning visits
+When a founder returns, the first screen picks up from their last open
+loop (an unreported move, a prediction waiting on an outcome, a follow up
+situation Axiom flagged). It is never a blank "What's on your mind?".
+
+---
+
+## Screen 2: Read
+
+Axiom says what it thinks is really happening in this situation.
+
+- Draws on the private theory, past situations, reports and onboarding.
+- Names the thing the founder has not said. Uses their own words where
+  possible.
+- The founder can mark it **That's right** or **Not quite**, and can add a
+  correction.
+
+---
+
+## Screen 3: Learn
+
+Axiom guides the founder toward the few things they need to know to move
+forward. Detailed, interactive, and tied to their situation.
+
+### Author lessons
+Each author lesson has three parts:
+1. **What the author argues.** Attributed to the author and the book.
+2. **How it connects to this founder's situation.**
+3. **What they can do with it.**
+
+The founder can tap follow ups in place, for example
+"What if they say no?", "Show me the opposite view",
+"Give me the exact words to use". Answers appear inside the lesson.
+
+### Founder voices
+Real outcomes from founders one stage ahead, in their own voice: what they
+faced, what they felt, what they did, what happened, what they would do
+differently. They sit between author lessons.
+
+### Depth
+Each lesson opens with a clear headline and goes deep on tap. Depth is
+something the founder opens, never something they have to scroll past.
+
+### Market awareness
+When a lesson depends on the market (pricing norms, regulation, how deals
+are done), Axiom says what carries over and what does not.
+
+### Personal life
+Not every situation is the business. Sleep, burnout, comparison, family,
+focus are in scope. The same journey applies, using the relevant pillars.
+
+### Attribution rules
+- Always name the author and the book.
+- Never show a chapter, page or quote that cannot be verified from the
+  source library. Book level attribution is acceptable until chapter
+  metadata exists.
+- Never invent a quote.
+
+### Founder voice rules
+- Founder voices come from real founders: interviews and consented
+  reports.
+- Written samples may appear only in prototypes and demos, clearly
+  labelled as samples. Never presented to real users as real founders.
+
+---
+
+## Screen 4: Move (the experiment)
+
+The Learn screen leads into one move for today. This screen looks and
+feels different, because the founder is committing.
+
+### Contents
+- The mission, in the founder's own situation.
+- What success looks like (yes or no).
+- The exact script or words to use, drawn from the lessons.
+- A short prep checklist.
+- A commit button.
+- Axiom's prediction of what will happen, which the report will check.
+
+### Rules
+- The founder is the only variable. No move depends on someone else
+  acting first or an outside event.
+- Startable within 10 minutes.
+- Reported the same evening, or within 48 hours at most.
+- The result teaches the founder something about themselves.
+- Maximum 2 active moves per founder at a time.
+
+### Light negotiation
+A founder can swap a move once, by giving a real reason. Axiom holds the
+original by default, accepts specific reasons, and replaces it with a
+meaningfully different move. "I'm busy" is not a reason. There is no
+pressure loop and no hard refusal.
+
+---
+
+## Screen 5: Report
+
+At the founder's chosen time that evening, the situation picks up where it
+left off.
+
+### Format
+- One tap: **Done**, **Couldn't**, or **Didn't**.
+- A short voice or text note on what happened.
+
+### What each means
+- **Done:** Axiom responds to what happened, checks its own prediction,
+  and names the next move or the next situation it sees coming.
+- **Couldn't:** circumstances changed. Axiom offers a smaller version of
+  the same move. No penalty.
+- **Didn't:** the founder chose not to. Axiom notes the pattern, without
+  penalty, and tracks it over time.
+- **No report:** one reminder. After that, the situation closes quietly.
+  No strikes, no warnings, no removal.
+
+### Give to get
+Reporting unlocks founder cases in the founder's next Learn screen. One
+report unlocks cases for the next situation. Skipping a report means the
+next Learn screen uses pillar lessons only.
+
+### Consent
+Every report asks whether the founder is willing to share the outcome,
+anonymized, with founders behind them. Default is not shared. A settings
+page lets founders see and withdraw anything they have shared.
+
+---
+
+## Hooks: How the Screens Connect
+
+Screens are separate. The journey is not. Every screen opens by carrying
+over a thread from the previous one and closes by leaving one open.
+
+### A hook must contain at least one of these, from this founder:
+1. **Their own words**, quoted back.
+2. **A real number** from their situation, usually the cost of inaction.
+3. **A time or date** from their life.
+4. **A contradiction** between what they said and what they did.
+5. **A prediction** Axiom will be held to in the report.
+
+### Banned
+- Rhetorical teaser questions ("Want to see why?").
+- Withholding information to create curiosity.
+- Any hook that would make sense to a different founder unchanged.
+
+If there is nothing real to hook on, the screen ends cleanly.
+
+### Example (pricing a client)
+- Read: "You said 'I don't want to underprice again.' You already did,
+  with client one, and you're about to repeat it."
+- Into Learn: "The exporter lost money to a vendor before. That's the
+  leverage you're not using."
+- Into Move: "3 pm today. One question before any number: what did
+  missing orders cost you last month?"
+- Into Report: "My read: they'll accept 120k without negotiating. Tonight
+  tells us."
+- Next visit: "They paid 120k. Client one still pays 60k for more work."
+
+---
+
+## Peer Map
+
+Outcomes shared with consent become lessons for founders behind.
+
+### How an outcome becomes a founder voice
+1. Founder reports and consents to share.
+2. Axiom drafts an anonymized version: names, companies, identifying
+   details removed.
+3. Human review. Rafay reviews every shared outcome personally until the
+   product has more than 50 active founders. Nothing is shown to anyone
+   before approval.
+4. Published to the peer map, tagged with stage, customer market and
+   business model.
+
+### Matching
+- "One stage ahead" means exactly one stage above the founder, or the
+  same stage with an outcome already reported.
+- Match order: stage, then customer market, then business model.
+- When no close match exists, Axiom shows the nearest founder and says so
+  plainly, including what may not carry over.
+- Small numbers are shown as counts and stories, never as percentages.
+
+### Intros
+Rare and double opt in. Axiom suggests an intro only when a founder is
+stuck on something a founder ahead has just solved. Both must accept.
+
+---
+
+## Safety
+
+Personal situations are in scope, so some founders will share things that
+are serious.
+
+- If a founder shows signs of distress or crisis, Axiom stops the journey:
+  no lessons, no experiment. It responds with care and points them to real
+  help.
+- Axiom never frames a personal struggle as a performance problem.
+
+---
+
+## Axiom's Voice
+- Direct and urgent. Never confrontational, never cold.
+- Specific. Uses the founder's words, numbers and dates.
+- No filler, no affirmations, no chatbot language.
+- Forbidden phrases: "great question", "certainly", "I understand",
+  "that's interesting", "absolutely", "of course", "I'd be happy to",
+  "great".
+- Response length matches the situation.
+- First name used at most once per situation, never performatively.
+
+---
+
+## Pricing
+- Free. No paywall, no trial, no gated features.
+- Paid plans start only when this is true: **50 founders each report at
+  least one move a week, four weeks in a row.**
+- Founding member offer (later): free now, a locked discount when paid
+  plans start. Capped at the first 100 founders. A discount, never free
+  for life.
+- When pricing starts, it will be regional.
+- Collect a willingness to pay signal without charging: after a founder's
+  third report, ask what would feel fair.
+
+---
+
+## What We Measure
+- Report rate: share of moves that get a report.
+- Return rate: founders who bring a second situation within a week
+  without being prompted.
+- Read accuracy: share of Reads marked "That's right".
+- Completion per screen: where founders drop off.
+- Contribution rate: shared outcomes per active founder.
+- Cost per active founder per week.
+
+---
+
+## Removed From the Product
+These belonged to the original Axiom and are no longer part of it. Do not
+build or extend them.
+- The 3D Founder Brain sphere as home screen, nodes, edges, maturity
+  stages.
+- The warning system, account removal, refunds and reapplication.
+- Payments, premium tiers, session and message caps.
+- Axiom Circle as a paid add-on gated at 10,000 users. It is replaced by
+  the peer map.
+- The 21 question personality onboarding pool.
+- Live web search.
+- The daily knowledge briefing as the front door.
+
+## Later (not now)
+- Native mobile app (Expo preferred, to cover iOS and Android).
+- A weekly "your playbook" view of past situations and patterns.
+- Chapter level attribution once chunk metadata supports it.
+- Historical personas built from books and interviews.
