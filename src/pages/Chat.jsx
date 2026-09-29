@@ -4,7 +4,7 @@ import MessageBubble from '../components/MessageBubble'
 import ExperimentCard from '../components/ExperimentCard'
 import ArtifactRenderer from '../components/ArtifactRenderer'
 import { clearStoredSessionToken, getStoredSessionToken, supabase } from '../lib/supabase'
-import { openai, CHAT_MODEL, generateEmbedding, generateOpeningMessage, generateNodeOpeningMessage, buildSystemPrompt, getLastPromptDiagnostics } from '../lib/openai'
+import { openai, CHAT_MODEL, generateEmbedding, generateOpeningMessage, buildSystemPrompt, getLastPromptDiagnostics } from '../lib/openai'
 import { buildArtifactForResponse, getArtifactBuildSteps, getRequiredArtifactType, humanizeArtifactType } from '../lib/artifacts'
 import {
   routeQuestionMode,
@@ -16,7 +16,6 @@ import {
 } from '../lib/rag'
 import { searchPersonalMemory, formatNamedPatternsContext, formatPersonalMemoryContext, recordExperimentAvoidancePattern, recordExperimentResistancePattern, updatePersonalMemory } from '../lib/personalMemory'
 import { getCachedTurnContext, setCachedTurnContext } from '../lib/sessionTurnContext'
-import { syncPersonalWiki } from '../lib/personalWiki'
 import { ensureConversationThread } from '../lib/conversationThreads'
 import { incrementAppSessionMessagesSent } from '../lib/appSessionTracker'
 import { getApiJson, postApiJson } from '../lib/api'
@@ -680,7 +679,6 @@ function shouldRunMemoryUpdate(userText = '', assistantText = '', options = {}) 
   const wordCount = user.split(/\s+/).filter(Boolean).length
   const importantTurn =
     Boolean(options.experiment) ||
-    Boolean(options.nodeContext?.id) ||
     looksLikeExperimentCompletion(user) ||
     looksLikeExperimentCancel(user) ||
     /\b(i decided|we decided|decided to|my goal|new goal|i want to|i need to|we need to|i prefer|my preference|from now on|i'?m going to|i am going to)\b/i.test(user)
@@ -844,7 +842,7 @@ function getUnresolvedExperiment(experiments, messages) {
 
 async function checkAndUpdateGhosting(session) {
   const now = Date.now()
-  const experiments = session.active_experiments || []
+  const experiments = session.experiments || []
   let changed = false
   const rowUpdates = []
 
@@ -883,21 +881,19 @@ async function checkAndUpdateGhosting(session) {
       )
   )
 
-  return { ...session, active_experiments: updatedExperiments }
+  return { ...session, experiments: updatedExperiments }
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 export default function Chat() {
   const navigate = useNavigate()
   const location = useLocation()
-  const nodeContext = location.state?.nodeContext || null
   const initialInput = location.state?.initialInput || ''
   const threadId = location.state?.threadId || null
   const isTouchDevice = window.matchMedia('(pointer: coarse)').matches
   const freshThread = Boolean(location.state?.freshThread)
   const autoSend = Boolean(location.state?.autoSend)
   const skipOpening = Boolean(location.state?.skipOpening)
-  const pulseNodeEntry = Boolean(location.state?.pulseNodeEntry)
 
   const [session, setSession] = useState(null)
   const [messages, setMessages] = useState([])  // { id, role, content, streaming, experiment, artifactPendingType }
@@ -934,7 +930,7 @@ export default function Chat() {
 
   const clearTransientRouteState = useCallback(() => {
     const state = location.state || {}
-    if (!('autoSend' in state) && !('initialInput' in state) && !('freshThread' in state) && !('skipOpening' in state) && !('pulseNodeEntry' in state)) {
+    if (!('autoSend' in state) && !('initialInput' in state) && !('freshThread' in state) && !('skipOpening' in state)) {
       return
     }
 
@@ -946,7 +942,6 @@ export default function Chat() {
         initialInput: '',
         freshThread: false,
         skipOpening: false,
-        pulseNodeEntry: false,
       },
     })
   }, [location.pathname, location.state, navigate])
@@ -1014,7 +1009,7 @@ export default function Chat() {
     const tableExperiments = await fetchSessionExperiments(sessionData.id)
     const hydratedSession = {
       ...sessionData,
-      active_experiments: tableExperiments || sessionData.active_experiments || [],
+      experiments: tableExperiments || [],
     }
 
     // Check and update ghosting state
@@ -1026,13 +1021,13 @@ export default function Chat() {
 	        threadId,
 	        userId: user.id,
 	        sessionId: updatedSession.id,
-	        title: initialInput || nodeContext?.label || 'Branch thread',
-	        primaryPillar: nodeContext?.pillar || null,
+	        title: initialInput || 'Conversation',
+	        primaryPillar: null,
 	      })
 	    }
 
-	    // Fetch only the active thread. Default chat uses null thread_id; node taps
-    // create their own thread_id so they do not inherit the old transcript.
+	    // Fetch only the active thread. Default chat uses null thread_id; each
+    // conversation opened from Home has its own thread_id.
     let messagesQuery = supabase
       .from('messages')
       .select('*')
@@ -1077,9 +1072,7 @@ export default function Chat() {
     // load the saved conversation from the first personalized message without
     // generating another assistant response.
     if (isNew && skipOpening) {
-      // Brain input is a fresh intent. Let the user's first message lead.
-    } else if (isNew && nodeContext) {
-      await streamNodeOpeningMessage(sessionWithContext, nodeContext, pulseNodeEntry)
+      // Home input is a fresh intent. Let the user's first message lead.
     } else if (isNew) {
       await streamOpeningMessage(sessionWithContext)
     }
@@ -1150,27 +1143,6 @@ export default function Chat() {
         prev.map((m) =>
           m.id === msgId
             ? { ...m, content: 'Something went wrong connecting to Axiom.', streaming: false }
-            : m
-        )
-      )
-    }
-  }
-
-  async function streamNodeOpeningMessage(sess, node, isPulseEntry = false) {
-    const msgId = crypto.randomUUID()
-    setMessages((prev) => [
-      ...prev,
-      { id: msgId, role: 'assistant', content: '', streaming: true, experiment: null, artifactPendingType: null },
-    ])
-
-    try {
-      const content = await generateNodeOpeningMessage(sess, node, isPulseEntry)
-      await saveAssistantOpening(sess, msgId, content)
-    } catch {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === msgId
-            ? { ...m, content: 'This node needs one clean input from you before Axiom can work it properly.', streaming: false }
             : m
         )
       )
@@ -1298,11 +1270,7 @@ export default function Chat() {
         }
       }
 
-      const turnCacheScope = nodeContext?.id
-        ? `node:${nodeContext.id}`
-        : nodeContext?.pillar
-          ? `pillar:${nodeContext.pillar}`
-          : 'chat'
+      const turnCacheScope = 'chat'
       const cachedTurnContext = getCachedTurnContext(session.id, text, turnCacheScope)
       let queryEmbeddingPromise = null
       const getQueryEmbedding = () => {
@@ -1339,7 +1307,7 @@ export default function Chat() {
             ...session,
             unresolved_experiment: unresolvedExperimentRef.current,
             experiment_negotiation: experimentNegotiationRef.current,
-          }, nodeContext))
+          }))
         .then((value) => ({ ok: true, value }))
         .catch((error) => ({ ok: false, error }))
       const personalMemoriesPromise = (Array.isArray(cachedTurnContext?.personalMemories)
@@ -1360,7 +1328,7 @@ export default function Chat() {
       })
       let sessionForTurn = {
         ...session,
-        active_experiments: latestExperiments || session.active_experiments || [],
+        experiments: latestExperiments || session.experiments || [],
         unresolved_experiment: unresolvedExperimentRef.current,
         experiment_negotiation: experimentNegotiationRef.current,
       }
@@ -1565,7 +1533,7 @@ export default function Chat() {
       }
       const combinedWikiContext = wikiContext
       const groundedSourceCount = sources.length
-      const activeExperimentCount = (sessionForTurn.active_experiments || []).filter((e) => e.status === 'active').length
+      const activeExperimentCount = (sessionForTurn.experiments || []).filter((e) => e.status === 'active').length
       const {
         effectiveRoute,
         requiredArtifactType,
@@ -1586,7 +1554,7 @@ export default function Chat() {
       const continuityContext = cachedTurnContext?.cacheHit
         ? `Conversation continuity: this turn is reusing ${cachedTurnContext.cacheHit === 'follow_up' ? 'the previous turn context for a short follow-up' : 'cached context for the same query'}. Treat it as the same terrain unless the user clearly changed topic. Do not restart from first principles. Signal continuity through smooth prose only, not labels or meta-language.`
         : ''
-      const activeExpsForCheckin = (sessionForTurn.active_experiments || []).filter((e) => e.status === 'active')
+      const activeExpsForCheckin = (sessionForTurn.experiments || []).filter((e) => e.status === 'active')
       const inExperimentMode =
         experimentNegotiationRef.current !== null ||
         isAwaitingExperimentOutcomeClarification(baseMessages) ||
@@ -1620,12 +1588,7 @@ export default function Chat() {
         continuityContext,
         visibleResponseContract(effectiveRoute, requiredArtifactType, shouldHoldExperiment),
       ].filter(Boolean).join('\n\n')
-      const graphContext = nodeContext
-        ? `Selected Founder Brain node: ${nodeContext.label} | type: ${nodeContext.type} | pillar: ${nodeContext.pillar || 'unmapped'} | read: ${nodeContext.summary || 'No node summary yet.'}`
-        : ''
-      const personalMemoryContext = [graphContext, formatPersonalMemoryContext(personalMemories)]
-        .filter(Boolean)
-        .join('\n')
+      const personalMemoryContext = formatPersonalMemoryContext(personalMemories)
       const namedPatternsContext = formatNamedPatternsContext(personalMemories)
 
       // Build conversation history for OpenAI (last 10 msgs, exclude the placeholder).
@@ -1772,7 +1735,7 @@ export default function Chat() {
       // Jailbreak: termination — server auto-increments via session_id in the request
       if (fullContent.trim() === 'AXIOM_SESSION_TERMINATED') {
         setMessages((prev) => prev.filter((m) => m.id !== assistantMsgId))
-        navigate('/brain')
+        navigate('/home')
         return
       }
 
@@ -1916,7 +1879,7 @@ export default function Chat() {
             console.log(`[Axiom latency ${latencyRunId}] post:experiment_assigned`, {
               elapsed_ms: Math.round(performance.now() - postStart),
             })
-            const assigned = findMatchingExperiment(sessionForMemory.active_experiments, experiment)
+            const assigned = findMatchingExperiment(sessionForMemory.experiments, experiment)
             if (assigned) {
               const enrichedContent = `${cleanText}\n\n<experiment>\n${JSON.stringify(assigned)}\n</experiment>`
               supabase
@@ -1959,7 +1922,6 @@ export default function Chat() {
           ).length + 1
           const memoryDecision = shouldRunMemoryUpdate(text, cleanText, {
             assistantTurnCount,
-            nodeContext,
             experiment,
           })
 
@@ -1977,17 +1939,6 @@ export default function Chat() {
               elapsed_ms: Math.round(performance.now() - postStart),
               reason: memoryDecision.reason,
             })
-            const token = getStoredSessionToken()
-            if (token) {
-              syncPersonalWiki(updatedSession).then((synced) => {
-                if (synced?.nodes?.length) {
-                  const key = `axiom_brain_graph:${token}`
-                  try {
-                    localStorage.setItem(key, JSON.stringify(synced))
-                  } catch {}
-                }
-              }).catch(() => {})
-            }
           }
         } catch {
           setSession(sessionForMemory)
@@ -2058,7 +2009,7 @@ export default function Chat() {
   // ── Experiment Assignment ─────────────────────────────────────────────────
   async function assignExperiment(experiment, baseSession = session) {
     if (!baseSession) return baseSession
-    const activeExps = baseSession.active_experiments || []
+    const activeExps = baseSession.experiments || []
 
     if (activeExps.filter((e) => e.status === 'active').length >= 2) return baseSession
 
@@ -2110,7 +2061,7 @@ export default function Chat() {
         assignment_error: true,
         error_message: error.message || 'This experiment was generated, but it was not saved.',
       }
-      const updatedSession = { ...baseSession, active_experiments: [...activeExps, failedExperiment] }
+      const updatedSession = { ...baseSession, experiments: [...activeExps, failedExperiment] }
       setSession(updatedSession)
       return updatedSession
     }
@@ -2118,7 +2069,7 @@ export default function Chat() {
     const updated = [...activeExps, normalizeExperiment(result?.experiment || newExp)]
     const sessionUpdates = result?.session_updates || {}
 
-    const updatedSession = { ...baseSession, ...sessionUpdates, active_experiments: updated }
+    const updatedSession = { ...baseSession, ...sessionUpdates, experiments: updated }
     setSession(updatedSession)
     return updatedSession
   }
@@ -2162,7 +2113,7 @@ export default function Chat() {
       return {
         ...prev,
         ...sessionUpdates,
-        active_experiments: (prev.active_experiments || []).map((exp) =>
+        experiments: (prev.experiments || []).map((exp) =>
           exp.id === experimentId ? normalized : exp
         ),
       }
@@ -2180,18 +2131,11 @@ export default function Chat() {
   }
 
   async function recordResistanceAndSync(baseSession, experiment, text, reasonStrength) {
-    const memoryRecorded = await recordExperimentResistancePattern(baseSession, experiment, text, reasonStrength)
-    if (memoryRecorded) {
-      syncPersonalWiki(baseSession).then((synced) => {
-        if (synced) window.dispatchEvent(new CustomEvent('axiom-wiki-updated'))
-      }).catch((error) => {
-        console.error('Failed to sync wiki after experiment resistance pattern', error)
-      })
-    }
+    await recordExperimentResistancePattern(baseSession, experiment, text, reasonStrength)
   }
 
   async function maybeCaptureExperimentReport(text, baseSession, historyMessages = []) {
-    const activeExperiments = (baseSession.active_experiments || []).filter((exp) => exp.status === 'active')
+    const activeExperiments = (baseSession.experiments || []).filter((exp) => exp.status === 'active')
     if (activeExperiments.length === 0) return { session: baseSession, handled: false }
 
     const target = activeExperiments[0]
@@ -2252,12 +2196,12 @@ export default function Chat() {
 
         await recordExperimentAvoidancePattern(baseSession, negotiationTarget, text)
         experimentNegotiationRef.current = null
-        const updatedExperiments = (baseSession.active_experiments || []).map((exp) =>
+        const updatedExperiments = (baseSession.experiments || []).map((exp) =>
           exp.id === negotiationTarget.id ? updatedExperiment : exp
         )
 
         return {
-          session: { ...baseSession, active_experiments: updatedExperiments, experiment_negotiation: null },
+          session: { ...baseSession, experiments: updatedExperiments, experiment_negotiation: null },
           handled: true,
           assistantText: 'I marked that as a choice not to do it, not a constraint. That matters because this is exactly where the pattern shows up.',
         }
@@ -2284,20 +2228,13 @@ export default function Chat() {
           assistantText: 'I could not save that experiment outcome. Try once more before we move on.',
         }
       }
-      const updatedExperiments = (baseSession.active_experiments || []).map((exp) =>
+      const updatedExperiments = (baseSession.experiments || []).map((exp) =>
         exp.id === target.id ? updatedExperiment : exp
       )
-      const updatedSession = { ...baseSession, active_experiments: updatedExperiments }
+      const updatedSession = { ...baseSession, experiments: updatedExperiments }
 
       if (outcomeReason === 'didnt') {
-        const memoryRecorded = await recordExperimentAvoidancePattern(baseSession, target, text)
-        if (memoryRecorded) {
-          syncPersonalWiki(updatedSession).then((synced) => {
-            if (synced) window.dispatchEvent(new CustomEvent('axiom-wiki-updated'))
-          }).catch((error) => {
-            console.error('Failed to sync wiki after experiment avoidance pattern', error)
-          })
-        }
+        await recordExperimentAvoidancePattern(baseSession, target, text)
       }
 
       const assistantText = outcomeReason === 'couldnt'
@@ -2314,7 +2251,7 @@ export default function Chat() {
       return {
         session: {
           ...baseSession,
-          active_experiments: (baseSession.active_experiments || []).map((exp) =>
+          experiments: (baseSession.experiments || []).map((exp) =>
             exp.id === target.id ? updatedExperiment : exp
           ),
         },
@@ -2544,8 +2481,8 @@ export default function Chat() {
       {/* Header */}
       <header className="chat__header">
         <span className="chat__wordmark">Axiom</span>
-        <button className="chat__brain-link" onClick={() => navigate('/brain')}>
-          Brain
+        <button className="chat__home-link" onClick={() => navigate('/home')}>
+          Home
         </button>
       </header>
 

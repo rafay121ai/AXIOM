@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import Onboarding from './pages/Onboarding'
 import Chat from './pages/Chat'
-import Brain from './pages/Brain'
+import Home from './pages/Home'
 import Welcome from './pages/Welcome'
 import AuthCallback from './pages/AuthCallback'
 import { getStoredSessionToken, supabase } from './lib/supabase'
@@ -49,14 +49,12 @@ function RequireChatEntry({ children }) {
 
   if (loading) return <div className="onboarding"><div className="pulse-dot" /></div>
   if (!user || !token) return <Navigate to="/" replace />
-  if (!location.state?.fromBrain) return <Navigate to="/brain" replace />
+  if (!location.state?.fromHome) return <Navigate to="/home" replace />
   return children
 }
 
 function entryPointForLocation(location) {
-  if (location.pathname === '/brain') return 'brain'
-  if (location.state?.nodeContext || location.state?.pulseNodeEntry) return 'experiment'
-  if (location.state?.fromBrain) return 'resume'
+  if (location.state?.fromHome) return 'resume'
   return 'direct'
 }
 
@@ -131,10 +129,10 @@ export default function App() {
           }
         />
         <Route
-          path="/brain"
+          path="/home"
           element={
             <RequireSession>
-              <Brain />
+              <Home />
             </RequireSession>
           }
         />

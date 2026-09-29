@@ -380,7 +380,7 @@ ${JSON.stringify(onboardingAnswers, null, 2)}`,
 // ─── Opening Message ─────────────────────────────────────────────────────────
 export async function generateOpeningMessage(session, isNew) {
   const unresolvedExperiment = session.unresolved_experiment || null
-  const activeExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'active')
+  const activeExps = (session.experiments || []).filter((experiment) => experiment.status === 'active')
   const hasExperiment = activeExps.length > 0
   const recentExp = hasExperiment ? activeExps[activeExps.length - 1] : null
 
@@ -428,42 +428,6 @@ Warning language: disappointed but still in their corner. Not a system alert. No
   })
 
   return response.choices[0].message.content
-}
-
-export async function generateBrainOverlayMessage(session) {
-  const activeExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'active')
-  const response = await openai.chat.completions.create({
-    model: CHAT_MODEL,
-    usage_context: { call_type: 'session_notes', session_id: session.id },
-    messages: [
-      {
-        role: 'system',
-        content: `You are Axiom. Write a single short line for the brain screen overlay.
-
-Rules:
-- Maximum 14 words
-- One sentence only
-- Direct, quiet, specific
-- No greeting
-- No metaphor
-- No artifact
-- No citation
-- No experiment
-- Use the user's private pattern or current experiment if relevant
-- This line should feel like a subtle read, not a speech`,
-      },
-      {
-        role: 'user',
-        content: `Private theory: ${session.axiom_profile || 'None'}
-Session notes: ${session.session_notes || 'None'}
-Active experiments: ${JSON.stringify(activeExps)}
-`,
-      },
-    ],
-    max_completion_tokens: 60,
-  })
-
-  return response.choices[0].message.content.trim()
 }
 
 export async function generateStructuredArtifact({
@@ -656,203 +620,6 @@ ${answerDraft || 'None'}`,
       // Ignore trailing malformed output
     }
   }
-}
-
-export async function generateWeeklyRead(session, recentMessages = []) {
-  const activeExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'active')
-  const history = recentMessages
-    .filter((message) => message?.content)
-    .slice(-24)
-    .map((message) => `${message.role === 'user' ? 'User' : 'Axiom'}: ${message.content}`)
-    .join('\n\n')
-
-  const response = await openai.chat.completions.create({
-    model: UTILITY_MODEL,
-    usage_context: { call_type: 'session_notes', session_id: session.id },
-    messages: [
-      {
-        role: 'system',
-        content: `You write Axiom's weekly read for a user.
-
-Rules:
-- 1-2 sentences maximum
-- Maximum 26 words per sentence
-- Direct, concise, plainspoken
-- No greeting
-- No metaphor
-- No artifact
-- No citation
-- No experiment
-- This is a weekly snapshot of the user's real pattern, movement, or stuckness
-- Base it on what changed in their conversations, not just a static profile
-- If there is active progress, name it
-- If there is avoidance or drift, name that instead
-- End with a live tension, not a summary line`,
-      },
-      {
-        role: 'user',
-        content: `Private theory: ${session.axiom_profile || 'None'}
-Session notes: ${session.session_notes || 'None'}
-Active experiments: ${JSON.stringify(activeExps)}
-
-Recent conversation history:
-${history || 'No recent messages.'}`,
-      },
-    ],
-    max_completion_tokens: 120,
-  })
-
-  return response.choices[0].message.content.trim()
-}
-
-function estimateNodeContextLevel(node) {
-  if (!node) return 0
-
-  const summaryLength = (node.summary || '').trim().length
-  const confidence = Number(node.confidence ?? 0.35)
-  const importance = Number(node.importance || 3)
-  const status = node.status || 'dim'
-
-  let score = 0
-  score += Math.min(0.3, Math.max(0, confidence) * 0.3)
-  if (summaryLength > 240) score += 0.25
-  else if (summaryLength > 120) score += 0.18
-  else if (summaryLength > 40) score += 0.1
-  if (['active', 'bright', 'ghosted', 'resolved'].includes(status)) score += 0.18
-  if (node.last_activated_at) score += 0.08
-  if (['pattern', 'goal', 'experiment'].includes(node.type)) score += 0.08
-  score += Math.min(0.11, Math.max(0, importance - 1) * 0.0275)
-
-  return Math.max(0, Math.min(1, score))
-}
-
-export async function generateNodeOpeningMessage(session, nodeContext, isPulseEntry = false) {
-  const contextLevel = estimateNodeContextLevel(nodeContext)
-  const level = Number.isFinite(contextLevel) ? Math.max(0, Math.min(1, contextLevel)) : 0
-  const percent = Math.round(level * 100)
-  const nodeType = nodeContext.type || 'concept'
-  const activeExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'active')
-  const ghostedExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'ghosted')
-  const ghostedTitles = ghostedExps
-    .map((experiment) => experiment.title || experiment.description)
-    .filter(Boolean)
-    .slice(-4)
-
-  if (isPulseEntry) {
-    const response = await openai.chat.completions.create({
-      model: CHAT_MODEL,
-      usage_context: { call_type: 'chat', session_id: session.id },
-      messages: [
-        {
-          role: 'system',
-          content: `You are Axiom. A mentor for ambitious founders aged 18-28.
-
-This is a brand-new thread opened from a pulsing recommended Founder Brain node. The pulse means Axiom thinks this node is relevant now.
-
-Write one opening message only.
-- Read the private theory and session notes carefully.
-- Read the Founder Brain node fields carefully.
-- Open with 1-2 sentences recapping specifically what was discussed, attempted, avoided, or left unresolved around this node in previous sessions. Use actual detail from session notes. If session notes contain nothing specific about this node, skip the recap entirely.
-- Then give a concrete next step or plan of action for this node, framed as a direction, not a question. A natural shape is "Here's where I'd pick this back up:" followed by 2-3 sentences of substance.
-- End with one short sharp question that opens the conversation.
-- Tone: no-BS, warm when needed, conversational, like a mentor who actually remembers the user.
-- Never use em dashes. Never use generic AI phrasing. No greeting. No list. Pure prose.
-- Length: 4-6 sentences max.`,
-        },
-        {
-          role: 'user',
-          content: `Private theory: ${session.axiom_profile || 'None'}
-Session notes: ${session.session_notes || 'None'}
-Pillar weights: ${session.pillar_weights ? JSON.stringify(session.pillar_weights) : 'balanced'}
-Active experiments: ${JSON.stringify(activeExps)}
-Ghosted experiments: ${ghostedTitles.length ? ghostedTitles.map((title) => `"${title}"`).join(', ') : 'None'}
-
-Founder Brain node:
-Label: ${nodeContext.label}
-Type: ${nodeContext.type}
-Pillar: ${nodeContext.pillar || 'unmapped'}
-Summary: ${nodeContext.summary || 'No summary yet.'}
-Status: ${nodeContext.status || 'dim'}
-Importance: ${nodeContext.importance || 3}
-Confidence: ${nodeContext.confidence ?? 0.7}
-Last activated at: ${nodeContext.last_activated_at || 'Never'}
-Context completeness: ${percent}%`,
-        },
-      ],
-      max_completion_tokens: 240,
-    })
-
-    return response.choices[0].message.content
-  }
-
-  let directive
-
-  if (nodeType === 'experiment') {
-    // User tapped an experiment node — they're probably reporting back
-    directive = `This is an experiment node. The user tapped it. Open with 1 direct sentence asking where they are with this experiment — what happened, what they tried, or why they haven't started. Do not diagnose yet. Let them speak first.`
-
-  } else if (nodeType === 'pattern') {
-    // User tapped their own pattern to explore it — this is exploratory, not accountability
-    if (level < 0.4) {
-      directive = `The user tapped their own pattern node. This is an exploratory moment — not accountability. Open with 1 sentence that names what this pattern looks like in practice for this specific person (use their axiom_profile and session notes to make it concrete). Then ask 1 specific question: where do they most see this pattern showing up right now? Do not prescribe a first move. Do not confront. Let them drive the direction.`
-    } else {
-      directive = `The user is returning to a pattern they've engaged with before. Open with 1 sentence referencing something specific Axiom has observed about how this pattern has shown up for them. Then offer 2 directions: go deeper into understanding it, or apply it to a specific situation they have right now. Ask which one they want.`
-    }
-
-  } else if (nodeType === 'concept' || nodeType === 'belief' || nodeType === 'goal') {
-    // Exploratory / learning mode
-    if (level < 0.25) {
-      directive = `The user is exploring this node for the first time. Use LEARNING MODE. Open with 1 sentence connecting why "${nodeContext.label}" is specifically relevant to this person right now — tie it to what you know about them. Then ask 1 question to find the angle: are they trying to understand it theoretically, or do they have a specific situation where this applies? Do not teach yet. Do not prescribe.`
-    } else {
-      directive = `The user has prior engagement with this concept. Use LEARNING MODE. Open with 1-2 sentences: name what they've covered and what's still open. Then ask: do they want to go deeper into the concept, or apply it to something specific they're dealing with right now?`
-    }
-
-  } else {
-    // blind_spot, decision, fact, or unknown — invite before confronting
-    if (level < 0.25) {
-      directive = `Fresh node. Open with 1 sentence connecting "${nodeContext.label}" to what Axiom knows about this person. Then ask 1 specific question to understand what brought them here. Do not assign a first move before they've said anything.`
-    } else {
-      directive = `The user has some history here. Open with 1 sentence naming what's unresolved in this area for them specifically. Then ask what they want to do with it today — understand it better, or work on a specific instance of it.`
-    }
-  }
-
-  const response = await openai.chat.completions.create({
-    model: CHAT_MODEL,
-    usage_context: { call_type: 'chat', session_id: session.id },
-    messages: [
-      {
-        role: 'system',
-        content: `You are Axiom. A mentor for ambitious founders aged 18-28.
-
-Your voice: direct, specific, concise, plainspoken.
-No greetings. No filler. No theatrical metaphors. Never say "welcome", "great question", "I understand", "of course", or "let's explore".
-This is a brand-new thread opened from a private Founder Brain node. The user tapped a node — they have not said anything yet. Do not confront them before they speak. Do not prescribe a first move before you know what they want from this session.`,
-      },
-      {
-        role: 'user',
-        content: `Private theory: ${session.axiom_profile || 'None'}
-Session notes: ${session.session_notes || 'None'}
-Pillar weights: ${session.pillar_weights ? JSON.stringify(session.pillar_weights) : 'balanced'}
-Active experiments: ${JSON.stringify(activeExps)}
-Ghosted experiments: ${ghostedTitles.length ? ghostedTitles.map((title) => `"${title}"`).join(', ') : 'None'}
-
-Founder Brain node:
-Label: ${nodeContext.label}
-Type: ${nodeContext.type}
-Pillar: ${nodeContext.pillar || 'unmapped'}
-Summary: ${nodeContext.summary || 'No summary yet.'}
-Status: ${nodeContext.status || 'dim'}
-Importance: ${nodeContext.importance || 3}
-Confidence: ${nodeContext.confidence ?? 0.7}
-Context completeness: ${percent}%
-
-${directive}`,
-      },
-    ],
-    max_completion_tokens: 220,
-  })
-
-  return response.choices[0].message.content
 }
 
 // --- Session Memory ---------------------------------------------------------
@@ -1491,8 +1258,8 @@ ${hasSignalMap ? '- If the routing block requires signal_map, do not use visible
 
 // ─── System Prompt Builder ───────────────────────────────────────────────────
 export function buildSystemPrompt(session, wikiContext, personalMemoryContext = '', assistantMessageNumber = 0, retrievalConfidence = null, namedPatternsContext = '', routeContext = '', experimentAssignedInSession = false, promptOptions = {}) {
-  const activeExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'active')
-  const ghostedExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'ghosted')
+  const activeExps = (session.experiments || []).filter((experiment) => experiment.status === 'active')
+  const ghostedExps = (session.experiments || []).filter((experiment) => experiment.status === 'ghosted')
   const ghostedExperimentTitles = ghostedExps
     .map((experiment) => experiment.title || experiment.description)
     .filter(Boolean)

@@ -304,7 +304,7 @@ export async function buildArtifactForResponse({
       id: session?.id,
       profile: session?.axiom_profile || '',
       notes: session?.session_notes || '',
-      experiments: session?.active_experiments || [],
+      experiments: session?.experiments || [],
     },
   })
 

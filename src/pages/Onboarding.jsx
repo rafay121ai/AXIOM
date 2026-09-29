@@ -143,7 +143,7 @@ export default function Onboarding() {
 
     const currentToken = getStoredSessionToken()
     if (currentToken) {
-      navigate('/brain', { replace: true })
+      navigate('/home', { replace: true })
       return
     }
 
@@ -164,7 +164,7 @@ export default function Onboarding() {
 
       if (data?.session_token) {
         setStoredSessionToken(data.session_token)
-        navigate('/brain', { replace: true })
+        navigate('/home', { replace: true })
       }
     }
 
@@ -243,7 +243,7 @@ export default function Onboarding() {
       if (existingError) throw existingError
       if (existingSession?.session_token) {
         setStoredSessionToken(existingSession.session_token)
-        navigate('/brain')
+        navigate('/home')
         return
       }
 
@@ -258,7 +258,6 @@ export default function Onboarding() {
         onboarding_answers: qaPairs,
         pillar_weights: pillarWeights,
         axiom_profile: axiomProfile,
-        active_experiments: [],
       }
 
       const { error: insertError } = await supabase
@@ -272,7 +271,7 @@ export default function Onboarding() {
         catch { return false }
       })()
       if (!welcomeSeen) markAxiomWelcomePending()
-      navigate(welcomeSeen ? '/brain' : '/welcome')
+      navigate(welcomeSeen ? '/home' : '/welcome')
     } catch {
       setError('Something went wrong. Try again.')
       setIsProcessing(false)
