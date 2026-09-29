@@ -199,11 +199,8 @@ async function readNdjsonStream(response) {
 
 async function cleanup() {
   if (state.sessionId) {
-    await mainAdmin.from('personal_wiki_edges').delete().eq('session_id', state.sessionId)
-    await mainAdmin.from('personal_wiki_nodes').delete().eq('session_id', state.sessionId)
     await mainAdmin.from('experiments').delete().eq('session_id', state.sessionId)
     await mainAdmin.from('messages').delete().eq('session_id', state.sessionId)
-    await mainAdmin.from('weekly_reads').delete().eq('session_id', state.sessionId)
     await mainAdmin.from('conversation_threads').delete().eq('session_id', state.sessionId)
     await mainAdmin.from('sessions').delete().eq('id', state.sessionId)
   }
@@ -295,8 +292,6 @@ function promptFixtureControl(overrides = {}) {
     canAssignExperiment: false,
     experimentBlockReason: 'not_application_turn',
     shouldHoldExperiment: false,
-    requiredArtifactType: null,
-    includeArtifactRules: false,
     includeExperimentRules: false,
     includeExperimentLimitRules: false,
     includeLearningGateRules: false,
@@ -308,7 +303,6 @@ function promptFixtureControl(overrides = {}) {
     includeCancellationRules: false,
     includeUsefulResistanceRules: false,
     includeFullCitationRules: false,
-    includeLiveCurrentRules: false,
     ...overrides,
   }
 }
@@ -319,10 +313,7 @@ function buildPromptFixture({ message, promptControl, learningStateContext = '',
     user_id: '00000000-0000-0000-0000-000000000002',
     axiom_profile: 'User overbuilds to avoid committing.',
     session_notes: 'User keeps returning to infrastructure instead of one falsifiable customer/user bet.',
-    active_experiments: [],
-    warning_level: 0,
-    ghost_count: 0,
-    consecutive_miss_count: 0,
+    experiments: [],
   }
 
   return buildSystemPrompt(
@@ -332,7 +323,7 @@ function buildPromptFixture({ message, promptControl, learningStateContext = '',
     1,
     0.5,
     '',
-    'Mode: single_pillar\nSelected pillar: think_sharper\nArtifact strategy: none',
+    'Mode: single_pillar\nSelected pillar: think_sharper',
     false,
     {
       latestUserMessage: message,
@@ -402,10 +393,6 @@ test('smoke: minimum deploy flows work end to end', { timeout: TEST_TIMEOUT_MS }
       onboarding_answers: [{ question: 'Smoke question?', answer: 'Smoke answer.' }],
       pillar_weights: { think_sharper: 3, human_mind: 2 },
       axiom_profile: 'Smoke test profile.',
-      active_experiments: [],
-      ghost_count: 0,
-      consecutive_miss_count: 0,
-      warning_level: 0,
     }
 
     const { data: session, error: sessionError } = await mainAuthed
@@ -416,7 +403,6 @@ test('smoke: minimum deploy flows work end to end', { timeout: TEST_TIMEOUT_MS }
     assert.ifError(sessionError)
     assert.equal(session.user_id, state.userId)
     assert.equal(session.session_token, state.sessionToken)
-    assert.equal(session.warning_level, 0)
     state.sessionId = session.id
   })
 
@@ -601,47 +587,5 @@ test('smoke: minimum deploy flows work end to end', { timeout: TEST_TIMEOUT_MS }
       outcome: 'Should not work.',
     }, otherUser.accessToken)
     assert.equal(forbidden.response.status, 403)
-  })
-
-  await t.test('Brain graph', async () => {
-    const nodePayload = (label, summary) => ({
-      label,
-      type: 'goal',
-      pillar: 'think_sharper',
-      summary,
-      status: 'active',
-      importance: 3,
-      confidence: 0.8,
-      x: 0,
-      y: 0,
-      z: 0,
-    })
-
-    const nodeA = await apiPost('/api/personal-wiki/nodes', {
-      session_id: state.sessionId,
-      node: nodePayload('Smoke Node A', 'Smoke node A summary.'),
-    })
-    const nodeB = await apiPost('/api/personal-wiki/nodes', {
-      session_id: state.sessionId,
-      node: nodePayload('Smoke Node B', 'Smoke node B summary.'),
-    })
-    assert.equal(nodeA.response.status, 200)
-    assert.equal(nodeB.response.status, 200)
-    assert.ok(nodeA.json.node?.id)
-    assert.ok(nodeB.json.node?.id)
-
-    const edge = await apiPost('/api/personal-wiki/edges', {
-      session_id: state.sessionId,
-      source_node_id: nodeA.json.node.id,
-      target_node_id: nodeB.json.node.id,
-      relationship: 'related_to',
-      weight: 0.7,
-    })
-    assert.equal(edge.response.status, 200)
-    assert.equal(edge.json.edge.source_node_id, nodeA.json.node.id)
-    assert.equal(edge.json.edge.target_node_id, nodeB.json.node.id)
-
-    const accessed = await apiPost(`/api/personal-wiki/nodes/${nodeA.json.node.id}/accessed`, {})
-    assert.equal(accessed.response.status, 200)
   })
 })

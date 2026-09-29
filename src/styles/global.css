@@ -1314,33 +1314,6 @@ h1, h2, h3 {
   margin: 0;
 }
 
-/* ─── Warning Card ───────────────────────────────────────────────────── */
-.warning-card {
-  max-width: 80%;
-  border-left: 2px solid var(--red);
-  background: #0F0A0A;
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  padding: 14px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 4px;
-}
-
-.warning-card__label {
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--red);
-}
-
-.warning-card__text {
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--text-primary);
-}
-
 @media (max-width: 640px) {
   .chat__header {
     height: 52px;
@@ -1372,8 +1345,7 @@ h1, h2, h3 {
 
   .msg,
   .msg__status,
-  .experiment-card,
-  .warning-card {
+  .experiment-card {
     max-width: 94%;
   }
 
@@ -1385,8 +1357,7 @@ h1, h2, h3 {
     width: min(94%, 560px);
   }
 
-  .experiment-card,
-  .warning-card {
+  .experiment-card {
     padding: 13px 14px;
   }
 

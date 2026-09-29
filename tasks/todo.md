@@ -98,10 +98,13 @@ Branch: `cleanup/remove-old-product`
 
 ## Stage 5: Tests and repository cleanup
 
-- [ ] Update smoke coverage to the retained product without running live-data operations.
-- [ ] Remove dependencies, dead files, stale environment names, and stale comments made obsolete by Stages 1-4.
-- [ ] Run final installs, build, frontend start, backend start, static searches, code-path walkthrough, and `git diff --check`.
-- [ ] Run only tests proven not to access live services; record all skipped tests and reasons.
-- [ ] Record final LOC and prompt-character metrics.
-- [ ] Write `audit/CLEANUP_REPORT.md` with evidence, residual risks, handoffs, open questions, and full coverage.
-- [ ] Commit Stage 5 only; do not merge.
+- [x] Update `scripts/smoke.test.js`: removed `personal_wiki_edges`/`personal_wiki_nodes`/`weekly_reads` cleanup deletes; removed `active_experiments`, `ghost_count`, `warning_level`, `consecutive_miss_count` from the session insert, the prompt fixture session (now `experiments: []`) and the `warning_level` assertion; removed `requiredArtifactType`, `includeArtifactRules`, `includeLiveCurrentRules` from the prompt-control fixture and `Artifact strategy: none` from the route fixture; deleted the `Brain graph` test. Every other test (validator, prompt budgets, auth/session, chat, RAG, personal memories, concept states, experiments) kept.
+- [x] Remove unused dependencies: `react-is` (root; lockfile showed no other dependent once Recharts was gone). Earlier stages removed `three`, `@types/three`, `postprocessing`, `recharts` (root) and `exa-js` (server). Kept root `express-rate-limit`: imported by `server/index.js`, and the root `start` script runs that file, so removal depends on how Railway installs (unverified).
+- [x] Remove dead code: `isForecastAsk` (live-search helper, no callers); remaining `.warning-card` CSS including two shared mobile selectors. Dead-code scan of every top-level function/export in `src/` and `server/` found nothing else left behind by removed features.
+- [x] Env references for removed services: none left. Names no longer referenced anywhere: `EXA_API_KEY`, `LIVE_SEARCH_CACHE_TTL_MS`, `LIVE_SEARCH_MAX_RESULTS`, `WIKI_LABEL_MODEL`.
+- [x] Commented-out blocks: none found for removed features; stale comments fixed in earlier stages.
+- [x] Final verify: root and server `npm install` pass; build passes (93 modules; JS 535 kB; existing chunk-size warning only); backend `/health` ok, removed route 404, auth route 401; frontend serves and transforms every page; static search: zero code references to every removed name except the admin diagnostics response key `active_experiments` (counts `experiments` rows); removed packages absent from both lockfiles; `git diff --check` clean; npm audit root 16 (was 17 before cleanup), server 6 (unchanged), none introduced.
+- [x] Tests: `node --test --test-name-pattern="validator|prompt budgets" scripts/smoke.test.js` with dummy loopback env: 2/2 pass. `smoke: minimum deploy flows work end to end` not run: it creates auth users and writes/deletes live Supabase rows. Tag-stripping 6/6, router test unchanged.
+- [x] Final metrics: LOC 23,266 -> 14,501. Static prompt 73,025 -> 50,959. Assembled prompt: plain 24,877 -> 24,354; experiment report 24,018 -> 23,698; structured request 25,492 -> 24,875; artifact turn 30,500 -> 24,489; ghosted history 25,186 -> 23,800.
+- [x] Write `audit/CLEANUP_REPORT.md`.
+- [x] Commit Stage 5 only; do not merge.

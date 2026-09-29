@@ -23,10 +23,6 @@ export function isFreshnessAsk(text = '') {
   return /\b(now|today|current|currently|latest|recent|recently|this week|this month|this year|live|news|update|updates|what happened|what (?:is|are) .* doing|what has .* done|how is .* moving)\b/i.test(text)
 }
 
-export function isForecastAsk(text = '') {
-  return /\b(signal|signals|forecast|prediction|predict|next \d+|next \d+-\d+ years?|next decade|202[7-9]|2030|2035|future effects?|what'?s coming)\b/i.test(text)
-}
-
 export function isCurrentFactDomain(text = '') {
   return CURRENT_FACT_DOMAINS.some((pattern) => pattern.test(text))
 }
