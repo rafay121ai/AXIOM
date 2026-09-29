@@ -1,4 +1,3 @@
-import { getArtifactProfile } from './artifactRegistry.js'
 import { supabase } from './supabase.js'
 
 export const PROFILE_MODEL = 'gpt-5.2-2025-12-11'
@@ -430,198 +429,6 @@ Warning language: disappointed but still in their corner. Not a system alert. No
   return response.choices[0].message.content
 }
 
-export async function generateStructuredArtifact({
-  artifactType,
-  query,
-  session,
-  routeContext = '',
-  wikiContext = '',
-  personalMemoryContext = '',
-  namedPatternsContext = '',
-  answerDraft = '',
-}) {
-  const spec = getArtifactProfile(artifactType)
-  if (!spec) return null
-
-	  return requestJsonObject({
-	    label: `${spec.label || artifactType} artifact`,
-	    maxCompletionTokens: spec.maxTokens || 600,
-	    usageContext: {
-	      call_type: 'artifact',
-	      session_id: session?.id || null,
-	    },
-	    messages: [
-      {
-        role: 'system',
-        content: `You generate only the JSON payload for Axiom's ${artifactType} artifact.
-
-Return valid JSON only. Do not wrap it in markdown. Do not include <artifact> tags.
-
-Rules:
-- The artifact must answer the user's actual question shape, not a broader neighboring question.
-- Make the structure concrete, tight, and visually intelligible.
-- Keep it specific to the user's situation when possible.
-- Do not turn a focused structural question into a broad landscape map.
-- If the main response may include an experiment, keep this artifact to the framework, loop, terrain, or decision structure only.
-- Do not include the exact experiment task, operational steps, watch-fors, reporting instructions, or success conditions in the artifact.
-
-Required JSON shape:
-${spec.schema}
-
-Additional rules:
-${spec.rules.map((rule) => `- ${rule}`).join('\n')}`,
-      },
-      {
-        role: 'user',
-        content: `Question: ${query}
-
-Artifact type: ${artifactType}
-
-Route context:
-${routeContext || 'None'}
-
-Private theory:
-${session?.axiom_profile || 'None'}
-
-Session notes:
-${session?.session_notes || 'None'}
-
-Named patterns:
-${namedPatternsContext || 'None'}
-
-Personal context:
-${personalMemoryContext || 'None'}
-
-Wiki context:
-${wikiContext || 'None'}
-
-Draft answer:
-${answerDraft || 'None'}`,
-      },
-    ],
-  })
-}
-
-export async function* streamStructuredArtifact({
-  artifactType,
-  query,
-  session,
-  routeContext = '',
-  wikiContext = '',
-  personalMemoryContext = '',
-  namedPatternsContext = '',
-  answerDraft = '',
-  signal,
-}) {
-  const spec = getArtifactProfile(artifactType)
-  if (!spec) return
-
-  const systemPrompt =
-    artifactType === 'signal_map'
-      ? `You stream JSON merge events for Axiom's signal_map artifact.
-
-Return newline-delimited JSON only. Each line must be a complete valid JSON object with this exact shape:
-{"merge": { ...partial artifact fields... }}
-
-Rules:
-- No markdown.
-- No prose outside JSON.
-- Emit one top-level section per line in this order:
-${spec.streamOrder.map((item, index) => `  ${index + 1}. ${item}`).join('\n')}
-- Ground the map in concrete present-tense signals first, then interpretation, then forecast.
-- Keep it specific to the user's situation when possible.
-- Make the framework genuinely visual, not list-like.
-- If the main response may include an experiment, keep this artifact to terrain and framework only.
-- Do not include the exact experiment task, operational steps, watch-fors, reporting instructions, or success conditions in the artifact.`
-      : `You stream JSON merge events for Axiom's ${artifactType} artifact.
-
-Return newline-delimited JSON only. Each line must be a complete valid JSON object with this exact shape:
-{"merge": { ...partial artifact fields... }}
-
-Rules:
-- No markdown.
-- No prose outside JSON.
-- The artifact must answer the user's actual question shape, not a broader neighboring question.
-- Emit one meaningful section per line until the artifact is complete.
-- Keep the structure tight, concrete, and visually intelligible.
-- If the main response may include an experiment, keep this artifact to the framework, loop, terrain, or decision structure only.
-- Do not include the exact experiment task, operational steps, watch-fors, reporting instructions, or success conditions in the artifact.
-${spec ? spec.rules.map((rule) => `- ${rule}`).join('\n') : ''}`
-
-  const response = await openai.chat.completions.create({
-    model: CHAT_MODEL,
-    usage_context: {
-      call_type: 'artifact',
-      session_id: session?.id || null,
-    },
-    messages: [
-      { role: 'system', content: systemPrompt },
-      {
-        role: 'user',
-        content: `Question: ${query}
-
-Artifact type: ${artifactType}
-
-Route context:
-${routeContext || 'None'}
-
-Private theory:
-${session?.axiom_profile || 'None'}
-
-Session notes:
-${session?.session_notes || 'None'}
-
-Named patterns:
-${namedPatternsContext || 'None'}
-
-Personal context:
-${personalMemoryContext || 'None'}
-
-Wiki context:
-${wikiContext || 'None'}
-
-Draft answer:
-${answerDraft || 'None'}`,
-      },
-    ],
-    stream: true,
-  }, { signal })
-
-  let buffer = ''
-  for await (const chunk of response) {
-    const delta = chunk.choices?.[0]?.delta?.content || ''
-    if (!delta) continue
-    buffer += delta
-    const lines = buffer.split('\n')
-    buffer = lines.pop() || ''
-
-    for (const rawLine of lines) {
-      const line = rawLine.trim()
-      if (!line) continue
-      try {
-        const parsed = JSON.parse(line)
-        if (parsed?.merge && typeof parsed.merge === 'object') {
-          yield parsed.merge
-        }
-      } catch {
-        // Ignore malformed partial lines; the model sometimes emits a line break late.
-      }
-    }
-  }
-
-  const finalLine = buffer.trim()
-  if (finalLine) {
-    try {
-      const parsed = JSON.parse(finalLine)
-      if (parsed?.merge && typeof parsed.merge === 'object') {
-        yield parsed.merge
-      }
-    } catch {
-      // Ignore trailing malformed output
-    }
-  }
-}
-
 // --- Session Memory ---------------------------------------------------------
 export async function generateMemoryUpdate(session, recentMessages, userMessage, assistantMessage) {
   const history = recentMessages
@@ -745,10 +552,6 @@ function getPromptFlags({ session, wikiContext, routeContext, latestUserMessage,
   const userText = String(latestUserMessage || '').toLowerCase()
   const combinedText = `${routeText}\n${userText}`
   const activeExperimentExists = activeExperimentCount > 0
-  const artifactTurn =
-    /a separate [a-z_]+ artifact is being built/.test(routeText) ||
-    /artifact strategy:\s*(?!none\b)\S+/.test(routeText) ||
-    /<artifact_here\s*\/>/.test(routeText)
   const learningSignal =
     /\b(explain|teach me|how does|how do .* work|what is|take me from 0 to 1|game plan|where do i start|break this down|help me understand|walk me through|how do i learn|what should i know|framework|curriculum|roadmap|learn|concept)\b/.test(combinedText)
   const applicationSignal =
@@ -779,7 +582,6 @@ function getPromptFlags({ session, wikiContext, routeContext, latestUserMessage,
     Boolean(experimentAssignedInSession)
 
   const computed = {
-    includeArtifactRules: artifactTurn,
     includeExperimentRules: activeExperimentCount < 2 && experimentRelevant,
     includeExperimentLimitRules: activeExperimentCount >= 2,
     includePostExperimentRules: Boolean(experimentAssignedInSession),
@@ -791,7 +593,6 @@ function getPromptFlags({ session, wikiContext, routeContext, latestUserMessage,
     includeFullCitationRules: Boolean(wikiContext) || sourceQuestionSignal,
     includeUsefulResistanceRules: resistanceSignal,
     signals: {
-      artifactTurn,
       learningSignal,
       applicationSignal,
       accountabilitySignal,
@@ -809,7 +610,6 @@ function getPromptFlags({ session, wikiContext, routeContext, latestUserMessage,
 
   return {
     ...computed,
-    includeArtifactRules: Boolean(promptControl.includeArtifactRules),
     includeExperimentRules: Boolean(promptControl.includeExperimentRules),
     includeExperimentLimitRules: Boolean(promptControl.includeExperimentLimitRules),
     includePostExperimentRules: Boolean(promptControl.includePostExperimentRules),
@@ -828,7 +628,6 @@ function getPromptFlags({ session, wikiContext, routeContext, latestUserMessage,
 }
 
 function getPromptBudget(flags) {
-  if (flags.includeArtifactRules) return { label: 'artifact turn', target: 45000 }
   if (flags.includeExperimentRules || flags.includeReportRules || flags.includeCancellationRules || flags.includeAccountabilityModeRules) {
     return { label: 'experiment/accountability turn', target: 45000 }
   }
@@ -921,7 +720,7 @@ Before sending, remove anything that could apply to any ambitious founder. The l
 RESPONSE STRUCTURE — ANTI-GENERIC RULE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Default mentor responses follow this shape unless a higher-priority mode, artifact, experiment, source question, or vulnerable moment requires a different shape.
+Default mentor responses follow this shape unless a higher-priority mode, experiment, source question, or vulnerable moment requires a different shape.
 
 HOOK — 1-2 sentences maximum.
 Ground the response in one of:
@@ -953,7 +752,7 @@ HARD LIMITS
 - Maximum 4 short paragraphs outside learning mode and structured outputs.
 - No bullet dumps in normal mentor conversation.
 - No headers in normal mentor conversation.
-- Headers only when the user explicitly asks for structure or an artifact requires it.
+- Headers only when the user explicitly asks for structure.
 - If a response exceeds these limits, cut until it does not.`
 }
 
@@ -1077,115 +876,15 @@ The move: name the avoided bet, name motion protecting them from it, then ask fo
 Do not moralize. Do not use this on normal implementation, bug fixes, or necessary infrastructure. Help them finish real work; resist when work replaces the bet. Do not attach an experiment unless the gate is open and the user has confirmed the read.`
 }
 
-function buildArtifactRules() {
-  return `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ARTIFACT RULES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Normal answer text must never be raw JSON. Never place standalone JSON in the assistant message body.
-
-Artifacts are optional. Use at most one artifact per response, and only when structure makes the answer clearer than prose.
-
-When the system builds a required artifact separately, the main answer should contain prose only. If placement matters, use <artifact_here/> as a marker. Do not write the artifact payload yourself unless the user explicitly asks for raw JSON.
-
-Artifact tags, when used directly, must follow this shape exactly:
-<artifact type="TYPE_NAME">
-{"key": "value"}
-</artifact>
-
-Available artifact types:
-comparison_table | flow_diagram | mental_model | reasoning_curve | reasoning_cycle | reasoning_pyramid | reasoning_stack | reasoning_wave | behavior_loop | donut_chart | area_chart | bar_chart | animated_chart | quadrant | timeline | spectrum | stat_cards | scatter_plot | radar_chart | choice_card | drag_rank | fill_framework | signal_map | book_ref | key_takeaway
-
-INTERACTIVITY RULE
-Where the artifact type supports it, default to interactive and animated output:
-- animate: true
-- interactive: true
-- user_can_plot_self: true when self-placement is meaningful
-
-PLACEMENT RULES
-- Maximum 1 artifact per message
-- Use <artifact_here/> exactly where the artifact should appear
-- In learning mode, use artifacts only when they materially clarify the concept
-- In accountability/report mode, default to no artifact unless the visual changes how the point lands
-- Never use markdown tables or raw pipe-table syntax in prose
-- Structured thinking should become structured artifacts, not improvised formatting
-
-TYPE SELECTION
-- comparison_table: contrasts, tradeoffs, winners vs losers, value pools, options
-- flow_diagram: process, sequence, chain of events
-- mental_model: compact framework or concept map
-- reasoning_curve: adoption, compounding, phase change, rise/peak/decline
-- reasoning_cycle or behavior_loop: recurring loops and repeated dynamics
-- reasoning_pyramid: dependency hierarchy or layered buildup
-- reasoning_stack: value capture, system layers, ownership layers
-- reasoning_wave: swell, saturation, hype-to-infrastructure, broad cycles
-- quadrant: 2x2 decision or positioning framework
-- timeline: history, roadmap, narrative sequence
-- spectrum: single-axis positioning
-- charts/stat_cards/scatter_plot/radar_chart: numeric, magnitude, distribution, or profile data
-- choice_card/drag_rank/fill_framework: interactive learning moments when choices improve the lesson
-- signal_map: only when routing requires signal_map or the user asks for signals, forecasts, predictions, future effects, what's coming, where things are moving, or a named future horizon
-- book_ref: one source card for a specific book/author passage that grounds the answer
-- key_takeaway: only when the user explicitly asks for distilled takeaways
-
-ARTIFACT DOMAIN QUALITY RULE
-Every artifact must expose a hidden variable the user could not already see from prose. Generic structure is not enough.
-
-For comparison_table, include the domain's real leverage:
-- Company strategy: distribution, switching cost, structural risk
-- Geopolitics: chokepoint, escalation path, binding constraint
-- Personal psychology: trigger, payoff, cost of the pattern
-- Money/investing: downside scenario, leverage point, timing dependency
-
-SIGNAL MAP RULE
-A signal_map is a terrain tool. It should show where power, people, capital, behavior, and attention are moving. Build it from concrete present-tense signals first, then herd movement, gaps, wedges, interpretation, and forecast. Do not create a signal_map for a narrow factual question.
-
-BOOK_REF MINI SCHEMA
-If attaching a book_ref directly, use the standard artifact tag with this payload only:
-{"book":"Title","author":"Name","excerpt":"Specific passage or insight","pillar":"money_game|human_mind|how_companies_win|whats_coming|think_sharper|move_people"}
-
-Color options: money_game | human_mind | how_companies_win | whats_coming | think_sharper | move_people | or any hex color like #7C9EBF`
-}
-
-function buildBookRefRules() {
-  return `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-BOOK REF RULE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-When you reference a specific author, book, or named thinker, reference them naturally in the response body — name the person, the book, and the specific idea.
-
-Attach a book_ref artifact when ANY of these are true:
-- The passage is the clearest way to understand the point
-- The idea is standalone wisdom the user could carry beyond this conversation
-- The source grounds a key claim that lands harder with the actual words
-- It is a foundational text for the concept just taught
-
-Do NOT attach a book_ref when:
-- It is a passing mention or casual name-drop
-- The idea was fully explained in your text and the quote adds nothing
-- You are not certain the exact passage exists — never fabricate an excerpt
-
-Rules:
-- The excerpt must be a specific, substantive passage — not a generic summary
-- A book_ref counts as your one artifact for that message
-- Maximum one per response
-- Never output <book_ref> tags. If you attach a book_ref, use the standard artifact tag exactly:
-<artifact type="book_ref">
-{"book": "Title", "author": "Name", "excerpt": "Specific passage or insight", "pillar": "human_mind"}
-</artifact>`
-}
-
 function buildRouteContract(routeContext = '') {
   const routeText = String(routeContext || '').toLowerCase()
   const isSingle = routeText.includes('single_pillar')
   const isTwo = routeText.includes('two_pillar')
   const isFour = routeText.includes('four_pillar_synthesis')
   const isAll = routeText.includes('all_pillar_synthesis')
-  const hasSignalMap = routeText.includes('signal_map')
 
   const modeContract = isFour
     ? `If the route is four_pillar_synthesis:
-- If the routing block requires signal_map, use the four pillars internally and write only a short integrated setup in prose. Do not write visible pillar headings; the artifact carries the pillar sections.
 - The answer must clearly move through these four lenses in this order:
   1. WHAT'S COMING
   2. HOW COMPANIES WIN
@@ -1193,9 +892,7 @@ function buildRouteContract(routeContext = '') {
   4. THINK SHARPER
 - Each lens must say what matters for the question. Make it user-specific only when Axiom has concrete user context.
 - Notice disagreement between pillars when it exists. Do not smooth over real tension.
-- End by merging the four lenses into one clear conclusion or direction.
-- Follow the artifact strategy in the routing block exactly.
-- If a signal_map artifact is present, keep the prose above it short. Set up the read, then let the artifact do the heavy lifting.`
+- End by merging the four lenses into one clear conclusion or direction.`
     : isAll
       ? `If the route is all_pillar_synthesis:
 - Use all six pillars, but do not force equal space for each one.
@@ -1208,8 +905,7 @@ function buildRouteContract(routeContext = '') {
 - Make both pillars visible in the reasoning.
 - Surface the tension, tradeoff, or contradiction between them.
 - Resolve that tension into one judgment. Convert it into a next move only if concrete user context exists.
-- The answer should still feel like one response, not two mini-essays.
-- Treat the routing block as the authority for artifact shape. Do not invent a different artifact just because it also seems plausible.`
+- The answer should still feel like one response, not two mini-essays.`
         : isSingle
           ? `If the route is single_pillar:
 - Write one coherent answer through the selected pillar only.
@@ -1250,7 +946,7 @@ CLOSING MOVE RULE
 - If the response already contains a concrete experiment or a specific next action, the action is the close.
 
 VISIBLE STRUCTURE RULE
-${hasSignalMap ? '- If the routing block requires signal_map, do not use visible pillar headings in the prose. Write a short read, then let the artifact carry the structure.' : '- Use visible structure only when it makes the route clearer.'}
+- Use visible structure only when it makes the route clearer.
 - Do not use sterile report language.
 - The structure should help the user feel the shift in lens, not feel like a template.`
 }
@@ -1337,7 +1033,6 @@ export function buildSystemPrompt(session, wikiContext, personalMemoryContext = 
     ? `PROMPT CONTROL — CODE-RESOLVED DECISIONS:
 Response mode: ${promptControl.responseMode}
 Route mode: ${promptControl.routeMode}
-Artifact required: ${promptControl.requiredArtifactType || 'none'}
 Active experiments: ${promptControl.activeExperimentCount}/2
 Experiment assignment: ${promptControl.canAssignExperiment ? 'allowed' : `blocked (${promptControl.experimentBlockReason || 'not_applicable'})`}
 Absorbed concepts available: ${promptControl.totalAbsorbedConceptCount || 0}
@@ -1398,8 +1093,6 @@ An experiment is already active in this thread. If the current topic raises its 
     profileRules: buildProfileRules(),
     usefulResistance: promptFlags.includeUsefulResistanceRules ? buildUsefulResistanceRules() : '',
     learningState: learningStateContext,
-    artifactRules: promptFlags.includeArtifactRules ? buildArtifactRules() : '',
-    bookRefRules: promptFlags.includeArtifactRules ? buildBookRefRules() : '',
   }
 
   const prompt = `You are Axiom. A mentor built for ambitious founders and builders aged 18-28.
@@ -1445,9 +1138,8 @@ Apply rules in this order. A lower rule never overrides a higher rule.
 3. Active experiment limit: never assign a third active experiment.
 4. Session mode: learning, accountability, or report.
 5. Routing and RAG: choose the pillar lens and use retrieved sources when relevant.
-6. Artifact choice: use visuals only when they clarify the job of the response.
-7. Experiment assignment: assign only when the experiment gate is open.
-8. Voice rules.
+6. Experiment assignment: assign only when the experiment gate is open.
+7. Voice rules.
 
 If two rules conflict, obey the higher rule and ignore the lower one for that response.
 
@@ -1618,7 +1310,6 @@ LEARNING MODE VOICE
 - No urgency framing in learning mode. Cost of inaction does not belong here.
 - Challenge through questions, not accusations.
 - Include one concrete real-world example per teaching response — a real case, not a hypothetical.
-- Use artifacts in learning mode only when the concept has shape, sequence, tradeoff, recurrence, or a map that text would flatten. Do not use artifacts to make a normal answer look bigger.
 
 DEAD END HANDLING
 If after 3-4 exchanges Axiom cannot determine whether the user understands, stop probing indirectly. Say: "I can't tell if this landed. Give me an example from your own life where you've seen this play out." Do not move forward until they do.
@@ -1709,11 +1400,6 @@ When giving examples, check personal memory for real people the user has mention
 When you don't have specific people stored yet, ask. One direct question at the right moment: "Who in your life does this well?" or "Do you know someone who's navigated this?" Then store and use going forward. Never ask for this in bulk — one person, one moment, when it's relevant.
 
 When referencing a real person from memory, name the relationship not the name unless the user gave one. Never invent a person who does not exist in the user's memory.
-
-
-${promptModules.artifactRules}
-
-${promptModules.bookRefRules}
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -196,7 +196,7 @@ async function requireAuth(req, res, next) {
 
 const chatRateLimit = rateLimit({
   windowMs: 60 * 1000,
-  // One user message can fan out into query expansion, artifact generation,
+  // One user message can fan out into query expansion, routing,
   // final answer streaming, and memory updates. Keep abuse protection without
   // throttling normal Axiom turns.
   max: 120,

@@ -41,7 +41,7 @@ Branch: `cleanup/remove-old-product`
 - [x] Record baseline source LOC and prompt-character metrics: 20,746 lines across tracked source/script file types (excluding dependencies); 9,472 characters on source lines containing `prompt`/`Prompt`/`PROMPT` (stable lexical proxy for before/after comparison).
 - [x] Replace the metrics above with reproducible ones (session 2). Pre-cleanup reference is commit `10b7217`.
   - LOC: tracked `.js/.jsx/.css/.html/.py` under `src/`, `server/*.js`, `scripts/`, `shared/`, plus `seed.js`, `index.html`, `vite.config.js`. `10b7217`: 23,266. After Stage 1 (`6c2d300`): 22,852.
-  - Prompt size: (a) static prompt text = characters in template literals of 200+ chars in the prompt-bearing files, parsed with `@babel/parser`; (b) assembled `buildSystemPrompt` output for four fixed fixture turns (plain, experiment report, structured request, ghosted history). `10b7217`: static 73,025; assembled 24,877 / 24,018 / 25,492 / 25,186.
+  - Prompt size: (a) static prompt text = characters in template literals of 200+ chars in the prompt-bearing files, parsed with `@babel/parser`; (b) assembled `buildSystemPrompt` output for four fixed fixture turns (plain, experiment report, structured request, ghosted history). `10b7217`: static 73,025; assembled 24,877 / 24,018 / 25,492 / 25,186 (plain / experiment report / structured request / ghosted history); a fifth fixture, artifact turn (route context carries `Required artifact strategy`), added in Stage 3: 30,500.
   - Scripts live in the session scratchpad (`loc.sh`, `prompt_measure.mjs`, `verify.sh`); the method is recorded here so the next session can recreate them.
 - Verification method: backend started with dummy env values (`PORT=3999`, loopback Supabase URLs, dummy keys, `FRONTEND_URL`) so it cannot reach live services; probe `/health`, a removed route (expect 404) and an auth route (expect 401). Frontend: `vite` dev server, fetch `/` and transform each page module.
 
@@ -77,11 +77,14 @@ Branch: `cleanup/remove-old-product`
 
 ## Stage 3: Artifacts
 
-- [ ] Remove artifact routing, builder, renderer, registry, and artifact prompt code.
-- [ ] Strip artifact tags from remaining model output safely.
-- [ ] Remove Recharts only if no remaining runtime imports exist.
-- [ ] Verify installs, build, frontend start, backend start, static searches, and changed code paths.
-- [ ] Commit Stage 3 only.
+- [x] Remove artifact routing, builder, renderer, registry, and artifact prompt code: deleted `ArtifactRenderer.jsx`, `artifactRegistry.js`, `artifacts.js`; removed `generateStructuredArtifact`, `streamStructuredArtifact`, `buildArtifactRules`, `buildBookRefRules`, the artifact prompt flag/budget, "Artifact required" control line, artifact lines in the route contract, precedence list, learning mode and anti-generic rules; Chat artifact plan, build promise, loading preview, interactive answer handlers; MessageBubble `artifactNode`; rag.js `artifact_strategy` field, artifact-only helpers, router-prompt artifact rules and `Required artifact strategy` route line.
+- [x] Strip artifact tags from model output safely: `stripArtifactMarkup` in Chat (complete blocks, unterminated tails, `<artifact_here/>`, `<book_ref>`) runs on streamed display, final parse and saved-message load; MessageBubble `safeContent` stays as a final render-time guard. Replies that contained artifact markup are saved as clean text.
+- [x] Remove Recharts: no remaining imports; uninstalled. `react-is` was only its peer, removal deferred to Stage 5.
+- [x] Remove artifact CSS (52 rules + their keyframes), found with a dead-class analyzer and cross-checked against `fe2e7df`: every removed class was used only by ArtifactRenderer or the artifact loading preview.
+- [x] Verify: build passed (93 modules, JS 1,076 kB -> 536 kB; existing chunk-size warning only); backend/frontend start and probes pass; tag-stripping test on real Chat functions passes 6 cases (saved artifact reply, inline marker, book_ref, partial stream, standalone artifact JSON, plain prose) and an experiment tag next to an artifact block still parses and passes the validator; router returns mode/pillars/rationale only and route context has no artifact line. Chat path: route -> `searchWikiForRoute` (RAG unchanged) -> `formatRouteContext` -> prompt -> stream -> strip/parse -> save. No new browser writes. Prompt: static 51,172; assembled 24,354 / 23,712 / 24,875 / artifact turn 24,489 / 23,800. LOC 14,603.
+  - Behaviour changes to note: current-fact questions always take the prose route (the "unless they ask for a table" exception is gone); query expansion no longer triggers just because a route had an artifact strategy (four/all-pillar routes and source-depth questions still expand).
+  - Kept: `'artifact'` in server `USAGE_CALL_TYPES` (model usage logger is out of scope; DB check constraint lists it).
+- [x] Commit Stage 3 only.
 
 ## Stage 4: Prompts and copy
 

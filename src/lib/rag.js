@@ -60,19 +60,6 @@ const FOUR_PILLAR_STACK = [
   'money_game',
   'think_sharper',
 ]
-const ARTIFACT_STRATEGIES = new Set([
-  'none',
-  'signal_map',
-  'comparison_table',
-  'quadrant',
-  'mental_model',
-  'behavior_loop',
-  'reasoning_cycle',
-  'reasoning_stack',
-  'reasoning_curve',
-  'reasoning_wave',
-  'reasoning_pyramid',
-])
 const CACHE_TTL_MS = 5 * 60 * 1000
 const MAX_CACHE_ENTRIES = 120
 const embeddingCache = new Map()
@@ -122,30 +109,6 @@ function wantsSignalMap(lower = '') {
   return /\b(signal map|map the signals|map this terrain|forecast|prediction|predict|where is .* moving|where are .* moving|what'?s coming|future effects?|future shift|future shifts|next \d+ (months?|years?)|next \d+-\d+ years?|next decade|10-15 years|2030|2035|202[7-9]|where will .* accrue|where does .* accrue|what happens if)\b/.test(lower)
 }
 
-function wantsExplicitArtifact(lower = '') {
-  return /\b(signal map|map this|map the signals|visuali[sz]e|show me visually|table|comparison table|compare in a table|matrix|quadrant|diagram|chart|graph|watchlist|checklist|timeline|stack|ladder|pyramid|curve|loop)\b/.test(lower)
-}
-
-function isPracticalJudgmentTurn(lower = '') {
-  const practicalContext =
-    /\b(my|our|me|i|we|father|brother|family|business|company|customers?|buyers?|suppliers?|cash|collection|collect|credit|payment|accounts|production|selling|market|textile|wholesale)\b/.test(lower)
-  const judgmentAsk =
-    /\b(how long|how possible|possible|what should|how should|can i|can we|tell me|done before|people .* done|examples?|currently|right now|every week|every month|process works)\b/.test(lower)
-
-  return practicalContext && judgmentAsk
-}
-
-function wantsVisualReasoningArtifact(lower = '') {
-  if (isPracticalJudgmentTurn(lower)) return false
-
-  const asksToUnderstandStructure =
-    /\b(i don'?t get|i still don'?t get|confused|help me understand|explain|teach me|how does .* work|how do .* relate|relationship between|moving parts|structure of|framework behind|mental model|break down the structure|map the sequence|sequence from|stages of|layers of)\b/.test(lower)
-  const visualReasoningShape =
-    /\b(relationship|relate|moving parts|structure|sequence|stages|layers|loop|cycle|stack|pyramid|curve|tradeoff|tension| vs |versus|system|mechanism)\b/.test(lower)
-
-  return asksToUnderstandStructure && visualReasoningShape
-}
-
 function isCurrentFactualQuestion(lower = '') {
   return asksForCurrentFacts(lower) || (
     /\b(what should i watch next|watch next)\b/.test(lower) &&
@@ -160,19 +123,16 @@ const QUESTION_SHAPE_RULES = [
     build: () => ({
       mode: 'two_pillar',
       pillars: ['move_people', 'money_game'],
-      artifactStrategy: 'none',
       rationale: 'Revenue/outreach action turn. Combine buyer persuasion with money pressure; keep it concrete and prose-first.',
     }),
   },
   {
     matches: (lower) =>
-      isCurrentFactualQuestion(lower) &&
-      !wantsExplicitArtifact(lower),
+      isCurrentFactualQuestion(lower),
     build: () => ({
       mode: 'two_pillar',
       pillars: ['whats_coming', 'how_companies_win'],
-      artifactStrategy: 'none',
-      rationale: 'Current factual/live query. Answer in prose only unless the user explicitly asks for a visual artifact.',
+      rationale: 'Current factual/live query. Answer in prose only.',
     }),
   },
   {
@@ -183,8 +143,7 @@ const QUESTION_SHAPE_RULES = [
     build: () => ({
       mode: 'single_pillar',
       pillars: ['whats_coming'],
-      artifactStrategy: 'none',
-      rationale: 'Focused future-mechanism question. Explain the specific bottleneck in prose; do not force a signal map.',
+      rationale: 'Focused future-mechanism question. Explain the specific bottleneck in prose.',
     }),
   },
   {
@@ -194,8 +153,7 @@ const QUESTION_SHAPE_RULES = [
     build: () => ({
       mode: 'two_pillar',
       pillars: ['how_companies_win', 'money_game'],
-      artifactStrategy: 'reasoning_stack',
-      rationale: 'Focused structural layer question. Use a stack, not a broad landscape artifact.',
+      rationale: 'Focused structural layer question.',
     }),
   },
   {
@@ -204,7 +162,6 @@ const QUESTION_SHAPE_RULES = [
     build: ({ defaultSingle }) => ({
       mode: 'single_pillar',
       pillars: [defaultSingle === 'human_mind' ? 'money_game' : defaultSingle],
-      artifactStrategy: 'reasoning_cycle',
       rationale: 'Compounding is a recurring mechanism. Show the reinforcing loop directly.',
     }),
   },
@@ -214,8 +171,7 @@ const QUESTION_SHAPE_RULES = [
     build: () => ({
       mode: 'two_pillar',
       pillars: ['human_mind', 'think_sharper'],
-      artifactStrategy: 'behavior_loop',
-      rationale: 'Psychological stuckness is a defensive loop. Use a behavior loop artifact.',
+      rationale: 'Psychological stuckness is a defensive loop.',
     }),
   },
   {
@@ -224,18 +180,16 @@ const QUESTION_SHAPE_RULES = [
     build: () => ({
       mode: 'two_pillar',
       pillars: ['human_mind', 'think_sharper'],
-      artifactStrategy: 'none',
       rationale: 'Commitment and unfinished-motion accountability question. Use human pattern plus decision quality, no router call needed.',
     }),
   },
   {
     matches: (lower) =>
       /\b(hype cycle|rise[, ]+peak[, ]+and decline|rise and decline|adoption curve|s-curve|compounding curve|show me the curve)\b/.test(lower),
-    build: ({ nodePillar, lower }) => ({
+    build: ({ nodePillar }) => ({
       mode: 'single_pillar',
       pillars: [nodePillar || 'think_sharper'],
-      artifactStrategy: /\bhype|wave|swell\b/.test(lower) ? 'reasoning_wave' : 'reasoning_curve',
-      rationale: 'Phase-change question. Use a curve or wave artifact to make the movement visible.',
+      rationale: 'Phase-change question.',
     }),
   },
   {
@@ -244,8 +198,7 @@ const QUESTION_SHAPE_RULES = [
     build: ({ nodePillar }) => ({
       mode: 'single_pillar',
       pillars: [nodePillar || 'how_companies_win'],
-      artifactStrategy: 'reasoning_pyramid',
-      rationale: 'Dependency or hierarchy question. Use a pyramid artifact.',
+      rationale: 'Dependency or hierarchy question.',
     }),
   },
   {
@@ -255,8 +208,7 @@ const QUESTION_SHAPE_RULES = [
     build: () => ({
       mode: 'four_pillar_synthesis',
       pillars: FOUR_PILLAR_STACK,
-      artifactStrategy: 'signal_map',
-      rationale: 'Explicit future / signal / prediction question. Use a full signal map.',
+      rationale: 'Explicit future / signal / prediction question.',
     }),
   },
   {
@@ -265,7 +217,6 @@ const QUESTION_SHAPE_RULES = [
     build: ({ nodePillar }) => ({
       mode: 'two_pillar',
       pillars: nodePillar ? [nodePillar, 'think_sharper'] : ['human_mind', 'money_game'],
-      artifactStrategy: 'comparison_table',
       rationale: 'Tradeoff question. Use a direct comparison.',
     }),
   },
@@ -275,20 +226,16 @@ const QUESTION_SHAPE_RULES = [
     build: () => ({
       mode: 'two_pillar',
       pillars: ['how_companies_win', 'move_people'],
-      artifactStrategy: 'none',
       rationale: 'Early-user retention question. Combine product wedge with user persuasion, no router call needed.',
     }),
   },
   {
     matches: (lower) =>
       /\b(life|career|next 5 years|next five years|who should i become|what should i do with my)\b/.test(lower),
-    build: ({ lower }) => ({
+    build: () => ({
       mode: 'all_pillar_synthesis',
       pillars: ALL_PILLARS,
-      artifactStrategy: wantsSignalMap(lower) ? 'signal_map' : 'none',
-      rationale: wantsSignalMap(lower)
-        ? 'Major future orientation question. Use all pillars and a full synthesis artifact.'
-        : 'Major orientation question. Use all pillars in prose without forcing a future artifact.',
+      rationale: 'Major orientation question. Use all pillars in prose.',
     }),
   },
 ]
@@ -363,48 +310,26 @@ function describeSourceWeight(source = {}) {
   return `${kind} weight: ${weight}`
 }
 
-function normalizeRouterPayload(payload = {}, query = '') {
-  const lower = String(query || '').toLowerCase()
-  const signalMapAllowed = wantsSignalMap(lower)
-  const artifactAllowed = wantsExplicitArtifact(lower) || signalMapAllowed || wantsVisualReasoningArtifact(lower)
-  const currentFactualWithoutArtifactAsk = isCurrentFactualQuestion(lower) && !artifactAllowed
+function normalizeRouterPayload(payload = {}) {
   const requestedMode = ROUTER_MODES.has(payload.mode) ? payload.mode : 'single_pillar'
   let pillars = Array.isArray(payload.pillars)
     ? payload.pillars.filter((pillar) => ALL_PILLARS.includes(pillar))
     : []
-  let artifactStrategy = ARTIFACT_STRATEGIES.has(payload.artifact_strategy) ? payload.artifact_strategy : 'none'
 
   if (requestedMode === 'single_pillar') {
     pillars = [pillars[0] || payload.primary_pillar || 'human_mind'].filter((pillar) => ALL_PILLARS.includes(pillar))
-    artifactStrategy = artifactStrategy === 'none' ? 'none' : artifactStrategy
   } else if (requestedMode === 'two_pillar') {
     pillars = [...new Set(pillars)].slice(0, 2)
     if (pillars.length < 2) pillars = ['human_mind', 'money_game']
-    if (artifactStrategy === 'none') artifactStrategy = 'comparison_table'
   } else if (requestedMode === 'four_pillar_synthesis') {
     pillars = FOUR_PILLAR_STACK
-    if (artifactStrategy === 'none') artifactStrategy = signalMapAllowed ? 'signal_map' : 'none'
   } else if (requestedMode === 'all_pillar_synthesis') {
     pillars = ALL_PILLARS
-    if (artifactStrategy === 'none') artifactStrategy = signalMapAllowed ? 'signal_map' : 'none'
-  }
-
-  if (artifactStrategy === 'signal_map' && !signalMapAllowed) {
-    artifactStrategy = 'none'
-  }
-
-  if (artifactStrategy !== 'none' && !artifactAllowed) {
-    artifactStrategy = 'none'
-  }
-
-  if (currentFactualWithoutArtifactAsk) {
-    artifactStrategy = 'none'
   }
 
   return {
     mode: requestedMode,
     pillars,
-    artifactStrategy,
     rationale: typeof payload.rationale === 'string' ? payload.rationale.trim() : '',
   }
 }
@@ -422,7 +347,6 @@ function fallbackRouteQuestionMode(query, session, nodeContext = null) {
   return {
     mode: 'single_pillar',
     pillars: [nodePillar || weightedPillars[0] || 'human_mind'],
-    artifactStrategy: 'none',
     rationale: 'Default to one pillar for a narrow or local question.',
   }
 }
@@ -463,7 +387,6 @@ Return valid JSON only with this exact shape:
 {
   "mode": "single_pillar|two_pillar|four_pillar_synthesis|all_pillar_synthesis",
   "pillars": ["human_mind|money_game|how_companies_win|whats_coming|think_sharper|move_people"],
-  "artifact_strategy": "none|signal_map|comparison_table|quadrant|mental_model|behavior_loop|reasoning_cycle|reasoning_stack|reasoning_curve|reasoning_wave|reasoning_pyramid",
   "rationale": "short string"
 }
 
@@ -472,10 +395,7 @@ Rules:
 - two_pillar: exactly 2 pillars
 - four_pillar_synthesis: always use ["whats_coming","how_companies_win","money_game","think_sharper"]
 - all_pillar_synthesis: always use all six pillars
-- Use signal_map only when the user explicitly asks about signals, forecasts, predictions, future effects, what's coming, where things are moving, or a named future horizon.
-- For current/latest/recent/news/geopolitics/markets/company-update questions, choose artifact_strategy "none" unless the user explicitly asks for a table, signal map, framework, matrix, watchlist, or other visual/structured artifact.
-- "What should I watch next?" means prose watchpoints, not an artifact. Only create an artifact if the user says "watchlist", "table", "map", "framework", or similar.
-- For focused "tell me about this specific thing" questions, choose single_pillar or two_pillar with artifact_strategy "none" unless the user asks for a visual/map/table/framework.
+- For focused "tell me about this specific thing" questions, choose single_pillar or two_pillar.
 - User context must influence the mode and pillar choice.
 - Choose the smallest mode that can answer the question well.`,
         },
@@ -489,7 +409,7 @@ Selected node: ${nodeContext ? `${nodeContext.label} | pillar: ${nodeContext.pil
         },
       ],
     })
-    return normalizeRouterPayload(parsed, query)
+    return normalizeRouterPayload(parsed)
   }).catch(() => {
     return fallbackRouteQuestionMode(query, session, nodeContext)
   })
@@ -650,14 +570,9 @@ export function formatRouteContext(route, pillarResults = {}) {
   const modeInstructions = {
     single_pillar: 'Answer through one pillar only. Keep the response tight and local. The user layer still applies fully.',
     two_pillar: 'Answer through two pillars. Surface the tension between them, then reconcile it into one judgment. The user layer applies inside both pillars.',
-    four_pillar_synthesis: route.artifactStrategy === 'signal_map'
-      ? 'Use WHAT\'S COMING, HOW COMPANIES WIN, THE MONEY GAME, and THINK SHARPER internally. Keep prose short and integrated; do not print pillar headings because the signal map carries the structure.'
-      : 'Answer through WHAT\'S COMING, HOW COMPANIES WIN, THE MONEY GAME, and THINK SHARPER. Each pillar must be filtered through the user before the synthesis.',
+    four_pillar_synthesis: 'Answer through WHAT\'S COMING, HOW COMPANIES WIN, THE MONEY GAME, and THINK SHARPER. Each pillar must be filtered through the user before the synthesis.',
     all_pillar_synthesis: 'Answer through all six pillars, but weight them by relevance. Do not force equal coverage. Every pillar is filtered through the user.',
   }
-  const artifactInstruction = route.artifactStrategy && route.artifactStrategy !== 'none'
-    ? `Required artifact strategy: ${route.artifactStrategy}`
-    : 'Recommended artifact strategy: none'
   const evidenceLines = (route.pillars || [])
     .map((pillar) => summarisePillarEvidence(pillar, pillarResults[pillar]))
     .join('\n')
@@ -666,7 +581,6 @@ export function formatRouteContext(route, pillarResults = {}) {
 Selected pillars: ${pillarsText}
 Routing rationale: ${route.rationale || 'None provided'}
 Routing instruction: ${modeInstructions[route.mode] || 'Use the selected pillars and keep the user layer active throughout.'}
-${artifactInstruction}
 Per-pillar evidence:
 ${evidenceLines || 'No per-pillar evidence summary available.'}`
 }
