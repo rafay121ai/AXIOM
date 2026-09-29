@@ -10,7 +10,7 @@ const THINK_SHARPER = /\b(mental model|first principles|inversion|second[- ]orde
 
 const MOVE_PEOPLE = /\b(negotiation|persuasion|influence|rhetoric|storytelling|narrative|framing|positioning|sales|closing|objection handling|cold outreach|cold email|pipeline|marketing|copywriting|headline|hook|cta|conversion|funnel|public speaking|presentation|pitch|investor pitch|demo day|leadership|management|hiring|firing|performance review|feedback|culture|team|morale|conflict|trust|psychological safety|social media|viral|content|personal brand|audience|newsletter|pr|press|media|journalist|traction|credibility|body language|tonality|eye contact|charisma|cialdini|dale carnegie|chris voss|andy grove|ben horowitz|jugaad|cricket|ipl|bcci|family business|patriarch|hierarchy|high context|low context|cultural intelligence)\b/i
 
-const LIVE_SEARCH_DOMAINS = [
+const CURRENT_FACT_DOMAINS = [
   MONEY_GAME,
   HUMAN_MIND,
   HOW_COMPANIES_WIN,
@@ -23,18 +23,10 @@ export function isFreshnessAsk(text = '') {
   return /\b(now|today|current|currently|latest|recent|recently|this week|this month|this year|live|news|update|updates|what happened|what (?:is|are) .* doing|what has .* done|how is .* moving)\b/i.test(text)
 }
 
-export function isForecastAsk(text = '') {
-  return /\b(signal|signals|forecast|prediction|predict|next \d+|next \d+-\d+ years?|next decade|202[7-9]|2030|2035|future effects?|what'?s coming)\b/i.test(text)
+export function isCurrentFactDomain(text = '') {
+  return CURRENT_FACT_DOMAINS.some((pattern) => pattern.test(text))
 }
 
-export function isLiveSearchDomain(text = '') {
-  return LIVE_SEARCH_DOMAINS.some((pattern) => pattern.test(text))
-}
-
-export function wantsLiveSearchForText(text = '') {
-  return (isFreshnessAsk(text) || isForecastAsk(text)) && isLiveSearchDomain(text)
-}
-
-export function isCurrentFactualLiveQuestion(text = '') {
-  return isFreshnessAsk(text) && isLiveSearchDomain(text)
+export function isCurrentFactualQuestion(text = '') {
+  return isFreshnessAsk(text) && isCurrentFactDomain(text)
 }

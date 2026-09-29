@@ -2,10 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import MessageBubble from '../components/MessageBubble'
 import ExperimentCard from '../components/ExperimentCard'
-import ArtifactRenderer from '../components/ArtifactRenderer'
 import { clearStoredSessionToken, getStoredSessionToken, supabase } from '../lib/supabase'
-import { openai, CHAT_MODEL, generateEmbedding, generateOpeningMessage, generateNodeOpeningMessage, buildSystemPrompt, getLastPromptDiagnostics } from '../lib/openai'
-import { buildArtifactForResponse, getArtifactBuildSteps, getRequiredArtifactType, humanizeArtifactType } from '../lib/artifacts'
+import { openai, CHAT_MODEL, generateEmbedding, generateOpeningMessage, buildSystemPrompt, getLastPromptDiagnostics } from '../lib/openai'
 import {
   routeQuestionMode,
   searchWikiForRoute,
@@ -15,18 +13,13 @@ import {
   updateConceptStatesAfterResponse,
 } from '../lib/rag'
 import { searchPersonalMemory, formatNamedPatternsContext, formatPersonalMemoryContext, recordExperimentAvoidancePattern, recordExperimentResistancePattern, updatePersonalMemory } from '../lib/personalMemory'
-import { formatLiveSearchContext, liveSearch, shouldUseLiveSearch } from '../lib/liveSearch'
 import { getCachedTurnContext, setCachedTurnContext } from '../lib/sessionTurnContext'
-import { syncPersonalWiki } from '../lib/personalWiki'
 import { ensureConversationThread } from '../lib/conversationThreads'
 import { incrementAppSessionMessagesSent } from '../lib/appSessionTracker'
 import { getApiJson, postApiJson } from '../lib/api'
 import { validateExperimentQuality } from '../lib/experimentQuality'
 
 // ─── Message Tag Parsing ─────────────────────────────────────────────────────
-const ARTIFACT_JSON_KEY_RE = /"(title|topic|core_shift|trend_state|what_is_happening_now|observed_moves|sections|forecast|frameworks|watch_points|source_weighting|confidence|counterforces|for_this_user)"\s*:/
-const SIGNAL_MAP_HEADING_RE = /^(WHAT[’']?S COMING|HOW COMPANIES WIN|THE MONEY GAME|THINK SHARPER)\s*$/gim
-const MAX_SIGNAL_MAP_PROSE_CHARS = 760
 const EXPERIMENT_OUTCOME_CLARIFICATION =
   'What got in the way, was it something outside your control, or did you just not get to it?'
 const EXPERIMENT_CANCEL_REASON_QUESTION = "What's making this one not work?"
@@ -77,58 +70,16 @@ function normalizeExperimentPillarForStorage(pillar) {
   return aliases[normalized] || null
 }
 
-function inferArtifactTypeFromData(data) {
-  if (!data || typeof data !== 'object' || Array.isArray(data)) return null
-  if (
-    data.core_shift ||
-    data.trend_state ||
-    data.what_is_happening_now ||
-    data.observed_moves ||
-    data.forecast ||
-    data.watch_points
-  ) return 'signal_map'
-  if (Array.isArray(data.headers) && Array.isArray(data.rows)) return 'comparison_table'
-  if (Array.isArray(data.steps)) return 'reasoning_cycle'
-  if (Array.isArray(data.layers)) return 'reasoning_stack'
-  if (Array.isArray(data.quadrants)) return 'quadrant'
-  return null
-}
-
-function looksLikeArtifactJson(text = '') {
-  const clean = String(text || '').trim()
-  if (!clean.startsWith('{')) return false
-  return ARTIFACT_JSON_KEY_RE.test(clean)
-}
-
-function findArtifactJsonStart(text = '') {
-  const source = String(text || '')
-  const keyMatch = source.match(ARTIFACT_JSON_KEY_RE)
-  if (!keyMatch || keyMatch.index == null) return -1
-  return source.slice(0, keyMatch.index).lastIndexOf('{')
-}
-
-function parseArtifact(text) {
-  const match = text.match(/<artifact[^>]*type="([^"]+)"[^>]*>([\s\S]*?)<\/artifact>/)
-  if (!match) {
-    const standalone = safeParseJsonText(text)
-    const inferredType = inferArtifactTypeFromData(standalone)
-    if (inferredType) {
-      return { cleanText: '', artifact: { type: inferredType, data: standalone } }
-    }
-
-    return {
-      cleanText: text.replace(/<book_ref>[\s\S]*?<\/book_ref>/g, '').trim(),
-      artifact: null,
-    }
-  }
-
-  const type = match[1]
-  const data = safeParseJsonText(match[2])
-  const cleanText = text.replace(/<artifact[^>]*>[\s\S]*?<\/artifact>/, '').trim()
-
-  if (!data || typeof data !== 'object') return { cleanText, artifact: null }
-
-  return { cleanText, artifact: { type, data } }
+// Artifacts were removed. Older saved replies and stray model output can still
+// carry artifact tags, so drop the markup instead of showing it.
+function stripArtifactMarkup(text = '') {
+  return String(text || '')
+    .replace(/<artifact_here\s*\/>/gi, '')
+    .replace(/<artifact[^>]*>[\s\S]*?<\/artifact>/g, '')
+    .replace(/<artifact[\s\S]*$/, '')
+    .replace(/<book_ref>[\s\S]*?<\/book_ref>/g, '')
+    .replace(/<book_ref[\s\S]*$/, '')
+    .trim()
 }
 
 function parseExperiment(text) {
@@ -155,9 +106,7 @@ function parseExperiment(text) {
 }
 
 function parseMessage(text) {
-  const { cleanText: afterArtifact, artifact } = parseArtifact(text)
-  const { cleanText, experiment } = parseExperiment(afterArtifact)
-  return { cleanText, artifact, experiment }
+  return parseExperiment(stripArtifactMarkup(text))
 }
 
 function stripLeakedStructuredPayload(text = '') {
@@ -166,25 +115,7 @@ function stripLeakedStructuredPayload(text = '') {
 
   const fencedJson = clean
     .replace(/```json[\s\S]*?```/gi, '')
-    .replace(/<artifact[^>]*>[\s\S]*/gi, '')
     .trim()
-
-  if (looksLikeArtifactJson(fencedJson)) {
-    const parsed = safeParseJsonText(fencedJson)
-    const inferredType = inferArtifactTypeFromData(parsed)
-    if (inferredType || !parsed) return ''
-  }
-
-  const artifactJsonStart = findArtifactJsonStart(fencedJson)
-  if (artifactJsonStart >= 0) {
-    const before = fencedJson.slice(0, artifactJsonStart).trim()
-    const candidate = fencedJson.slice(artifactJsonStart).trim()
-    const parsed = safeParseJsonText(candidate)
-    const inferredType = inferArtifactTypeFromData(parsed)
-    if (inferredType || !parsed) {
-      return before
-    }
-  }
 
   const jsonStart = fencedJson.indexOf('{')
   const jsonEnd = fencedJson.lastIndexOf('}')
@@ -202,129 +133,22 @@ function stripLeakedStructuredPayload(text = '') {
   return fencedJson
 }
 
-function tidyProseForArtifact(text = '', artifactType = null) {
-  const clean = stripArtifactHandoffQuestions(text, artifactType)
-  if (artifactType !== 'signal_map' || !clean) return clean
-
-  const hadSignalMapHeadings = SIGNAL_MAP_HEADING_RE.test(clean)
-  SIGNAL_MAP_HEADING_RE.lastIndex = 0
-
-  const withoutHeadings = clean
-    .replace(SIGNAL_MAP_HEADING_RE, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-
-  if (!hadSignalMapHeadings && withoutHeadings.length <= MAX_SIGNAL_MAP_PROSE_CHARS) {
-    return withoutHeadings
-  }
-
-  const paragraphs = withoutHeadings
-    .split(/\n{2,}/)
-    .map(paragraph => paragraph.trim())
-    .filter(Boolean)
-
-  const compact = paragraphs.slice(0, 2).join('\n\n')
-  return completeSentenceExcerpt(compact, MAX_SIGNAL_MAP_PROSE_CHARS)
+function sanitizeVisibleAssistantText(text = '') {
+  return stripLeakedStructuredPayload(stripArtifactMarkup(text))
 }
 
-function stripArtifactHandoffQuestions(text = '', artifactType = null) {
-  const clean = String(text || '').trim()
-  if (!artifactType || !clean) return clean
-
-  return clean
-    .replace(/\bI can (?:turn|make|convert|build) (?:that|this|it) into (?:a |an )?[^.!?]*[.!?](?=\s|$)/gi, '')
-    .replace(/\bI can (?:turn|make|convert|build) (?:a |an )?[^.!?]*(?:but|if)[^.!?]*[.!?](?=\s|$)/gi, '')
-    .replace(/\bDo you want (?:the|this|that)?\s*(?:map|artifact|visual|diagram|table|chart)[^?]*\?/gi, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .replace(/[ \t]{2,}/g, ' ')
-    .trim()
-}
-
-function completeSentenceExcerpt(text = '', maxChars = MAX_SIGNAL_MAP_PROSE_CHARS) {
-  const clean = String(text || '').trim()
-  if (clean.length <= maxChars) return clean
-
-  const boundaryMatches = [...clean.matchAll(/[.!?](?=\s|$)/g)]
-  const lastSafeBoundary = boundaryMatches
-    .map(match => match.index + 1)
-    .filter(index => index <= maxChars)
-    .pop()
-
-  if (lastSafeBoundary && lastSafeBoundary >= Math.min(220, maxChars * 0.45)) {
-    return clean.slice(0, lastSafeBoundary).trim()
-  }
-
-  const firstSentence = boundaryMatches[0]
-  if (firstSentence) return clean.slice(0, firstSentence.index + 1).trim()
-
-  return clean.slice(0, maxChars).replace(/\s+\S*$/, '').trim()
-}
-
-function sanitizeVisibleAssistantText(text = '', artifactType = null) {
-  return tidyProseForArtifact(stripLeakedStructuredPayload(text), artifactType)
-}
-
-function visibleResponseContract(route, artifactType = null, shouldHoldExperiment = false) {
+function visibleResponseContract(shouldHoldExperiment = false) {
   const lines = [
     'VISIBLE RESPONSE CONTRACT:',
     '- Your visible response must be prose only. When you are assigning an experiment, your prose response ends normally, then on a new line you append the experiment tag. The experiment tag is not part of the visible response. It is a structured output appended after your prose. Never put JSON in your prose. Always put it in the tag.',
+    '- Do not output markdown tables, JSON, or a structured visual block.',
   ]
-
-  if (artifactType) {
-    lines.push(`- A separate ${artifactType} artifact is being built by the app. Do not write the artifact yourself.`)
-    lines.push('- Do not duplicate artifact sections in prose. The prose should set up the artifact, not repeat it.')
-    lines.push('- Do not ask whether to build the artifact, promise to build it later, or ask for a narrowing choice before it appears. Use the latest user message and conversation context as the scope.')
-  } else {
-    lines.push('- No artifact is being built for this turn. Do not output artifact tags, markdown tables, JSON, or a structured visual block.')
-  }
-
-  if (artifactType === 'signal_map') {
-    lines.push('- For signal_map turns, write 1-2 compact paragraphs only.')
-    lines.push('- Do not print the headings WHAT\'S COMING, HOW COMPANIES WIN, THE MONEY GAME, or THINK SHARPER in the visible answer.')
-    lines.push('- Do not list the forecast, framework, watch points, observed moves, or pillar cards in prose.')
-  }
 
   if (shouldHoldExperiment) {
     lines.push('- The user already has two active experiments. Do not assign another experiment or experiment-shaped checklist.')
   }
 
   return lines.join('\n')
-}
-
-function shouldHaveArtifact(text) {
-  return hasExplicitArtifactRequest(text) || suggestsVisualReasoningArtifact(text)
-}
-
-const EXPLICIT_ARTIFACT_REQUEST_RE =
-  /\b(signal map|map this|artifact|visual|diagram|chart|graph|table|comparison table|compare in a table|matrix|watchlist|checklist|timeline|quadrant)\b/i
-
-const EXPLICIT_SIGNAL_MAP_REQUEST_RE =
-  /\b(signal map|map this|forecast|prediction|predict|what(?:'s| is) coming|future|2027|2028|2030|next \d+|opportunit(?:y|ies)|where .* moving|current signals|watch points|trend)\b/i
-
-function hasExplicitArtifactRequest(text = '') {
-  return EXPLICIT_ARTIFACT_REQUEST_RE.test(String(text || ''))
-}
-
-function isPracticalJudgmentTurn(text = '') {
-  const clean = String(text || '').toLowerCase()
-  const practicalContext =
-    /\b(my|our|me|i|we|father|brother|family|business|company|customers?|buyers?|suppliers?|cash|collection|collect|credit|payment|accounts|production|selling|market|textile|wholesale)\b/.test(clean)
-  const judgmentAsk =
-    /\b(how long|how possible|possible|what should|how should|can i|can we|tell me|done before|people .* done|examples?|currently|right now|every week|every month|process works)\b/.test(clean)
-
-  return practicalContext && judgmentAsk
-}
-
-function suggestsVisualReasoningArtifact(text = '') {
-  const clean = String(text || '').toLowerCase()
-  if (isPracticalJudgmentTurn(clean)) return false
-
-  const asksToUnderstandStructure =
-    /\b(i don'?t get|i still don'?t get|confused|help me understand|explain|teach me|how does .* work|how do .* relate|relationship between|moving parts|structure of|framework behind|mental model|break down the structure|map the sequence|sequence from|stages of|layers of)\b/.test(clean)
-  const visualReasoningShape =
-    /\b(relationship|relate|moving parts|structure|sequence|stages|layers|loop|cycle|stack|pyramid|curve|tradeoff|tension| vs |versus|system|mechanism)\b/.test(clean)
-
-  return asksToUnderstandStructure && visualReasoningShape
 }
 
 function asksForExperimentOrApplication(text = '') {
@@ -347,121 +171,9 @@ function shouldAllowQueryExpansionForTurn(text = '', route = null) {
     /\b(sources?|cite|citation|book|essay|paper|study|case study|examples?|framework|mental model|teach|explain|what is|how does|why does|research|evidence|where did|current|latest|recent|news|forecast|prediction|what'?s coming|signals?)\b/.test(clean)
   const routeNeedsDepth =
     route?.mode === 'four_pillar_synthesis' ||
-    route?.mode === 'all_pillar_synthesis' ||
-    Boolean(getRequiredArtifactType(route))
+    route?.mode === 'all_pillar_synthesis'
 
   return explicitSourceDepth || routeNeedsDepth
-}
-
-function explicitArtifactTypeForText(text = '') {
-  const clean = String(text || '').toLowerCase()
-  if (EXPLICIT_SIGNAL_MAP_REQUEST_RE.test(clean)) return 'signal_map'
-  if (/\b(table|comparison table|compare in a table|matrix)\b/.test(clean)) return 'comparison_table'
-  if (/\b(loop|cycle)\b/.test(clean)) return 'reasoning_cycle'
-  if (/\b(stack|layer|layers|ladder)\b/.test(clean)) return 'reasoning_stack'
-  if (/\b(pyramid|hierarchy|hierarchical)\b/.test(clean)) return 'reasoning_pyramid'
-  if (/\b(curve|s-curve|adoption curve|phase shift|inflection)\b/.test(clean)) return 'reasoning_curve'
-  if (/\b(wave|hype cycle|swell|crest)\b/.test(clean)) return 'reasoning_wave'
-  return null
-}
-
-function withRouteArtifactStrategy(route, artifactStrategy, reason) {
-  const baseRoute = route || {
-    mode: 'single_pillar',
-    pillars: ['human_mind'],
-    artifactStrategy: 'none',
-    rationale: '',
-  }
-
-  return {
-    ...baseRoute,
-    artifactStrategy,
-    rationale: [baseRoute.rationale, reason].filter(Boolean).join(' '),
-  }
-}
-
-function resolveTurnResponsePlan({
-  text = '',
-  route = null,
-  cachedTurnContext = null,
-  groundedSourceCount = 0,
-  activeExperimentCount = 0,
-}) {
-  const cacheHit = cachedTurnContext?.cacheHit || null
-  const explicitArtifactRequest = hasExplicitArtifactRequest(text)
-  const visualReasoningArtifact = suggestsVisualReasoningArtifact(text)
-  const artifactAllowed = explicitArtifactRequest || visualReasoningArtifact
-  const explicitSignalMapRequest = EXPLICIT_SIGNAL_MAP_REQUEST_RE.test(String(text || ''))
-  const explicitArtifactType = explicitArtifactTypeForText(text)
-  const shouldHoldExperiment = activeExperimentCount >= 2 && asksForExperimentOrApplication(text)
-
-  let effectiveRoute = route
-  let requiredArtifactType = getRequiredArtifactType(route)
-
-  if (requiredArtifactType && !artifactAllowed) {
-    effectiveRoute = withRouteArtifactStrategy(
-      effectiveRoute,
-      'none',
-      'Artifacts require either an explicit request or a clear visual-reasoning need, so answer in prose.'
-    )
-    requiredArtifactType = null
-  }
-
-  if (cacheHit === 'follow_up' && artifactAllowed && explicitArtifactType && requiredArtifactType !== explicitArtifactType) {
-    effectiveRoute = withRouteArtifactStrategy(
-      effectiveRoute,
-      explicitArtifactType,
-      'Short follow-up explicitly requested a visual, so use the requested artifact instead of the inherited strategy.'
-    )
-    requiredArtifactType = explicitArtifactType
-  }
-
-  const inheritedSignalMapWithoutAsk =
-    cacheHit === 'follow_up' &&
-    requiredArtifactType === 'signal_map' &&
-    !explicitSignalMapRequest
-
-  const inheritedArtifactWithoutAsk =
-    cacheHit === 'follow_up' &&
-    requiredArtifactType &&
-    !artifactAllowed
-
-  if (inheritedSignalMapWithoutAsk || inheritedArtifactWithoutAsk) {
-    effectiveRoute = withRouteArtifactStrategy(
-      effectiveRoute,
-      'none',
-      'Short follow-up should preserve continuity in prose without inheriting the previous artifact.'
-    )
-    requiredArtifactType = null
-  }
-
-  if (
-    requiredArtifactType === 'signal_map' &&
-    needsCurrentSourceGrounding(text) &&
-    groundedSourceCount === 0
-  ) {
-    effectiveRoute = withRouteArtifactStrategy(
-      effectiveRoute,
-      'none',
-      'Source-thin current affairs should stay prose-first.'
-    )
-    requiredArtifactType = null
-  }
-
-  if (shouldHoldExperiment && requiredArtifactType) {
-    effectiveRoute = withRouteArtifactStrategy(
-      effectiveRoute,
-      'none',
-      'The active experiment limit is full, so this turn should not build an experiment-shaped artifact.'
-    )
-    requiredArtifactType = null
-  }
-
-  return {
-    effectiveRoute,
-    requiredArtifactType,
-    shouldHoldExperiment,
-  }
 }
 
 function classifyPromptResponseMode({
@@ -483,7 +195,7 @@ function classifyPromptResponseMode({
 
   if (session?.unresolved_experiment || reportSignal) return 'report'
   if (inExperimentMode || cancelSignal) return 'experiment_negotiation'
-  if (accountabilitySignal || applicationSignal || Number(session?.warning_level || 0) > 0) return 'accountability'
+  if (accountabilitySignal || applicationSignal) return 'accountability'
   if (learningSignal) return 'learning'
   if (activeExperimentCount > 0) return 'continuity'
   return 'terrain'
@@ -492,14 +204,12 @@ function classifyPromptResponseMode({
 function resolvePromptControl({
   text = '',
   session = {},
-  effectiveRoute = null,
-  requiredArtifactType = null,
+  route = null,
   shouldHoldExperiment = false,
   activeExperimentCount = 0,
   experimentAssignedInSession = false,
   concepts = [],
   historicalAbsorbedConceptCount = 0,
-  hasLiveWebContext = false,
   inExperimentMode = false,
   retrievalConfidence = null,
 } = {}) {
@@ -536,7 +246,7 @@ function resolvePromptControl({
     /\b(rag|maps?|prompt rewrites?|frameworks?|research|right people|audience|more sources?|more context|another build|build loop|tuning)\b/i.test(text)
 
   return {
-    routeMode: effectiveRoute?.mode || 'single_pillar',
+    routeMode: route?.mode || 'single_pillar',
     responseMode,
     activeExperimentCount,
     currentAbsorbedConceptCount: currentAbsorbedCount,
@@ -546,8 +256,6 @@ function resolvePromptControl({
     canAssignExperiment,
     experimentBlockReason,
     shouldHoldExperiment,
-    requiredArtifactType,
-    includeArtifactRules: Boolean(requiredArtifactType),
     includeExperimentRules: canAssignExperiment,
     includeExperimentLimitRules: activeLimitReached,
     includeLearningGateRules: experimentBlockReason === 'no_absorbed_concept',
@@ -558,16 +266,8 @@ function resolvePromptControl({
     includeReportRules: responseMode === 'report',
     includeCancellationRules: responseMode === 'experiment_negotiation',
     includeUsefulResistanceRules: usefulResistanceSignal,
-    includeFullCitationRules: Boolean(wantsSources || hasLiveWebContext || retrievalConfidence >= 0.3),
-    includeLiveCurrentRules: Boolean(hasLiveWebContext),
+    includeFullCitationRules: Boolean(wantsSources || retrievalConfidence >= 0.3),
   }
-}
-
-function needsCurrentSourceGrounding(text = '') {
-  const lower = String(text || '').toLowerCase()
-  const currentAffairs = /\b(geopolitics|geopolitical|us[- ]china|china|united states|america|beijing|washington|tariff|sanction|export control|semiconductor controls|taiwan|war|military|election|policy|regulation|diplomacy)\b/.test(lower)
-  const liveFrame = /\b(doing|now|today|current|currently|recent|recently|latest|this year|next 12 months|next year)\b/.test(lower)
-  return currentAffairs && liveFrame
 }
 
 function looksLikeExperimentCompletion(text = '') {
@@ -683,7 +383,6 @@ function shouldRunMemoryUpdate(userText = '', assistantText = '', options = {}) 
   const wordCount = user.split(/\s+/).filter(Boolean).length
   const importantTurn =
     Boolean(options.experiment) ||
-    Boolean(options.nodeContext?.id) ||
     looksLikeExperimentCompletion(user) ||
     looksLikeExperimentCancel(user) ||
     /\b(i decided|we decided|decided to|my goal|new goal|i want to|i need to|we need to|i prefer|my preference|from now on|i'?m going to|i am going to)\b/i.test(user)
@@ -698,14 +397,6 @@ function shouldRunMemoryUpdate(userText = '', assistantText = '', options = {}) 
   }
 
   return { run: false, reason: 'cadence_throttled' }
-}
-
-function artifactLooksLikeExperiment(artifact) {
-  if (!artifact?.data) return false
-  const title = String(artifact.data.title || artifact.data.label || '').toLowerCase()
-  const serialized = JSON.stringify(artifact.data).toLowerCase()
-  return /\b(today'?s experiment|experiment|real-world application|apply this today)\b/.test(title) ||
-    /\b(today'?s experiment|window_hours|bring back|what to notice|success condition)\b/.test(serialized)
 }
 
 function hasConcreteIncident(text = '') {
@@ -765,37 +456,19 @@ function firstPersonIncidentQuestion(text = '') {
   return null
 }
 
-function auditArtifact(userText, assistantText, artifact) {
-  if (!import.meta.env.DEV) return
-  if (!shouldHaveArtifact(userText)) return
-  if (!artifact) return
-}
-
 // Strip tag blocks from streaming display — tags are invisible while generating,
 // then resolved into rendered components once the stream ends.
 // The two-regex pattern per tag type handles both cases:
 //   1. Complete tag already in the buffer (lazy match to avoid over-consuming)
 //   2. Partial tag still arriving — catches from <tag to end of string before > lands
-function stripForDisplay(text, artifactType = null) {
-  return sanitizeVisibleAssistantText(text, artifactType)
-    .replace(/<artifact[^>]*>[\s\S]*?<\/artifact>/g, '')
-    .replace(/<artifact[\s\S]*$/, '')
-    .replace(/<book_ref>[\s\S]*?<\/book_ref>/g, '')
-    .replace(/<book_ref[\s\S]*$/, '')
+function stripForDisplay(text) {
+  return sanitizeVisibleAssistantText(text)
     .replace(/<experiment>[\s\S]*?<\/experiment>/g, '')
     .replace(/<experiment[\s\S]*$/, '')
     .replace(/\[JAILBREAK_REDIRECT\]\s*$/g, '')
     .trim()
 }
 
-function warningLevelForCounts(ghostCount = 0, consecutiveMissCount = 0, currentLevel = 0) {
-  if (ghostCount >= 4 || consecutiveMissCount >= 5) return Math.max(currentLevel, 2)
-  if (ghostCount >= 2 || consecutiveMissCount >= 3) return Math.max(currentLevel, 1)
-  return currentLevel
-}
-
-// ─── Ghosting Check ──────────────────────────────────────────────────────────
-// Returns updated session if warning_level needs to change, otherwise null.
 function normalizeExperiment(row) {
   return {
     id: row.id,
@@ -855,10 +528,7 @@ function getUnresolvedExperiment(experiments, messages) {
 
 async function checkAndUpdateGhosting(session) {
   const now = Date.now()
-  const experiments = session.active_experiments || []
-  let ghost_count = session.ghost_count || 0
-  let consecutive_miss_count = session.consecutive_miss_count || 0
-  let warning_level = session.warning_level || 0
+  const experiments = session.experiments || []
   let changed = false
   const rowUpdates = []
 
@@ -872,8 +542,6 @@ async function checkAndUpdateGhosting(session) {
 
     if (!expired) return exp
 
-    ghost_count++           // lifetime total, kept for analytics
-    consecutive_miss_count++ // consecutive streak, drives warning thresholds
     changed = true
 
     const ghostedAt = new Date().toISOString()
@@ -882,12 +550,6 @@ async function checkAndUpdateGhosting(session) {
     return updated
 
   })
-
-  const thresholdWarningLevel = warningLevelForCounts(ghost_count, consecutive_miss_count, warning_level)
-  if (thresholdWarningLevel !== warning_level) {
-    warning_level = thresholdWarningLevel
-    changed = true
-  }
 
   if (!changed) return session
 
@@ -905,33 +567,22 @@ async function checkAndUpdateGhosting(session) {
       )
   )
 
-  const updates = {
-    ghost_count,
-    consecutive_miss_count,
-    warning_level,
-  }
-
-  const { error: sessionUpdateError } = await supabase.from('sessions').update(updates).eq('id', session.id)
-  if (sessionUpdateError) console.error('Failed to update session ghost counts', { error: sessionUpdateError, session_id: session.id })
-
-  return { ...session, ...updates, active_experiments: updatedExperiments }
+  return { ...session, experiments: updatedExperiments }
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 export default function Chat() {
   const navigate = useNavigate()
   const location = useLocation()
-  const nodeContext = location.state?.nodeContext || null
   const initialInput = location.state?.initialInput || ''
   const threadId = location.state?.threadId || null
   const isTouchDevice = window.matchMedia('(pointer: coarse)').matches
   const freshThread = Boolean(location.state?.freshThread)
   const autoSend = Boolean(location.state?.autoSend)
   const skipOpening = Boolean(location.state?.skipOpening)
-  const pulseNodeEntry = Boolean(location.state?.pulseNodeEntry)
 
   const [session, setSession] = useState(null)
-  const [messages, setMessages] = useState([])  // { id, role, content, streaming, experiment, artifactPendingType }
+  const [messages, setMessages] = useState([])  // { id, role, content, streaming, experiment }
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [editingMessageId, setEditingMessageId] = useState(null)
@@ -965,7 +616,7 @@ export default function Chat() {
 
   const clearTransientRouteState = useCallback(() => {
     const state = location.state || {}
-    if (!('autoSend' in state) && !('initialInput' in state) && !('freshThread' in state) && !('skipOpening' in state) && !('pulseNodeEntry' in state)) {
+    if (!('autoSend' in state) && !('initialInput' in state) && !('freshThread' in state) && !('skipOpening' in state)) {
       return
     }
 
@@ -977,7 +628,6 @@ export default function Chat() {
         initialInput: '',
         freshThread: false,
         skipOpening: false,
-        pulseNodeEntry: false,
       },
     })
   }, [location.pathname, location.state, navigate])
@@ -1045,7 +695,7 @@ export default function Chat() {
     const tableExperiments = await fetchSessionExperiments(sessionData.id)
     const hydratedSession = {
       ...sessionData,
-      active_experiments: tableExperiments || sessionData.active_experiments || [],
+      experiments: tableExperiments || [],
     }
 
     // Check and update ghosting state
@@ -1057,13 +707,13 @@ export default function Chat() {
 	        threadId,
 	        userId: user.id,
 	        sessionId: updatedSession.id,
-	        title: initialInput || nodeContext?.label || 'Branch thread',
-	        primaryPillar: nodeContext?.pillar || null,
+	        title: initialInput || 'Conversation',
+	        primaryPillar: null,
 	      })
 	    }
 
-	    // Fetch only the active thread. Default chat uses null thread_id; node taps
-    // create their own thread_id so they do not inherit the old transcript.
+	    // Fetch only the active thread. Default chat uses null thread_id; each
+    // conversation opened from Home has its own thread_id.
     let messagesQuery = supabase
       .from('messages')
       .select('*')
@@ -1108,9 +758,7 @@ export default function Chat() {
     // load the saved conversation from the first personalized message without
     // generating another assistant response.
     if (isNew && skipOpening) {
-      // Brain input is a fresh intent. Let the user's first message lead.
-    } else if (isNew && nodeContext) {
-      await streamNodeOpeningMessage(sessionWithContext, nodeContext, pulseNodeEntry)
+      // Home input is a fresh intent. Let the user's first message lead.
     } else if (isNew) {
       await streamOpeningMessage(sessionWithContext)
     }
@@ -1145,8 +793,9 @@ export default function Chat() {
   }, [autoSend, clearTransientRouteState, initialInput, loading, messages.length, session])
 
   function normalizeMsg(m) {
-    const { cleanText, artifact, experiment } = parseMessage(m.content || '')
-    return { ...m, content: cleanText, artifact: artifact || null, experiment: experiment || null }
+    const { cleanText, experiment } = parseMessage(m.content || '')
+    const content = m.role === 'assistant' ? stripLeakedStructuredPayload(cleanText) : cleanText
+    return { ...m, content, experiment: experiment || null }
   }
 
   // ── Opening Message (new sessions only) ──────────────────────────────────
@@ -1170,7 +819,7 @@ export default function Chat() {
     const msgId = crypto.randomUUID()
     setMessages((prev) => [
       ...prev,
-      { id: msgId, role: 'assistant', content: '', streaming: true, experiment: null, artifactPendingType: null },
+      { id: msgId, role: 'assistant', content: '', streaming: true, experiment: null },
     ])
 
     try {
@@ -1181,27 +830,6 @@ export default function Chat() {
         prev.map((m) =>
           m.id === msgId
             ? { ...m, content: 'Something went wrong connecting to Axiom.', streaming: false }
-            : m
-        )
-      )
-    }
-  }
-
-  async function streamNodeOpeningMessage(sess, node, isPulseEntry = false) {
-    const msgId = crypto.randomUUID()
-    setMessages((prev) => [
-      ...prev,
-      { id: msgId, role: 'assistant', content: '', streaming: true, experiment: null, artifactPendingType: null },
-    ])
-
-    try {
-      const content = await generateNodeOpeningMessage(sess, node, isPulseEntry)
-      await saveAssistantOpening(sess, msgId, content)
-    } catch {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === msgId
-            ? { ...m, content: 'This node needs one clean input from you before Axiom can work it properly.', streaming: false }
             : m
         )
       )
@@ -1278,16 +906,14 @@ export default function Chat() {
         content: '',
         streaming: true,
         status: null,
-        artifact: null,
         experiment: null,
-        artifactPendingType: null,
       }
 
       if (reuseUserMessage) return [...withoutReplacement, assistantPlaceholder]
 
       return [
         ...withoutReplacement,
-        { id: userMsgId, role: 'user', content: text, artifact: null, experiment: null },
+        { id: userMsgId, role: 'user', content: text, experiment: null },
         assistantPlaceholder,
       ]
     })
@@ -1329,11 +955,7 @@ export default function Chat() {
         }
       }
 
-      const turnCacheScope = nodeContext?.id
-        ? `node:${nodeContext.id}`
-        : nodeContext?.pillar
-          ? `pillar:${nodeContext.pillar}`
-          : 'chat'
+      const turnCacheScope = 'chat'
       const cachedTurnContext = getCachedTurnContext(session.id, text, turnCacheScope)
       let queryEmbeddingPromise = null
       const getQueryEmbedding = () => {
@@ -1370,7 +992,7 @@ export default function Chat() {
             ...session,
             unresolved_experiment: unresolvedExperimentRef.current,
             experiment_negotiation: experimentNegotiationRef.current,
-          }, nodeContext))
+          }))
         .then((value) => ({ ok: true, value }))
         .catch((error) => ({ ok: false, error }))
       const personalMemoriesPromise = (Array.isArray(cachedTurnContext?.personalMemories)
@@ -1391,7 +1013,7 @@ export default function Chat() {
       })
       let sessionForTurn = {
         ...session,
-        active_experiments: latestExperiments || session.active_experiments || [],
+        experiments: latestExperiments || session.experiments || [],
         unresolved_experiment: unresolvedExperimentRef.current,
         experiment_negotiation: experimentNegotiationRef.current,
       }
@@ -1414,7 +1036,7 @@ export default function Chat() {
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsgId
-              ? { ...m, content: immediateAssistantText, streaming: false, artifact: null, experiment: null, artifactPendingType: null }
+              ? { ...m, content: immediateAssistantText, streaming: false, experiment: null }
               : m
           )
         )
@@ -1464,7 +1086,7 @@ export default function Chat() {
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsgId
-              ? { ...m, content: incidentQuestion, streaming: false, artifact: null, experiment: null, artifactPendingType: null }
+              ? { ...m, content: incidentQuestion, streaming: false, experiment: null }
               : m
           )
         )
@@ -1521,10 +1143,6 @@ export default function Chat() {
       let wikiContext = typeof cachedTurnContext?.wikiContext === 'string'
         ? cachedTurnContext.wikiContext
         : null
-      let liveSearchContext = typeof cachedTurnContext?.liveSearchContext === 'string'
-        ? cachedTurnContext.liveSearchContext
-        : ''
-
       if (!route || !personalMemories) {
         const [freshRouteResult, freshPersonalMemoriesResult] = await Promise.all([
           routePromise,
@@ -1539,14 +1157,12 @@ export default function Chat() {
       }
       markLatency('preflight:route_and_memory_ready', {
         routeMode: route?.mode,
-        artifactStrategy: route?.artifactStrategy || route?.artifact_strategy,
         memoryCount: personalMemories?.length || 0,
       })
       ragTimingOptions.allowQueryExpansion = shouldAllowQueryExpansionForTurn(text, route)
       markLatency('rag:query_expansion_policy', {
         allowed: ragTimingOptions.allowQueryExpansion,
         routeMode: route?.mode,
-        artifactStrategy: route?.artifactStrategy || route?.artifact_strategy,
       })
 
       if (!chunks || !sources || !concepts || retrievalConfidence === null || !pillarResults || wikiContext === null || learningStateContext === null) {
@@ -1584,35 +1200,6 @@ export default function Chat() {
         })
       }
 
-      const routedArtifactType = getRequiredArtifactType(route)
-      let liveSearchAttempted = false
-      if (!liveSearchContext && shouldUseLiveSearch({
-        text,
-        retrievalConfidence,
-        sourceCount: sources.length,
-        requiredArtifactType: routedArtifactType,
-      })) {
-        liveSearchAttempted = true
-        try {
-          const livePayload = await liveSearch(text, { numResults: 5 })
-          liveSearchContext = formatLiveSearchContext(livePayload)
-          markLatency('live_search:ready', {
-            hasContext: Boolean(liveSearchContext),
-          })
-        } catch (error) {
-          markLatency('live_search:failed', {
-            message: error?.message || 'unknown',
-          })
-        }
-      }
-      if (!liveSearchAttempted) {
-        markLatency('live_search:skipped', {
-          retrievalConfidence,
-          sourceCount: sources.length,
-          requiredArtifactType: routedArtifactType,
-        })
-      }
-
       if (!cachedTurnContext) {
         setCachedTurnContext(sessionForTurn.id, text, {
           route,
@@ -1625,33 +1212,20 @@ export default function Chat() {
           pillarResults,
           wikiContext,
           learningStateContext,
-          liveSearchContext,
         }, turnCacheScope)
       }
-      const combinedWikiContext = [wikiContext, liveSearchContext].filter(Boolean).join('\n\n')
-      const groundedSourceCount = sources.length + (liveSearchContext ? 1 : 0)
-      const activeExperimentCount = (sessionForTurn.active_experiments || []).filter((e) => e.status === 'active').length
-      const {
-        effectiveRoute,
-        requiredArtifactType,
-        shouldHoldExperiment,
-      } = resolveTurnResponsePlan({
-        text,
-        route,
-        cachedTurnContext,
-        groundedSourceCount,
-        activeExperimentCount,
-      })
+      const combinedWikiContext = wikiContext
+      const activeExperimentCount = (sessionForTurn.experiments || []).filter((e) => e.status === 'active').length
+      const shouldHoldExperiment = activeExperimentCount >= 2 && asksForExperimentOrApplication(text)
       markLatency('response_plan:resolved', {
-        requiredArtifactType,
         shouldHoldExperiment,
         activeExperimentCount,
       })
-      const artifactRouteContext = formatRouteContext(effectiveRoute, pillarResults)
+      const routeModeContext = formatRouteContext(route, pillarResults)
       const continuityContext = cachedTurnContext?.cacheHit
         ? `Conversation continuity: this turn is reusing ${cachedTurnContext.cacheHit === 'follow_up' ? 'the previous turn context for a short follow-up' : 'cached context for the same query'}. Treat it as the same terrain unless the user clearly changed topic. Do not restart from first principles. Signal continuity through smooth prose only, not labels or meta-language.`
         : ''
-      const activeExpsForCheckin = (sessionForTurn.active_experiments || []).filter((e) => e.status === 'active')
+      const activeExpsForCheckin = (sessionForTurn.experiments || []).filter((e) => e.status === 'active')
       const inExperimentMode =
         experimentNegotiationRef.current !== null ||
         isAwaitingExperimentOutcomeClarification(baseMessages) ||
@@ -1668,30 +1242,23 @@ export default function Chat() {
       const promptControl = resolvePromptControl({
         text,
         session: sessionForTurn,
-        effectiveRoute,
-        requiredArtifactType,
+        route,
         shouldHoldExperiment,
         activeExperimentCount,
         experimentAssignedInSession,
         concepts,
         historicalAbsorbedConceptCount,
-        hasLiveWebContext: Boolean(liveSearchContext),
         inExperimentMode,
         retrievalConfidence,
       })
 
       const routeContext = [
         checkinContext,
-        artifactRouteContext,
+        routeModeContext,
         continuityContext,
-        visibleResponseContract(effectiveRoute, requiredArtifactType, shouldHoldExperiment),
+        visibleResponseContract(shouldHoldExperiment),
       ].filter(Boolean).join('\n\n')
-      const graphContext = nodeContext
-        ? `Selected Founder Brain node: ${nodeContext.label} | type: ${nodeContext.type} | pillar: ${nodeContext.pillar || 'unmapped'} | read: ${nodeContext.summary || 'No node summary yet.'}`
-        : ''
-      const personalMemoryContext = [graphContext, formatPersonalMemoryContext(personalMemories)]
-        .filter(Boolean)
-        .join('\n')
+      const personalMemoryContext = formatPersonalMemoryContext(personalMemories)
       const namedPatternsContext = formatNamedPatternsContext(personalMemories)
 
       // Build conversation history for OpenAI (last 10 msgs, exclude the placeholder).
@@ -1743,50 +1310,8 @@ export default function Chat() {
       const runAbort = new AbortController()
       abortControllerRef.current = runAbort
 
-      let artifact = null
       let cleanText = ''
       let experiment = null
-      let textDone = false
-      let latestArtifact = null
-
-      const artifactBuildPromise = requiredArtifactType
-        ? buildArtifactForResponse({
-            artifactType: requiredArtifactType,
-            query: text,
-            session: sessionForTurn,
-            routeContext: artifactRouteContext,
-            wikiContext: combinedWikiContext,
-            personalMemoryContext,
-            namedPatternsContext,
-            answerDraft: text,
-            signal: runAbort.signal,
-            onProgress: (progressiveData) => {
-              latestArtifact = { type: requiredArtifactType, data: progressiveData }
-              if (!textDone) return
-
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantMsgId
-                    ? {
-                        ...m,
-                        content: cleanText,
-                        streaming: false,
-                        artifact: latestArtifact,
-                        experiment: null,
-                        artifactPendingType: null,
-                      }
-                    : m
-                )
-              )
-            },
-          }).then((result) => {
-            latestArtifact = result || latestArtifact
-            return latestArtifact
-          })
-        : Promise.resolve(null)
-      if (requiredArtifactType) {
-        markLatency('artifact:build_started', { requiredArtifactType })
-      }
 
       // Stream response
       const stream = await openai.chat.completions.create({
@@ -1823,7 +1348,7 @@ export default function Chat() {
 
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === assistantMsgId ? { ...m, content: stripForDisplay(fullContent, requiredArtifactType) } : m
+            m.id === assistantMsgId ? { ...m, content: stripForDisplay(fullContent) } : m
           )
         )
 
@@ -1838,7 +1363,7 @@ export default function Chat() {
       // Jailbreak: termination — server auto-increments via session_id in the request
       if (fullContent.trim() === 'AXIOM_SESSION_TERMINATED') {
         setMessages((prev) => prev.filter((m) => m.id !== assistantMsgId))
-        navigate('/brain')
+        navigate('/home')
         return
       }
 
@@ -1849,17 +1374,12 @@ export default function Chat() {
         setSession((prev) => ({ ...prev, jailbreak_attempts: (prev.jailbreak_attempts || 0) + 1 }))
       }
 
-      // Parse artifact and experiment tags — done exactly once after stream ends
-      const parsed = parseMessage(fullContent)
-      artifact = parsed.artifact
-      cleanText = sanitizeVisibleAssistantText(parsed.cleanText, requiredArtifactType)
-      if (!cleanText && requiredArtifactType && !artifact && !latestArtifact) {
-        cleanText = 'The structured map did not build cleanly. Try again in a moment.'
-      }
+      // Parse experiment tags and drop any artifact markup — done exactly once after stream ends
+      const withoutArtifacts = stripArtifactMarkup(fullContent)
+      const parsed = parseExperiment(withoutArtifacts)
+      cleanText = stripLeakedStructuredPayload(parsed.cleanText)
       experiment = parsed.experiment
-      textDone = true
       markLatency('response:parsed', {
-        hasArtifact: Boolean(artifact || latestArtifact),
         hasExperiment: Boolean(experiment),
         cleanTextChars: cleanText.length,
       })
@@ -1867,43 +1387,12 @@ export default function Chat() {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantMsgId
-            ? {
-                ...m,
-                content: cleanText,
-                streaming: false,
-                artifact: latestArtifact,
-                experiment: null,
-                artifactPendingType: requiredArtifactType && !latestArtifact ? requiredArtifactType : null,
-              }
+            ? { ...m, content: cleanText, streaming: false, experiment: null }
             : m
         )
       )
 
-      if (requiredArtifactType) {
-        try {
-          const builtArtifact = await artifactBuildPromise
-          artifact = builtArtifact || artifact || latestArtifact
-          if (artifact?.data) {
-            fullContent = `${cleanText}\n\n<artifact type="${requiredArtifactType}">\n${JSON.stringify(artifact.data)}\n</artifact>`
-          } else {
-            fullContent = cleanText
-          }
-          markLatency('artifact:build_done', {
-            hasArtifact: Boolean(artifact?.data),
-          })
-        } catch {
-          fullContent = cleanText
-          markLatency('artifact:build_failed')
-        }
-      } else {
-        artifact = parsed.artifact
-        if (!artifact && parsed.cleanText !== cleanText) {
-          fullContent = cleanText
-        }
-      }
-
-      if (shouldHoldExperiment && artifactLooksLikeExperiment(artifact)) {
-        artifact = null
+      if (withoutArtifacts !== fullContent || parsed.cleanText !== cleanText) {
         fullContent = cleanText
       }
 
@@ -1928,12 +1417,10 @@ export default function Chat() {
         fullContent = `${fullContent}\n\n<experiment>\n${JSON.stringify(experiment)}\n</experiment>`
       }
 
-      auditArtifact(text, fullContent, artifact)
-
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantMsgId
-            ? { ...m, content: cleanText, streaming: false, artifact, experiment, artifactPendingType: null }
+            ? { ...m, content: cleanText, streaming: false, experiment }
             : m
         )
       )
@@ -1982,7 +1469,7 @@ export default function Chat() {
             console.log(`[Axiom latency ${latencyRunId}] post:experiment_assigned`, {
               elapsed_ms: Math.round(performance.now() - postStart),
             })
-            const assigned = findMatchingExperiment(sessionForMemory.active_experiments, experiment)
+            const assigned = findMatchingExperiment(sessionForMemory.experiments, experiment)
             if (assigned) {
               const enrichedContent = `${cleanText}\n\n<experiment>\n${JSON.stringify(assigned)}\n</experiment>`
               supabase
@@ -2025,7 +1512,6 @@ export default function Chat() {
           ).length + 1
           const memoryDecision = shouldRunMemoryUpdate(text, cleanText, {
             assistantTurnCount,
-            nodeContext,
             experiment,
           })
 
@@ -2043,17 +1529,6 @@ export default function Chat() {
               elapsed_ms: Math.round(performance.now() - postStart),
               reason: memoryDecision.reason,
             })
-            const token = getStoredSessionToken()
-            if (token) {
-              syncPersonalWiki(updatedSession).then((synced) => {
-                if (synced?.nodes?.length) {
-                  const key = `axiom_brain_graph:${token}`
-                  try {
-                    localStorage.setItem(key, JSON.stringify(synced))
-                  } catch {}
-                }
-              }).catch(() => {})
-            }
           }
         } catch {
           setSession(sessionForMemory)
@@ -2077,9 +1552,7 @@ export default function Chat() {
                   content: m.content || stripForDisplay(fullContent) || 'Response stopped.',
                   streaming: false,
                   status: 'interrupted',
-                  artifact: null,
                   experiment: null,
-                  artifactPendingType: null,
                 }
               : m
           )
@@ -2089,7 +1562,7 @@ export default function Chat() {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantMsgId
-                ? { ...m, content: '', streaming: true, status: null, artifact: null, experiment: null, artifactPendingType: null }
+                ? { ...m, content: '', streaming: true, status: null, experiment: null }
                 : m
             )
           )
@@ -2107,7 +1580,7 @@ export default function Chat() {
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsgId
-              ? { ...m, content: 'Something went wrong. Try again.', streaming: false, artifactPendingType: null }
+              ? { ...m, content: 'Something went wrong. Try again.', streaming: false }
               : m
           )
         )
@@ -2124,10 +1597,9 @@ export default function Chat() {
   // ── Experiment Assignment ─────────────────────────────────────────────────
   async function assignExperiment(experiment, baseSession = session) {
     if (!baseSession) return baseSession
-    const activeExps = baseSession.active_experiments || []
+    const activeExps = baseSession.experiments || []
 
     if (activeExps.filter((e) => e.status === 'active').length >= 2) return baseSession
-    const shouldResetMissStreak = activeExps.some((e) => e.status === 'ghosted')
 
     const assignedAt = new Date()
     const windowHours = Number(experiment.window_hours) > 0 ? Number(experiment.window_hours) : 48
@@ -2177,15 +1649,15 @@ export default function Chat() {
         assignment_error: true,
         error_message: error.message || 'This experiment was generated, but it was not saved.',
       }
-      const updatedSession = { ...baseSession, active_experiments: [...activeExps, failedExperiment] }
+      const updatedSession = { ...baseSession, experiments: [...activeExps, failedExperiment] }
       setSession(updatedSession)
       return updatedSession
     }
 
     const updated = [...activeExps, normalizeExperiment(result?.experiment || newExp)]
-    const sessionUpdates = result?.session_updates || (shouldResetMissStreak ? { consecutive_miss_count: 0 } : {})
+    const sessionUpdates = result?.session_updates || {}
 
-    const updatedSession = { ...baseSession, ...sessionUpdates, active_experiments: updated }
+    const updatedSession = { ...baseSession, ...sessionUpdates, experiments: updated }
     setSession(updatedSession)
     return updatedSession
   }
@@ -2222,14 +1694,14 @@ export default function Chat() {
     }
 
     const normalized = normalizeExperiment(result?.experiment)
-    const sessionUpdates = result?.session_updates || (status === 'completed' ? { consecutive_miss_count: 0 } : {})
+    const sessionUpdates = result?.session_updates || {}
 
     setSession((prev) => {
       if (!prev) return prev
       return {
         ...prev,
         ...sessionUpdates,
-        active_experiments: (prev.active_experiments || []).map((exp) =>
+        experiments: (prev.experiments || []).map((exp) =>
           exp.id === experimentId ? normalized : exp
         ),
       }
@@ -2247,18 +1719,11 @@ export default function Chat() {
   }
 
   async function recordResistanceAndSync(baseSession, experiment, text, reasonStrength) {
-    const memoryRecorded = await recordExperimentResistancePattern(baseSession, experiment, text, reasonStrength)
-    if (memoryRecorded) {
-      syncPersonalWiki(baseSession).then((synced) => {
-        if (synced) window.dispatchEvent(new CustomEvent('axiom-wiki-updated'))
-      }).catch((error) => {
-        console.error('Failed to sync wiki after experiment resistance pattern', error)
-      })
-    }
+    await recordExperimentResistancePattern(baseSession, experiment, text, reasonStrength)
   }
 
   async function maybeCaptureExperimentReport(text, baseSession, historyMessages = []) {
-    const activeExperiments = (baseSession.active_experiments || []).filter((exp) => exp.status === 'active')
+    const activeExperiments = (baseSession.experiments || []).filter((exp) => exp.status === 'active')
     if (activeExperiments.length === 0) return { session: baseSession, handled: false }
 
     const target = activeExperiments[0]
@@ -2319,12 +1784,12 @@ export default function Chat() {
 
         await recordExperimentAvoidancePattern(baseSession, negotiationTarget, text)
         experimentNegotiationRef.current = null
-        const updatedExperiments = (baseSession.active_experiments || []).map((exp) =>
+        const updatedExperiments = (baseSession.experiments || []).map((exp) =>
           exp.id === negotiationTarget.id ? updatedExperiment : exp
         )
 
         return {
-          session: { ...baseSession, active_experiments: updatedExperiments, experiment_negotiation: null },
+          session: { ...baseSession, experiments: updatedExperiments, experiment_negotiation: null },
           handled: true,
           assistantText: 'I marked that as a choice not to do it, not a constraint. That matters because this is exactly where the pattern shows up.',
         }
@@ -2351,24 +1816,17 @@ export default function Chat() {
           assistantText: 'I could not save that experiment outcome. Try once more before we move on.',
         }
       }
-      const updatedExperiments = (baseSession.active_experiments || []).map((exp) =>
+      const updatedExperiments = (baseSession.experiments || []).map((exp) =>
         exp.id === target.id ? updatedExperiment : exp
       )
-      const updatedSession = { ...baseSession, active_experiments: updatedExperiments }
+      const updatedSession = { ...baseSession, experiments: updatedExperiments }
 
       if (outcomeReason === 'didnt') {
-        const memoryRecorded = await recordExperimentAvoidancePattern(baseSession, target, text)
-        if (memoryRecorded) {
-          syncPersonalWiki(updatedSession).then((synced) => {
-            if (synced) window.dispatchEvent(new CustomEvent('axiom-wiki-updated'))
-          }).catch((error) => {
-            console.error('Failed to sync wiki after experiment avoidance pattern', error)
-          })
-        }
+        await recordExperimentAvoidancePattern(baseSession, target, text)
       }
 
       const assistantText = outcomeReason === 'couldnt'
-        ? 'That is not a strike. The experiment was blocked, so I marked it as cancelled. We can either reset the same test or replace it with one that fits the constraint.'
+        ? 'The experiment was blocked, so I marked it as cancelled. We can either reset the same test or replace it with one that fits the constraint.'
         : 'That one counts. I marked it as a choice, not a constraint. The useful part is that we now know what your avoidance reaches for when the work gets real.'
 
       return { session: updatedSession, handled: true, assistantText }
@@ -2381,8 +1839,7 @@ export default function Chat() {
       return {
         session: {
           ...baseSession,
-          consecutive_miss_count: 0,
-          active_experiments: (baseSession.active_experiments || []).map((exp) =>
+          experiments: (baseSession.experiments || []).map((exp) =>
             exp.id === target.id ? updatedExperiment : exp
           ),
         },
@@ -2531,9 +1988,7 @@ export default function Chat() {
         role: 'assistant',
         content: EXPERIMENT_CANCEL_REASON_QUESTION,
         streaming: false,
-        artifact: null,
         experiment: null,
-        artifactPendingType: null,
       },
     ])
 
@@ -2576,21 +2031,6 @@ export default function Chat() {
     }
   }
 
-  function handleUserPlot(artifactType, value) {
-    const message = `[I placed myself at ${JSON.stringify(value)} on the ${artifactType}]`
-    sendMessage(message)
-  }
-
-  function handleAnswer(selectedLabel, isCorrect) {
-    const message = `[I selected: "${selectedLabel}"]`
-    sendMessage(message)
-  }
-
-  function handleArtifactSubmit(values) {
-    const message = `[I submitted: ${JSON.stringify(values)}]`
-    sendMessage(message)
-  }
-
   // ── Render ────────────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -2612,8 +2052,8 @@ export default function Chat() {
       {/* Header */}
       <header className="chat__header">
         <span className="chat__wordmark">Axiom</span>
-        <button className="chat__brain-link" onClick={() => navigate('/brain')}>
-          Brain
+        <button className="chat__home-link" onClick={() => navigate('/home')}>
+          Home
         </button>
       </header>
 
@@ -2637,9 +2077,6 @@ export default function Chat() {
               onExperimentDone={completeExperiment}
               onExperimentCancel={cancelExperiment}
               sending={sending}
-              onAnswer={handleAnswer}
-              onSubmit={handleArtifactSubmit}
-              onUserPlot={handleUserPlot}
             />
           ))}
           <div ref={bottomRef} />
@@ -2680,7 +2117,7 @@ export default function Chat() {
 }
 
 // ── Message Group ─────────────────────────────────────────────────────────────
-// Renders a message + optional experiment/warning card below it
+// Renders a message + optional experiment card below it
 function MessageGroup({
   msg,
   isLatestUser,
@@ -2696,13 +2133,8 @@ function MessageGroup({
   onExperimentDone,
   onExperimentCancel,
   sending,
-  onAnswer,
-  onSubmit,
-  onUserPlot,
 }) {
-  const showArtifact   = msg.role === 'assistant' && msg.artifact && !msg.streaming
   const showExperiment = msg.role === 'assistant' && msg.experiment && !msg.streaming
-  const showArtifactPending = false
   const isEditing = msg.role === 'user' && editingMessageId === msg.id
   const canEdit = msg.role === 'user' && isLatestUser && !sending && !isEditing
   const canRegenerate = msg.role === 'assistant' && isLatestAssistant && !sending && !msg.streaming && typeof onRegenerate === 'function'
@@ -2710,20 +2142,6 @@ function MessageGroup({
     canEdit && { label: 'Edit', ariaLabel: 'Edit message', icon: 'edit', onClick: () => onStartEdit(msg) },
     canRegenerate && { label: 'Regenerate', ariaLabel: 'Regenerate response', icon: 'regenerate', onClick: onRegenerate },
   ]
-
-  // If Axiom placed <artifact_here/> inside the text, inject the artifact inline
-  // at that position instead of appending it below the bubble.
-  const inlineArtifact = showArtifact && /<artifact_here\s*\/>/i.test(msg.content || '')
-
-  const artifactElement = showArtifact ? (
-    <ArtifactRenderer
-      type={msg.artifact.type}
-      data={msg.artifact.data}
-      onAnswer={onAnswer}
-      onSubmit={onSubmit}
-      onUserPlot={onUserPlot}
-    />
-  ) : null
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -2754,13 +2172,8 @@ function MessageGroup({
           streaming={msg.streaming}
           status={msg.status}
           actions={messageActions}
-          artifactNode={inlineArtifact ? artifactElement : null}
         />
       )}
-      {showArtifactPending && (
-        <ArtifactLoadingPreview artifactType={msg.artifactPendingType} />
-      )}
-      {showArtifact && !inlineArtifact && artifactElement}
       {showExperiment && (
         <ExperimentCard
           title={msg.experiment.title}
@@ -2779,43 +2192,6 @@ function MessageGroup({
           onCancel={msg.experiment.id && msg.experiment.status === 'active' ? () => onExperimentCancel(msg.experiment) : null}
         />
       )}
-    </div>
-  )
-}
-
-function ArtifactLoadingPreview({ artifactType }) {
-  const [stepIndex, setStepIndex] = useState(0)
-  const steps = getArtifactBuildSteps(artifactType)
-
-  useEffect(() => {
-    setStepIndex(0)
-    if (steps.length <= 1) return
-
-    let current = 0
-    const interval = window.setInterval(() => {
-      current += 1
-      setStepIndex((prev) => (prev < steps.length - 1 ? prev + 1 : prev))
-      if (current >= steps.length - 1) {
-        window.clearInterval(interval)
-      }
-    }, 380)
-
-    return () => window.clearInterval(interval)
-  }, [artifactType, steps.length])
-
-  const currentStep = steps[Math.min(stepIndex, steps.length - 1)] || 'Sketching the shape'
-
-  return (
-    <div className="artifact-loading axiom-animate-fade">
-      <div className="artifact-loading__canvas">
-        <div className="artifact-loading__scanline" />
-        <div className={`artifact-loading__shape artifact-loading__shape--${artifactType}`} />
-      </div>
-      <div className="artifact-loading__whisper">
-        <span className="artifact-loading__dot artifact-loading__dot--live" />
-        <span className="artifact-loading__whisper-text">{currentStep}</span>
-        <span className="artifact-loading__type">{humanizeArtifactType(artifactType)}</span>
-      </div>
     </div>
   )
 }

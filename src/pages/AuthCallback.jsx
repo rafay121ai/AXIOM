@@ -44,7 +44,7 @@ export default function AuthCallback() {
 
         if (sessionRow?.session_token) {
           setStoredSessionToken(sessionRow.session_token)
-          navigate('/brain', { replace: true })
+          navigate('/home', { replace: true })
           return
         }
 

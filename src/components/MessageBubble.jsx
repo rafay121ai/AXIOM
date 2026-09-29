@@ -1,5 +1,5 @@
 // Renders a single message. Streaming state shows pulsing dot.
-// Does NOT render experiment/warning cards — those are handled by the parent.
+// Does NOT render experiment cards — those are handled by the parent.
 import { useEffect, useRef, useState } from 'react'
 
 // Final defense: strip any artifact/experiment tags that weren't caught upstream.
@@ -103,34 +103,10 @@ function renderTextBlock(text, keyPrefix = 'text') {
   ))
 }
 
-// Render text with inline markdown, and optionally insert an artifact exactly
-// where Axiom placed <artifact_here/>.
-function renderContent(raw, artifactNode = null) {
-  const text = raw || ''
-  const marker = /<artifact_here\s*\/>/i
-  if (!artifactNode || !marker.test(text)) return renderTextBlock(text)
-
-  const parts = text.split(marker)
-  return parts.flatMap((part, index) => {
-    const nodes = []
-    const textNode = renderTextBlock(part, `text-${index}`)
-    if (textNode) nodes.push(...textNode)
-    if (index < parts.length - 1) {
-      nodes.push(
-        <div key={`artifact-${index}`} style={{ margin: '10px 0' }}>
-          {artifactNode}
-        </div>
-      )
-    }
-    return nodes
-  })
-}
-
 export default function MessageBubble({
   role,
   content,
   streaming,
-  artifactNode,
   status,
   actions = [],
 }) {
@@ -231,7 +207,7 @@ export default function MessageBubble({
       }}
     >
       <div className={`msg msg--${role}${streaming ? ' msg--streaming' : ''}${status === 'interrupted' ? ' msg--interrupted' : ''}`}>
-        {renderContent(content, artifactNode)}
+        {renderTextBlock(content)}
       </div>
       {status === 'interrupted' && (
         <div className="msg__status">Stopped</div>

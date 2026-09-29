@@ -1,228 +1,151 @@
-# Axiom — Claude Code Instructions
+# Axiom: Instructions for Coding Agents
+
+This file is for Claude Code, Codex and any other coding agent working in
+this repo. Read it at the start of every session.
 
 ## Project Context
-Mentor app for ambitious founders and builders (18-28).
-Built web-first. Native (React Native + Expo) comes after web is live.
+Axiom is an operating system for founders. A founder brings a real
+situation, Axiom reads what is really going on, teaches what they need to
+know from authors and from founders one stage ahead, gives them one move
+to make today, and finds out with them what happened.
 
-Stack (web):
-- Frontend: Next.js
-- Backend: FastAPI
-- Database + Auth: Supabase
-- Deployment: Railway
+- **PRODUCT.md** is the source of truth for what Axiom is and how it
+  behaves.
+- **ARCHITECTURE.md** is the source of truth for how it is built.
+- If code and these documents disagree, stop and flag it. Do not guess.
 
-Core loop has two entry points:
-- Situation-based: user brings something that happened, Axiom identifies
-  the pattern they can't see, responds through the relevant pillar, ends
-  with a 24-48hr experiment.
-- Curiosity-based: user wants to understand a specific topic, Axiom
-  teaches it through their specific context and world, still ends with
-  an experiment.
+Global product. Free for now. Web first. Native later (Expo preferred).
 
-Both entry points end the same way — an action, never just information.
+## Stack (current)
+- Frontend: Vite + React, on Vercel
+- Backend: Express (Node.js), on Railway
+- Database and Auth: Supabase, two projects (main and axiom-knowledge)
+- AI: OpenAI. Model IDs live in server config.
 
-AI: Claude API (claude-sonnet-4-20250514) powers the tutor.
-Tone: Adaptive. Reads the user's state and mirrors it. Always direct,
-never generic, never chatbot-friendly.
+The old docs described Next.js, FastAPI and the Claude API. That stack
+does not exist here.
 
-The product compounds over time. Axiom tracks experiments, reports, and
-patterns across sessions. After enough sessions it knows the gap between
-what a user says they want and how they actually behave. That
-understanding is the moat.
+## The Founder Journey
+Onboarding once. Then every situation moves through separate screens:
 
-Axiom is not for everyone. Users who don't follow through get removed.
-This is a core product decision, not a feature — do not touch removal
-logic without explicit instruction.
+**Situation -> Read -> Learn -> Move -> Report (evening)**
 
-## The 6 Pillars
-| Pillar            | Domain                                              |
-|-------------------|-----------------------------------------------------|
-| The Money Game    | Economics, capital, investing, financial literacy   |
-| The Human Mind    | Psychology, behavior, cognitive science             |
-| How Companies Win | Business strategy, competitive advantage            |
-| What's Coming     | Futures thinking, emerging tech, geopolitics        |
-| Think Sharper     | Mental models, decision-making, reasoning           |
-| Move People       | Influence, persuasion, communication, leadership    |
+The screens are separate. The journey is connected by hooks: every screen
+carries over a thread from the last one and leaves one open. See the Hooks
+section of PRODUCT.md. Hooks must be specific to the founder. No teaser
+questions, no withheld information.
 
-Pillars are not tabs. They are lenses the AI applies to whatever the
-user brings. A single session can touch multiple pillars. The user
-never categorizes themselves.
+## Hard Rules
+- Axiom speaks first after onboarding. Returning founders land on their
+  last open loop, never a blank prompt.
+- Situation: maximum 2 follow up questions, enforced in code.
+- Every Learn screen ends in a Move. Never information only.
+- Author lessons always name the author and book. Never show a chapter,
+  page or quote that is not verified against the source library. Never
+  invent a quote.
+- Founder voices shown to real users must come from real, consented,
+  reviewed outcomes. Samples only in prototypes, labelled as samples.
+- Moves: the founder is the only variable, startable within 10 minutes,
+  binary success, reported the same evening or within 48 hours. Maximum 2
+  active per founder. One swap allowed, with a real reason.
+- Report outcomes: Done, Couldn't, Didn't. No strikes, no warnings, no
+  removal, ever.
+- Give to get: a report unlocks founder cases for the next situation.
+- Consent to share is asked at every report. Default is not shared.
+- Peer outcomes are never shown before human approval. Peer outcome rows
+  never store a user_id.
+- Distress or crisis signals stop the journey: no lessons, no move. Respond
+  with care and point to real help.
+- All writes go through the Express API. The browser uses Supabase for
+  auth only.
+- No paywall, no gating, no payment code until explicitly instructed.
 
-## The Founder Brain
-The home screen is a 3D sphere of nodes — the user is inside it.
-Every concept engaged with and every completed experiment is a node.
-Nodes are color-coded and symbol-coded by pillar.
-Edges connect nodes across pillars when Axiom identifies a relationship.
+## Never Touch Without Explicit Instruction
+- Supabase project URLs, keys, or live data
+- Database schema. Write a migration plan first, and base it on a dump of
+  the live schema, not the checked in files.
+- The deterministic experiment validator. Full regression test required.
+- Consent, anonymization and peer outcome privacy logic
+- Stored founder memory, theory, situations and reports
 
-Node states:
-- Dim: concept engaged, experiment not completed
-- Bright: experiment completed, knowledge implemented
+## Flag First, Before Doing
+- Changing Axiom's voice or adding filler copy
+- Adding onboarding steps or questions
+- Changing the AI model or provider
+- Introducing new fonts, colors or UI patterns outside DESIGN.md
+- Deleting any table, column or stored user data
 
-On open: sphere auto-rotates for 3 seconds. Axiom's 1-2 sentence read
-appears as floating text in the center. Axiom highlights 1-3 nodes with
-a guiding light beam and "Start here today" label.
+## Deprecated: Do Not Build On
+These are from the old product. Do not extend them. Remove them only when
+the task says so and the replacement works.
+- Founder Brain / Three.js sphere, nodes, edges, maturity stages
+- Personal wiki graph
+- Artifact rendering system
+- Live web search
+- Weekly reads
+- Warning, removal, refund and reapplication system
+- Payments and premium tiers
 
-Navigation: slide to rotate, pinch to zoom in/out, tap node to open.
-Tapping a node shows its label and pillar. Second tap starts the session.
+## Axiom's Voice
+Direct and urgent. Never confrontational, never cold. Specific to the
+founder: their words, their numbers, their dates. No filler.
 
-Bottom of screen: persistent small text bar — "Something on your mind?"
-User types freely. Axiom maps it to the right node and opens the session.
-Axiom always speaks first when a session opens.
+Forbidden phrases: "great question", "certainly", "I understand",
+"that's interesting", "absolutely", "of course", "I'd be happy to",
+"great".
 
-Node tap behavior: user sees the exact Axiom-generated insight that
-created that node. For cross-pillar edges, they see the specific
-connection Axiom made about them personally.
+## Workflow
 
-Maturity stages: Novice → Developing → Sharp → Founder-grade
-Measured per pillar and overall.
+### 1. Plan first
+- Use plan mode for any non trivial task (3+ steps or multiple files).
+- Write the plan to `tasks/todo.md` with checkable items before touching
+  code.
+- If something goes sideways, stop and re plan.
 
-3D brain built with Three.js on web.
-When converting to native: rebuild with expo-gl + Three.js.
+### 2. Subagents
+- Use subagents for research, exploration and parallel analysis.
+- One task per subagent.
 
-## Testing Mode (Pre-Launch)
-All features are unlocked for internal testing. No paywalls, no feature
-flags, no premium gates active.
+### 3. Self improvement
+- After any correction, add the pattern to `tasks/lessons.md`.
+- Review `tasks/lessons.md` at the start of each session.
 
-When going live, the following move to premium:
-- Full interconnected graph with cross-pillar edges
-- Maturity stage label
-- Shareable brain snapshot
+### 4. Verify before done
+Never mark a task complete without proving it works. After changes to the
+relevant area, check:
+- New founder: onboarding through first Read
+- Returning founder: lands on the last open loop
+- Situation: follow ups stop at 2
+- Learn: lessons render, citations validated, follow up taps work
+- Move: validator passes, commit schedules the report
+- Report: outcome saved, unlock granted, consent recorded
+- No browser side writes introduced
+- Cost logging still records the call
 
-Do NOT build any paywall logic until explicitly instructed.
-Do NOT gate any feature during testing phase.
+### 5. Elegance, not hacks
+- For non trivial changes, ask whether there is a simpler way.
+- Do not over engineer simple fixes.
 
-## Workflow Orchestration
-
-### 1. Plan Node Default
-- Enter plan mode for ANY non-trivial task (3+ steps or changes
-  touching multiple files)
-- If something goes sideways, STOP and re-plan — don't keep pushing
-- Write detailed specs upfront before touching any code
-- Use plan mode for verification steps, not just building
-
-### 2. Subagent Strategy
-- Use subagents to keep the main context window clean
-- Offload research, exploration, and parallel analysis to subagents
-- One task per subagent for focused execution
-
-### 3. Self-Improvement Loop
-- After ANY correction: update `tasks/lessons.md` with the pattern
-- Write rules that prevent the same mistake from recurring
-- Review `tasks/lessons.md` at the start of each session
-
-### 4. Verification Before Done
-- Never mark a task complete without proving it works
-- Ask yourself: "Would a staff engineer approve this?"
-- Check all session flows after every change — new user, returning
-  user, experiment delivery, removal warning, brain graph update
-- Verify Three.js sphere renders correctly after any graph change
-- Verify memory persistence after any Supabase schema change
-- Test bottom text bar routing after any session logic change
-
-### 5. Demand Elegance
-- For non-trivial changes: pause and ask "is there a more elegant way?"
-- If a fix feels hacky, implement the elegant solution instead
-- Skip this for simple, obvious fixes — don't over-engineer
-- Challenge your own work before presenting it
-
-### 6. Autonomous Bug Fixing
-- When given a bug report: just fix it, no hand-holding needed
-- Point at logs, errors, or broken behavior — then resolve them
-- Zero context switching required from the user
-
-## Task Management
-1. **Plan First** — Write plan to `tasks/todo.md` with checkable items
-2. **Verify Plan** — Check in before starting implementation
-3. **Track Progress** — Mark items complete as you go
-4. **Explain Changes** — High-level summary at each step
-5. **Document Results** — Add review section to `tasks/todo.md`
-6. **Capture Lessons** — Update `tasks/lessons.md` after any correction
+### 6. Bug fixing
+- Given a bug, find the root cause and fix it. No temporary patches.
 
 ## Core Principles
-- **Simplicity First** — Make every change as simple as possible.
-  Impact minimal code.
-- **No Laziness** — Find root causes. No temporary fixes.
-  Senior developer standards.
-- **Minimal Impact** — Changes should only touch what's necessary.
-  Avoid introducing bugs.
-- **Memory is Sacred** — Never touch session history, experiment logs,
-  or user pattern data without explicit instruction. This is the core
-  value of the product.
-- **Voice is Non-Negotiable** — Axiom's tone is direct, confrontational,
-  and urgent. Never soften copy without flagging it first.
-- **The Sphere is the Product** — The 3D brain is not a feature. It is
-  the home screen, the navigation, and the entry point. Never replace
-  it with a flat UI without explicit instruction.
-
-## Project-Specific Rules
-
-### Never touch without explicit instruction:
-- Supabase project URL or anon key
-- Session memory schema — write a migration plan first
-- Experiment delivery logic — full regression test required
-- Removal logic, warning thresholds, or refund triggers — these are
-  legal and product commitments
-- Three.js sphere core logic — document the change before touching it
-- The bottom text bar routing — this is the primary entry point fallback
-
-### Never do without flagging first:
-- Soften Axiom's voice or add filler copy anywhere in the product
-- Add onboarding steps — every extra step kills conversion
-- Change pillar colors, symbols, or node visual language
-- Introduce new fonts, colors, or UI patterns outside DESIGN.md
-- Change the AI model — claude-sonnet-4-20250514 is the default
-
-### Hard rules:
-- Axiom speaks first on every returning user session — never break this
-- The home screen is the 3D brain sphere — never default to a chat UI
-- All experiments must be completable within 24-48 hours unless
-  explicitly instructed otherwise
-- Nodes have two states only — dim (engaged) and bright (implemented)
-  — do not add intermediate states without instruction
-- Cross-pillar edges only appear when Axiom has generated a specific
-  personal insight linking them — never auto-generate edges
-- The bottom text bar placeholder is "Something on your mind?" —
-  do not change this copy without flagging
-- Do NOT build paywall logic until explicitly instructed
-- Do NOT gate any feature during the testing phase
-
-### Removal System — do not modify:
-- Warning 1: user misses 2 consecutive experiments with no report back
-- Warning 2: user misses 2 more consecutive experiments
-- Warning 1 and 2 are delivered in Axiom's voice — not as system
-  notifications or customer service copy
-- After Warning 2: next miss triggers permanent removal
-- Refund: full refund only if removed within first 15 days
-- Reapplication: available after 3 months
-- Reapplication question: "When you left, it was because [specific
-  logged reason]. Tell us 3 things you did in the last 3 months
-  to overcome that."
-- Axiom reviews the response and decides — no appeals process
-
-### Wiki Pipeline Rules
-- Never process documents synchronously —
-  always async, never block the upload response
-- Never skip the similarity threshold (0.75) —
-  irrelevant chunks injected into context are
-  worse than no wiki context at all
-- Never store raw files in Supabase Storage —
-  raw files go to R2 only, Supabase holds chunks
-  and embeddings only
-- Never expose the admin panel route in the
-  main app navigation — /admin only, no link
-- Never auto-approve user-contributed sources —
-  team review always required before processing
-- OpenAI API key is for embeddings only —
-  all AI responses still use Claude API
-- If processing fails: log the error, mark
-  document as failed, never silently drop it
-- Reprocess option must always be available
-  in admin panel for failed documents
+- **Simplicity first.** Smallest change that solves the problem.
+- **Minimal impact.** Touch only what the task needs. Do not reformat
+  unrelated code.
+- **Memory is sacred.** Founder situations, reports, theory and memory are
+  the product's value. Never alter or delete them without instruction.
+- **Server owns logic.** Rules that matter are enforced in code, not only
+  in prompts.
+- **Specific or nothing.** Any output that would make sense to a different
+  founder unchanged is a bug.
 
 ## File Structure
-- `tasks/todo.md` — current task plan and progress
-- `tasks/lessons.md` — running log of mistakes and fixes
-- `CLAUDE.md` — this file, codebase bible
-- `PRODUCT.md` — full product philosophy, rules, and decisions
-- `ARCHITECTURE.md` — system design, memory layer, API structure
-- `DESIGN.md` — visual language, interaction principles,
-  component rules
+- `CLAUDE.md`: this file
+- `PRODUCT.md`: product definition, rules and decisions
+- `ARCHITECTURE.md`: system design, data model, AI layer
+- `DESIGN.md`: visual language (needs updating to the new product)
+- `BRAND.md`: brand guidance (needs updating to the new product)
+- `tasks/todo.md`: current plan and progress
+- `tasks/lessons.md`: mistakes and the rules that prevent them
+- `audit/`: September 2026 codebase audit

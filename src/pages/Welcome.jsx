@@ -83,7 +83,7 @@ export default function Welcome() {
 
     async function loadWelcome() {
       if (hasSeenAxiomWelcome() || !hasPendingAxiomWelcome()) {
-        navigate('/brain', { replace: true })
+        navigate('/home', { replace: true })
         return
       }
 
@@ -149,7 +149,7 @@ export default function Welcome() {
     navigate('/chat', {
       replace: true,
       state: {
-        fromBrain: true,
+        fromHome: true,
         freshThread: true,
         threadId: crypto.randomUUID(),
         initialInput: suggestedQuestion,
@@ -161,7 +161,7 @@ export default function Welcome() {
 
   function startFresh() {
     markWelcomeSeen()
-    navigate('/brain', { replace: true })
+    navigate('/home', { replace: true })
   }
 
   if (loading) {

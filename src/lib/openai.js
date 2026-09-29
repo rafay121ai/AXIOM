@@ -1,4 +1,3 @@
-import { getArtifactProfile } from './artifactRegistry.js'
 import { supabase } from './supabase.js'
 
 export const PROFILE_MODEL = 'gpt-5.2-2025-12-11'
@@ -380,21 +379,12 @@ ${JSON.stringify(onboardingAnswers, null, 2)}`,
 // ─── Opening Message ─────────────────────────────────────────────────────────
 export async function generateOpeningMessage(session, isNew) {
   const unresolvedExperiment = session.unresolved_experiment || null
-  const activeExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'active')
-  const ghostedExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'ghosted')
-  const ghostedTitles = ghostedExps
-    .map((experiment) => experiment.title || experiment.description)
-    .filter(Boolean)
-    .slice(-4)
+  const activeExps = (session.experiments || []).filter((experiment) => experiment.status === 'active')
   const hasExperiment = activeExps.length > 0
   const recentExp = hasExperiment ? activeExps[activeExps.length - 1] : null
 
   const contextLines = [
     `Private theory: ${session.axiom_profile}`,
-    `Warning level: ${session.warning_level}`,
-    `Ghost count: ${session.ghost_count || 0}`,
-    `Consecutive missed experiments: ${session.consecutive_miss_count || 0}`,
-    `Ghosted experiments: ${ghostedTitles.length ? ghostedTitles.map((title) => `"${title}"`).join(', ') : 'None'}`,
     unresolvedExperiment
       ? `Unresolved experiment: "${unresolvedExperiment.description}" — due ${unresolvedExperiment.due_at ? new Date(unresolvedExperiment.due_at).toLocaleDateString() : 'window passed'}`
       : hasExperiment
@@ -410,10 +400,6 @@ export async function generateOpeningMessage(session, isNew) {
     directive = `An experiment is unresolved and the user is returning: "${unresolvedExperiment.description}". ${dueLine} Open with 1-2 sentences that name this specific experiment and ask what happened. Not a check-in — accountability. Axiom remembers. Do not welcome them. Do not soften it. Lead with the experiment. Examples of the right tone: "You took this on. What happened?" or "That experiment ran out the window. Walk me through it." Use the exact experiment description in your opening — do not restate it generically.`
   } else if (isNew) {
     directive = 'This is their first session. Generate a 1-2 sentence opening that names their most specific gap or pattern. It must be a direction, not a summary. Do not welcome them.'
-  } else if (session.warning_level === 2) {
-    directive = 'Warning level is 2. Open with a direct mentor warning, not a system alert. Name the specific ghosted or missed experiments from context. Ask what is actually going on underneath. Make clear that Axiom is not useful if the user is not moving. Disappointed but still in their corner. 2-4 sentences.'
-  } else if (session.warning_level === 1) {
-    directive = 'Warning level is 1. Acknowledge the pattern early, clearly and specifically, not aggressively. Name what it looks like from the counts and ghosted experiment context. Use the shape: this is the second time something has been left unfinished. That is worth looking at. 1-2 sentences.'
   } else if (hasExperiment) {
     directive = `User is returning. Reference the active experiment "${recentExp.description}" — ask where they are with it. Do not summarize. 1-2 sentences.`
   } else {
@@ -430,446 +416,13 @@ export async function generateOpeningMessage(session, isNew) {
 
 Your voice: Direct. Never diplomatic. Specific. Never generic. Challenging. Urgent.
 Never say: "Great question", "I understand", "Certainly", "Absolutely", "Welcome back", "That's interesting".
-Never use emoji.
-Warning language: disappointed but still in their corner. Not a system alert. Not theatrical.`,
+Never use emoji.`,
       },
       {
         role: 'user',
         content: `${contextLines}\n\n${directive}`,
       },
     ],
-  })
-
-  return response.choices[0].message.content
-}
-
-export async function generateBrainOverlayMessage(session) {
-  const activeExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'active')
-  const response = await openai.chat.completions.create({
-    model: CHAT_MODEL,
-    usage_context: { call_type: 'session_notes', session_id: session.id },
-    messages: [
-      {
-        role: 'system',
-        content: `You are Axiom. Write a single short line for the brain screen overlay.
-
-Rules:
-- Maximum 14 words
-- One sentence only
-- Direct, quiet, specific
-- No greeting
-- No metaphor
-- No artifact
-- No citation
-- No experiment
-- Use the user's private pattern or current experiment if relevant
-- This line should feel like a subtle read, not a speech`,
-      },
-      {
-        role: 'user',
-        content: `Private theory: ${session.axiom_profile || 'None'}
-Session notes: ${session.session_notes || 'None'}
-Active experiments: ${JSON.stringify(activeExps)}
-Warning level: ${session.warning_level || 0}`,
-      },
-    ],
-    max_completion_tokens: 60,
-  })
-
-  return response.choices[0].message.content.trim()
-}
-
-export async function generateStructuredArtifact({
-  artifactType,
-  query,
-  session,
-  routeContext = '',
-  wikiContext = '',
-  personalMemoryContext = '',
-  namedPatternsContext = '',
-  answerDraft = '',
-}) {
-  const spec = getArtifactProfile(artifactType)
-  if (!spec) return null
-
-	  return requestJsonObject({
-	    label: `${spec.label || artifactType} artifact`,
-	    maxCompletionTokens: spec.maxTokens || 600,
-	    usageContext: {
-	      call_type: 'artifact',
-	      session_id: session?.id || null,
-	    },
-	    messages: [
-      {
-        role: 'system',
-        content: `You generate only the JSON payload for Axiom's ${artifactType} artifact.
-
-Return valid JSON only. Do not wrap it in markdown. Do not include <artifact> tags.
-
-Rules:
-- The artifact must answer the user's actual question shape, not a broader neighboring question.
-- Make the structure concrete, tight, and visually intelligible.
-- Keep it specific to the user's situation when possible.
-- Do not turn a focused structural question into a broad landscape map.
-- If the main response may include an experiment, keep this artifact to the framework, loop, terrain, or decision structure only.
-- Do not include the exact experiment task, operational steps, watch-fors, reporting instructions, or success conditions in the artifact.
-
-Required JSON shape:
-${spec.schema}
-
-Additional rules:
-${spec.rules.map((rule) => `- ${rule}`).join('\n')}`,
-      },
-      {
-        role: 'user',
-        content: `Question: ${query}
-
-Artifact type: ${artifactType}
-
-Route context:
-${routeContext || 'None'}
-
-Private theory:
-${session?.axiom_profile || 'None'}
-
-Session notes:
-${session?.session_notes || 'None'}
-
-Named patterns:
-${namedPatternsContext || 'None'}
-
-Personal context:
-${personalMemoryContext || 'None'}
-
-Wiki context:
-${wikiContext || 'None'}
-
-Draft answer:
-${answerDraft || 'None'}`,
-      },
-    ],
-  })
-}
-
-export async function* streamStructuredArtifact({
-  artifactType,
-  query,
-  session,
-  routeContext = '',
-  wikiContext = '',
-  personalMemoryContext = '',
-  namedPatternsContext = '',
-  answerDraft = '',
-  signal,
-}) {
-  const spec = getArtifactProfile(artifactType)
-  if (!spec) return
-
-  const systemPrompt =
-    artifactType === 'signal_map'
-      ? `You stream JSON merge events for Axiom's signal_map artifact.
-
-Return newline-delimited JSON only. Each line must be a complete valid JSON object with this exact shape:
-{"merge": { ...partial artifact fields... }}
-
-Rules:
-- No markdown.
-- No prose outside JSON.
-- Emit one top-level section per line in this order:
-${spec.streamOrder.map((item, index) => `  ${index + 1}. ${item}`).join('\n')}
-- Ground the map in concrete present-tense signals first, then interpretation, then forecast.
-- Keep it specific to the user's situation when possible.
-- Make the framework genuinely visual, not list-like.
-- If the main response may include an experiment, keep this artifact to terrain and framework only.
-- Do not include the exact experiment task, operational steps, watch-fors, reporting instructions, or success conditions in the artifact.`
-      : `You stream JSON merge events for Axiom's ${artifactType} artifact.
-
-Return newline-delimited JSON only. Each line must be a complete valid JSON object with this exact shape:
-{"merge": { ...partial artifact fields... }}
-
-Rules:
-- No markdown.
-- No prose outside JSON.
-- The artifact must answer the user's actual question shape, not a broader neighboring question.
-- Emit one meaningful section per line until the artifact is complete.
-- Keep the structure tight, concrete, and visually intelligible.
-- If the main response may include an experiment, keep this artifact to the framework, loop, terrain, or decision structure only.
-- Do not include the exact experiment task, operational steps, watch-fors, reporting instructions, or success conditions in the artifact.
-${spec ? spec.rules.map((rule) => `- ${rule}`).join('\n') : ''}`
-
-  const response = await openai.chat.completions.create({
-    model: CHAT_MODEL,
-    usage_context: {
-      call_type: 'artifact',
-      session_id: session?.id || null,
-    },
-    messages: [
-      { role: 'system', content: systemPrompt },
-      {
-        role: 'user',
-        content: `Question: ${query}
-
-Artifact type: ${artifactType}
-
-Route context:
-${routeContext || 'None'}
-
-Private theory:
-${session?.axiom_profile || 'None'}
-
-Session notes:
-${session?.session_notes || 'None'}
-
-Named patterns:
-${namedPatternsContext || 'None'}
-
-Personal context:
-${personalMemoryContext || 'None'}
-
-Wiki context:
-${wikiContext || 'None'}
-
-Draft answer:
-${answerDraft || 'None'}`,
-      },
-    ],
-    stream: true,
-  }, { signal })
-
-  let buffer = ''
-  for await (const chunk of response) {
-    const delta = chunk.choices?.[0]?.delta?.content || ''
-    if (!delta) continue
-    buffer += delta
-    const lines = buffer.split('\n')
-    buffer = lines.pop() || ''
-
-    for (const rawLine of lines) {
-      const line = rawLine.trim()
-      if (!line) continue
-      try {
-        const parsed = JSON.parse(line)
-        if (parsed?.merge && typeof parsed.merge === 'object') {
-          yield parsed.merge
-        }
-      } catch {
-        // Ignore malformed partial lines; the model sometimes emits a line break late.
-      }
-    }
-  }
-
-  const finalLine = buffer.trim()
-  if (finalLine) {
-    try {
-      const parsed = JSON.parse(finalLine)
-      if (parsed?.merge && typeof parsed.merge === 'object') {
-        yield parsed.merge
-      }
-    } catch {
-      // Ignore trailing malformed output
-    }
-  }
-}
-
-export async function generateWeeklyRead(session, recentMessages = []) {
-  const activeExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'active')
-  const history = recentMessages
-    .filter((message) => message?.content)
-    .slice(-24)
-    .map((message) => `${message.role === 'user' ? 'User' : 'Axiom'}: ${message.content}`)
-    .join('\n\n')
-
-  const response = await openai.chat.completions.create({
-    model: UTILITY_MODEL,
-    usage_context: { call_type: 'session_notes', session_id: session.id },
-    messages: [
-      {
-        role: 'system',
-        content: `You write Axiom's weekly read for a user.
-
-Rules:
-- 1-2 sentences maximum
-- Maximum 26 words per sentence
-- Direct, concise, plainspoken
-- No greeting
-- No metaphor
-- No artifact
-- No citation
-- No experiment
-- This is a weekly snapshot of the user's real pattern, movement, or stuckness
-- Base it on what changed in their conversations, not just a static profile
-- If there is active progress, name it
-- If there is avoidance or drift, name that instead
-- End with a live tension, not a summary line`,
-      },
-      {
-        role: 'user',
-        content: `Private theory: ${session.axiom_profile || 'None'}
-Session notes: ${session.session_notes || 'None'}
-Active experiments: ${JSON.stringify(activeExps)}
-Warning level: ${session.warning_level || 0}
-
-Recent conversation history:
-${history || 'No recent messages.'}`,
-      },
-    ],
-    max_completion_tokens: 120,
-  })
-
-  return response.choices[0].message.content.trim()
-}
-
-function estimateNodeContextLevel(node) {
-  if (!node) return 0
-
-  const summaryLength = (node.summary || '').trim().length
-  const confidence = Number(node.confidence ?? 0.35)
-  const importance = Number(node.importance || 3)
-  const status = node.status || 'dim'
-
-  let score = 0
-  score += Math.min(0.3, Math.max(0, confidence) * 0.3)
-  if (summaryLength > 240) score += 0.25
-  else if (summaryLength > 120) score += 0.18
-  else if (summaryLength > 40) score += 0.1
-  if (['active', 'bright', 'ghosted', 'resolved'].includes(status)) score += 0.18
-  if (node.last_activated_at) score += 0.08
-  if (['pattern', 'goal', 'experiment'].includes(node.type)) score += 0.08
-  score += Math.min(0.11, Math.max(0, importance - 1) * 0.0275)
-
-  return Math.max(0, Math.min(1, score))
-}
-
-export async function generateNodeOpeningMessage(session, nodeContext, isPulseEntry = false) {
-  const contextLevel = estimateNodeContextLevel(nodeContext)
-  const level = Number.isFinite(contextLevel) ? Math.max(0, Math.min(1, contextLevel)) : 0
-  const percent = Math.round(level * 100)
-  const nodeType = nodeContext.type || 'concept'
-  const activeExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'active')
-  const ghostedExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'ghosted')
-  const ghostedTitles = ghostedExps
-    .map((experiment) => experiment.title || experiment.description)
-    .filter(Boolean)
-    .slice(-4)
-
-  if (isPulseEntry) {
-    const response = await openai.chat.completions.create({
-      model: CHAT_MODEL,
-      usage_context: { call_type: 'chat', session_id: session.id },
-      messages: [
-        {
-          role: 'system',
-          content: `You are Axiom. A mentor for ambitious founders aged 18-28.
-
-This is a brand-new thread opened from a pulsing recommended Founder Brain node. The pulse means Axiom thinks this node is relevant now.
-
-Write one opening message only.
-- Read the private theory and session notes carefully.
-- Read the Founder Brain node fields carefully.
-- Open with 1-2 sentences recapping specifically what was discussed, attempted, avoided, or left unresolved around this node in previous sessions. Use actual detail from session notes. If session notes contain nothing specific about this node, skip the recap entirely.
-- Then give a concrete next step or plan of action for this node, framed as a direction, not a question. A natural shape is "Here's where I'd pick this back up:" followed by 2-3 sentences of substance.
-- End with one short sharp question that opens the conversation.
-- Tone: no-BS, warm when needed, conversational, like a mentor who actually remembers the user.
-- Never use em dashes. Never use generic AI phrasing. No greeting. No list. Pure prose.
-- Length: 4-6 sentences max.`,
-        },
-        {
-          role: 'user',
-          content: `Private theory: ${session.axiom_profile || 'None'}
-Session notes: ${session.session_notes || 'None'}
-Pillar weights: ${session.pillar_weights ? JSON.stringify(session.pillar_weights) : 'balanced'}
-Active experiments: ${JSON.stringify(activeExps)}
-Warning level: ${session.warning_level || 0}
-Ghost count: ${session.ghost_count || 0}
-Consecutive missed experiments: ${session.consecutive_miss_count || 0}
-Ghosted experiments: ${ghostedTitles.length ? ghostedTitles.map((title) => `"${title}"`).join(', ') : 'None'}
-
-Founder Brain node:
-Label: ${nodeContext.label}
-Type: ${nodeContext.type}
-Pillar: ${nodeContext.pillar || 'unmapped'}
-Summary: ${nodeContext.summary || 'No summary yet.'}
-Status: ${nodeContext.status || 'dim'}
-Importance: ${nodeContext.importance || 3}
-Confidence: ${nodeContext.confidence ?? 0.7}
-Last activated at: ${nodeContext.last_activated_at || 'Never'}
-Context completeness: ${percent}%`,
-        },
-      ],
-      max_completion_tokens: 240,
-    })
-
-    return response.choices[0].message.content
-  }
-
-  let directive
-
-  if (nodeType === 'experiment') {
-    // User tapped an experiment node — they're probably reporting back
-    directive = `This is an experiment node. The user tapped it. Open with 1 direct sentence asking where they are with this experiment — what happened, what they tried, or why they haven't started. Do not diagnose yet. Let them speak first.`
-
-  } else if (nodeType === 'pattern') {
-    // User tapped their own pattern to explore it — this is exploratory, not accountability
-    if (level < 0.4) {
-      directive = `The user tapped their own pattern node. This is an exploratory moment — not accountability. Open with 1 sentence that names what this pattern looks like in practice for this specific person (use their axiom_profile and session notes to make it concrete). Then ask 1 specific question: where do they most see this pattern showing up right now? Do not prescribe a first move. Do not confront. Let them drive the direction.`
-    } else {
-      directive = `The user is returning to a pattern they've engaged with before. Open with 1 sentence referencing something specific Axiom has observed about how this pattern has shown up for them. Then offer 2 directions: go deeper into understanding it, or apply it to a specific situation they have right now. Ask which one they want.`
-    }
-
-  } else if (nodeType === 'concept' || nodeType === 'belief' || nodeType === 'goal') {
-    // Exploratory / learning mode
-    if (level < 0.25) {
-      directive = `The user is exploring this node for the first time. Use LEARNING MODE. Open with 1 sentence connecting why "${nodeContext.label}" is specifically relevant to this person right now — tie it to what you know about them. Then ask 1 question to find the angle: are they trying to understand it theoretically, or do they have a specific situation where this applies? Do not teach yet. Do not prescribe.`
-    } else {
-      directive = `The user has prior engagement with this concept. Use LEARNING MODE. Open with 1-2 sentences: name what they've covered and what's still open. Then ask: do they want to go deeper into the concept, or apply it to something specific they're dealing with right now?`
-    }
-
-  } else {
-    // blind_spot, decision, fact, or unknown — invite before confronting
-    if (level < 0.25) {
-      directive = `Fresh node. Open with 1 sentence connecting "${nodeContext.label}" to what Axiom knows about this person. Then ask 1 specific question to understand what brought them here. Do not assign a first move before they've said anything.`
-    } else {
-      directive = `The user has some history here. Open with 1 sentence naming what's unresolved in this area for them specifically. Then ask what they want to do with it today — understand it better, or work on a specific instance of it.`
-    }
-  }
-
-  const response = await openai.chat.completions.create({
-    model: CHAT_MODEL,
-    usage_context: { call_type: 'chat', session_id: session.id },
-    messages: [
-      {
-        role: 'system',
-        content: `You are Axiom. A mentor for ambitious founders aged 18-28.
-
-Your voice: direct, specific, concise, plainspoken.
-No greetings. No filler. No theatrical metaphors. Never say "welcome", "great question", "I understand", "of course", or "let's explore".
-This is a brand-new thread opened from a private Founder Brain node. The user tapped a node — they have not said anything yet. Do not confront them before they speak. Do not prescribe a first move before you know what they want from this session.`,
-      },
-      {
-        role: 'user',
-        content: `Private theory: ${session.axiom_profile || 'None'}
-Session notes: ${session.session_notes || 'None'}
-Pillar weights: ${session.pillar_weights ? JSON.stringify(session.pillar_weights) : 'balanced'}
-Active experiments: ${JSON.stringify(activeExps)}
-Warning level: ${session.warning_level || 0}
-Ghost count: ${session.ghost_count || 0}
-Consecutive missed experiments: ${session.consecutive_miss_count || 0}
-Ghosted experiments: ${ghostedTitles.length ? ghostedTitles.map((title) => `"${title}"`).join(', ') : 'None'}
-
-Founder Brain node:
-Label: ${nodeContext.label}
-Type: ${nodeContext.type}
-Pillar: ${nodeContext.pillar || 'unmapped'}
-Summary: ${nodeContext.summary || 'No summary yet.'}
-Status: ${nodeContext.status || 'dim'}
-Importance: ${nodeContext.importance || 3}
-Confidence: ${nodeContext.confidence ?? 0.7}
-Context completeness: ${percent}%
-
-${directive}`,
-      },
-    ],
-    max_completion_tokens: 220,
   })
 
   return response.choices[0].message.content
@@ -948,7 +501,7 @@ Rules:
 - primary_pillar is the real subject of the memory. Example: "fear of market feedback" is human_mind with money_game secondary, not money_game primary.
 - secondary_pillars should include only genuinely relevant nearby pillars, maximum 2.
 - pillar_confidence must be 0-1 based on how clear the pillar ownership is.
-- If pillar ownership is unclear or pillar_confidence would be below 0.55, set primary_pillar to null, secondary_pillars to [], and pillar_confidence below 0.55. Low-confidence memories should become dim/unresolved graph nodes rather than being forced into a pillar.
+- If pillar ownership is unclear or pillar_confidence would be below 0.55, set primary_pillar to null, secondary_pillars to [], and pillar_confidence below 0.55.
 - importance must be an integer from 1 to 7. Use 7 only for explicit avoided-action patterns after an experiment report reveals the user chose not to act.
 - confidence must be a number from 0 to 1 based on how directly the user revealed it.
 - concept_progress: only populate entries if the conversation was in LEARNING MODE with an active roadmap. List each topic the user has been taught. concepts_completed must only include concepts where Axiom confirmed understanding via a transition message. concepts_remaining are the roadmap concepts not yet confirmed. If no learning roadmap is active, return an empty array.
@@ -993,15 +546,11 @@ export function getLastPromptDiagnostics() {
   return lastPromptDiagnostics
 }
 
-function getPromptFlags({ session, wikiContext, routeContext, latestUserMessage, activeExperimentCount, experimentAssignedInSession, hasLiveWebContext, promptControl = null }) {
+function getPromptFlags({ session, wikiContext, routeContext, latestUserMessage, activeExperimentCount, experimentAssignedInSession, promptControl = null }) {
   const routeText = String(routeContext || '').toLowerCase()
   const userText = String(latestUserMessage || '').toLowerCase()
   const combinedText = `${routeText}\n${userText}`
   const activeExperimentExists = activeExperimentCount > 0
-  const artifactTurn =
-    /a separate [a-z_]+ artifact is being built/.test(routeText) ||
-    /artifact strategy:\s*(?!none\b)\S+/.test(routeText) ||
-    /<artifact_here\s*\/>/.test(routeText)
   const learningSignal =
     /\b(explain|teach me|how does|how do .* work|what is|take me from 0 to 1|game plan|where do i start|break this down|help me understand|walk me through|how do i learn|what should i know|framework|curriculum|roadmap|learn|concept)\b/.test(combinedText)
   const applicationSignal =
@@ -1032,21 +581,17 @@ function getPromptFlags({ session, wikiContext, routeContext, latestUserMessage,
     Boolean(experimentAssignedInSession)
 
   const computed = {
-    includeArtifactRules: artifactTurn,
     includeExperimentRules: activeExperimentCount < 2 && experimentRelevant,
     includeExperimentLimitRules: activeExperimentCount >= 2,
     includePostExperimentRules: Boolean(experimentAssignedInSession),
-    includeWarningRules: Number(session?.warning_level || 0) > 0,
     includeCancellationRules: Boolean(session?.experiment_negotiation) || (activeExperimentExists && cancelSignal),
     includeReportRules: Boolean(session?.unresolved_experiment) || (activeExperimentExists && reportSignal),
     includeLearningModeRules: learningSignal && !reportSignal && !cancelSignal,
-    includeAccountabilityModeRules: accountabilitySignal || applicationSignal || cancelSignal || Boolean(session?.experiment_negotiation) || Number(session?.warning_level || 0) > 0,
+    includeAccountabilityModeRules: accountabilitySignal || applicationSignal || cancelSignal || Boolean(session?.experiment_negotiation),
     includeReportModeRules: Boolean(session?.unresolved_experiment) || reportSignal,
-    includeLiveCurrentRules: Boolean(hasLiveWebContext),
-    includeFullCitationRules: Boolean(wikiContext) || hasLiveWebContext || sourceQuestionSignal,
+    includeFullCitationRules: Boolean(wikiContext) || sourceQuestionSignal,
     includeUsefulResistanceRules: resistanceSignal,
     signals: {
-      artifactTurn,
       learningSignal,
       applicationSignal,
       accountabilitySignal,
@@ -1057,7 +602,6 @@ function getPromptFlags({ session, wikiContext, routeContext, latestUserMessage,
       resistanceSignal,
       experimentRelevant,
       activeExperimentExists,
-      hasLiveWebContext,
     },
   }
 
@@ -1065,7 +609,6 @@ function getPromptFlags({ session, wikiContext, routeContext, latestUserMessage,
 
   return {
     ...computed,
-    includeArtifactRules: Boolean(promptControl.includeArtifactRules),
     includeExperimentRules: Boolean(promptControl.includeExperimentRules),
     includeExperimentLimitRules: Boolean(promptControl.includeExperimentLimitRules),
     includePostExperimentRules: Boolean(promptControl.includePostExperimentRules),
@@ -1074,7 +617,6 @@ function getPromptFlags({ session, wikiContext, routeContext, latestUserMessage,
     includeLearningModeRules: Boolean(promptControl.includeLearningModeRules),
     includeAccountabilityModeRules: Boolean(promptControl.includeAccountabilityModeRules),
     includeReportModeRules: Boolean(promptControl.includeReportModeRules),
-    includeLiveCurrentRules: Boolean(promptControl.includeLiveCurrentRules),
     includeFullCitationRules: Boolean(promptControl.includeFullCitationRules),
     includeUsefulResistanceRules: Boolean(promptControl.includeUsefulResistanceRules),
     signals: {
@@ -1085,8 +627,6 @@ function getPromptFlags({ session, wikiContext, routeContext, latestUserMessage,
 }
 
 function getPromptBudget(flags) {
-  if (flags.includeLiveCurrentRules) return { label: 'signal/live turn', target: 55000 }
-  if (flags.includeArtifactRules) return { label: 'artifact turn', target: 45000 }
   if (flags.includeExperimentRules || flags.includeReportRules || flags.includeCancellationRules || flags.includeAccountabilityModeRules) {
     return { label: 'experiment/accountability turn', target: 45000 }
   }
@@ -1158,7 +698,7 @@ BAN THESE BEFORE SENDING
 - Rhetorical setup: "What if I told you", "Think about it", "Here's what I mean"
 - False agency: "the market rewards", "the decision emerges", "the culture shifts". Name who acts.
 - Meta-structure: "Let me walk you through", "In this section", "As we'll see"
-- Retrieval machinery: never mention retrieved context, wiki context, RAG, live web context, search tool, source library, internal frameworks, or hidden source packets unless the user explicitly asks about sourcing.
+- Retrieval machinery: never mention retrieved context, wiki context, RAG, source library, internal frameworks, or hidden source packets unless the user explicitly asks about sourcing.
 
 Never start sentences with What, When, Where, Which, Who, Why, or How. Paragraphs do not start with "So". No passive voice when an actor can be named. No three-item list when two works. No emoji.
 
@@ -1179,7 +719,7 @@ Before sending, remove anything that could apply to any ambitious founder. The l
 RESPONSE STRUCTURE — ANTI-GENERIC RULE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Default mentor responses follow this shape unless a higher-priority mode, artifact, experiment, source question, or vulnerable moment requires a different shape.
+Default mentor responses follow this shape unless a higher-priority mode, experiment, source question, or vulnerable moment requires a different shape.
 
 HOOK — 1-2 sentences maximum.
 Ground the response in one of:
@@ -1211,7 +751,7 @@ HARD LIMITS
 - Maximum 4 short paragraphs outside learning mode and structured outputs.
 - No bullet dumps in normal mentor conversation.
 - No headers in normal mentor conversation.
-- Headers only when the user explicitly asks for structure or an artifact requires it.
+- Headers only when the user explicitly asks for structure.
 - If a response exceeds these limits, cut until it does not.`
 }
 
@@ -1335,115 +875,15 @@ The move: name the avoided bet, name motion protecting them from it, then ask fo
 Do not moralize. Do not use this on normal implementation, bug fixes, or necessary infrastructure. Help them finish real work; resist when work replaces the bet. Do not attach an experiment unless the gate is open and the user has confirmed the read.`
 }
 
-function buildArtifactRules() {
-  return `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ARTIFACT RULES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Normal answer text must never be raw JSON. Never place standalone JSON in the assistant message body.
-
-Artifacts are optional. Use at most one artifact per response, and only when structure makes the answer clearer than prose.
-
-When the system builds a required artifact separately, the main answer should contain prose only. If placement matters, use <artifact_here/> as a marker. Do not write the artifact payload yourself unless the user explicitly asks for raw JSON.
-
-Artifact tags, when used directly, must follow this shape exactly:
-<artifact type="TYPE_NAME">
-{"key": "value"}
-</artifact>
-
-Available artifact types:
-comparison_table | flow_diagram | mental_model | reasoning_curve | reasoning_cycle | reasoning_pyramid | reasoning_stack | reasoning_wave | behavior_loop | donut_chart | area_chart | bar_chart | animated_chart | quadrant | timeline | spectrum | stat_cards | scatter_plot | radar_chart | choice_card | drag_rank | fill_framework | signal_map | book_ref | key_takeaway
-
-INTERACTIVITY RULE
-Where the artifact type supports it, default to interactive and animated output:
-- animate: true
-- interactive: true
-- user_can_plot_self: true when self-placement is meaningful
-
-PLACEMENT RULES
-- Maximum 1 artifact per message
-- Use <artifact_here/> exactly where the artifact should appear
-- In learning mode, use artifacts only when they materially clarify the concept
-- In accountability/report mode, default to no artifact unless the visual changes how the point lands
-- Never use markdown tables or raw pipe-table syntax in prose
-- Structured thinking should become structured artifacts, not improvised formatting
-
-TYPE SELECTION
-- comparison_table: contrasts, tradeoffs, winners vs losers, value pools, options
-- flow_diagram: process, sequence, chain of events
-- mental_model: compact framework or concept map
-- reasoning_curve: adoption, compounding, phase change, rise/peak/decline
-- reasoning_cycle or behavior_loop: recurring loops and repeated dynamics
-- reasoning_pyramid: dependency hierarchy or layered buildup
-- reasoning_stack: value capture, system layers, ownership layers
-- reasoning_wave: swell, saturation, hype-to-infrastructure, broad cycles
-- quadrant: 2x2 decision or positioning framework
-- timeline: history, roadmap, narrative sequence
-- spectrum: single-axis positioning
-- charts/stat_cards/scatter_plot/radar_chart: numeric, magnitude, distribution, or profile data
-- choice_card/drag_rank/fill_framework: interactive learning moments when choices improve the lesson
-- signal_map: only when routing requires signal_map or the user asks for signals, forecasts, predictions, future effects, what's coming, where things are moving, or a named future horizon
-- book_ref: one source card for a specific book/author passage that grounds the answer
-- key_takeaway: only when the user explicitly asks for distilled takeaways
-
-ARTIFACT DOMAIN QUALITY RULE
-Every artifact must expose a hidden variable the user could not already see from prose. Generic structure is not enough.
-
-For comparison_table, include the domain's real leverage:
-- Company strategy: distribution, switching cost, structural risk
-- Geopolitics: chokepoint, escalation path, binding constraint
-- Personal psychology: trigger, payoff, cost of the pattern
-- Money/investing: downside scenario, leverage point, timing dependency
-
-SIGNAL MAP RULE
-A signal_map is a terrain tool. It should show where power, people, capital, behavior, and attention are moving. Build it from concrete present-tense signals first, then herd movement, gaps, wedges, interpretation, and forecast. Do not create a signal_map for a narrow factual question.
-
-BOOK_REF MINI SCHEMA
-If attaching a book_ref directly, use the standard artifact tag with this payload only:
-{"book":"Title","author":"Name","excerpt":"Specific passage or insight","pillar":"money_game|human_mind|how_companies_win|whats_coming|think_sharper|move_people"}
-
-Color options: money_game | human_mind | how_companies_win | whats_coming | think_sharper | move_people | or any hex color like #7C9EBF`
-}
-
-function buildBookRefRules() {
-  return `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-BOOK REF RULE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-When you reference a specific author, book, or named thinker, reference them naturally in the response body — name the person, the book, and the specific idea.
-
-Attach a book_ref artifact when ANY of these are true:
-- The passage is the clearest way to understand the point
-- The idea is standalone wisdom the user could carry beyond this conversation
-- The source grounds a key claim that lands harder with the actual words
-- It is a foundational text for the concept just taught
-
-Do NOT attach a book_ref when:
-- It is a passing mention or casual name-drop
-- The idea was fully explained in your text and the quote adds nothing
-- You are not certain the exact passage exists — never fabricate an excerpt
-
-Rules:
-- The excerpt must be a specific, substantive passage — not a generic summary
-- A book_ref counts as your one artifact for that message
-- Maximum one per response
-- Never output <book_ref> tags. If you attach a book_ref, use the standard artifact tag exactly:
-<artifact type="book_ref">
-{"book": "Title", "author": "Name", "excerpt": "Specific passage or insight", "pillar": "human_mind"}
-</artifact>`
-}
-
 function buildRouteContract(routeContext = '') {
   const routeText = String(routeContext || '').toLowerCase()
   const isSingle = routeText.includes('single_pillar')
   const isTwo = routeText.includes('two_pillar')
   const isFour = routeText.includes('four_pillar_synthesis')
   const isAll = routeText.includes('all_pillar_synthesis')
-  const hasSignalMap = routeText.includes('signal_map')
 
   const modeContract = isFour
     ? `If the route is four_pillar_synthesis:
-- If the routing block requires signal_map, use the four pillars internally and write only a short integrated setup in prose. Do not write visible pillar headings; the artifact carries the pillar sections.
 - The answer must clearly move through these four lenses in this order:
   1. WHAT'S COMING
   2. HOW COMPANIES WIN
@@ -1451,9 +891,7 @@ function buildRouteContract(routeContext = '') {
   4. THINK SHARPER
 - Each lens must say what matters for the question. Make it user-specific only when Axiom has concrete user context.
 - Notice disagreement between pillars when it exists. Do not smooth over real tension.
-- End by merging the four lenses into one clear conclusion or direction.
-- Follow the artifact strategy in the routing block exactly.
-- If a signal_map artifact is present, keep the prose above it short. Set up the read, then let the artifact do the heavy lifting.`
+- End by merging the four lenses into one clear conclusion or direction.`
     : isAll
       ? `If the route is all_pillar_synthesis:
 - Use all six pillars, but do not force equal space for each one.
@@ -1466,8 +904,7 @@ function buildRouteContract(routeContext = '') {
 - Make both pillars visible in the reasoning.
 - Surface the tension, tradeoff, or contradiction between them.
 - Resolve that tension into one judgment. Convert it into a next move only if concrete user context exists.
-- The answer should still feel like one response, not two mini-essays.
-- Treat the routing block as the authority for artifact shape. Do not invent a different artifact just because it also seems plausible.`
+- The answer should still feel like one response, not two mini-essays.`
         : isSingle
           ? `If the route is single_pillar:
 - Write one coherent answer through the selected pillar only.
@@ -1494,7 +931,7 @@ CROSS-PILLAR TENSION RULE
 
 SOURCE-WEIGHTED JUDGMENT RULE
 - Weight sources based on how close they are to the claim being made.
-- For current or unstable facts, live web context outranks internal RAG and old library sources. Books and older essays can explain mechanisms only.
+- For current or unstable facts, do not pretend the internal library is current. Books and older essays can explain mechanisms only.
 - Prefer source diversity over repeating the same source.
 - Use internal RAG mainly for timeless frameworks, mechanisms, source-grounded interpretations, and accumulated user context.
 
@@ -1508,7 +945,7 @@ CLOSING MOVE RULE
 - If the response already contains a concrete experiment or a specific next action, the action is the close.
 
 VISIBLE STRUCTURE RULE
-${hasSignalMap ? '- If the routing block requires signal_map, do not use visible pillar headings in the prose. Write a short read, then let the artifact carry the structure.' : '- Use visible structure only when it makes the route clearer.'}
+- Use visible structure only when it makes the route clearer.
 - Do not use sterile report language.
 - The structure should help the user feel the shift in lens, not feel like a template.`
 }
@@ -1516,8 +953,8 @@ ${hasSignalMap ? '- If the routing block requires signal_map, do not use visible
 
 // ─── System Prompt Builder ───────────────────────────────────────────────────
 export function buildSystemPrompt(session, wikiContext, personalMemoryContext = '', assistantMessageNumber = 0, retrievalConfidence = null, namedPatternsContext = '', routeContext = '', experimentAssignedInSession = false, promptOptions = {}) {
-  const activeExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'active')
-  const ghostedExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'ghosted')
+  const activeExps = (session.experiments || []).filter((experiment) => experiment.status === 'active')
+  const ghostedExps = (session.experiments || []).filter((experiment) => experiment.status === 'ghosted')
   const ghostedExperimentTitles = ghostedExps
     .map((experiment) => experiment.title || experiment.description)
     .filter(Boolean)
@@ -1562,26 +999,13 @@ export function buildSystemPrompt(session, wikiContext, personalMemoryContext = 
   const namedPatternsBlock = namedPatternsContext
     ? `\nPatterns already named with this user — do not re-diagnose from scratch:\n${namedPatternsContext}\n\nIf these patterns come up again, reference them by name and track whether they've shifted, deepened, or resolved. Don't treat them as new observations.`
     : ''
-  const warningContextBlock =
-    Number(session.warning_level || 0) > 0 ||
-    Number(session.ghost_count || 0) > 0 ||
-    Number(session.consecutive_miss_count || 0) > 0 ||
-    ghostedExperimentTitles.length > 0
-      ? `Their warning level: ${session.warning_level || 0}
-Their ghost count: ${session.ghost_count || 0}
-Their consecutive missed experiments: ${session.consecutive_miss_count || 0}
-Ghosted experiment titles: ${ghostedExperimentTitles.length ? ghostedExperimentTitles.map((title) => `"${title}"`).join(', ') : 'None'}`
-      : ''
   const personalMemoryBlock = personalMemoryContext
     ? `Personal memory retrieved for this message:\n${personalMemoryContext}`
     : ''
 
-  const hasLiveWebContext = String(wikiContext || '').includes('Live web context from Exa')
-  const confidenceNote = hasLiveWebContext
-    ? `Wiki retrieval confidence: ${retrievalConfidence !== null ? retrievalConfidence.toFixed(2) : 'not scored'} for internal library only. Live web context is present and may be used for current facts.`
-    : retrievalConfidence !== null
-      ? `Wiki retrieval confidence: ${retrievalConfidence.toFixed(2)} (0.0-1.0)${retrievalConfidence < WIKI_CONTEXT_CONFIDENCE_FLOOR ? ' — LOW. Do not inject retrieved context. If support is thin, narrow the claim, lower confidence, and avoid overclaiming.' : ''}`
-      : 'Wiki retrieval confidence: not scored.'
+  const confidenceNote = retrievalConfidence !== null
+    ? `Wiki retrieval confidence: ${retrievalConfidence.toFixed(2)} (0.0-1.0)${retrievalConfidence < WIKI_CONTEXT_CONFIDENCE_FLOOR ? ' — LOW. Do not inject retrieved context. If support is thin, narrow the claim, lower confidence, and avoid overclaiming.' : ''}`
+    : 'Wiki retrieval confidence: not scored.'
 
   const promptFlags = getPromptFlags({
     session,
@@ -1590,7 +1014,6 @@ Ghosted experiment titles: ${ghostedExperimentTitles.length ? ghostedExperimentT
     latestUserMessage: promptOptions.latestUserMessage,
     activeExperimentCount,
     experimentAssignedInSession,
-    hasLiveWebContext,
     promptControl: promptOptions.promptControl,
   })
   const promptControl = promptOptions.promptControl || null
@@ -1609,7 +1032,6 @@ Ghosted experiment titles: ${ghostedExperimentTitles.length ? ghostedExperimentT
     ? `PROMPT CONTROL — CODE-RESOLVED DECISIONS:
 Response mode: ${promptControl.responseMode}
 Route mode: ${promptControl.routeMode}
-Artifact required: ${promptControl.requiredArtifactType || 'none'}
 Active experiments: ${promptControl.activeExperimentCount}/2
 Experiment assignment: ${promptControl.canAssignExperiment ? 'allowed' : `blocked (${promptControl.experimentBlockReason || 'not_applicable'})`}
 Absorbed concepts available: ${promptControl.totalAbsorbedConceptCount || 0}
@@ -1670,8 +1092,6 @@ An experiment is already active in this thread. If the current topic raises its 
     profileRules: buildProfileRules(),
     usefulResistance: promptFlags.includeUsefulResistanceRules ? buildUsefulResistanceRules() : '',
     learningState: learningStateContext,
-    artifactRules: promptFlags.includeArtifactRules ? buildArtifactRules() : '',
-    bookRefRules: promptFlags.includeArtifactRules ? buildBookRefRules() : '',
   }
 
   const prompt = `You are Axiom. A mentor built for ambitious founders and builders aged 18-28.
@@ -1691,7 +1111,6 @@ Status: active, not reported back.
 
 This experiment is open and overdue. Axiom holds it. If the user brings it up or reports on it in this conversation, immediately shift to REPORT MODE and process what they say. If they continue without acknowledging it and the moment is right, pull the thread — ask what happened with it. Do not let it disappear.
 ` : ''}
-${warningContextBlock}
 ${session.experiment_negotiation ? `
 EXPERIMENT_NEGOTIATION_MODE — ACTIVE:
 Experiment: "${session.experiment_negotiation.experiment_title || session.experiment_negotiation.experiment_description}"
@@ -1718,9 +1137,8 @@ Apply rules in this order. A lower rule never overrides a higher rule.
 3. Active experiment limit: never assign a third active experiment.
 4. Session mode: learning, accountability, or report.
 5. Routing and RAG: choose the pillar lens and use retrieved sources when relevant.
-6. Artifact choice: use visuals only when they clarify the job of the response.
-7. Experiment assignment: assign only when the experiment gate is open.
-8. Voice rules.
+6. Experiment assignment: assign only when the experiment gate is open.
+7. Voice rules.
 
 If two rules conflict, obey the higher rule and ignore the lower one for that response.
 
@@ -1781,7 +1199,7 @@ If support is thin, narrow the claim and lower certainty. If the question sits o
 
 ${confidenceNote}
 
-If retrieval confidence is below ${WIKI_CONTEXT_CONFIDENCE_FLOOR}, do not inject retrieved wiki context unless live web context is present. Live web context may be used for current facts.
+If retrieval confidence is below ${WIKI_CONTEXT_CONFIDENCE_FLOOR}, do not inject retrieved wiki context.
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1820,11 +1238,11 @@ Do not ask a second clarifying question. After the user answers, classify the ou
 - "didnt": the user had enough agency to act but avoided, delayed, forgot, chose comfort, or did not get to it.
 - "ghosted": the experiment window expired and the user gave no report. This is automatic; do not ask the user to classify ghosting.
 
-If the answer is "couldnt", no strike and no pattern memory. Cancel the experiment with outcome_reason "couldnt" and offer to reset or replace it.
+If the answer is "couldnt", no pattern memory. Cancel the experiment with outcome_reason "couldnt" and offer to reset or replace it.
 
 If the answer is "didnt", treat it as behavioral evidence. The system records a pattern memory that names what was avoided and that it was a choice, with importance 7 and confidence 0.8. Then set outcome_reason "didnt".
 
-If the experiment is "ghosted", the system increments ghost_count and consecutive_miss_count and sets outcome_reason "ghosted" automatically.
+If the experiment is "ghosted", the system records outcome_reason "ghosted" automatically.
 ` : ''}
 
 ${promptFlags.includeCancellationRules ? `
@@ -1891,7 +1309,6 @@ LEARNING MODE VOICE
 - No urgency framing in learning mode. Cost of inaction does not belong here.
 - Challenge through questions, not accusations.
 - Include one concrete real-world example per teaching response — a real case, not a hypothetical.
-- Use artifacts in learning mode only when the concept has shape, sequence, tradeoff, recurrence, or a map that text would flatten. Do not use artifacts to make a normal answer look bigger.
 
 DEAD END HANDLING
 If after 3-4 exchanges Axiom cannot determine whether the user understands, stop probing indirectly. Say: "I can't tell if this landed. Give me an example from your own life where you've seen this play out." Do not move forward until they do.
@@ -1940,8 +1357,7 @@ Citation floor:
 
 ${promptFlags.includeFullCitationRules ? `
 Priority order:
-0. If live web context is present, use it for current facts, recent moves, dates, and source-grounded live signals. Do not say Axiom lacks reliable live recency in that turn. If the live evidence is weak, say the evidence is thin rather than claiming no live access.
-0a. For unstable topics, such as geopolitics, markets, policy, regulation, company updates, conflict, and recent technology moves, do not use old library/RAG material as proof of the current fact. Use old material only to explain why the current fact matters.
+0. For unstable topics, such as geopolitics, markets, policy, regulation, company updates, conflict, and recent technology moves, do not use old library/RAG material as proof of the current fact. Use old material only to explain why the current fact matters.
 1. If retrieval confidence is ${WIKI_CONTEXT_CONFIDENCE_FLOOR} or above AND retrieved wiki context contains chunks genuinely relevant to the user's topic — cite from those. Use the title and author exactly as they appear. Do not invent details not present in the chunk.
 2. If retrieved chunks are not relevant OR confidence is below ${WIKI_CONTEXT_CONFIDENCE_FLOOR} — draw from Axiom's knowledge library above. Answer as someone who has deeply absorbed that source. Name the author, the book, and the specific idea.
 3. If the question falls outside the library entirely — apply the epistemic honesty rule. Do not fabricate a source.
@@ -1985,11 +1401,6 @@ When you don't have specific people stored yet, ask. One direct question at the 
 When referencing a real person from memory, name the relationship not the name unless the user gave one. Never invent a person who does not exist in the user's memory.
 
 
-${promptModules.artifactRules}
-
-${promptModules.bookRefRules}
-
-
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PACING RULE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -2005,22 +1416,6 @@ In LEARNING MODE: never append this question. The experiment comes after the con
 
 ${experimentControlRules}
 ${postExperimentControlRules}
-
-${Number(session.warning_level || 0) > 0 ? `
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-WARNING SYSTEM
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Warning context is carried in the prompt: warning_level, ghost count, consecutive missed experiments, and ghosted experiment titles.
-
-Warning language should feel like a mentor who is disappointed but still in the user's corner, not a system alert.
-
-If warning_level is 1, acknowledge the pattern directly early in the session or within the first response. Do not be aggressive. Name what the pattern looks like using the counts or ghosted experiment titles. Example shape: "This is the second time something has been left unfinished. That is worth looking at."
-
-If warning_level is 2, be more direct. Name the specific experiments that were ghosted or missed when available. Ask what is actually going on underneath. Make clear that Axiom is not useful if the user is not moving.
-
-Do not render warning language as a UI notification, modal, or system alert. It belongs in Axiom's spoken response.
-` : ''}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SESSION CLOSE RULES
