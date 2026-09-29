@@ -381,20 +381,11 @@ ${JSON.stringify(onboardingAnswers, null, 2)}`,
 export async function generateOpeningMessage(session, isNew) {
   const unresolvedExperiment = session.unresolved_experiment || null
   const activeExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'active')
-  const ghostedExps = (session.active_experiments || []).filter((experiment) => experiment.status === 'ghosted')
-  const ghostedTitles = ghostedExps
-    .map((experiment) => experiment.title || experiment.description)
-    .filter(Boolean)
-    .slice(-4)
   const hasExperiment = activeExps.length > 0
   const recentExp = hasExperiment ? activeExps[activeExps.length - 1] : null
 
   const contextLines = [
     `Private theory: ${session.axiom_profile}`,
-    `Warning level: ${session.warning_level}`,
-    `Ghost count: ${session.ghost_count || 0}`,
-    `Consecutive missed experiments: ${session.consecutive_miss_count || 0}`,
-    `Ghosted experiments: ${ghostedTitles.length ? ghostedTitles.map((title) => `"${title}"`).join(', ') : 'None'}`,
     unresolvedExperiment
       ? `Unresolved experiment: "${unresolvedExperiment.description}" — due ${unresolvedExperiment.due_at ? new Date(unresolvedExperiment.due_at).toLocaleDateString() : 'window passed'}`
       : hasExperiment
@@ -410,10 +401,6 @@ export async function generateOpeningMessage(session, isNew) {
     directive = `An experiment is unresolved and the user is returning: "${unresolvedExperiment.description}". ${dueLine} Open with 1-2 sentences that name this specific experiment and ask what happened. Not a check-in — accountability. Axiom remembers. Do not welcome them. Do not soften it. Lead with the experiment. Examples of the right tone: "You took this on. What happened?" or "That experiment ran out the window. Walk me through it." Use the exact experiment description in your opening — do not restate it generically.`
   } else if (isNew) {
     directive = 'This is their first session. Generate a 1-2 sentence opening that names their most specific gap or pattern. It must be a direction, not a summary. Do not welcome them.'
-  } else if (session.warning_level === 2) {
-    directive = 'Warning level is 2. Open with a direct mentor warning, not a system alert. Name the specific ghosted or missed experiments from context. Ask what is actually going on underneath. Make clear that Axiom is not useful if the user is not moving. Disappointed but still in their corner. 2-4 sentences.'
-  } else if (session.warning_level === 1) {
-    directive = 'Warning level is 1. Acknowledge the pattern early, clearly and specifically, not aggressively. Name what it looks like from the counts and ghosted experiment context. Use the shape: this is the second time something has been left unfinished. That is worth looking at. 1-2 sentences.'
   } else if (hasExperiment) {
     directive = `User is returning. Reference the active experiment "${recentExp.description}" — ask where they are with it. Do not summarize. 1-2 sentences.`
   } else {
@@ -470,7 +457,7 @@ Rules:
         content: `Private theory: ${session.axiom_profile || 'None'}
 Session notes: ${session.session_notes || 'None'}
 Active experiments: ${JSON.stringify(activeExps)}
-Warning level: ${session.warning_level || 0}`,
+`,
       },
     ],
     max_completion_tokens: 60,
@@ -707,7 +694,6 @@ Rules:
         content: `Private theory: ${session.axiom_profile || 'None'}
 Session notes: ${session.session_notes || 'None'}
 Active experiments: ${JSON.stringify(activeExps)}
-Warning level: ${session.warning_level || 0}
 
 Recent conversation history:
 ${history || 'No recent messages.'}`,
@@ -779,9 +765,6 @@ Write one opening message only.
 Session notes: ${session.session_notes || 'None'}
 Pillar weights: ${session.pillar_weights ? JSON.stringify(session.pillar_weights) : 'balanced'}
 Active experiments: ${JSON.stringify(activeExps)}
-Warning level: ${session.warning_level || 0}
-Ghost count: ${session.ghost_count || 0}
-Consecutive missed experiments: ${session.consecutive_miss_count || 0}
 Ghosted experiments: ${ghostedTitles.length ? ghostedTitles.map((title) => `"${title}"`).join(', ') : 'None'}
 
 Founder Brain node:
@@ -851,9 +834,6 @@ This is a brand-new thread opened from a private Founder Brain node. The user ta
 Session notes: ${session.session_notes || 'None'}
 Pillar weights: ${session.pillar_weights ? JSON.stringify(session.pillar_weights) : 'balanced'}
 Active experiments: ${JSON.stringify(activeExps)}
-Warning level: ${session.warning_level || 0}
-Ghost count: ${session.ghost_count || 0}
-Consecutive missed experiments: ${session.consecutive_miss_count || 0}
 Ghosted experiments: ${ghostedTitles.length ? ghostedTitles.map((title) => `"${title}"`).join(', ') : 'None'}
 
 Founder Brain node:
@@ -993,7 +973,7 @@ export function getLastPromptDiagnostics() {
   return lastPromptDiagnostics
 }
 
-function getPromptFlags({ session, wikiContext, routeContext, latestUserMessage, activeExperimentCount, experimentAssignedInSession, hasLiveWebContext, promptControl = null }) {
+function getPromptFlags({ session, wikiContext, routeContext, latestUserMessage, activeExperimentCount, experimentAssignedInSession, promptControl = null }) {
   const routeText = String(routeContext || '').toLowerCase()
   const userText = String(latestUserMessage || '').toLowerCase()
   const combinedText = `${routeText}\n${userText}`
@@ -1036,14 +1016,12 @@ function getPromptFlags({ session, wikiContext, routeContext, latestUserMessage,
     includeExperimentRules: activeExperimentCount < 2 && experimentRelevant,
     includeExperimentLimitRules: activeExperimentCount >= 2,
     includePostExperimentRules: Boolean(experimentAssignedInSession),
-    includeWarningRules: Number(session?.warning_level || 0) > 0,
     includeCancellationRules: Boolean(session?.experiment_negotiation) || (activeExperimentExists && cancelSignal),
     includeReportRules: Boolean(session?.unresolved_experiment) || (activeExperimentExists && reportSignal),
     includeLearningModeRules: learningSignal && !reportSignal && !cancelSignal,
-    includeAccountabilityModeRules: accountabilitySignal || applicationSignal || cancelSignal || Boolean(session?.experiment_negotiation) || Number(session?.warning_level || 0) > 0,
+    includeAccountabilityModeRules: accountabilitySignal || applicationSignal || cancelSignal || Boolean(session?.experiment_negotiation),
     includeReportModeRules: Boolean(session?.unresolved_experiment) || reportSignal,
-    includeLiveCurrentRules: Boolean(hasLiveWebContext),
-    includeFullCitationRules: Boolean(wikiContext) || hasLiveWebContext || sourceQuestionSignal,
+    includeFullCitationRules: Boolean(wikiContext) || sourceQuestionSignal,
     includeUsefulResistanceRules: resistanceSignal,
     signals: {
       artifactTurn,
@@ -1057,7 +1035,6 @@ function getPromptFlags({ session, wikiContext, routeContext, latestUserMessage,
       resistanceSignal,
       experimentRelevant,
       activeExperimentExists,
-      hasLiveWebContext,
     },
   }
 
@@ -1074,7 +1051,6 @@ function getPromptFlags({ session, wikiContext, routeContext, latestUserMessage,
     includeLearningModeRules: Boolean(promptControl.includeLearningModeRules),
     includeAccountabilityModeRules: Boolean(promptControl.includeAccountabilityModeRules),
     includeReportModeRules: Boolean(promptControl.includeReportModeRules),
-    includeLiveCurrentRules: Boolean(promptControl.includeLiveCurrentRules),
     includeFullCitationRules: Boolean(promptControl.includeFullCitationRules),
     includeUsefulResistanceRules: Boolean(promptControl.includeUsefulResistanceRules),
     signals: {
@@ -1085,7 +1061,6 @@ function getPromptFlags({ session, wikiContext, routeContext, latestUserMessage,
 }
 
 function getPromptBudget(flags) {
-  if (flags.includeLiveCurrentRules) return { label: 'signal/live turn', target: 55000 }
   if (flags.includeArtifactRules) return { label: 'artifact turn', target: 45000 }
   if (flags.includeExperimentRules || flags.includeReportRules || flags.includeCancellationRules || flags.includeAccountabilityModeRules) {
     return { label: 'experiment/accountability turn', target: 45000 }
@@ -1158,7 +1133,7 @@ BAN THESE BEFORE SENDING
 - Rhetorical setup: "What if I told you", "Think about it", "Here's what I mean"
 - False agency: "the market rewards", "the decision emerges", "the culture shifts". Name who acts.
 - Meta-structure: "Let me walk you through", "In this section", "As we'll see"
-- Retrieval machinery: never mention retrieved context, wiki context, RAG, live web context, search tool, source library, internal frameworks, or hidden source packets unless the user explicitly asks about sourcing.
+- Retrieval machinery: never mention retrieved context, wiki context, RAG, source library, internal frameworks, or hidden source packets unless the user explicitly asks about sourcing.
 
 Never start sentences with What, When, Where, Which, Who, Why, or How. Paragraphs do not start with "So". No passive voice when an actor can be named. No three-item list when two works. No emoji.
 
@@ -1494,7 +1469,7 @@ CROSS-PILLAR TENSION RULE
 
 SOURCE-WEIGHTED JUDGMENT RULE
 - Weight sources based on how close they are to the claim being made.
-- For current or unstable facts, live web context outranks internal RAG and old library sources. Books and older essays can explain mechanisms only.
+- For current or unstable facts, do not pretend the internal library is current. Books and older essays can explain mechanisms only.
 - Prefer source diversity over repeating the same source.
 - Use internal RAG mainly for timeless frameworks, mechanisms, source-grounded interpretations, and accumulated user context.
 
@@ -1562,26 +1537,13 @@ export function buildSystemPrompt(session, wikiContext, personalMemoryContext = 
   const namedPatternsBlock = namedPatternsContext
     ? `\nPatterns already named with this user — do not re-diagnose from scratch:\n${namedPatternsContext}\n\nIf these patterns come up again, reference them by name and track whether they've shifted, deepened, or resolved. Don't treat them as new observations.`
     : ''
-  const warningContextBlock =
-    Number(session.warning_level || 0) > 0 ||
-    Number(session.ghost_count || 0) > 0 ||
-    Number(session.consecutive_miss_count || 0) > 0 ||
-    ghostedExperimentTitles.length > 0
-      ? `Their warning level: ${session.warning_level || 0}
-Their ghost count: ${session.ghost_count || 0}
-Their consecutive missed experiments: ${session.consecutive_miss_count || 0}
-Ghosted experiment titles: ${ghostedExperimentTitles.length ? ghostedExperimentTitles.map((title) => `"${title}"`).join(', ') : 'None'}`
-      : ''
   const personalMemoryBlock = personalMemoryContext
     ? `Personal memory retrieved for this message:\n${personalMemoryContext}`
     : ''
 
-  const hasLiveWebContext = String(wikiContext || '').includes('Live web context from Exa')
-  const confidenceNote = hasLiveWebContext
-    ? `Wiki retrieval confidence: ${retrievalConfidence !== null ? retrievalConfidence.toFixed(2) : 'not scored'} for internal library only. Live web context is present and may be used for current facts.`
-    : retrievalConfidence !== null
-      ? `Wiki retrieval confidence: ${retrievalConfidence.toFixed(2)} (0.0-1.0)${retrievalConfidence < WIKI_CONTEXT_CONFIDENCE_FLOOR ? ' — LOW. Do not inject retrieved context. If support is thin, narrow the claim, lower confidence, and avoid overclaiming.' : ''}`
-      : 'Wiki retrieval confidence: not scored.'
+  const confidenceNote = retrievalConfidence !== null
+    ? `Wiki retrieval confidence: ${retrievalConfidence.toFixed(2)} (0.0-1.0)${retrievalConfidence < WIKI_CONTEXT_CONFIDENCE_FLOOR ? ' — LOW. Do not inject retrieved context. If support is thin, narrow the claim, lower confidence, and avoid overclaiming.' : ''}`
+    : 'Wiki retrieval confidence: not scored.'
 
   const promptFlags = getPromptFlags({
     session,
@@ -1590,7 +1552,6 @@ Ghosted experiment titles: ${ghostedExperimentTitles.length ? ghostedExperimentT
     latestUserMessage: promptOptions.latestUserMessage,
     activeExperimentCount,
     experimentAssignedInSession,
-    hasLiveWebContext,
     promptControl: promptOptions.promptControl,
   })
   const promptControl = promptOptions.promptControl || null
@@ -1691,7 +1652,6 @@ Status: active, not reported back.
 
 This experiment is open and overdue. Axiom holds it. If the user brings it up or reports on it in this conversation, immediately shift to REPORT MODE and process what they say. If they continue without acknowledging it and the moment is right, pull the thread — ask what happened with it. Do not let it disappear.
 ` : ''}
-${warningContextBlock}
 ${session.experiment_negotiation ? `
 EXPERIMENT_NEGOTIATION_MODE — ACTIVE:
 Experiment: "${session.experiment_negotiation.experiment_title || session.experiment_negotiation.experiment_description}"
@@ -1781,7 +1741,7 @@ If support is thin, narrow the claim and lower certainty. If the question sits o
 
 ${confidenceNote}
 
-If retrieval confidence is below ${WIKI_CONTEXT_CONFIDENCE_FLOOR}, do not inject retrieved wiki context unless live web context is present. Live web context may be used for current facts.
+If retrieval confidence is below ${WIKI_CONTEXT_CONFIDENCE_FLOOR}, do not inject retrieved wiki context.
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1824,7 +1784,7 @@ If the answer is "couldnt", no strike and no pattern memory. Cancel the experime
 
 If the answer is "didnt", treat it as behavioral evidence. The system records a pattern memory that names what was avoided and that it was a choice, with importance 7 and confidence 0.8. Then set outcome_reason "didnt".
 
-If the experiment is "ghosted", the system increments ghost_count and consecutive_miss_count and sets outcome_reason "ghosted" automatically.
+If the experiment is "ghosted", the system records outcome_reason "ghosted" automatically.
 ` : ''}
 
 ${promptFlags.includeCancellationRules ? `
@@ -1940,8 +1900,7 @@ Citation floor:
 
 ${promptFlags.includeFullCitationRules ? `
 Priority order:
-0. If live web context is present, use it for current facts, recent moves, dates, and source-grounded live signals. Do not say Axiom lacks reliable live recency in that turn. If the live evidence is weak, say the evidence is thin rather than claiming no live access.
-0a. For unstable topics, such as geopolitics, markets, policy, regulation, company updates, conflict, and recent technology moves, do not use old library/RAG material as proof of the current fact. Use old material only to explain why the current fact matters.
+0. For unstable topics, such as geopolitics, markets, policy, regulation, company updates, conflict, and recent technology moves, do not use old library/RAG material as proof of the current fact. Use old material only to explain why the current fact matters.
 1. If retrieval confidence is ${WIKI_CONTEXT_CONFIDENCE_FLOOR} or above AND retrieved wiki context contains chunks genuinely relevant to the user's topic — cite from those. Use the title and author exactly as they appear. Do not invent details not present in the chunk.
 2. If retrieved chunks are not relevant OR confidence is below ${WIKI_CONTEXT_CONFIDENCE_FLOOR} — draw from Axiom's knowledge library above. Answer as someone who has deeply absorbed that source. Name the author, the book, and the specific idea.
 3. If the question falls outside the library entirely — apply the epistemic honesty rule. Do not fabricate a source.
@@ -2005,22 +1964,6 @@ In LEARNING MODE: never append this question. The experiment comes after the con
 
 ${experimentControlRules}
 ${postExperimentControlRules}
-
-${Number(session.warning_level || 0) > 0 ? `
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-WARNING SYSTEM
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Warning context is carried in the prompt: warning_level, ghost count, consecutive missed experiments, and ghosted experiment titles.
-
-Warning language should feel like a mentor who is disappointed but still in the user's corner, not a system alert.
-
-If warning_level is 1, acknowledge the pattern directly early in the session or within the first response. Do not be aggressive. Name what the pattern looks like using the counts or ghosted experiment titles. Example shape: "This is the second time something has been left unfinished. That is worth looking at."
-
-If warning_level is 2, be more direct. Name the specific experiments that were ghosted or missed when available. Ask what is actually going on underneath. Make clear that Axiom is not useful if the user is not moving.
-
-Do not render warning language as a UI notification, modal, or system alert. It belongs in Axiom's spoken response.
-` : ''}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SESSION CLOSE RULES

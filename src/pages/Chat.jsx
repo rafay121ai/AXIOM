@@ -15,7 +15,6 @@ import {
   updateConceptStatesAfterResponse,
 } from '../lib/rag'
 import { searchPersonalMemory, formatNamedPatternsContext, formatPersonalMemoryContext, recordExperimentAvoidancePattern, recordExperimentResistancePattern, updatePersonalMemory } from '../lib/personalMemory'
-import { formatLiveSearchContext, liveSearch, shouldUseLiveSearch } from '../lib/liveSearch'
 import { getCachedTurnContext, setCachedTurnContext } from '../lib/sessionTurnContext'
 import { syncPersonalWiki } from '../lib/personalWiki'
 import { ensureConversationThread } from '../lib/conversationThreads'
@@ -483,7 +482,7 @@ function classifyPromptResponseMode({
 
   if (session?.unresolved_experiment || reportSignal) return 'report'
   if (inExperimentMode || cancelSignal) return 'experiment_negotiation'
-  if (accountabilitySignal || applicationSignal || Number(session?.warning_level || 0) > 0) return 'accountability'
+  if (accountabilitySignal || applicationSignal) return 'accountability'
   if (learningSignal) return 'learning'
   if (activeExperimentCount > 0) return 'continuity'
   return 'terrain'
@@ -499,7 +498,6 @@ function resolvePromptControl({
   experimentAssignedInSession = false,
   concepts = [],
   historicalAbsorbedConceptCount = 0,
-  hasLiveWebContext = false,
   inExperimentMode = false,
   retrievalConfidence = null,
 } = {}) {
@@ -558,8 +556,7 @@ function resolvePromptControl({
     includeReportRules: responseMode === 'report',
     includeCancellationRules: responseMode === 'experiment_negotiation',
     includeUsefulResistanceRules: usefulResistanceSignal,
-    includeFullCitationRules: Boolean(wantsSources || hasLiveWebContext || retrievalConfidence >= 0.3),
-    includeLiveCurrentRules: Boolean(hasLiveWebContext),
+    includeFullCitationRules: Boolean(wantsSources || retrievalConfidence >= 0.3),
   }
 }
 
@@ -788,14 +785,6 @@ function stripForDisplay(text, artifactType = null) {
     .trim()
 }
 
-function warningLevelForCounts(ghostCount = 0, consecutiveMissCount = 0, currentLevel = 0) {
-  if (ghostCount >= 4 || consecutiveMissCount >= 5) return Math.max(currentLevel, 2)
-  if (ghostCount >= 2 || consecutiveMissCount >= 3) return Math.max(currentLevel, 1)
-  return currentLevel
-}
-
-// ─── Ghosting Check ──────────────────────────────────────────────────────────
-// Returns updated session if warning_level needs to change, otherwise null.
 function normalizeExperiment(row) {
   return {
     id: row.id,
@@ -856,9 +845,6 @@ function getUnresolvedExperiment(experiments, messages) {
 async function checkAndUpdateGhosting(session) {
   const now = Date.now()
   const experiments = session.active_experiments || []
-  let ghost_count = session.ghost_count || 0
-  let consecutive_miss_count = session.consecutive_miss_count || 0
-  let warning_level = session.warning_level || 0
   let changed = false
   const rowUpdates = []
 
@@ -872,8 +858,6 @@ async function checkAndUpdateGhosting(session) {
 
     if (!expired) return exp
 
-    ghost_count++           // lifetime total, kept for analytics
-    consecutive_miss_count++ // consecutive streak, drives warning thresholds
     changed = true
 
     const ghostedAt = new Date().toISOString()
@@ -882,12 +866,6 @@ async function checkAndUpdateGhosting(session) {
     return updated
 
   })
-
-  const thresholdWarningLevel = warningLevelForCounts(ghost_count, consecutive_miss_count, warning_level)
-  if (thresholdWarningLevel !== warning_level) {
-    warning_level = thresholdWarningLevel
-    changed = true
-  }
 
   if (!changed) return session
 
@@ -905,16 +883,7 @@ async function checkAndUpdateGhosting(session) {
       )
   )
 
-  const updates = {
-    ghost_count,
-    consecutive_miss_count,
-    warning_level,
-  }
-
-  const { error: sessionUpdateError } = await supabase.from('sessions').update(updates).eq('id', session.id)
-  if (sessionUpdateError) console.error('Failed to update session ghost counts', { error: sessionUpdateError, session_id: session.id })
-
-  return { ...session, ...updates, active_experiments: updatedExperiments }
+  return { ...session, active_experiments: updatedExperiments }
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -1521,10 +1490,6 @@ export default function Chat() {
       let wikiContext = typeof cachedTurnContext?.wikiContext === 'string'
         ? cachedTurnContext.wikiContext
         : null
-      let liveSearchContext = typeof cachedTurnContext?.liveSearchContext === 'string'
-        ? cachedTurnContext.liveSearchContext
-        : ''
-
       if (!route || !personalMemories) {
         const [freshRouteResult, freshPersonalMemoriesResult] = await Promise.all([
           routePromise,
@@ -1584,35 +1549,6 @@ export default function Chat() {
         })
       }
 
-      const routedArtifactType = getRequiredArtifactType(route)
-      let liveSearchAttempted = false
-      if (!liveSearchContext && shouldUseLiveSearch({
-        text,
-        retrievalConfidence,
-        sourceCount: sources.length,
-        requiredArtifactType: routedArtifactType,
-      })) {
-        liveSearchAttempted = true
-        try {
-          const livePayload = await liveSearch(text, { numResults: 5 })
-          liveSearchContext = formatLiveSearchContext(livePayload)
-          markLatency('live_search:ready', {
-            hasContext: Boolean(liveSearchContext),
-          })
-        } catch (error) {
-          markLatency('live_search:failed', {
-            message: error?.message || 'unknown',
-          })
-        }
-      }
-      if (!liveSearchAttempted) {
-        markLatency('live_search:skipped', {
-          retrievalConfidence,
-          sourceCount: sources.length,
-          requiredArtifactType: routedArtifactType,
-        })
-      }
-
       if (!cachedTurnContext) {
         setCachedTurnContext(sessionForTurn.id, text, {
           route,
@@ -1625,11 +1561,10 @@ export default function Chat() {
           pillarResults,
           wikiContext,
           learningStateContext,
-          liveSearchContext,
         }, turnCacheScope)
       }
-      const combinedWikiContext = [wikiContext, liveSearchContext].filter(Boolean).join('\n\n')
-      const groundedSourceCount = sources.length + (liveSearchContext ? 1 : 0)
+      const combinedWikiContext = wikiContext
+      const groundedSourceCount = sources.length
       const activeExperimentCount = (sessionForTurn.active_experiments || []).filter((e) => e.status === 'active').length
       const {
         effectiveRoute,
@@ -1675,7 +1610,6 @@ export default function Chat() {
         experimentAssignedInSession,
         concepts,
         historicalAbsorbedConceptCount,
-        hasLiveWebContext: Boolean(liveSearchContext),
         inExperimentMode,
         retrievalConfidence,
       })
@@ -2127,7 +2061,6 @@ export default function Chat() {
     const activeExps = baseSession.active_experiments || []
 
     if (activeExps.filter((e) => e.status === 'active').length >= 2) return baseSession
-    const shouldResetMissStreak = activeExps.some((e) => e.status === 'ghosted')
 
     const assignedAt = new Date()
     const windowHours = Number(experiment.window_hours) > 0 ? Number(experiment.window_hours) : 48
@@ -2183,7 +2116,7 @@ export default function Chat() {
     }
 
     const updated = [...activeExps, normalizeExperiment(result?.experiment || newExp)]
-    const sessionUpdates = result?.session_updates || (shouldResetMissStreak ? { consecutive_miss_count: 0 } : {})
+    const sessionUpdates = result?.session_updates || {}
 
     const updatedSession = { ...baseSession, ...sessionUpdates, active_experiments: updated }
     setSession(updatedSession)
@@ -2222,7 +2155,7 @@ export default function Chat() {
     }
 
     const normalized = normalizeExperiment(result?.experiment)
-    const sessionUpdates = result?.session_updates || (status === 'completed' ? { consecutive_miss_count: 0 } : {})
+    const sessionUpdates = result?.session_updates || {}
 
     setSession((prev) => {
       if (!prev) return prev
@@ -2381,7 +2314,6 @@ export default function Chat() {
       return {
         session: {
           ...baseSession,
-          consecutive_miss_count: 0,
           active_experiments: (baseSession.active_experiments || []).map((exp) =>
             exp.id === target.id ? updatedExperiment : exp
           ),

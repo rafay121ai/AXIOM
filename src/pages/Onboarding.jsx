@@ -259,9 +259,6 @@ export default function Onboarding() {
         pillar_weights: pillarWeights,
         axiom_profile: axiomProfile,
         active_experiments: [],
-        ghost_count: 0,
-        consecutive_miss_count: 0,
-        warning_level: 0,
       }
 
       const { error: insertError } = await supabase

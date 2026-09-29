@@ -1,6 +1,6 @@
 import { knowledgeSupabase } from './knowledgeSupabase'
 import { generateEmbedding, openai, CHAT_MODEL, requestJsonObject } from './openai'
-import { isCurrentFactualLiveQuestion } from './liveSearchTriggers'
+import { isCurrentFactualQuestion as asksForCurrentFacts } from './currentFacts'
 import { supabase } from './supabase'
 
 const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
@@ -147,7 +147,7 @@ function wantsVisualReasoningArtifact(lower = '') {
 }
 
 function isCurrentFactualQuestion(lower = '') {
-  return isCurrentFactualLiveQuestion(lower) || (
+  return asksForCurrentFacts(lower) || (
     /\b(what should i watch next|watch next)\b/.test(lower) &&
     /\b(geopolitics|geopolitical|war|military|escalation|market|markets|company|china|us[- ]china|u\.s\.[- ]china|iran|israel|semiconductor|chip|energy|grid)\b/.test(lower)
   )
