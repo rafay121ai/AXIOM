@@ -132,7 +132,7 @@ const QUESTION_SHAPE_RULES = [
     build: () => ({
       mode: 'two_pillar',
       pillars: ['whats_coming', 'how_companies_win'],
-      rationale: 'Current factual/live query. Answer in prose only.',
+      rationale: 'Current factual query. Answer in prose only.',
     }),
   },
   {
@@ -186,18 +186,18 @@ const QUESTION_SHAPE_RULES = [
   {
     matches: (lower) =>
       /\b(hype cycle|rise[, ]+peak[, ]+and decline|rise and decline|adoption curve|s-curve|compounding curve|show me the curve)\b/.test(lower),
-    build: ({ nodePillar }) => ({
+    build: () => ({
       mode: 'single_pillar',
-      pillars: [nodePillar || 'think_sharper'],
+      pillars: ['think_sharper'],
       rationale: 'Phase-change question.',
     }),
   },
   {
     matches: (lower) =>
       /\b(pyramid|hierarchy|depends on what|built on what|foundation of|layers of dependency)\b/.test(lower),
-    build: ({ nodePillar }) => ({
+    build: () => ({
       mode: 'single_pillar',
-      pillars: [nodePillar || 'how_companies_win'],
+      pillars: ['how_companies_win'],
       rationale: 'Dependency or hierarchy question.',
     }),
   },
@@ -214,9 +214,9 @@ const QUESTION_SHAPE_RULES = [
   {
     matches: (lower) =>
       /\b(should i| vs | versus |tradeoff|rationalizing|conflict|tension|or should|optimize for)\b/.test(lower),
-    build: ({ nodePillar }) => ({
+    build: () => ({
       mode: 'two_pillar',
-      pillars: nodePillar ? [nodePillar, 'think_sharper'] : ['human_mind', 'money_game'],
+      pillars: ['human_mind', 'money_game'],
       rationale: 'Tradeoff question. Use a direct comparison.',
     }),
   },
@@ -240,18 +240,17 @@ const QUESTION_SHAPE_RULES = [
   },
 ]
 
-function explicitQuestionShapeRoute(query, session, nodeContext = null) {
+function explicitQuestionShapeRoute(query, session) {
   const lower = String(query || '').toLowerCase().trim()
-  const nodePillar = nodeContext?.pillar && ALL_PILLARS.includes(nodeContext.pillar) ? nodeContext.pillar : null
   const weightedPillars = Object.entries(session?.pillar_weights || {})
     .filter(([pillar]) => ALL_PILLARS.includes(pillar))
     .sort((a, b) => b[1] - a[1])
     .map(([pillar]) => pillar)
-  const defaultSingle = nodePillar || weightedPillars[0] || 'human_mind'
+  const defaultSingle = weightedPillars[0] || 'human_mind'
 
   for (const rule of QUESTION_SHAPE_RULES) {
     if (rule.matches(lower)) {
-      return rule.build({ lower, nodePillar, defaultSingle })
+      return rule.build({ defaultSingle })
     }
   }
 
@@ -334,10 +333,9 @@ function normalizeRouterPayload(payload = {}) {
   }
 }
 
-function fallbackRouteQuestionMode(query, session, nodeContext = null) {
-  const explicit = explicitQuestionShapeRoute(query, session, nodeContext)
+function fallbackRouteQuestionMode(query, session) {
+  const explicit = explicitQuestionShapeRoute(query, session)
   if (explicit) return explicit
-  const nodePillar = nodeContext?.pillar && ALL_PILLARS.includes(nodeContext.pillar) ? nodeContext.pillar : null
 
   const weightedPillars = Object.entries(session?.pillar_weights || {})
     .filter(([pillar]) => ALL_PILLARS.includes(pillar))
@@ -346,13 +344,13 @@ function fallbackRouteQuestionMode(query, session, nodeContext = null) {
 
   return {
     mode: 'single_pillar',
-    pillars: [nodePillar || weightedPillars[0] || 'human_mind'],
+    pillars: [weightedPillars[0] || 'human_mind'],
     rationale: 'Default to one pillar for a narrow or local question.',
   }
 }
 
-export async function routeQuestionMode(query, session, nodeContext = null) {
-  const explicit = explicitQuestionShapeRoute(query, session, nodeContext)
+export async function routeQuestionMode(query, session) {
+  const explicit = explicitQuestionShapeRoute(query, session)
   if (explicit) return explicit
 
   const cacheKey = stableStringify({
@@ -360,14 +358,6 @@ export async function routeQuestionMode(query, session, nodeContext = null) {
     profile: session?.axiom_profile || '',
     notes: session?.session_notes || '',
     weights: session?.pillar_weights || {},
-    node: nodeContext
-      ? {
-          id: nodeContext.id,
-          label: nodeContext.label,
-          type: nodeContext.type,
-          pillar: nodeContext.pillar,
-        }
-      : null,
   })
 
   return cachedAsync(routerCache, cacheKey, async () => {
@@ -404,14 +394,13 @@ Rules:
           content: `Question: ${query}
 Private theory: ${session?.axiom_profile || 'None'}
 Session notes: ${session?.session_notes || 'None'}
-Pillar weights: ${JSON.stringify(session?.pillar_weights || {})}
-Selected node: ${nodeContext ? `${nodeContext.label} | pillar: ${nodeContext.pillar || 'unknown'} | type: ${nodeContext.type}` : 'None'}`,
+Pillar weights: ${JSON.stringify(session?.pillar_weights || {})}`,
         },
       ],
     })
     return normalizeRouterPayload(parsed)
   }).catch(() => {
-    return fallbackRouteQuestionMode(query, session, nodeContext)
+    return fallbackRouteQuestionMode(query, session)
   })
 }
 

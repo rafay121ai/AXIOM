@@ -302,7 +302,7 @@ export default function Onboarding() {
         <div className="onboarding__auth">
           <h1 className="onboarding__auth-title">Sign in to start your private founder session.</h1>
           <p className="onboarding__auth-copy">
-            Google sign-in is now required so every account owns its own sessions, memory, and brain graph.
+            Google sign-in is now required so every account owns its own sessions and memory.
           </p>
           <button
             className="onboarding__google"

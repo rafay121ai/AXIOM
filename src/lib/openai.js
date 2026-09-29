@@ -416,8 +416,7 @@ export async function generateOpeningMessage(session, isNew) {
 
 Your voice: Direct. Never diplomatic. Specific. Never generic. Challenging. Urgent.
 Never say: "Great question", "I understand", "Certainly", "Absolutely", "Welcome back", "That's interesting".
-Never use emoji.
-Warning language: disappointed but still in their corner. Not a system alert. Not theatrical.`,
+Never use emoji.`,
       },
       {
         role: 'user',
@@ -502,7 +501,7 @@ Rules:
 - primary_pillar is the real subject of the memory. Example: "fear of market feedback" is human_mind with money_game secondary, not money_game primary.
 - secondary_pillars should include only genuinely relevant nearby pillars, maximum 2.
 - pillar_confidence must be 0-1 based on how clear the pillar ownership is.
-- If pillar ownership is unclear or pillar_confidence would be below 0.55, set primary_pillar to null, secondary_pillars to [], and pillar_confidence below 0.55. Low-confidence memories should become dim/unresolved graph nodes rather than being forced into a pillar.
+- If pillar ownership is unclear or pillar_confidence would be below 0.55, set primary_pillar to null, secondary_pillars to [], and pillar_confidence below 0.55.
 - importance must be an integer from 1 to 7. Use 7 only for explicit avoided-action patterns after an experiment report reveals the user chose not to act.
 - confidence must be a number from 0 to 1 based on how directly the user revealed it.
 - concept_progress: only populate entries if the conversation was in LEARNING MODE with an active roadmap. List each topic the user has been taught. concepts_completed must only include concepts where Axiom confirmed understanding via a transition message. concepts_remaining are the roadmap concepts not yet confirmed. If no learning roadmap is active, return an empty array.
@@ -1239,7 +1238,7 @@ Do not ask a second clarifying question. After the user answers, classify the ou
 - "didnt": the user had enough agency to act but avoided, delayed, forgot, chose comfort, or did not get to it.
 - "ghosted": the experiment window expired and the user gave no report. This is automatic; do not ask the user to classify ghosting.
 
-If the answer is "couldnt", no strike and no pattern memory. Cancel the experiment with outcome_reason "couldnt" and offer to reset or replace it.
+If the answer is "couldnt", no pattern memory. Cancel the experiment with outcome_reason "couldnt" and offer to reset or replace it.
 
 If the answer is "didnt", treat it as behavioral evidence. The system records a pattern memory that names what was avoided and that it was a choice, with importance 7 and confidence 0.8. Then set outcome_reason "didnt".
 

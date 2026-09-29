@@ -88,11 +88,13 @@ Branch: `cleanup/remove-old-product`
 
 ## Stage 4: Prompts and copy
 
-- [ ] Remove prompt and product-copy references to deleted features.
-- [ ] Remove paid, premium, paywall, refund, and account-removal language that conflicts with the current free product.
-- [ ] Measure and record prompt characters before and after.
-- [ ] Verify installs, build, frontend start, backend start, static searches, and changed code paths.
-- [ ] Commit Stage 4 only.
+- [x] Remove prompt text that references removed features (removal only, no rewording): opening-message "Warning language" line; memory-update sentence about "dim/unresolved graph nodes"; "no strike and" in the report rules; router `nodeContext` parameter, cache key field and "Selected node" prompt line, plus the always-null `nodePillar` in router rules (each rule keeps its existing default pillar); "live" in the current-fact route rationale. Artifact, signal-map and book_ref prompt text went in Stage 3; Brain/weekly/node generators in Stage 2.
+- [x] Remove copy: "That is not a strike." from the blocked-experiment reply; "and brain graph" from the sign-in note.
+- [x] Payment, pricing and premium: searched prompts, UI copy, `index.html` and server; no payment claims, pricing copy or premium gates exist in the app (matches audit H-13). Nothing to remove.
+- [x] Prompt size: static 50,959 (from 73,025 before cleanup); assembled plain 24,354 (24,877), experiment report 23,698 (24,018), structured request 24,875 (25,492), artifact turn 24,489 (30,500), ghosted history 23,800 (25,186).
+- [x] Verify: build passed (93 modules); backend/frontend start and probes pass (one run showed "build was canceled" in the Vite log because the probe stopped Vite while it re-optimized deps after the Recharts removal; rerun clean); router test returns the same modes/pillars as Stage 3; tag-stripping test 6/6. LOC 14,590.
+  - Kept on purpose: "Not as a warning." in the cost-of-inaction voice rule (voice guidance, not the warning system); `EXPLICIT_STRUCTURE_RE` in `sessionTurnContext.js` (follow-up cache detection); learning-map prompt text (protected); jailbreak termination flow (security, not the removal system).
+- [x] Commit Stage 4 only.
 
 ## Stage 5: Tests and repository cleanup
 

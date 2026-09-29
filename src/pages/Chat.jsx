@@ -1826,7 +1826,7 @@ export default function Chat() {
       }
 
       const assistantText = outcomeReason === 'couldnt'
-        ? 'That is not a strike. The experiment was blocked, so I marked it as cancelled. We can either reset the same test or replace it with one that fits the constraint.'
+        ? 'The experiment was blocked, so I marked it as cancelled. We can either reset the same test or replace it with one that fits the constraint.'
         : 'That one counts. I marked it as a choice, not a constraint. The useful part is that we now know what your avoidance reaches for when the work gets real.'
 
       return { session: updatedSession, handled: true, assistantText }
