@@ -12,6 +12,8 @@ import OpenAI from 'openai'
 import { createClient } from '@supabase/supabase-js'
 import rateLimit from 'express-rate-limit'
 import { validateExperimentQuality } from './experimentQuality.js'
+import { estimateModelCost, USAGE_CALL_TYPES } from './modelUsage.js'
+import { createEventTracker, PRODUCT_EVENTS } from './productEvents.js'
 
 const app = express()
 const port = process.env.PORT || 3001
@@ -62,21 +64,12 @@ const openai = new OpenAI({
   apiKey: openaiApiKey,
 })
 
-const MODEL_PRICING_PER_MILLION = {
-  'gpt-4.1-mini': { input: 0.40, output: 1.60 },
-  'gpt-4.1-mini-2025-04-14': { input: 0.40, output: 1.60 },
-  'text-embedding-3-small': { input: 0.02, output: 0 },
-}
-const FALLBACK_MODEL_PRICING = MODEL_PRICING_PER_MILLION['gpt-4.1-mini']
-const USAGE_CALL_TYPES = new Set([
-  'chat',
-  'query_expansion',
-  'onboarding',
-  'session_notes',
-  'memory_update',
-  'concept_state_update',
-  'artifact',
-  'embedding',
+const USAGE_CALL_TYPE_SET = new Set(USAGE_CALL_TYPES)
+const BROWSER_TRACKABLE_EVENTS = new Set([
+  'onboarding_completed',
+  'chat_started',
+  'message_sent',
+  'thread_resumed',
 ])
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL
@@ -105,6 +98,7 @@ if (!supabaseUrl || !supabaseServiceKey) {
 const supabaseAdmin = supabaseUrl && supabaseServiceKey
   ? createClient(supabaseUrl, supabaseServiceKey)
   : null
+const trackEvent = createEventTracker({ supabase: supabaseAdmin })
 
 const knowledgeSupabaseUrl = process.env.VITE_KNOWLEDGE_SUPABASE_URL
 const knowledgeSupabaseServiceKey = process.env.KNOWLEDGE_SUPABASE_SERVICE_ROLE_KEY
@@ -123,13 +117,6 @@ function queueModelUsageLog(payload) {
   })
 }
 
-function estimateModelCost(model, usage = {}) {
-  const pricing = MODEL_PRICING_PER_MILLION[model] || FALLBACK_MODEL_PRICING
-  const promptTokens = Number(usage.prompt_tokens || 0)
-  const completionTokens = Number(usage.completion_tokens || 0)
-  return ((promptTokens * pricing.input) + (completionTokens * pricing.output)) / 1_000_000
-}
-
 async function logModelUsage({
   userId,
   usageContext = {},
@@ -141,7 +128,7 @@ async function logModelUsage({
 }) {
   if (!supabaseAdmin || !userId || !model) return
 
-  const callType = USAGE_CALL_TYPES.has(usageContext.call_type)
+  const callType = USAGE_CALL_TYPE_SET.has(usageContext.call_type)
     ? usageContext.call_type
     : 'chat'
   const promptTokens = Number(usage.prompt_tokens || 0)
@@ -246,11 +233,24 @@ app.use('/api/knowledge', requireAuth)
 app.use('/api/experiments', requireAuth)
 app.use('/api/personal-memories', requireAuth)
 app.use('/api/admin', requireAuth)
+app.use('/api/events', requireAuth)
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true })
+})
+
+app.post('/api/events', async (req, res) => {
+  const event = typeof req.body?.event === 'string' ? req.body.event.trim() : ''
+  const properties = req.body?.properties
+
+  if (!BROWSER_TRACKABLE_EVENTS.has(event) || !PRODUCT_EVENTS.includes(event)) {
+    return res.status(400).json({ error: 'Invalid product event' })
+  }
+
+  await trackEvent(req.user.id, event, properties)
+  return res.status(202).json({ accepted: true })
 })
 
 const CONCEPT_STATES = new Set(['encountered', 'partial', 'absorbed'])
@@ -805,6 +805,18 @@ app.post('/api/experiments', experimentWriteRateLimit, async (req, res) => {
 
     if (error) throw error
 
+    const eventProperties = {
+      experiment_id: data.id,
+      session_id: data.session_id,
+      pillar: data.pillar || null,
+      window_hours: data.window_hours,
+    }
+    void trackEvent(req.user.id, 'experiment_created', eventProperties)
+    void trackEvent(req.user.id, 'experiment_committed', {
+      ...eventProperties,
+      commit_mode: 'automatic_on_create',
+    })
+
     return res.json({ experiment: data, session_updates: {} })
   } catch (error) {
     console.error('[Experiments] assignment failed', error)
@@ -893,6 +905,20 @@ app.post('/api/experiments/:id/status', experimentWriteRateLimit, async (req, re
       .single()
 
     if (error) throw error
+
+    const reportedOutcome = payload.status === 'completed'
+      ? 'done'
+      : payload.status === 'cancelled' && ['couldnt', 'didnt'].includes(payload.outcome_reason)
+        ? payload.outcome_reason
+        : null
+
+    if (reportedOutcome) {
+      void trackEvent(req.user.id, 'experiment_reported', {
+        experiment_id: data.id,
+        session_id: data.session_id,
+        outcome: reportedOutcome,
+      })
+    }
 
     return res.json({ experiment: data, session_updates: {} })
   } catch (error) {

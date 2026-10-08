@@ -16,7 +16,7 @@ import { searchPersonalMemory, formatNamedPatternsContext, formatPersonalMemoryC
 import { getCachedTurnContext, setCachedTurnContext } from '../lib/sessionTurnContext'
 import { ensureConversationThread } from '../lib/conversationThreads'
 import { incrementAppSessionMessagesSent } from '../lib/appSessionTracker'
-import { getApiJson, postApiJson } from '../lib/api'
+import { getApiJson, postApiJson, trackProductEvent } from '../lib/api'
 import { validateExperimentQuality } from '../lib/experimentQuality'
 
 // ─── Message Tag Parsing ─────────────────────────────────────────────────────
@@ -729,6 +729,18 @@ export default function Chat() {
     const existing = msgs || []
     const isNew = freshThread || existing.length === 0
 
+    if (isNew) {
+      void trackProductEvent('chat_started', {
+        session_id: updatedSession.id,
+        thread_id: threadId,
+      })
+    } else if (threadId) {
+      void trackProductEvent('thread_resumed', {
+        session_id: updatedSession.id,
+        thread_id: threadId,
+      })
+    }
+
     // Update last_active
     await supabase
       .from('sessions')
@@ -939,6 +951,11 @@ export default function Chat() {
 	          const optimisticUserId = userMsgId
 	          userMsgId = savedUser.id
 	          incrementAppSessionMessagesSent()
+	          void trackProductEvent('message_sent', {
+	            session_id: session.id,
+	            thread_id: threadId,
+	            message_id: savedUser.id,
+	          })
 	          persistedUserMessage = {
             id: savedUser.id,
             role: 'user',

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getStoredSessionToken, setStoredSessionToken, supabase } from '../lib/supabase'
 import { generateAxiomProfile } from '../lib/openai'
+import { trackProductEvent } from '../lib/api'
 import { AXIOM_WELCOME_SEEN_KEY, markAxiomWelcomePending } from './Welcome'
 
 // ─── Question Pool ───────────────────────────────────────────────────────────
@@ -266,6 +267,9 @@ export default function Onboarding() {
       if (insertError) throw insertError
 
       setStoredSessionToken(sessionToken)
+      void trackProductEvent('onboarding_completed', {
+        answer_count: qaPairs.length,
+      })
       const welcomeSeen = (() => {
         try { return localStorage.getItem(AXIOM_WELCOME_SEEN_KEY) === '1' }
         catch { return false }

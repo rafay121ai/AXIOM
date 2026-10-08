@@ -70,3 +70,16 @@ export async function getApiJson(path) {
 
   return response.json()
 }
+
+export async function trackProductEvent(event, properties = {}) {
+  try {
+    await postApiJson('/api/events', { event, properties })
+    return true
+  } catch (error) {
+    console.warn('[Product Event] request failed', {
+      event,
+      error: error?.message || String(error),
+    })
+    return false
+  }
+}
