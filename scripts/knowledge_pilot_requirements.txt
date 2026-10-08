@@ -3,4 +3,3 @@ docling-parse==7.22.1
 numpy==2.3.3
 openai==2.6.1
 pypdfium2==5.13.0
-supabase==2.22.0

@@ -126,28 +126,49 @@ Branch: `feature/cost-and-tracking`
 
 Branch: `feature/knowledge-rechunk-pilot`
 
-## Step 0: corpus and tooling
+Rules for this branch:
 
-- [ ] Confirm source-file locations, parser availability, environment-variable names, and the read-only old-chunk schema without exposing secrets or writing to a database.
-- [ ] Pilot these 10 PDFs across all six pillars: The Laws of Human Nature; The Everything Store; Thinking, Fast and Slow; Never Split the Difference; The Psychology of Money; 7 Powers; The Lean Startup; Thinking in Bets; Superforecasting; How the World Really Works. (`atomic-habits.pdf` was rejected because the repo file is only four pages.)
-- [ ] Add `/knowledge_pilot/` to `.gitignore`; keep all extracted book text, generated chunks, embeddings, evaluations, and reports inside that ignored directory.
+- No database writes. No Supabase commands. Do not modify ingestion code or the existing knowledge tables.
+- Do not touch the cost and tracking work; it lives on `feature/cost-tracking`.
+- All generated outputs go in `/knowledge_pilot/`, which is already gitignored.
+- One commit per stage. Update this checklist after each stage.
 
-## Steps 1-2: structured extraction and deterministic chunking
+## Stage 1: environment
 
-- [ ] Implement PDF extraction with chapter/section/page structure, line-wrap and hyphen repair, repeated header/footer removal, and front/back-matter filtering without changing `seed.js` or ingestion code.
-- [ ] Implement chapter-bounded, paragraph/sentence-safe 150-450 word chunks with one-sentence overlap and embedding-similarity topic-boundary detection.
-- [ ] Record book, author, pillar, chapter, section, page range, source character offsets, and position in chapter for every chunk.
-- [ ] Add focused tests for cleanup, boundary detection, sentence integrity, overlap, chapter isolation, and metadata.
+- [x] Removed the yanked `supabase==2.22.0` from `scripts/knowledge_pilot_requirements.txt`; the pilot does not need the Python Supabase client for local extraction/chunking, and Supabase commands are forbidden.
+- [x] Retried `docling-slim==2.131.0` and `docling-parse==7.22.1` install once in `knowledge_pilot/.venv`; sandboxed install failed due network resolution, escalated retry succeeded.
+- [x] PyMuPDF fallback not needed because Docling installed successfully.
 
-## Steps 3-4: enrichment and embeddings
+## Stage 2: extract and chunk one book, then stop
 
-- [ ] Add a pilot config with one cheap enrichment/judge model and `text-embedding-3-small`; validate strict enrichment JSON and retry once on invalid output.
-- [ ] Verify quotes as exact chunk substrings, null invalid quotes, drop `junk` chunks while counting them, and record token usage, elapsed time, and cost when configured.
-- [ ] Generate two embeddings per retained chunk and write the complete output to `knowledge_pilot/chunks.jsonl`.
+- [ ] Start with The Everything Store.
+- [ ] Extract text with chapter and section headings kept; strip headers, footers, page numbers, and front/back matter.
+- [ ] Chunk on paragraph boundaries; never split mid-sentence; start a new chunk where the topic changes; target roughly 200 to 500 words.
+- [ ] Every chunk records book, author, pillar, chapter, section, and page range.
+- [ ] Write chunks to `/knowledge_pilot/everything_store/chunks.jsonl`.
+- [ ] Stop and show total chunk count, word-count distribution, and 5 random chunks in full before doing the other 9 books.
 
-## Step 5: evaluation and report
+## Stage 3: all 10 books
 
-- [ ] Create 20 clearly synthetic founder situations spanning stages, pillars, and personal/business scope in `knowledge_pilot/test_situations.jsonl`.
-- [ ] Read old source/chunk rows for only the selected books, retrieve old and new top five results, rerank new candidates, judge both result sets 0-2 with the configured model, and write `knowledge_pilot/eval.md`.
-- [ ] Write `knowledge_pilot/REPORT.md` with sources/parsers, counts, quality metrics, distributions, enrichment time/cost and 251-source estimate, evaluation averages/examples, and extraction problems.
-- [ ] Verify tests and output schemas, review the diff, and confirm no database writes, no `wiki_sources`/`wiki_chunks` modifications, no `seed.js` changes, and no generated book text tracked by Git.
+- [ ] Repeat the Stage 2 process for the remaining 9 books.
+- [ ] Report counts per book and flag any book where extraction looks broken.
+
+## Stage 4: enrich
+
+- [ ] For each chunk, add `context_line`, `chunk_type`, `idea`, and `applies_when` using `gpt-4.1-mini`.
+- [ ] Estimate the cost for all chunks before running and wait for approval if it is over $5.
+
+## Stage 5: embed
+
+- [ ] Embed `context_line` plus chunk text with `text-embedding-3-small`.
+
+## Stage 6: evaluate
+
+- [ ] Write 20 realistic founder situations in `/knowledge_pilot/eval_queries.md` across all six pillars and different stages.
+- [ ] Compare top 5 read-only results from existing `wiki_chunks` limited to the same 10 books against top 5 from new chunks.
+- [ ] Score each result as relevant, partly relevant, or irrelevant; flag starts/ends mid-sentence.
+- [ ] Write `/knowledge_pilot/eval.md` with side-by-side results.
+
+## Stage 7: report
+
+- [ ] Write `/knowledge_pilot/REPORT.md` covering what changed, old vs new scores, failures, total cost, and a recommendation on rechunking the full 127-source library.
