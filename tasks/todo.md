@@ -137,16 +137,23 @@ Rules for this branch:
 
 - [x] Removed the yanked `supabase==2.22.0` from `scripts/knowledge_pilot_requirements.txt`; the pilot does not need the Python Supabase client for local extraction/chunking, and Supabase commands are forbidden.
 - [x] Retried `docling-slim==2.131.0` and `docling-parse==7.22.1` install once in `knowledge_pilot/.venv`; sandboxed install failed due network resolution, escalated retry succeeded.
-- [x] PyMuPDF fallback not needed because Docling installed successfully.
+- [x] Docling packages installed, but Stage 2 required PyMuPDF because importing `DocumentConverter` failed on missing `scipy`; no further Docling repair attempted.
 
 ## Stage 2: extract and chunk one book, then stop
 
-- [ ] Start with The Everything Store.
-- [ ] Extract text with chapter and section headings kept; strip headers, footers, page numbers, and front/back matter.
-- [ ] Chunk on paragraph boundaries; never split mid-sentence; start a new chunk where the topic changes; target roughly 200 to 500 words.
-- [ ] Every chunk records book, author, pillar, chapter, section, and page range.
-- [ ] Write chunks to `/knowledge_pilot/everything_store/chunks.jsonl`.
-- [ ] Stop and show total chunk count, word-count distribution, and 5 random chunks in full before doing the other 9 books.
+- [x] Started with The Everything Store.
+- [x] Used PyMuPDF fallback for extraction after Docling installed but `DocumentConverter` import failed on missing `scipy`; did not spend more time on Docling dependency repair.
+- [x] Extracted PDF pages 6-298 with chapter headings represented in metadata; excluded front/back matter, photos, notes, newsletter, copyright pages, page numbers, and full part-title divider pages. Section-break ornaments are not headings; `section` is null throughout this book.
+- [x] Replaced lexical/word-limit splitting with a `gpt-4.1-mini` boundary pass over all ordered paragraphs in each of the 12 chapter/prologue units. Cached responses, validated coverage and dependent openings, and refined oversized ranges using complete narrower episodes/ideas rather than sentence cuts.
+- [x] Strip superscript numeric note references using PDF span metadata, preserving prices, dates and decimals; `Rambler.12` now reads `Rambler.`. Recognize curly closing quotes when reconstructing paragraphs across pages.
+- [x] Rename folder provenance to `book_pillar`; add `pillars: []` pending Stage 4 enrichment. Every chunk also records book, author, chapter, real section or null, and PDF page range.
+- [x] Wrote chunks to `/knowledge_pilot/everything_store/chunks.jsonl`.
+- [x] Revised The Everything Store only: 310 chunks; words min 45, p25 243, median 357, p75 476, max 699, mean 367.3. 49 below 200 words, 196 at 200-500, 65 at 501-700, zero above 700. Keep short complete ideas rather than padding them with unrelated topics.
+- [x] Usage-based cost estimate: $0.216465 for responses used by the final boundary workflow; $0.652997 total for this book including discarded attempts. Rates: $0.40 input / $0.10 cached input / $1.60 output per million tokens, verified at https://developers.openai.com/api/docs/models/gpt-4.1-mini. No enrichment or embeddings run.
+- [x] Recorded failures for the later report: model ranges sometimes skipped paragraphs or grouped broad initiatives; an additional semantic reviewer incorrectly rejected independent named topics and was discarded. Derive range ends from selected starts to guarantee coverage. Direct source review and model validation were needed for ten scopes, saved in `/knowledge_pilot/everything_store/boundary_review.json`; retain this ignored file when reproducing the final output.
+- [x] Verification: 7 focused unit tests pass; all 1,214 source paragraphs / 113,875 words appear exactly once in order; complete sentence endings; valid metadata; zero joined note references and zero detected dangling pronoun/demonstrative starts; zero chunks over 700 words. Book-level semantic quality still requires the user's review.
+- [x] Saved the two requested passages and three seeded random passages in full to `/knowledge_pilot/everything_store/sample_chunks.jsonl` and readable `/knowledge_pilot/everything_store/review_samples.md`. Final applied ranges are in `final_boundaries.jsonl`; usage/model decisions are in `boundary_audit.json`; stats in `summary.json`; checks in `quality_checks.json`.
+- [x] Stopped after this revision; awaiting approval before doing the other 9 books. No database writes, Supabase commands, ingestion changes, or cost/tracking changes.
 
 ## Stage 3: all 10 books
 
@@ -155,7 +162,9 @@ Rules for this branch:
 
 ## Stage 4: enrich
 
-- [ ] For each chunk, add `context_line`, `chunk_type`, `idea`, and `applies_when` using `gpt-4.1-mini`.
+- [ ] For each chunk, add `context_line`, `chunk_type`, `idea`, `applies_when`, `lesson_strength`, and `pillars` using `gpt-4.1-mini`.
+- [ ] Set `lesson_strength` to `strong`, `weak`, or `none`; a story without a transferable lesson is `none`.
+- [ ] Fill `pillars` with zero or more of the six pillar IDs (`how_companies_win`, `human_mind`, `money_game`, `move_people`, `think_sharper`, `whats_coming`); allow multiple pillars per chunk and retain `book_pillar` as fixed folder provenance.
 - [ ] Estimate the cost for all chunks before running and wait for approval if it is over $5.
 
 ## Stage 5: embed
