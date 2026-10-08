@@ -108,3 +108,46 @@ Branch: `cleanup/remove-old-product`
 - [x] Final metrics: LOC 23,266 -> 14,501. Static prompt 73,025 -> 50,959. Assembled prompt: plain 24,877 -> 24,354; experiment report 24,018 -> 23,698; structured request 25,492 -> 24,875; artifact turn 30,500 -> 24,489; ghosted history 25,186 -> 23,800.
 - [x] Write `audit/CLEANUP_REPORT.md`.
 - [x] Commit Stage 5 only; do not merge.
+
+# Cost logging and product event tracking
+
+Branch: `feature/cost-and-tracking`
+
+- [x] Inventory the model usage logger, every call site, current model IDs, emitted call types, and the live-dump constraints.
+- [x] Centralize per-model input/output pricing as explicit TODO values; make unknown or unpriced models warn and persist a null estimated cost.
+- [x] Add focused unit tests for known-model calculation, unknown-model warning/null behavior, and zero-token usage.
+- [x] Add post-`20260930000000` migrations for nullable model cost, the current call-type constraint, and server-only `product_events` with indexes and RLS but no browser policies.
+- [x] Add a best-effort server `trackEvent` helper and unit test that database failures are logged and swallowed.
+- [x] Wire authenticated event tracking for onboarding completion, chat start, message send, experiment creation/commit/report, and thread resume wherever those moments exist today, without browser database writes.
+- [x] Run focused unit tests, `npm run build`, static checks, and start the backend with dummy loopback environment values; do not run `scripts/smoke.test.js` or any Supabase/database command.
+- [x] Review the diff, mark completed items, and summarize files, migrations, current call types, models needing prices, wired events, and future events.
+
+# Knowledge rechunk pilot
+
+Branch: `feature/knowledge-rechunk-pilot`
+
+## Step 0: corpus and tooling
+
+- [ ] Confirm source-file locations, parser availability, environment-variable names, and the read-only old-chunk schema without exposing secrets or writing to a database.
+- [ ] Pilot these 10 PDFs across all six pillars: The Laws of Human Nature; The Everything Store; Thinking, Fast and Slow; Never Split the Difference; The Psychology of Money; 7 Powers; The Lean Startup; Thinking in Bets; Superforecasting; How the World Really Works. (`atomic-habits.pdf` was rejected because the repo file is only four pages.)
+- [ ] Add `/knowledge_pilot/` to `.gitignore`; keep all extracted book text, generated chunks, embeddings, evaluations, and reports inside that ignored directory.
+
+## Steps 1-2: structured extraction and deterministic chunking
+
+- [ ] Implement PDF extraction with chapter/section/page structure, line-wrap and hyphen repair, repeated header/footer removal, and front/back-matter filtering without changing `seed.js` or ingestion code.
+- [ ] Implement chapter-bounded, paragraph/sentence-safe 150-450 word chunks with one-sentence overlap and embedding-similarity topic-boundary detection.
+- [ ] Record book, author, pillar, chapter, section, page range, source character offsets, and position in chapter for every chunk.
+- [ ] Add focused tests for cleanup, boundary detection, sentence integrity, overlap, chapter isolation, and metadata.
+
+## Steps 3-4: enrichment and embeddings
+
+- [ ] Add a pilot config with one cheap enrichment/judge model and `text-embedding-3-small`; validate strict enrichment JSON and retry once on invalid output.
+- [ ] Verify quotes as exact chunk substrings, null invalid quotes, drop `junk` chunks while counting them, and record token usage, elapsed time, and cost when configured.
+- [ ] Generate two embeddings per retained chunk and write the complete output to `knowledge_pilot/chunks.jsonl`.
+
+## Step 5: evaluation and report
+
+- [ ] Create 20 clearly synthetic founder situations spanning stages, pillars, and personal/business scope in `knowledge_pilot/test_situations.jsonl`.
+- [ ] Read old source/chunk rows for only the selected books, retrieve old and new top five results, rerank new candidates, judge both result sets 0-2 with the configured model, and write `knowledge_pilot/eval.md`.
+- [ ] Write `knowledge_pilot/REPORT.md` with sources/parsers, counts, quality metrics, distributions, enrichment time/cost and 251-source estimate, evaluation averages/examples, and extraction problems.
+- [ ] Verify tests and output schemas, review the diff, and confirm no database writes, no `wiki_sources`/`wiki_chunks` modifications, no `seed.js` changes, and no generated book text tracked by Git.

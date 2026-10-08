@@ -6,6 +6,7 @@ dist
 .DS_Store
 scripts/__pycache__/
 scripts/output/
+/knowledge_pilot/
 supabase/.temp/
 sources/**/*.pdf
 npm-debug.log*
