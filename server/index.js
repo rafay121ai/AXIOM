@@ -795,6 +795,26 @@ app.post('/api/personal-memories/mark-used', knowledgeWriteRateLimit, async (req
   }
 })
 
+const USAGE_PAGE_SIZE = 1000
+const USAGE_ROW_CAP = 50000
+
+// Pages through every usage row in the window, up to a hard cap.
+async function loadUsageWindow(since) {
+  const rows = []
+  while (rows.length < USAGE_ROW_CAP) {
+    const { data, error } = await supabaseAdmin
+      .from('model_usage_logs')
+      .select('call_type,total_tokens,estimated_cost_usd,latency_ms,error,created_at')
+      .gte('created_at', since)
+      .order('created_at', { ascending: false })
+      .range(rows.length, rows.length + USAGE_PAGE_SIZE - 1)
+    if (error) return { error }
+    rows.push(...(data || []))
+    if (!data || data.length < USAGE_PAGE_SIZE) return { data: rows, truncated: false }
+  }
+  return { data: rows, truncated: true }
+}
+
 app.get('/api/admin/diagnostics', async (req, res) => {
   if (!isAdminUser(req.user)) return res.status(403).json({ error: 'Forbidden' })
   if (!supabaseAdmin) return res.status(503).json({ error: 'Admin diagnostics not configured' })
@@ -812,17 +832,13 @@ app.get('/api/admin/diagnostics', async (req, res) => {
       countRows(supabaseAdmin, 'sessions', (q) => q.gte('created_at', since)),
       countRows(supabaseAdmin, 'messages', (q) => q.gte('created_at', since)),
       countRows(supabaseAdmin, 'experiments', (q) => q.eq('status', 'active')),
-      supabaseAdmin
-        .from('model_usage_logs')
-        .select('call_type,total_tokens,estimated_cost_usd,latency_ms,error,created_at')
-        .gte('created_at', since)
-        .order('created_at', { ascending: false })
-        .limit(200),
+      loadUsageWindow(since),
       getKnowledgeIntegrity(),
     ])
 
     const usage = usageRows.error ? [] : (usageRows.data || [])
     const usageSummary = summarizeUsage(usage)
+    if (usageRows.truncated) usageSummary.truncated = true
 
     return res.json({
       window_hours: 24,
