@@ -1,5 +1,10 @@
 -- Revoke browser (anon/authenticated) writes on the app tables.
 --
+-- ROLLBACK: re-grant insert, update, delete to authenticated on the affected
+-- tables and re-create the dropped FOR ALL policies with their baseline
+-- definitions (see 20260929000000_baseline_live_public_schema.sql).
+-- DO NOT PUSH until the live-dump diff is recorded in tasks/todo.md.
+--
 -- WRITTEN AGAINST the checked-in baseline
 -- (20260929000000_baseline_live_public_schema.sql), NOT a live schema dump.
 -- CLAUDE.md requires a plan based on a live dump before this is pushed:
@@ -20,17 +25,17 @@
 -- No data changes, no drops of tables or columns. Idempotent.
 
 -- Privileges
-revoke insert, update, delete, truncate on public.experiments from anon, authenticated;
+revoke insert, update, delete, truncate, references, trigger on public.experiments from anon, authenticated;
 revoke all on public.experiments from anon;
-revoke insert, update, delete, truncate on public.sessions from anon, authenticated;
+revoke insert, update, delete, truncate, references, trigger on public.sessions from anon, authenticated;
 revoke all on public.sessions from anon;
-revoke insert, update, delete, truncate on public.messages from anon, authenticated;
+revoke insert, update, delete, truncate, references, trigger on public.messages from anon, authenticated;
 revoke all on public.messages from anon;
-revoke insert, update, delete, truncate on public.conversation_threads from anon, authenticated;
+revoke insert, update, delete, truncate, references, trigger on public.conversation_threads from anon, authenticated;
 revoke all on public.conversation_threads from anon;
-revoke insert, update, delete, truncate on public.app_sessions from anon, authenticated;
+revoke insert, update, delete, truncate, references, trigger on public.app_sessions from anon, authenticated;
 revoke all on public.app_sessions from anon;
-revoke insert, update, delete, truncate on public.users from anon, authenticated;
+revoke insert, update, delete, truncate, references, trigger on public.users from anon, authenticated;
 revoke all on public.users from anon;
 
 -- experiments
