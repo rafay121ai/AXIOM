@@ -121,7 +121,7 @@ async function logModelUsage({
   userId,
   usageContext = {},
   model,
-  usage = {},
+  usage = null,
   latencyMs = null,
   error = false,
   errorDetails = null,
@@ -131,9 +131,13 @@ async function logModelUsage({
   const callType = USAGE_CALL_TYPE_SET.has(usageContext.call_type)
     ? usageContext.call_type
     : 'chat'
-  const promptTokens = Number(usage.prompt_tokens || 0)
-  const completionTokens = Number(usage.completion_tokens || 0)
-  const totalTokens = Number(usage.total_tokens || promptTokens + completionTokens || 0)
+  // Missing usage (aborted or failed call) is unknown, not zero.
+  const hasUsage = usage && typeof usage === 'object'
+  const promptTokens = hasUsage ? Number(usage.prompt_tokens || 0) : null
+  const completionTokens = hasUsage ? Number(usage.completion_tokens || 0) : null
+  const totalTokens = hasUsage
+    ? Number(usage.total_tokens || promptTokens + completionTokens || 0)
+    : null
 
   const { data, error: insertError } = await supabaseAdmin
     .from('model_usage_logs')
@@ -146,10 +150,7 @@ async function logModelUsage({
       prompt_tokens: promptTokens,
       completion_tokens: completionTokens,
       total_tokens: totalTokens,
-      estimated_cost_usd: estimateModelCost(model, {
-        prompt_tokens: promptTokens,
-        completion_tokens: completionTokens,
-      }),
+      estimated_cost_usd: hasUsage ? estimateModelCost(model, usage) : null,
       call_type: callType,
       rag_chunks_used: Number(usageContext.rag_chunks_used || 0),
       latency_ms: latencyMs,
@@ -241,14 +242,74 @@ app.get('/health', (_req, res) => {
   res.json({ ok: true })
 })
 
-app.post('/api/events', async (req, res) => {
+const EVENT_PROPERTY_KEYS = {
+  onboarding_completed: ['answer_count'],
+  chat_started: ['session_id', 'thread_id'],
+  thread_resumed: ['session_id', 'thread_id'],
+  message_sent: ['session_id', 'thread_id', 'message_id'],
+}
+const EVENT_STRING_MAX = 200
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+const eventsRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  message: { error: 'Too many requests, please slow down.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+async function sanitizeEventProperties(userId, event, raw) {
+  const source = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}
+  const clean = {}
+  for (const key of EVENT_PROPERTY_KEYS[event] || []) {
+    const value = source[key]
+    if (typeof value === 'string') clean[key] = value.slice(0, EVENT_STRING_MAX)
+    else if (typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value))) clean[key] = value
+  }
+
+  // Browser-supplied ids must belong to the caller, otherwise drop them.
+  const { session_id: sessionId, thread_id: threadId, message_id: messageId } = clean
+  if (sessionId !== undefined || threadId !== undefined || messageId !== undefined) {
+    let sessionOk = false
+    if (typeof sessionId === 'string' && UUID_PATTERN.test(sessionId) && supabaseAdmin) {
+      const { data } = await supabaseAdmin
+        .from('sessions')
+        .select('user_id')
+        .eq('id', sessionId)
+        .maybeSingle()
+      sessionOk = data?.user_id === userId
+    }
+    if (!sessionOk) {
+      delete clean.session_id
+      delete clean.thread_id
+      delete clean.message_id
+    } else {
+      if (typeof threadId !== 'string' || !UUID_PATTERN.test(threadId)) delete clean.thread_id
+      if (messageId !== undefined) {
+        const { data } = typeof messageId === 'string' && UUID_PATTERN.test(messageId)
+          ? await supabaseAdmin
+            .from('messages')
+            .select('id')
+            .eq('id', messageId)
+            .eq('session_id', sessionId)
+            .maybeSingle()
+          : { data: null }
+        if (!data) delete clean.message_id
+      }
+    }
+  }
+  return clean
+}
+
+app.post('/api/events', eventsRateLimit, async (req, res) => {
   const event = typeof req.body?.event === 'string' ? req.body.event.trim() : ''
-  const properties = req.body?.properties
 
   if (!BROWSER_TRACKABLE_EVENTS.has(event) || !PRODUCT_EVENTS.includes(event)) {
     return res.status(400).json({ error: 'Invalid product event' })
   }
 
+  const properties = await sanitizeEventProperties(req.user.id, event, req.body?.properties)
   await trackEvent(req.user.id, event, properties)
   return res.status(202).json({ accepted: true })
 })
@@ -675,15 +736,21 @@ app.get('/api/admin/diagnostics', async (req, res) => {
         total_tokens: 0,
         estimated_cost_usd: 0,
         errors: 0,
+        unpriced_calls: 0,
         avg_latency_ms: 0,
       }
       const bucket = summary.by_call_type[key]
       bucket.count += 1
       bucket.total_tokens += Number(row.total_tokens || 0)
-      bucket.estimated_cost_usd += Number(row.estimated_cost_usd || 0)
+      if (row.estimated_cost_usd != null) bucket.estimated_cost_usd += Number(row.estimated_cost_usd)
       bucket.errors += row.error ? 1 : 0
       bucket.avg_latency_ms += Number(row.latency_ms || 0)
-      summary.total_cost_usd += Number(row.estimated_cost_usd || 0)
+      if (row.estimated_cost_usd == null) {
+        summary.unpriced_calls += 1
+        bucket.unpriced_calls += 1
+      } else {
+        summary.total_cost_usd += Number(row.estimated_cost_usd)
+      }
       summary.total_tokens += Number(row.total_tokens || 0)
       summary.errors += row.error ? 1 : 0
       return summary
@@ -691,6 +758,8 @@ app.get('/api/admin/diagnostics', async (req, res) => {
       total_calls: usage.length,
       total_tokens: 0,
       total_cost_usd: 0,
+      unpriced_calls: 0,
+      cost_is_partial: false,
       errors: 0,
       by_call_type: {},
     })
@@ -700,6 +769,7 @@ app.get('/api/admin/diagnostics', async (req, res) => {
       bucket.estimated_cost_usd = Number(bucket.estimated_cost_usd.toFixed(6))
     }
     usageSummary.total_cost_usd = Number(usageSummary.total_cost_usd.toFixed(6))
+    usageSummary.cost_is_partial = usageSummary.unpriced_calls > 0
 
     return res.json({
       window_hours: 24,
@@ -1014,17 +1084,28 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
     message_id: rawUsageContext.message_id || rawUsageContext.messageId || message_id || null,
   }
 
+  // Exactly one usage row per request, whatever path ends it.
+  let usageLogged = false
+  let loggedUsage = null
+  let loggedError = null
+  const logUsageOnce = () => {
+    if (usageLogged) return
+    usageLogged = true
+    queueModelUsageLog({
+      userId: req.user?.id,
+      usageContext,
+      model,
+      usage: loggedUsage,
+      latencyMs: Date.now() - startedAt,
+      ...(loggedError ? { error: true, errorDetails: loggedError } : {}),
+    })
+  }
+
   try {
     if (!safePayload.stream) {
       const response = await openai.chat.completions.create(safePayload)
+      loggedUsage = response.usage || null
       res.json(response)
-      queueModelUsageLog({
-        userId: req.user.id,
-        usageContext,
-        model,
-        usage: response.usage,
-        latencyMs: Date.now() - startedAt,
-      })
       return
     }
 
@@ -1038,7 +1119,10 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
     let finalUsage = null
 
     for await (const chunk of streamResp) {
-      if (chunk.usage) finalUsage = chunk.usage
+      if (chunk.usage) {
+        finalUsage = chunk.usage
+        loggedUsage = finalUsage
+      }
       const delta = chunk.choices?.[0]?.delta?.content || ''
       streamedContent += delta
       res.write(`${JSON.stringify({ type: 'chunk', data: chunk })}\n`)
@@ -1046,14 +1130,6 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
 
     res.write(`${JSON.stringify({ type: 'done' })}\n`)
     res.end()
-
-    queueModelUsageLog({
-      userId: req.user.id,
-      usageContext,
-      model,
-      usage: finalUsage,
-      latencyMs: Date.now() - startedAt,
-    })
 
     // Auto-increment jailbreak counter when AI signals a jailbreak event.
     // session_id ownership is verified before updating.
@@ -1080,14 +1156,7 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
   } catch (err) {
     console.error('[Chat]', err)
 
-    queueModelUsageLog({
-      userId: req.user?.id,
-      usageContext,
-      model,
-      latencyMs: Date.now() - startedAt,
-      error: true,
-      errorDetails: err.message || 'Chat request failed',
-    })
+    loggedError = err.message || 'Chat request failed'
 
     if (res.headersSent) {
       res.write(`${JSON.stringify({ type: 'error', error: err.message || 'Chat request failed' })}\n`)
@@ -1096,6 +1165,8 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
     }
 
     res.status(err.status || 500).json({ error: err.message || 'Chat request failed' })
+  } finally {
+    logUsageOnce()
   }
 })
 

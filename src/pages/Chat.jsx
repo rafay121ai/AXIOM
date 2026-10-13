@@ -594,6 +594,7 @@ export default function Chat() {
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
   const sendingRef = useRef(false)        // sync guard against rapid double-submit
+  const resumedThreadRef = useRef(null)   // thread_resumed fires once per thread load
   const initCalledRef = useRef(false)     // guard against StrictMode double-invoke
   const abortControllerRef = useRef(null) // current active stream abort handle
   const initialInputAppliedRef = useRef(false)
@@ -734,7 +735,8 @@ export default function Chat() {
         session_id: updatedSession.id,
         thread_id: threadId,
       })
-    } else if (threadId) {
+    } else if (threadId && resumedThreadRef.current !== threadId) {
+      resumedThreadRef.current = threadId
       void trackProductEvent('thread_resumed', {
         session_id: updatedSession.id,
         thread_id: threadId,
