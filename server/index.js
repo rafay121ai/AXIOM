@@ -15,8 +15,17 @@ import { validateExperimentQuality } from './experimentQuality.js'
 import { estimateModelCost, USAGE_CALL_TYPES } from './modelUsage.js'
 import { createEventTracker, PRODUCT_EVENTS } from './productEvents.js'
 import { summarizeUsage } from './usageSummary.js'
+import {
+  validateChatMessages,
+  isAllowedResponseFormat,
+  validateEmbeddingInput,
+  parseBearerToken,
+  upstreamErrorStatus,
+} from './requestValidation.js'
 
 const app = express()
+// Railway sits behind exactly one proxy hop; trust only that hop for req.ip.
+app.set('trust proxy', 1)
 const port = process.env.PORT || 3001
 
 const frontendUrl = process.env.FRONTEND_URL?.trim().replace(/\/$/, '')
@@ -40,9 +49,10 @@ function corsOrigin(origin, callback) {
 
   const normalizedOrigin = origin.trim().replace(/\/$/, '')
   if (allowedOrigins.has(normalizedOrigin)) return callback(null, true)
-  if (/^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(normalizedOrigin)) return callback(null, true)
 
-  return callback(new Error(`CORS blocked origin: ${origin}`))
+  const err = new Error('CORS blocked origin')
+  err.code = 'CORS_BLOCKED'
+  return callback(err)
 }
 
 // Exact model IDs the client is allowed to request. Anything else is rejected.
@@ -63,6 +73,8 @@ if (!openaiApiKey) {
 
 const openai = new OpenAI({
   apiKey: openaiApiKey,
+  timeout: 60_000,
+  maxRetries: 1,
 })
 
 const USAGE_CALL_TYPE_SET = new Set(USAGE_CALL_TYPES)
@@ -173,11 +185,16 @@ async function logModelUsage({
 
 async function requireAuth(req, res, next) {
   if (!supabaseAdmin) return res.status(503).json({ error: 'Auth service not configured' })
-  const token = req.headers.authorization?.replace('Bearer ', '')
+  const token = parseBearerToken(req.headers.authorization)
   if (!token) return res.status(401).json({ error: 'Unauthorized' })
-  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
-  if (error || !user) return res.status(401).json({ error: 'Unauthorized' })
-  req.user = user
+  try {
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
+    if (error || !user) return res.status(401).json({ error: 'Unauthorized' })
+    req.user = user
+  } catch (err) {
+    console.error('[Auth] getUser failed:', err)
+    return res.status(503).json({ error: 'Auth service unavailable' })
+  }
   next()
 }
 
@@ -189,6 +206,7 @@ const chatRateLimit = rateLimit({
   // final answer streaming, and memory updates. Keep abuse protection without
   // throttling normal Axiom turns.
   max: 120,
+  keyGenerator: (req) => req.user.id,
   message: { error: 'Too many requests, please slow down.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -197,6 +215,7 @@ const chatRateLimit = rateLimit({
 const embeddingsRateLimit = rateLimit({
   windowMs: 60 * 1000,
   max: 180,
+  keyGenerator: (req) => req.user.id,
   message: { error: 'Too many requests, please slow down.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -205,6 +224,7 @@ const embeddingsRateLimit = rateLimit({
 const knowledgeWriteRateLimit = rateLimit({
   windowMs: 60 * 1000,
   max: 60,
+  keyGenerator: (req) => req.user.id,
   message: { error: 'Too many knowledge updates, please slow down.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -213,7 +233,16 @@ const knowledgeWriteRateLimit = rateLimit({
 const experimentWriteRateLimit = rateLimit({
   windowMs: 60 * 1000,
   max: 60,
+  keyGenerator: (req) => req.user.id,
   message: { error: 'Too many experiment updates, please slow down.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+const ipRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 300,
+  message: { error: 'Too many requests, please slow down.' },
   standardHeaders: true,
   legacyHeaders: false,
 })
@@ -227,8 +256,10 @@ const corsOptions = {
 
 app.use(cors(corsOptions))
 app.options('*', cors(corsOptions))
-app.use(express.json({ limit: '1mb' }))
 
+// Coarse per-IP limit runs before auth so unauthenticated floods never reach Supabase.
+app.use('/api', ipRateLimit)
+app.use(express.json({ limit: '1mb' }))
 app.use('/api/openai', requireAuth)
 app.use('/api/session', requireAuth)
 app.use('/api/knowledge', requireAuth)
@@ -428,8 +459,9 @@ function isAdminUser(user) {
     .map((item) => item.trim().toLowerCase())
     .filter(Boolean)
   if (!allowed.length) return false
+  // Emails are only trusted once confirmed; ids always are.
   return allowed.includes(String(user?.id || '').toLowerCase()) ||
-    allowed.includes(String(user?.email || '').toLowerCase())
+    (Boolean(user?.email_confirmed_at) && allowed.includes(String(user?.email || '').toLowerCase()))
 }
 
 async function countRows(client, table, query = (q) => q) {
@@ -865,7 +897,7 @@ app.post('/api/experiments', experimentWriteRateLimit, async (req, res) => {
     return res.json({ experiment: data, session_updates: {} })
   } catch (error) {
     console.error('[Experiments] assignment failed', error)
-    return res.status(500).json({ error: error.message || 'Failed to assign experiment' })
+    return res.status(500).json({ error: 'Failed to assign experiment' })
   }
 })
 
@@ -969,7 +1001,7 @@ app.post('/api/experiments/:id/status', experimentWriteRateLimit, async (req, re
     return res.json({ experiment: data, session_updates: {} })
   } catch (error) {
     console.error('[Experiments] status update failed', error)
-    return res.status(500).json({ error: error.message || 'Failed to update experiment' })
+    return res.status(500).json({ error: 'Failed to update experiment' })
   }
 })
 
@@ -983,11 +1015,7 @@ app.post('/api/openai/embeddings', embeddingsRateLimit, async (req, res) => {
 
   try {
     const { input, model } = req.body || {}
-    const inputIsValid =
-      typeof input === 'string' ||
-      (Array.isArray(input) && input.length > 0 && input.every((item) => typeof item === 'string'))
-
-    if (!inputIsValid || (model && model !== 'text-embedding-3-small')) {
+    if (!validateEmbeddingInput(input) || (model && model !== 'text-embedding-3-small')) {
       return res.status(400).json({ error: 'Invalid embedding request' })
     }
 
@@ -1013,7 +1041,7 @@ app.post('/api/openai/embeddings', embeddingsRateLimit, async (req, res) => {
       error: true,
       errorDetails: err.message || 'Embedding request failed',
     })
-    res.status(err.status || 500).json({ error: err.message || 'Embedding request failed' })
+    res.status(upstreamErrorStatus(err)).json({ error: 'Embedding request failed' })
   }
 })
 
@@ -1030,8 +1058,12 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
     usage_context,
   } = req.body
 
-  if (!Array.isArray(messages) || messages.length === 0) {
+  if (!validateChatMessages(messages)) {
     return res.status(400).json({ error: 'Invalid messages' })
+  }
+
+  if (!isAllowedResponseFormat(response_format)) {
+    return res.status(400).json({ error: 'Invalid response_format' })
   }
 
   if (!ALLOWED_MODELS.includes(model)) {
@@ -1043,7 +1075,7 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
     messages,
     stream: stream === true,
     max_completion_tokens: Math.min(Number(max_completion_tokens) || 1000, 4000),
-    ...(response_format ? { response_format } : {}),
+    ...(response_format ? { response_format: { type: 'json_object' } } : {}),
   }
   if (safePayload.stream) {
     safePayload.stream_options = { include_usage: true }
@@ -1091,6 +1123,12 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
     res.flushHeaders?.()
 
     const streamResp = await openai.chat.completions.create(safePayload)
+    // Stop paying for tokens nobody will read once the client goes away.
+    const abortUpstream = () => {
+      if (!res.writableEnded) streamResp.controller?.abort()
+    }
+    // res 'close' fires on client disconnect; req 'close' can fire early once the body is read.
+    res.on('close', abortUpstream)
     let streamedContent = ''
     let finalUsage = null
 
@@ -1135,12 +1173,12 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
     loggedError = err.message || 'Chat request failed'
 
     if (res.headersSent) {
-      res.write(`${JSON.stringify({ type: 'error', error: err.message || 'Chat request failed' })}\n`)
+      res.write(`${JSON.stringify({ type: 'error', error: 'Chat request failed' })}\n`)
       res.end()
       return
     }
 
-    res.status(err.status || 500).json({ error: err.message || 'Chat request failed' })
+    res.status(upstreamErrorStatus(err)).json({ error: 'Chat request failed' })
   } finally {
     logUsageOnce()
   }
@@ -1184,6 +1222,16 @@ app.post('/api/session/:id/jailbreak', async (req, res) => {
   res.json({ jailbreak_attempts: next })
 })
 
+
+// Final error handler: fixed messages only, details stay in server logs.
+app.use((err, _req, res, _next) => {
+  if (res.headersSent) return res.end()
+  if (err?.code === 'CORS_BLOCKED') return res.status(403).json({ error: 'Origin not allowed' })
+  if (err?.type === 'entity.parse.failed') return res.status(400).json({ error: 'Invalid JSON' })
+  if (err?.type === 'entity.too.large') return res.status(413).json({ error: 'Request too large' })
+  console.error('[Server] Unhandled request error:', err)
+  return res.status(500).json({ error: 'Internal server error' })
+})
 
 process.on('unhandledRejection', (reason) => {
   console.error('[Server] Unhandled rejection:', reason)
