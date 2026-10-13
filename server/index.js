@@ -143,6 +143,42 @@ function queueModelUsageLog(payload) {
   })
 }
 
+// Browser-supplied ids are untrusted: keep only those that belong to the
+// caller, drop the rest. Runs at log time, so it never delays the AI call.
+async function resolveUsageIds(userId, context = {}) {
+  const none = { session_id: null, thread_id: null, message_id: null }
+  const isId = (v) => typeof v === 'string' && UUID_PATTERN.test(v)
+  if (!supabaseAdmin || !isId(context.session_id)) return none
+  const sessionId = context.session_id
+  try {
+    const { data: session, error } = await supabaseAdmin
+      .from('sessions')
+      .select('user_id')
+      .eq('id', sessionId)
+      .maybeSingle()
+    if (error || session?.user_id !== userId) return none
+
+    const lookup = async (table, id) => {
+      if (!isId(id)) return null
+      const { data, error: lookupError } = await supabaseAdmin
+        .from(table)
+        .select('id')
+        .eq('id', id)
+        .eq('session_id', sessionId)
+        .maybeSingle()
+      return !lookupError && data ? id : null
+    }
+    const [threadId, messageId] = await Promise.all([
+      lookup('conversation_threads', context.thread_id),
+      lookup('messages', context.message_id),
+    ])
+    return { session_id: sessionId, thread_id: threadId, message_id: messageId }
+  } catch (err) {
+    console.error('[Usage Log] id validation failed', err?.message || err)
+    return none
+  }
+}
+
 async function logModelUsage({
   userId,
   usageContext = {},
@@ -165,13 +201,10 @@ async function logModelUsage({
     ? Number(usage.total_tokens || promptTokens + completionTokens || 0)
     : null
 
-  const { data, error: insertError } = await supabaseAdmin
-    .from('model_usage_logs')
-    .insert({
+  const ids = await resolveUsageIds(userId, usageContext)
+  const row = {
       user_id: userId,
-      session_id: usageContext.session_id || null,
-      thread_id: usageContext.thread_id || null,
-      message_id: usageContext.message_id || null,
+      ...ids,
       model,
       prompt_tokens: promptTokens,
       completion_tokens: completionTokens,
@@ -182,9 +215,18 @@ async function logModelUsage({
       latency_ms: latencyMs,
       error,
       error_details: errorDetails ? String(errorDetails).slice(0, 1000) : null,
-    })
+  }
+  const insertRow = (values) => supabaseAdmin
+    .from('model_usage_logs')
+    .insert(values)
     .select('id, user_id, session_id, thread_id, message_id, model, total_tokens, estimated_cost_usd, call_type, error, created_at')
     .single()
+
+  let { data, error: insertError } = await insertRow(row)
+  if (insertError?.code === '23503') {
+    // A foreign key failed (id raced or vanished): keep the cost row without ids.
+    ;({ data, error: insertError } = await insertRow({ ...row, session_id: null, thread_id: null, message_id: null }))
+  }
 
   if (insertError) {
     console.log('[Usage Log] insert error:', insertError)
@@ -653,6 +695,20 @@ app.post('/api/knowledge/concept-states', knowledgeWriteRateLimit, async (req, r
   }
 })
 
+const EXPERIMENT_METADATA_MAX_BYTES = 16 * 1024
+
+// The app reads only metadata.hypothesis. If the echoed original is oversized,
+// drop it and keep the essential fields; the move itself is never rejected.
+function capExperimentMetadata(original, essentials) {
+  const full = { ...(original && typeof original === 'object' ? original : {}), ...essentials }
+  try {
+    if (Buffer.byteLength(JSON.stringify(full), 'utf8') <= EXPERIMENT_METADATA_MAX_BYTES) return full
+  } catch {
+    // fall through to the essentials
+  }
+  return { ...essentials, original_dropped: true }
+}
+
 app.post('/api/personal-memories', knowledgeWriteRateLimit, async (req, res) => {
   if (!supabaseAdmin) return res.status(503).json({ error: 'Personal memory service not configured' })
   if (!hasAppServiceRoleKey) {
@@ -669,6 +725,7 @@ app.post('/api/personal-memories', knowledgeWriteRateLimit, async (req, res) => 
   if (!sessionId || !memory || !embedding) {
     return res.status(400).json({ error: 'Invalid personal memory payload' })
   }
+  if (!UUID_PATTERN.test(sessionId)) return res.status(400).json({ error: 'Invalid session_id' })
 
   const ownership = await assertSessionOwner(sessionId, req.user.id)
   if (!ownership.ok) return res.status(ownership.status).json({ error: ownership.error })
@@ -933,11 +990,10 @@ app.post('/api/experiments', experimentWriteRateLimit, async (req, res) => {
         success_condition: experiment.success_condition,
         assigned_at: assignedAt.toISOString(),
         due_at: dueAt.toISOString(),
-        metadata: {
-          ...experiment.original,
+        metadata: capExperimentMetadata(experiment.original, {
           hypothesis: experiment.hypothesis,
           quality_checked_at: assignedAt.toISOString(),
-        },
+        }),
       })
       .select('*')
       .single()
@@ -1286,6 +1342,7 @@ app.post('/api/session/:id/jailbreak', async (req, res) => {
   }
 
   const { id } = req.params
+  if (!UUID_PATTERN.test(String(id || ''))) return res.status(404).json({ error: 'Session not found' })
 
   const { data: session, error: fetchError } = await supabaseAdmin
     .from('sessions')
