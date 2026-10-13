@@ -71,6 +71,24 @@ test('shouldEmitExperimentReported suppresses cancel with no reason', () => {
 test('shouldEmitExperimentReported suppresses null to null', () => {
   assert.equal(shouldEmitExperimentReported({ status: 'active' }, { status: 'ghosted' }), false)
 })
+test('shouldEmitExperimentReported suppresses cancel retry that drops the reason', () => {
+  assert.equal(
+    shouldEmitExperimentReported(
+      { status: 'cancelled', outcome_reason: 'couldnt' },
+      { status: 'cancelled', outcome_reason: undefined },
+    ),
+    false,
+  )
+})
+test('shouldEmitExperimentReported suppresses identical cancelled couldnt retry', () => {
+  assert.equal(
+    shouldEmitExperimentReported(
+      { status: 'cancelled', outcome_reason: 'couldnt' },
+      { status: 'cancelled', outcome_reason: 'couldnt' },
+    ),
+    false,
+  )
+})
 test('capExperimentMetadata leaves small metadata unchanged', () => {
   assert.deepEqual(capExperimentMetadata({ a: 1 }, { hypothesis: 'h' }), { a: 1, hypothesis: 'h' })
 })
