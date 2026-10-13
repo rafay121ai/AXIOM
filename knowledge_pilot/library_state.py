@@ -218,3 +218,9 @@ def at_least(source_id: str, status: str, path: Path | str | None = None) -> boo
     if current not in PROGRESS_ORDER or status not in PROGRESS_ORDER:
         return current == status
     return PROGRESS_ORDER.index(current) >= PROGRESS_ORDER.index(status)
+
+
+def can_start(estimated_usd: float = 0.0, path: Path | str | None = None) -> bool:
+    """True when the remaining budget covers estimated_usd (part B's check)."""
+    remaining = budget_remaining(path)
+    return remaining > 0 and remaining >= estimated_usd
