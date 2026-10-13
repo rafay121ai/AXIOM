@@ -9,6 +9,11 @@
 -- Depends on 20261013000001 (default privileges revoked), so the grants
 -- below are explicit. Writes go through the Express API (service_role);
 -- the browser only gets own-row SELECT. No other tables touched.
+--
+-- updated_at is set by the API on every write; there is no trigger.
+-- `create table if not exists` silently skips a live table that already
+-- exists with a different shape, so the live-dump check matters: confirm no
+-- drifted public.founder_profiles exists before pushing.
 
 create table if not exists public.founder_profiles (
   user_id uuid primary key references auth.users(id) on delete cascade,
@@ -32,6 +37,10 @@ alter table public.founder_profiles add constraint founder_profiles_customer_mar
 alter table public.founder_profiles drop constraint if exists founder_profiles_open_answers_array;
 alter table public.founder_profiles add constraint founder_profiles_open_answers_array
   check (jsonb_typeof(open_answers) = 'array');
+
+alter table public.founder_profiles drop constraint if exists founder_profiles_open_answers_max;
+alter table public.founder_profiles add constraint founder_profiles_open_answers_max
+  check (jsonb_array_length(open_answers) <= 3);
 
 alter table public.founder_profiles drop constraint if exists founder_profiles_country_len;
 alter table public.founder_profiles add constraint founder_profiles_country_len
