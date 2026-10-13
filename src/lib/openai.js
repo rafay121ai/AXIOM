@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js'
+import { DailyCapError, isDailyCapError, isCappedBody } from './dailyCapError.js'
 
 const PROFILE_MODEL = 'gpt-5.2-2025-12-11'
 export const CHAT_MODEL = 'gpt-5.4-mini-2026-03-17'
@@ -55,21 +56,7 @@ function requestSignalWithTimeout(signal, timeoutMs = 30000) {
   }
 }
 
-// Thrown when the server reports the founder's daily AI cost cap is reached.
-// Background callers treat it like any failure and skip their step; the chat
-// turn shows err.message to the founder and saves nothing.
-export class DailyCapError extends Error {
-  constructor(body) {
-    super(body?.message || 'Daily limit reached.')
-    this.name = 'DailyCapError'
-    this.isDailyCap = true
-    this.resetsAt = body?.resets_at || null
-  }
-}
-
-export function isDailyCapError(error) {
-  return Boolean(error?.isDailyCap)
-}
+export { DailyCapError, isDailyCapError }
 
 async function postJson(path, body, options = {}) {
   const authHeaders = await getAuthHeaders()
@@ -97,7 +84,7 @@ async function postJson(path, body, options = {}) {
   }
 
   const data = await response.json()
-  if (data?.capped === true) throw new DailyCapError(data)
+  if (isCappedBody(data)) throw new DailyCapError(data)
   return data
 }
 
@@ -117,7 +104,7 @@ async function createChatStream(payload, options = {}) {
   // A capped response is plain JSON, not an NDJSON stream.
   if ((response.headers.get('content-type') || '').includes('application/json')) {
     const data = await response.json()
-    if (data?.capped === true) throw new DailyCapError(data)
+    if (isCappedBody(data)) throw new DailyCapError(data)
     throw new Error('Unexpected chat response')
   }
 
@@ -260,6 +247,7 @@ export async function requestJsonObject({
   try {
     return await repairJsonObject(lastRaw, label, usageContext)
   } catch (repairError) {
+    if (isDailyCapError(repairError)) throw repairError
     throw new Error(`Failed to parse ${label}: ${repairError?.message || lastError?.message || 'unknown parse error'}`)
   }
 }

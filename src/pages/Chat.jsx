@@ -1922,9 +1922,11 @@ export default function Chat() {
 
     if (error) return
 
-    await retireAssistantExperiment(targetAssistant, 'Cancelled by user message edit.')
+    if (!targetAssistant?.capped) {
+      await retireAssistantExperiment(targetAssistant, 'Cancelled by user message edit.')
+    }
 
-    if (targetAssistant?.id) {
+    if (targetAssistant?.id && !targetAssistant.capped) {
       await sendApiWrite('DELETE', `/api/messages/${targetAssistant.id}`)
     }
 

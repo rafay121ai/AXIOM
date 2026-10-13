@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getStoredSessionToken, setStoredSessionToken, supabase } from '../lib/supabase'
-import { generateAxiomProfile } from '../lib/openai'
+import { generateAxiomProfile, isDailyCapError } from '../lib/openai'
 import { postApiJson, trackProductEvent } from '../lib/api'
 import { AXIOM_WELCOME_SEEN_KEY, markAxiomWelcomePending } from './Welcome'
 
@@ -268,8 +268,8 @@ export default function Onboarding() {
       })()
       if (!welcomeSeen) markAxiomWelcomePending()
       navigate(welcomeSeen ? '/home' : '/welcome')
-    } catch {
-      setError('Something went wrong. Try again.')
+    } catch (err) {
+      setError(isDailyCapError(err) ? err.message : 'Something went wrong. Try again.')
       setIsProcessing(false)
     }
   }
