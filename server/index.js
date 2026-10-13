@@ -917,7 +917,7 @@ app.post('/api/experiments/:id/status', experimentWriteRateLimit, async (req, re
   try {
     const { data: existing, error: existingError } = await supabaseAdmin
       .from('experiments')
-      .select('id,session_id,user_id,status')
+      .select('id,session_id,user_id,status,outcome_reason')
       .eq('id', experimentId)
       .single()
 
@@ -957,7 +957,8 @@ app.post('/api/experiments/:id/status', experimentWriteRateLimit, async (req, re
         ? payload.outcome_reason
         : null
 
-    if (reportedOutcome && existing.status !== payload.status) {
+    // Corrections emit a new event; identical retries do not.
+    if (reportedOutcome && (existing.status !== payload.status || (existing.outcome_reason ?? null) !== (payload.outcome_reason ?? null))) {
       void trackEvent(req.user.id, 'experiment_reported', {
         experiment_id: data.id,
         session_id: data.session_id,
