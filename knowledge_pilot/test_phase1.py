@@ -175,8 +175,8 @@ def test_spot_check_first3_every10th_and_flagged(tmp_path, monkeypatch):
     q = json.loads((tmp_path / "spot_check_queue.json").read_text())["queue"]
     assert [r["source_id"] for r in q] == ["s00", "s01", "s02", "s09"]
     assert state.load(cfg.state_path)["sources"]["s09"]["agent_check_pending"] is True
-    assert P.register_spot_check(cfg, "s11", 2.5) is True
-    assert P.register_spot_check(cfg, "s11", 2.5) is True  # idempotent
+    assert P.register_spot_check(cfg, "new1", 2.5) is True
+    assert P.register_spot_check(cfg, "new1", 2.5) is True  # idempotent
 
 
 def test_report_contents(tmp_path, monkeypatch):
