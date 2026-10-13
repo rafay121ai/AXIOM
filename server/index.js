@@ -26,6 +26,7 @@ import {
   cleanMessagesSentAmount,
   cleanOnboardingPayload,
   cleanFounderProfilePayload,
+  normalizeReportTime,
   cleanSessionMemoryPayload,
   isExperimentExpired,
   isUuid,
@@ -1437,6 +1438,13 @@ app.post('/api/onboarding/complete', onboardingRateLimit, async (req, res) => {
   }
 })
 
+// Postgres returns time columns as HH:MM:SS; the client sends HH:MM.
+function normalizeProfileRow(row) {
+  return row && row.report_time_local
+    ? { ...row, report_time_local: normalizeReportTime(row.report_time_local) || row.report_time_local }
+    : row
+}
+
 app.get('/api/founder-profile', founderProfileRateLimit, async (req, res) => {
   if (!supabaseAdmin) return res.status(503).json({ error: 'Service not configured' })
   try {
@@ -1446,7 +1454,7 @@ app.get('/api/founder-profile', founderProfileRateLimit, async (req, res) => {
       .eq('user_id', req.user.id)
       .maybeSingle()
     if (error) throw error
-    return res.json({ profile: data || null })
+    return res.json({ profile: data ? normalizeProfileRow(data) : null })
   } catch (error) {
     console.error('[FounderProfile] read failed', error)
     return res.status(500).json({ error: 'Failed to load profile' })
@@ -1468,7 +1476,7 @@ app.put('/api/founder-profile', founderProfileRateLimit, async (req, res) => {
       .select('*')
       .single()
     if (error) throw error
-    return res.json({ profile: data })
+    return res.json({ profile: normalizeProfileRow(data) })
   } catch (error) {
     console.error('[FounderProfile] save failed', error)
     return res.status(500).json({ error: 'Failed to save profile' })

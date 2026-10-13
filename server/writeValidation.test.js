@@ -13,6 +13,7 @@ import {
   decideMessageAccess,
   isThreadOwnedBy,
   cleanFounderProfilePayload,
+  normalizeReportTime,
 } from './writeValidation.js'
 
 const token = '123e4567-e89b-42d3-a456-426614174000'
@@ -232,4 +233,36 @@ test('cleanFounderProfilePayload null clears nullable fields', () => {
   const r = cleanFounderProfilePayload({ stage: null, country: null, deadline: null, timezone: null, report_time_local: null })
   assert.deepEqual(r, { ok: true, value: { stage: null, country: null, deadline: null, timezone: null, report_time_local: null } })
   assert.equal(cleanFounderProfilePayload({ customer_markets: null }).ok, false)
+})
+
+test('cleanFounderProfilePayload canonicalises timezone case and rejects offsets', () => {
+  assert.equal(cleanFounderProfilePayload({ timezone: 'europe/lisbon' }).value.timezone, 'Europe/Lisbon')
+  assert.equal(cleanFounderProfilePayload({ timezone: 'UTC' }).value.timezone, 'UTC')
+  assert.equal(cleanFounderProfilePayload({ timezone: '+01:00' }).ok, false)
+})
+test('cleanFounderProfilePayload dedupes customer markets silently', () => {
+  const r = cleanFounderProfilePayload({ customer_markets: ['Europe', ' europe ', 'US'] })
+  assert.deepEqual(r, { ok: true, value: { customer_markets: ['europe', 'us'] } })
+})
+test('cleanFounderProfilePayload trims open answers and rejects empty answers', () => {
+  const ok = cleanFounderProfilePayload({ open_answers: [{ question: ' q ', answer: ' a ', input_mode: 'text' }] })
+  assert.deepEqual(ok.value.open_answers, [{ question: 'q', answer: 'a', input_mode: 'text' }])
+  assert.equal(cleanFounderProfilePayload({ open_answers: [{ question: 'q', answer: '   ', input_mode: 'text' }] }).ok, false)
+})
+test('cleanFounderProfilePayload handles leap days', () => {
+  assert.equal(cleanFounderProfilePayload({ deadline: '2024-02-29' }).ok, true)
+  assert.equal(cleanFounderProfilePayload({ deadline: '2026-02-29' }).ok, false)
+})
+test('cleanFounderProfilePayload report time bounds and seconds', () => {
+  assert.equal(cleanFounderProfilePayload({ report_time_local: '00:00' }).value.report_time_local, '00:00')
+  assert.equal(cleanFounderProfilePayload({ report_time_local: '23:59' }).value.report_time_local, '23:59')
+  assert.equal(cleanFounderProfilePayload({ report_time_local: '21:30:00' }).value.report_time_local, '21:30')
+  assert.equal(normalizeReportTime('21:30:00'), '21:30')
+})
+test('cleanFounderProfilePayload empty goal becomes null, bad bodies rejected', () => {
+  assert.equal(cleanFounderProfilePayload({ goal: '' }).value.goal, null)
+  assert.equal(cleanFounderProfilePayload(null).ok, false)
+  assert.equal(cleanFounderProfilePayload([]).ok, false)
+  assert.equal(cleanFounderProfilePayload('x').ok, false)
+  assert.equal(cleanFounderProfilePayload({ open_answers: null }).ok, false)
 })

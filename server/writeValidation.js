@@ -248,13 +248,21 @@ export const PROFILE_OPEN_QUESTION_MAX = 500
 export const PROFILE_OPEN_ANSWER_MAX = 5_000
 export const PROFILE_INPUT_MODES = ['voice', 'text']
 
-function isValidTimeZone(value) {
+// Returns the canonical IANA name, or null. Offsets like '+01:00' are rejected.
+function canonicalTimeZone(value) {
+  if (value !== 'UTC' && value.toUpperCase() !== 'UTC' && !value.includes('/')) return null
   try {
-    new Intl.DateTimeFormat(undefined, { timeZone: value })
-    return true
+    return new Intl.DateTimeFormat('en-US', { timeZone: value }).resolvedOptions().timeZone
   } catch {
-    return false
+    return null
   }
+}
+
+// Accepts HH:MM or HH:MM:SS, returns HH:MM or null.
+export function normalizeReportTime(value) {
+  if (typeof value !== 'string') return null
+  const m = /^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/.exec(value)
+  return m ? `${m[1]}:${m[2]}` : null
 }
 
 function isValidIsoDate(value) {
@@ -292,7 +300,7 @@ export function cleanFounderProfilePayload(body) {
     for (const item of v) {
       if (typeof item !== 'string') return fail('customer_markets')
       const t = item.trim().toLowerCase()
-      if (!t || t.length > CUSTOMER_MARKET_MAX_LEN || seen.has(t)) return fail('customer_markets')
+      if (!t || t.length > CUSTOMER_MARKET_MAX_LEN) return fail('customer_markets')
       seen.add(t)
     }
     value.customer_markets = [...seen]
@@ -309,9 +317,11 @@ export function cleanFounderProfilePayload(body) {
   if (has('timezone')) {
     const v = body.timezone
     if (v === null) value.timezone = null
-    else if (typeof v === 'string' && v.trim() && v.trim().length <= PROFILE_TIMEZONE_MAX && isValidTimeZone(v.trim())) {
-      value.timezone = v.trim()
-    } else return fail('timezone')
+    else {
+      const tz = typeof v === 'string' && v.trim() && v.trim().length <= PROFILE_TIMEZONE_MAX ? canonicalTimeZone(v.trim()) : null
+      if (!tz) return fail('timezone')
+      value.timezone = tz
+    }
   }
 
   if (has('deadline')) {
@@ -324,7 +334,7 @@ export function cleanFounderProfilePayload(body) {
   if (has('report_time_local')) {
     const v = body.report_time_local
     if (v === null) value.report_time_local = null
-    else if (typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(v)) value.report_time_local = v
+    else if (normalizeReportTime(v)) value.report_time_local = normalizeReportTime(v)
     else return fail('report_time_local')
   }
 
@@ -334,10 +344,10 @@ export function cleanFounderProfilePayload(body) {
     const out = []
     for (const item of v) {
       if (!isPlainObject(item)) return fail('open_answers')
-      if (typeof item.question !== 'string' || item.question.length > PROFILE_OPEN_QUESTION_MAX) return fail('open_answers')
-      if (typeof item.answer !== 'string' || item.answer.length > PROFILE_OPEN_ANSWER_MAX) return fail('open_answers')
+      if (typeof item.question !== 'string' || item.question.trim().length > PROFILE_OPEN_QUESTION_MAX) return fail('open_answers')
+      if (typeof item.answer !== 'string' || !item.answer.trim() || item.answer.trim().length > PROFILE_OPEN_ANSWER_MAX) return fail('open_answers')
       if (!PROFILE_INPUT_MODES.includes(item.input_mode)) return fail('open_answers')
-      out.push({ question: item.question, answer: item.answer, input_mode: item.input_mode })
+      out.push({ question: item.question.trim(), answer: item.answer.trim(), input_mode: item.input_mode })
     }
     value.open_answers = out
   }
