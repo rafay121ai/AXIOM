@@ -28,6 +28,7 @@ SCHEMA_VERSION = 1
 STATUSES = (
     "pending", "extracted", "chunked", "qa_passed", "enriched", "embedded", "done",
     "needs_review", "excluded", "duplicate", "unsupported_format",
+    "qa_failed_pending_fix",  # non-final: waits in needs_fix_queue.json for a chunker fix and --retry-failed
 )
 # Statuses a source can only leave deliberately (force), never by a normal rerun.
 TERMINAL_STATUSES = ("excluded", "duplicate", "unsupported_format")
