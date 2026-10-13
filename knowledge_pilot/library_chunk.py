@@ -73,6 +73,14 @@ MIN_WORDS = 150
 MAX_WORDS = 700
 STORY_MAX = 900
 WINDOW_WORDS = 6000
+SOFT_MAX = 500   # deterministic size pass splits units above this when a safe boundary exists
+
+TERMINAL_RE = re.compile(r"[.?!\"”’)]\s*$")
+TOPIC_CUE_RE =re.compile(
+    r"^(?:(?:In|By|On|During|After|Before|Since|Until) (?:\d{4}|the \d{4}s|[A-Z][a-z]+ \d)|"
+    r"For (?:example|instance)\b|Consider\b|Take\b|Imagine\b|Suppose\b|Let(?:'s|\u2019s)\b|"
+    r"Now,? |Today,? |Years later\b|Decades later\b|The (?:story|case|lesson|problem|question|idea) of\b|"
+    r"Why\b|How\b|What\b)")
 
 
 # ----------------------------------------------------------------------------
@@ -179,6 +187,47 @@ def split_unit(paras: list[Para], chapter: Chapter, u: Unit) -> tuple[Unit, Unit
     a = Unit(u.s, pos, left, u.section_start, True, "split_rule", set(keep))
     b = Unit(pos, u.e, right, False, True, "split_rule", set(keep))
     return a, b
+
+
+def size_split(paras: list[Para], chapter: Chapter, u: Unit) -> tuple[Unit, Unit] | None:
+    """No-API size pass: split a unit above SOFT_MAX at the safe paragraph boundary nearest
+    the middle, preferring scene breaks and topic cues. Both halves must be >= MIN_WORDS."""
+    cands = [c for c in _split_candidates(paras, chapter, u)
+             if TERMINAL_RE.search(paras[c[0] - 1].text)        # left piece ends on a full sentence
+             and not paras[c[0] - 1].text.rstrip().endswith(":")
+             and len(paras[c[0]].text.split()) >= 8]            # right piece opens on prose, not a label
+    if not cands:
+        return None
+    middle = u.words / 2
+
+    def score(c: tuple[int, int, int]) -> float:
+        pos, left, _ = c
+        bonus = 0.0
+        if paras[pos].scene_break:
+            bonus = 0.25 * u.words
+        elif TOPIC_CUE_RE.match(paras[pos].text):
+            bonus = 0.12 * u.words
+        return abs(left - middle) - bonus
+
+    pos, left, right = min(cands, key=score)
+    keep = u.flags & {"boundary_rule_fallback"}
+    return (Unit(u.s, pos, left, u.section_start, True, "split_rule", set(keep)),
+            Unit(pos, u.e, right, False, True, "split_rule", set(keep)))
+
+
+def _size_pass(paras: list[Para], chapter: Chapter, units: list[Unit], stats: dict[str, int]) -> list[Unit]:
+    out: list[Unit] = []
+    stack = list(reversed(units))
+    while stack:
+        u = stack.pop()
+        if u.words > SOFT_MAX and u.method not in ("cache", "seed", "llm"):   # trust planned boundaries
+            pieces = size_split(paras, chapter, u)
+            if pieces:
+                stats["size_splits"] += 1
+                stack.extend([pieces[1], pieces[0]])
+                continue
+        out.append(u)
+    return out
 
 
 def _section_end(paras: list[Para], u: Unit) -> str | None:
@@ -479,6 +528,7 @@ def build_chunks(paras: list[Para], meta: dict[str, Any], provider: BoundaryProv
             for k, (a, b) in enumerate(zip(bounds, bounds[1:])):
                 units.append(_make_unit(paras, a, b, sec_start and k == 0, method=method))
         units = _repair(paras, chapter, units, counter)
+        units = _size_pass(paras, chapter, units, counter)
         for u in units:
             all_units.append((chapter_title, chapter, u))
 

@@ -277,6 +277,33 @@ class ChunkRules(unittest.TestCase):
             flat = [t for c in chunks for t in c["text"].split("\n\n")]
             self.assertEqual(flat, [p.text for p in paras])
 
+    def test_size_pass_splits_over_500_at_safe_boundary(self):
+        paras = [para(filler(w, f"p{i}")) for i, w in enumerate([200, 180, 160, 120])]  # 660 words
+        chunks, stats = build(paras)
+        self.assertEqual(len(chunks), 2)
+        self.assertGreaterEqual(stats.get("size_splits", 0), 1)
+        self.assertTrue(chunks[0]["continues"])
+        self.assertTrue(chunks[1]["continues"])
+        self.assertEqual(chunks[0]["next_id"], chunks[1]["id"])
+        self.assertEqual(chunks[1]["prev_id"], chunks[0]["id"])
+        self.assertTrue(all(c["word_count"] >= 150 for c in chunks))
+
+    def test_size_pass_respects_continuation_and_small_halves(self):
+        # Only boundary that balances halves opens on "But": must not split there.
+        paras = [para(filler(300, "a")), para("But " + filler(300, "b"))]
+        chunks, _ = build(paras)
+        self.assertEqual(len(chunks), 1)
+        # Halves under 150 words are never created.
+        chunks, _ = build([para(filler(480, "a")), para(filler(100, "b"))])
+        self.assertEqual(len(chunks), 1)
+
+    def test_size_pass_keeps_lead_in_with_list(self):
+        paras = [para(filler(300, "a")), para("Here are the steps:"), para("1. " + filler(120, "s")),
+                 para(filler(200, "z"))]
+        chunks, _ = build(paras)
+        for c in chunks:
+            self.assertFalse(lt.ends_with_lead_in(c["text"]))
+
     def test_continuation_opener_merges_with_previous(self):
         a, b, c = para("Setup. " + filler(300, "a")), para("But the outcome surprised everyone. " + filler(300, "b")), para("Fresh topic here. " + filler(300, "c"))
         chunks, stats = build([a, b, c])
@@ -353,8 +380,11 @@ class ChunkRules(unittest.TestCase):
         for c in chunks:
             for piece in c["text"].split("\n\n"):
                 self.assertIn(piece, sources)
-        # Closest to the middle: three paragraphs each side.
-        self.assertEqual([len(c["text"].split("\n\n")) for c in chunks], [3, 3])
+        # Closest to the middle first (3 + 3); the 500-word size pass may then halve each side again,
+        # but no chunk may straddle the middle boundary.
+        counts = [len(c["text"].split("\n\n")) for c in chunks]
+        self.assertEqual(sum(counts), 6)
+        self.assertIn(3, [sum(counts[:k]) for k in range(1, len(counts))])
 
     def test_repeated_split_until_700_or_less(self):
         paras = [para(f"Section idea {i}. " + filler(180, f"u{i}")) for i in range(14)]  # ~2600 words
