@@ -330,7 +330,7 @@ function buildConstraintOffer(experiment) {
 function isAwaitingExperimentOutcomeClarification(list = []) {
   const lastAssistant = [...list]
     .reverse()
-    .find((message) => message.role === 'assistant' && !message.streaming && message.content)
+    .find((message) => message.role === 'assistant' && !message.streaming && !message.capped && message.content)
 
   return String(lastAssistant?.content || '').trim() === EXPERIMENT_OUTCOME_CLARIFICATION
 }
@@ -338,7 +338,7 @@ function isAwaitingExperimentOutcomeClarification(list = []) {
 function isAwaitingExperimentCancelReason(list = []) {
   const lastAssistant = [...list]
     .reverse()
-    .find((message) => message.role === 'assistant' && !message.streaming && message.content)
+    .find((message) => message.role === 'assistant' && !message.streaming && !message.capped && message.content)
 
   return String(lastAssistant?.content || '').trim() === EXPERIMENT_CANCEL_REASON_QUESTION
 }
@@ -415,7 +415,7 @@ function hasConcreteIncident(text = '') {
 }
 
 function isAwaitingConcreteIncident(messages = []) {
-  const lastAssistant = [...messages].reverse().find((message) => message.role === 'assistant' && message.content && !message.streaming)
+  const lastAssistant = [...messages].reverse().find((message) => message.role === 'assistant' && message.content && !message.streaming && !message.capped)
   if (!lastAssistant) return false
   return /\b(actual win first|actual situation first|actual moment|actual decision|actual situation|actual scene|what was the choice|what happened recently|name one recent choice)\b/i.test(lastAssistant.content)
 }
@@ -819,7 +819,17 @@ export default function Chat() {
     try {
       const content = await generateOpeningMessage(sess, true)
       await saveAssistantOpening(sess, msgId, content)
-    } catch {
+    } catch (e) {
+      if (isDailyCapError(e)) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === msgId
+              ? { ...m, content: e.message, streaming: false, status: null, experiment: null, capped: true }
+              : m
+          )
+        )
+        return
+      }
       setMessages((prev) =>
         prev.map((m) =>
           m.id === msgId
@@ -1872,9 +1882,11 @@ export default function Chat() {
       (!userMessage.created_at || !msg.created_at || msg.created_at <= userMessage.created_at)
     )
 
-    await retireAssistantExperiment(targetAssistant, 'Cancelled by assistant regeneration.')
+    if (!targetAssistant?.capped) {
+      await retireAssistantExperiment(targetAssistant, 'Cancelled by assistant regeneration.')
+    }
 
-    if (targetAssistant?.id) {
+    if (targetAssistant?.id && !targetAssistant.capped) {
       await sendApiWrite('DELETE', `/api/messages/${targetAssistant.id}`)
     }
 
@@ -2108,7 +2120,7 @@ function MessageGroup({
   const showExperiment = msg.role === 'assistant' && msg.experiment && !msg.streaming
   const isEditing = msg.role === 'user' && editingMessageId === msg.id
   const canEdit = msg.role === 'user' && isLatestUser && !sending && !isEditing
-  const canRegenerate = msg.role === 'assistant' && isLatestAssistant && !sending && !msg.streaming && typeof onRegenerate === 'function'
+  const canRegenerate = msg.role === 'assistant' && isLatestAssistant && !sending && !msg.streaming && !msg.capped && typeof onRegenerate === 'function'
   const messageActions = [
     canEdit && { label: 'Edit', ariaLabel: 'Edit message', icon: 'edit', onClick: () => onStartEdit(msg) },
     canRegenerate && { label: 'Regenerate', ariaLabel: 'Regenerate response', icon: 'regenerate', onClick: onRegenerate },
