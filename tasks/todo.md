@@ -113,11 +113,11 @@ Branch: `cleanup/remove-old-product`
 
 Push order. None have been pushed. Every one needs a live schema dump diff first (CLAUDE.md).
 
-1. `20260930000001_fix_model_usage_logging.sql`: unknown tokens and cost on model_usage_logs become null instead of 0. Live-dump diff: NOT DONE. Deploy: with or after the cost server deploy (0001 must not precede code that tolerates it, and the cost server needs it).
-2. `20260930000002_create_product_events.sql`: creates product_events (internal analytics, RLS on, no policies, service_role only). Live-dump diff: NOT DONE.
-3. `20261013000001_security_view_and_default_privileges.sql`: user_conversations view security, default privileges revoked, model_usage_logs write policy swap. Live-dump diff: NOT DONE.
-4. `20261013000002_revoke_browser_writes.sql`: revokes browser (anon/authenticated) writes on app tables. Live-dump diff: NOT DONE. Deploy: only after the hardening server and frontend are deployed, since the browser must no longer write directly.
-5. `20261013000003_create_founder_profiles.sql`: creates founder_profiles (one row per user, own-row SELECT for the browser, bounded columns and open_answers <= 3). Live-dump diff: NOT DONE. Also confirm no drifted live founder_profiles table exists, because `create table if not exists` would skip it.
+1. `20260930000001_fix_model_usage_logging.sql`: unknown tokens and cost on model_usage_logs become null instead of 0. Live-dump diff: NOT DONE. Deploy: push BEFORE or WITH the cost-tracking server deploy (the new server writes null tokens/cost, which the old NOT NULL columns reject; the old server's zero values still work after the migration).
+2. `20260930000002_create_product_events.sql`: creates product_events (internal analytics, RLS on, no policies, service_role only). Live-dump diff: NOT DONE. Deploy: BEFORE or WITH the server that emits product events.
+3. `20261013000001_security_view_and_default_privileges.sql`: user_conversations view security, default privileges revoked, model_usage_logs write policy swap. Live-dump diff: NOT DONE. Deploy: any time after the live-dump diff; first confirm the live model_usage_logs policy name and the user_conversations grants; verify pg_default_acl after.
+4. `20261013000002_revoke_browser_writes.sql` (now in `supabase/pending/`): revokes browser (anon/authenticated) writes on app tables. Live-dump diff: NOT DONE. Deploy: only after the Railway server and then the Vercel frontend from feature/backend-hardening are deployed; then move it into `supabase/migrations/` and push.
+5. `20261013000003_create_founder_profiles.sql`: creates founder_profiles (one row per user, own-row SELECT for the browser, bounded columns and open_answers <= 3). Live-dump diff: NOT DONE. Deploy: BEFORE or WITH the hardening server. Also confirm no drifted live founder_profiles table exists, because `create table if not exists` would skip it.
 
 ### Open questions
 

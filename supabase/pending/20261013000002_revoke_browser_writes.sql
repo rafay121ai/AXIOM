@@ -4,6 +4,9 @@
 -- tables and re-create the dropped FOR ALL policies with their baseline
 -- definitions (see 20260929000000_baseline_live_public_schema.sql).
 -- DO NOT PUSH until the live-dump diff is recorded in tasks/todo.md.
+-- LIVES IN supabase/pending/ ON PURPOSE: move it into supabase/migrations/ only
+-- after the hardening server (Railway) and then the frontend (Vercel), both from
+-- feature/backend-hardening, are deployed. Until then the browser still writes directly.
 --
 -- WRITTEN AGAINST the checked-in baseline
 -- (20260929000000_baseline_live_public_schema.sql), NOT a live schema dump.
