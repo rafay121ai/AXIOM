@@ -12,10 +12,10 @@ import OpenAI from 'openai'
 import { createClient } from '@supabase/supabase-js'
 import rateLimit from 'express-rate-limit'
 import { validateExperimentQuality } from './experimentQuality.js'
-import { estimateModelCost, USAGE_CALL_TYPES } from './modelUsage.js'
+import { buildUsageRow } from './modelUsage.js'
 import { createEventTracker, PRODUCT_EVENTS, toReportedOutcome, shouldEmitExperimentReported } from './productEvents.js'
 import { summarizeUsage } from './usageSummary.js'
-import { resolveDailyCap, sumChargesPaged, CHAT_MAX_COMPLETION_TOKENS } from './dailyCap.js'
+import { resolveDailyCap, sumChargesPaged, keysetOrFilter, STREAM_INTERRUPTED_MARKER, CLIENT_ABORTED_MARKER, CHAT_MAX_COMPLETION_TOKENS } from './dailyCap.js'
 import { capExperimentMetadata } from './writeValidation.js'
 import {
   cleanAppSessionStart,
@@ -94,7 +94,6 @@ const openai = new OpenAI({
   maxRetries: 1,
 })
 
-const USAGE_CALL_TYPE_SET = new Set(USAGE_CALL_TYPES)
 const BROWSER_TRACKABLE_EVENTS = new Set([
   'onboarding_completed',
   'chat_started',
@@ -151,15 +150,17 @@ function queueModelUsageLog(payload) {
 // since 00:00 UTC, else null. Fails open if the lookup errors (logged).
 function getDailyCapResponse(userId) {
   if (!supabaseAdmin) return Promise.resolve(null)
-  return resolveDailyCap(userId, (id, since) => sumChargesPaged(async (from, to) => {
-    const { data, error } = await supabaseAdmin
+  return resolveDailyCap(userId, (id, since) => sumChargesPaged(async (cursor, pageSize) => {
+    let query = supabaseAdmin
       .from('model_usage_logs')
-      .select('estimated_cost_usd, model, error')
+      .select('id, created_at, estimated_cost_usd, model, error, error_details')
       .eq('user_id', id)
       .gte('created_at', since)
-      .order('created_at')
-      .order('id')
-      .range(from, to)
+    if (cursor) query = query.or(keysetOrFilter(cursor))
+    const { data, error } = await query
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .limit(pageSize)
     if (error) throw new Error(error.message)
     return data
   }))
@@ -220,32 +221,8 @@ async function logModelUsage({
 }) {
   if (!supabaseAdmin || !userId || !model) return
 
-  const callType = USAGE_CALL_TYPE_SET.has(usageContext.call_type)
-    ? usageContext.call_type
-    : 'chat'
-  // Missing usage (aborted or failed call) is unknown, not zero.
-  const hasUsage = usage && typeof usage === 'object'
-  const promptTokens = hasUsage ? Number(usage.prompt_tokens || 0) : null
-  const completionTokens = hasUsage ? Number(usage.completion_tokens || 0) : null
-  const totalTokens = hasUsage
-    ? Number(usage.total_tokens || promptTokens + completionTokens || 0)
-    : null
-
   const ids = await resolveUsageIds(userId, usageContext)
-  const row = {
-      user_id: userId,
-      ...ids,
-      model,
-      prompt_tokens: promptTokens,
-      completion_tokens: completionTokens,
-      total_tokens: totalTokens,
-      estimated_cost_usd: hasUsage ? estimateModelCost(model, usage) : null,
-      call_type: callType,
-      rag_chunks_used: Number(usageContext.rag_chunks_used || 0),
-      latency_ms: latencyMs,
-      error,
-      error_details: errorDetails ? String(errorDetails).slice(0, 1000) : null,
-  }
+  const row = buildUsageRow({ userId, usageContext, ids, model, usage, latencyMs, error, errorDetails })
   const insertRow = (values) => supabaseAdmin
     .from('model_usage_logs')
     .insert(values)
@@ -1273,6 +1250,7 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
   let loggedUsage = null
   let loggedError = null
   let clientAborted = false
+  let streamStarted = false
   const logUsageOnce = () => {
     if (usageLogged) return
     usageLogged = true
@@ -1326,11 +1304,12 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
         finalUsage = chunk.usage
         loggedUsage = finalUsage
       }
+      streamStarted = true
       res.write(`${JSON.stringify({ type: 'chunk', data: chunk })}\n`)
     }
 
     if (clientAborted) {
-      loggedError = 'client_aborted'
+      loggedError = CLIENT_ABORTED_MARKER
       return
     }
 
@@ -1339,8 +1318,11 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
   } catch (err) {
     console.error('[Chat]', err)
 
-    // Fixed marker so aborted streams (null tokens/cost) can be counted.
-    loggedError = clientAborted ? 'client_aborted' : (err.message || 'Chat request failed')
+    // Fixed markers so aborted/interrupted streams (null tokens/cost) are charged.
+    // Failures before any token was sent keep their message and are charged 0.
+    loggedError = clientAborted
+      ? CLIENT_ABORTED_MARKER
+      : (streamStarted ? STREAM_INTERRUPTED_MARKER : (err.message || 'Chat request failed'))
 
     if (res.headersSent) {
       res.write(`${JSON.stringify({ type: 'error', error: 'Chat request failed' })}\n`)

@@ -47,51 +47,116 @@ test('capped response shape and decision', () => {
 })
 
 import {
-  capChargeForRow, sumChargesPaged, resolveDailyCap,
+  capChargeForRow, sumChargesPaged, resolveDailyCap, keysetOrFilter,
   ABORT_ASSUMED_PROMPT_TOKENS, ABORT_ASSUMED_OUTPUT_TOKENS,
+  CHARGED_ERROR_MARKERS, CLIENT_ABORTED_MARKER, STREAM_INTERRUPTED_MARKER,
 } from './dailyCap.js'
+import { buildUsageRow } from './modelUsage.js'
 
 const abortCost = (inP, outP) => (20000 * inP + 4000 * outP) / 1_000_000
+const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-12, `${a} vs ${b}`)
+// Real logger row shape: error is boolean, marker is in error_details.
+const aborted = (model) => ({ estimated_cost_usd: null, model, error: true, error_details: CLIENT_ABORTED_MARKER })
 
 test('abort assumptions are 20000 in / 4000 out', () => {
   assert.equal(ABORT_ASSUMED_PROMPT_TOKENS, 20000)
   assert.equal(ABORT_ASSUMED_OUTPUT_TOKENS, 4000)
 })
 
+test('markers list holds client_aborted and stream_interrupted', () => {
+  assert.deepEqual([...CHARGED_ERROR_MARKERS], ['client_aborted', 'stream_interrupted'])
+})
+
 test('aborted null-cost row is charged at gpt-5.4-mini and gpt-5.2 prices', () => {
-  const mini = capChargeForRow({ estimated_cost_usd: null, model: 'gpt-5.4-mini', error: 'client_aborted' })
-  const big = capChargeForRow({ estimated_cost_usd: null, model: 'gpt-5.2', error: 'client_aborted' })
-  assert.ok(Math.abs(mini - abortCost(0.75, 4.5)) < 1e-12)
-  assert.ok(Math.abs(big - abortCost(1.75, 14)) < 1e-12)
+  const mini = capChargeForRow(aborted('gpt-5.4-mini'))
+  const big = capChargeForRow(aborted('gpt-5.2'))
+  near(mini, abortCost(0.75, 4.5))
+  near(big, abortCost(1.75, 14))
   assert.ok(mini > 0 && big > mini)
 })
 
 test('priced row uses its stored cost, even if aborted', () => {
-  assert.equal(capChargeForRow({ estimated_cost_usd: 0.07, model: 'gpt-5.2', error: null }), 0.07)
-  assert.equal(capChargeForRow({ estimated_cost_usd: '0.02', model: 'gpt-5.2', error: 'client_aborted' }), 0.02)
+  assert.equal(capChargeForRow({ estimated_cost_usd: 0.07, model: 'gpt-5.2', error: false, error_details: null }), 0.07)
+  assert.equal(capChargeForRow({ estimated_cost_usd: '0.02', model: 'gpt-5.2', error: true, error_details: CLIENT_ABORTED_MARKER }), 0.02)
 })
 
 test('unknown model abort uses the max priced chat model', () => {
-  const v = capChargeForRow({ estimated_cost_usd: null, model: 'mystery', error: 'client_aborted' })
-  assert.ok(Math.abs(v - abortCost(1.75, 14)) < 1e-12)
+  near(capChargeForRow(aborted('mystery')), abortCost(1.75, 14))
 })
 
 test('non-abort null row is 0', () => {
-  assert.equal(capChargeForRow({ estimated_cost_usd: null, model: 'gpt-5.2', error: 'boom' }), 0)
-  assert.equal(capChargeForRow({ estimated_cost_usd: null, model: 'gpt-5.2', error: null }), 0)
+  assert.equal(capChargeForRow({ estimated_cost_usd: null, model: 'gpt-5.2', error: true, error_details: 'boom' }), 0)
+  assert.equal(capChargeForRow({ estimated_cost_usd: null, model: 'gpt-5.2', error: false, error_details: null }), 0)
+  // The old fake shape (marker in `error`) is not what the logger writes.
+  assert.equal(capChargeForRow({ estimated_cost_usd: null, model: 'gpt-5.2', error: 'client_aborted' }), 0)
 })
 
-test('paging sums across 3 pages', async () => {
-  const pages = [[{ estimated_cost_usd: 0.1 }, { estimated_cost_usd: 0.1 }], [{ estimated_cost_usd: 0.1 }, { estimated_cost_usd: 0.1 }], [{ estimated_cost_usd: 0.1 }]]
-  const calls = []
-  const total = await sumChargesPaged(async (from, to) => { calls.push([from, to]); return pages[calls.length - 1] }, 1, 2)
-  assert.ok(Math.abs(total - 0.5) < 1e-12)
-  assert.deepEqual(calls, [[0, 1], [2, 3], [4, 5]])
+test('round trip: rows built by the real logger function are charged correctly', async () => {
+  const build = (args) => buildUsageRow({ userId: 'u1', warn: () => {}, ...args })
+  const project = (r) => ({ estimated_cost_usd: r.estimated_cost_usd, model: r.model, error: r.error, error_details: r.error_details })
+  const usage = { prompt_tokens: 1000, completion_tokens: 500, total_tokens: 1500 }
+
+  const priced = build({ model: 'gpt-5.2', usage, error: false })
+  const clientAbort = build({ model: 'gpt-5.2', error: true, errorDetails: CLIENT_ABORTED_MARKER })
+  const interrupted = build({ model: 'gpt-5.4-mini', error: true, errorDetails: STREAM_INTERRUPTED_MARKER })
+  const preStream = build({ model: 'gpt-5.2', error: true, errorDetails: '503 upstream unavailable' })
+  const embedding = build({ model: 'text-embedding-3-small', usage: { prompt_tokens: 2000, total_tokens: 2000 }, usageContext: { call_type: 'embedding' } })
+
+  assert.ok(priced.estimated_cost_usd > 0)
+  assert.equal(clientAbort.estimated_cost_usd, null)
+  assert.equal(clientAbort.error, true)
+  assert.equal(clientAbort.error_details, 'client_aborted')
+  assert.ok(embedding.estimated_cost_usd > 0)
+
+  near(capChargeForRow(project(priced)), priced.estimated_cost_usd)
+  near(capChargeForRow(project(clientAbort)), abortCost(1.75, 14))
+  near(capChargeForRow(project(interrupted)), abortCost(0.75, 4.5))
+  assert.equal(capChargeForRow(project(preStream)), 0)
+  near(capChargeForRow(project(embedding)), embedding.estimated_cost_usd)
+
+  const rows = [priced, clientAbort, interrupted, preStream, embedding]
+    .map((r, i) => ({ id: `id-${i}`, created_at: `2026-10-13T10:00:0${i}Z`, ...project(r) }))
+  const total = await sumChargesPaged(async () => rows, 100, 1000)
+  near(total, priced.estimated_cost_usd + abortCost(1.75, 14) + abortCost(0.75, 4.5) + embedding.estimated_cost_usd)
 })
 
-test('paging exits early at the cap and handles empty', async () => {
+test('keysetOrFilter quotes the timestamp and ties on created_at break by id', () => {
+  const f = keysetOrFilter({ created_at: '2026-10-13T10:00:00.123456+00:00', id: 'abc-1' })
+  assert.equal(
+    f,
+    'created_at.gt."2026-10-13T10:00:00.123456+00:00",and(created_at.eq."2026-10-13T10:00:00.123456+00:00",id.gt."abc-1")',
+  )
+})
+
+test('keyset paging walks 3 pages, passing the last (created_at, id) as cursor', async () => {
+  const row = (id, created_at) => ({ id, created_at, estimated_cost_usd: 0.1 })
+  const pages = [
+    [row('a', 't1'), row('b', 't1')],
+    [row('c', 't1'), row('d', 't2')],
+    [row('e', 't3')],
+  ]
+  const cursors = []
+  const total = await sumChargesPaged(async (cursor, size) => { cursors.push([cursor, size]); return pages[cursors.length - 1] }, 1, 2)
+  near(total, 0.5)
+  assert.deepEqual(cursors, [[null, 2], [{ created_at: 't1', id: 'b' }, 2], [{ created_at: 't2', id: 'd' }, 2]])
+})
+
+test('keyset paging with a tie across a page boundary loses and repeats nothing', async () => {
+  // All rows share created_at; the id decides order, as the SQL filter does.
+  const all = ['a', 'b', 'c', 'd', 'e'].map((id) => ({ id, created_at: 't', estimated_cost_usd: 0.1 }))
+  const seen = []
+  const total = await sumChargesPaged(async (cursor, size) => {
+    const rows = all.filter((r) => !cursor || r.created_at > cursor.created_at || (r.created_at === cursor.created_at && r.id > cursor.id)).slice(0, size)
+    seen.push(...rows.map((r) => r.id))
+    return rows
+  }, 10, 2)
+  assert.deepEqual(seen, ['a', 'b', 'c', 'd', 'e'])
+  near(total, 0.5)
+})
+
+test('keyset paging exits early at the cap and handles empty', async () => {
   let calls = 0
-  const total = await sumChargesPaged(async () => { calls++; return [{ estimated_cost_usd: 0.6 }, { estimated_cost_usd: 0.6 }] }, 1, 2)
+  const total = await sumChargesPaged(async () => { calls++; return [{ id: 'a', created_at: 't', estimated_cost_usd: 0.6 }, { id: 'b', created_at: 't', estimated_cost_usd: 0.6 }] }, 1, 2)
   assert.equal(calls, 1)
   assert.ok(total >= 1)
   assert.equal(await sumChargesPaged(async () => [], 1, 2), 0)

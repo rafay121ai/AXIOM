@@ -51,3 +51,42 @@ export function estimateModelCost(model, usage = {}, options = {}) {
     (completionTokens * pricing.output)
   ) / 1_000_000
 }
+
+const USAGE_CALL_TYPE_SET = new Set(USAGE_CALL_TYPES)
+
+// Pure: the exact model_usage_logs row logModelUsage inserts. `ids` are the
+// already-validated { session_id, thread_id, message_id }.
+export function buildUsageRow({
+  userId,
+  usageContext = {},
+  ids = { session_id: null, thread_id: null, message_id: null },
+  model,
+  usage = null,
+  latencyMs = null,
+  error = false,
+  errorDetails = null,
+  warn,
+}) {
+  const callType = USAGE_CALL_TYPE_SET.has(usageContext.call_type) ? usageContext.call_type : 'chat'
+  // Missing usage (aborted or failed call) is unknown, not zero.
+  const hasUsage = usage && typeof usage === 'object'
+  const promptTokens = hasUsage ? Number(usage.prompt_tokens || 0) : null
+  const completionTokens = hasUsage ? Number(usage.completion_tokens || 0) : null
+  const totalTokens = hasUsage
+    ? Number(usage.total_tokens || promptTokens + completionTokens || 0)
+    : null
+  return {
+    user_id: userId,
+    ...ids,
+    model,
+    prompt_tokens: promptTokens,
+    completion_tokens: completionTokens,
+    total_tokens: totalTokens,
+    estimated_cost_usd: hasUsage ? estimateModelCost(model, usage, warn ? { warn } : {}) : null,
+    call_type: callType,
+    rag_chunks_used: Number(usageContext.rag_chunks_used || 0),
+    latency_ms: latencyMs,
+    error,
+    error_details: errorDetails ? String(errorDetails).slice(0, 1000) : null,
+  }
+}

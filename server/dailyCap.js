@@ -9,6 +9,9 @@ export const CHAT_MAX_COMPLETION_TOKENS = 4000
 export const ABORT_ASSUMED_PROMPT_TOKENS = 20000
 export const ABORT_ASSUMED_OUTPUT_TOKENS = CHAT_MAX_COMPLETION_TOKENS
 export const CLIENT_ABORTED_MARKER = 'client_aborted'
+export const STREAM_INTERRUPTED_MARKER = 'stream_interrupted'
+// error_details values that are charged the abort estimate when cost is unknown.
+export const CHARGED_ERROR_MARKERS = Object.freeze([CLIENT_ABORTED_MARKER, STREAM_INTERRUPTED_MARKER])
 export const CAP_PAGE_SIZE = 1000
 
 // Single place to change the copy shown to a founder who hit the cap.
@@ -70,20 +73,33 @@ function maxChatAbortCharge() {
 export function capChargeForRow(row) {
   const stored = row?.estimated_cost_usd
   if (stored != null && Number.isFinite(Number(stored))) return Number(stored)
-  if (row?.error !== CLIENT_ABORTED_MARKER) return 0
+  if (!CHARGED_ERROR_MARKERS.includes(row?.error_details)) return 0
   const priced = Object.hasOwn(MODEL_PRICING_PER_MILLION, row.model)
     ? estimateModelCost(row.model, ABORT_USAGE, { warn: quiet })
     : null
   return priced ?? maxChatAbortCharge()
 }
 
-// fetchPage(from, to) -> array of rows (inclusive range). Stops at the cap.
+// PostgREST or-filter for "strictly after (created_at, id)". Values are
+// double-quoted so timestamps with ':' '.' '+' parse as one value.
+export function keysetOrFilter(cursor) {
+  const q = (v) => `"${String(v).replace(/(["\\])/g, '\\$1')}"`
+  return `created_at.gt.${q(cursor.created_at)},and(created_at.eq.${q(cursor.created_at)},id.gt.${q(cursor.id)})`
+}
+
+// fetchPage(cursor, pageSize) -> rows ordered by (created_at, id) strictly after
+// cursor ({created_at, id} of the last row seen, null for the first page).
+// Stops at the cap.
 export async function sumChargesPaged(fetchPage, cap = DAILY_COST_CAP_USD, pageSize = CAP_PAGE_SIZE) {
   let total = 0
-  for (let from = 0; ; from += pageSize) {
-    const rows = (await fetchPage(from, from + pageSize - 1)) || []
+  let cursor = null
+  for (;;) {
+    const rows = (await fetchPage(cursor, pageSize)) || []
     for (const row of rows) total += capChargeForRow(row)
     if (total >= cap || rows.length < pageSize) return total
+    const last = rows[rows.length - 1]
+    if (last?.created_at == null || last?.id == null) throw new Error('cap page rows need created_at and id')
+    cursor = { created_at: last.created_at, id: last.id }
   }
 }
 
