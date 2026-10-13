@@ -15,6 +15,7 @@ import { validateExperimentQuality } from './experimentQuality.js'
 import { estimateModelCost, USAGE_CALL_TYPES } from './modelUsage.js'
 import { createEventTracker, PRODUCT_EVENTS, toReportedOutcome, shouldEmitExperimentReported } from './productEvents.js'
 import { summarizeUsage } from './usageSummary.js'
+import { capExperimentMetadata } from './writeValidation.js'
 import {
   cleanAppSessionStart,
   cleanMessageCreate,
@@ -156,7 +157,11 @@ async function resolveUsageIds(userId, context = {}) {
       .select('user_id')
       .eq('id', sessionId)
       .maybeSingle()
-    if (error || session?.user_id !== userId) return none
+    if (error) {
+      console.error('[Usage Log] session lookup failed', { session_id: sessionId, message: error.message })
+      return none
+    }
+    if (session?.user_id !== userId) return none
 
     const lookup = async (table, id) => {
       if (!isId(id)) return null
@@ -166,7 +171,11 @@ async function resolveUsageIds(userId, context = {}) {
         .eq('id', id)
         .eq('session_id', sessionId)
         .maybeSingle()
-      return !lookupError && data ? id : null
+      if (lookupError) {
+        console.error('[Usage Log] id lookup failed', { table, id, session_id: sessionId, message: lookupError.message })
+        return null
+      }
+      return data ? id : null
     }
     const [threadId, messageId] = await Promise.all([
       lookup('conversation_threads', context.thread_id),
@@ -695,20 +704,6 @@ app.post('/api/knowledge/concept-states', knowledgeWriteRateLimit, async (req, r
   }
 })
 
-const EXPERIMENT_METADATA_MAX_BYTES = 16 * 1024
-
-// The app reads only metadata.hypothesis. If the echoed original is oversized,
-// drop it and keep the essential fields; the move itself is never rejected.
-function capExperimentMetadata(original, essentials) {
-  const full = { ...(original && typeof original === 'object' ? original : {}), ...essentials }
-  try {
-    if (Buffer.byteLength(JSON.stringify(full), 'utf8') <= EXPERIMENT_METADATA_MAX_BYTES) return full
-  } catch {
-    // fall through to the essentials
-  }
-  return { ...essentials, original_dropped: true }
-}
-
 app.post('/api/personal-memories', knowledgeWriteRateLimit, async (req, res) => {
   if (!supabaseAdmin) return res.status(503).json({ error: 'Personal memory service not configured' })
   if (!hasAppServiceRoleKey) {
@@ -864,6 +859,7 @@ async function loadUsageWindow(since) {
       .select('call_type,total_tokens,estimated_cost_usd,latency_ms,error,created_at')
       .gte('created_at', since)
       .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
       .range(rows.length, rows.length + USAGE_PAGE_SIZE - 1)
     if (error) return { error }
     rows.push(...(data || []))
@@ -1126,9 +1122,11 @@ app.post('/api/experiments/:id/status', experimentWriteRateLimit, async (req, re
 
     if (error) throw error
 
-    const reportedOutcome = toReportedOutcome(data.status, data.outcome_reason)
+    // New outcome comes from the request payload, so a cancel without an explicit
+    // couldnt/didnt reason never emits (an old stored reason cannot leak in).
+    const reportedOutcome = toReportedOutcome(payload.status, payload.outcome_reason)
 
-    if (shouldEmitExperimentReported(existing, data)) {
+    if (shouldEmitExperimentReported(existing, { status: payload.status, outcome_reason: payload.outcome_reason })) {
       void trackEvent(req.user.id, 'experiment_reported', {
         experiment_id: data.id,
         session_id: data.session_id,

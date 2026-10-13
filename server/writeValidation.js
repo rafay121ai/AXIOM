@@ -219,3 +219,17 @@ export function decideMessageAccess({ message, session, userId, action }) {
 export function isThreadOwnedBy(thread, userId, sessionId) {
   return Boolean(thread) && thread.user_id === userId && thread.session_id === sessionId
 }
+
+const EXPERIMENT_METADATA_MAX_BYTES = 16 * 1024
+
+// The app reads only metadata.hypothesis. If the echoed original is oversized,
+// drop it and keep the essential fields; the move itself is never rejected.
+export function capExperimentMetadata(original, essentials) {
+  const full = { ...(original && typeof original === 'object' ? original : {}), ...essentials }
+  try {
+    if (Buffer.byteLength(JSON.stringify(full), 'utf8') <= EXPERIMENT_METADATA_MAX_BYTES) return full
+  } catch {
+    // fall through to the essentials
+  }
+  return { ...essentials, original_dropped: true }
+}
