@@ -343,9 +343,12 @@ const founderProfileRateLimit = rateLimit({
   legacyHeaders: false,
 })
 
+// Flood protection only; per-user limits do the real throttling. Relies on
+// `trust proxy 1` (line 44), which assumes exactly one proxy hop (Railway).
+// Re-check that setting if a CDN or other proxy is ever added in front.
 const ipRateLimit = rateLimit({
   windowMs: 60 * 1000,
-  max: 300,
+  max: 2000,
   message: { error: 'Too many requests, please slow down.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -1260,7 +1263,14 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
 
   try {
     if (!safePayload.stream) {
-      const response = await openai.chat.completions.create(safePayload)
+      const nonStreamAbort = new AbortController()
+      res.on('close', () => {
+        if (!res.writableEnded) {
+          clientAborted = true
+          nonStreamAbort.abort()
+        }
+      })
+      const response = await openai.chat.completions.create(safePayload, { signal: nonStreamAbort.signal })
       loggedUsage = response.usage || null
       res.json(response)
       return

@@ -12,8 +12,7 @@ export const FIRST_NAME_MAX = 100
 export const CONCEPT_PROGRESS_MAX_ENTRIES = 50
 export const CONCEPT_LIST_MAX = 100
 export const CONCEPT_TEXT_MAX = 300
-// 'brain' stays until the DB CHECK constraint on app_sessions.entry_point is migrated.
-export const APP_SESSION_ENTRY_POINTS = ['direct', 'resume', 'experiment', 'brain']
+export const APP_SESSION_ENTRY_POINTS = ['direct', 'resume', 'experiment']
 export const APP_SESSION_DEVICE_MAX = 200
 export const MESSAGES_SENT_MAX_INCREMENT = 20
 
