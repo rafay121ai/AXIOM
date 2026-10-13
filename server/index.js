@@ -1096,6 +1096,7 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
   let usageLogged = false
   let loggedUsage = null
   let loggedError = null
+  let clientAborted = false
   const logUsageOnce = () => {
     if (usageLogged) return
     usageLogged = true
@@ -1122,13 +1123,19 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
     res.setHeader('Connection', 'keep-alive')
     res.flushHeaders?.()
 
-    const streamResp = await openai.chat.completions.create(safePayload)
-    // Stop paying for tokens nobody will read once the client goes away.
+    // Stop paying for tokens nobody will read once the client goes away. The
+    // controller exists before the request so a disconnect during the initial
+    // wait aborts too.
+    const upstreamAbort = new AbortController()
     const abortUpstream = () => {
-      if (!res.writableEnded) streamResp.controller?.abort()
+      if (!res.writableEnded) {
+        clientAborted = true
+        upstreamAbort.abort()
+      }
     }
     // res 'close' fires on client disconnect; req 'close' can fire early once the body is read.
     res.on('close', abortUpstream)
+    const streamResp = await openai.chat.completions.create(safePayload, { signal: upstreamAbort.signal })
     let streamedContent = ''
     let finalUsage = null
 
@@ -1170,7 +1177,8 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
   } catch (err) {
     console.error('[Chat]', err)
 
-    loggedError = err.message || 'Chat request failed'
+    // Fixed marker so aborted streams (null tokens/cost) can be counted.
+    loggedError = clientAborted ? 'client_aborted' : (err.message || 'Chat request failed')
 
     if (res.headersSent) {
       res.write(`${JSON.stringify({ type: 'error', error: 'Chat request failed' })}\n`)

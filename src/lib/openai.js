@@ -272,12 +272,15 @@ async function withTransientRetry(fn, { retries = 2, baseDelayMs = 250 } = {}) {
   throw lastError
 }
 
+// Mirrors EMBEDDING_MAX_CHARS in server/requestValidation.js (server rejects longer input).
+const EMBEDDING_MAX_CHARS = 8000
+
 export async function generateEmbedding(text) {
   const response = await withTransientRetry(
     () =>
       openai.embeddings.create({
         model: EMBED_MODEL,
-        input: text,
+        input: String(text).slice(0, EMBEDDING_MAX_CHARS),
       }, { timeoutMs: 7000 }),
     { retries: 1, baseDelayMs: 200 }
   )
