@@ -203,3 +203,19 @@ export function cleanMessageUpdate(body, role) {
   if (role === 'assistant') return hasExperimentBlock(body.content) ? { content: body.content } : null
   return null
 }
+
+// Ownership rule for message update/delete. `message` and `session` are plain
+// rows (or null). Not found and not owned look the same (404). Only assistant
+// replies can be deleted (403 otherwise).
+export function decideMessageAccess({ message, session, userId, action }) {
+  if (!message || !session || !userId || session.user_id !== userId) {
+    return { allowed: false, status: 404 }
+  }
+  if (action === 'delete' && message.role !== 'assistant') return { allowed: false, status: 403 }
+  return { allowed: true }
+}
+
+// True when the thread row belongs to the caller and the given session.
+export function isThreadOwnedBy(thread, userId, sessionId) {
+  return Boolean(thread) && thread.user_id === userId && thread.session_id === sessionId
+}

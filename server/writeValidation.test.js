@@ -10,6 +10,8 @@ import {
   cleanThreadPayload,
   cleanMessageCreate,
   cleanMessageUpdate,
+  decideMessageAccess,
+  isThreadOwnedBy,
 } from './writeValidation.js'
 
 const token = '123e4567-e89b-42d3-a456-426614174000'
@@ -123,4 +125,39 @@ test('message update validation keeps today capabilities', () => {
   assert.deepEqual(cleanMessageUpdate({ content: enriched }, 'assistant'), { content: enriched })
   assert.equal(cleanMessageUpdate({ content: 'x' }, 'system'), null)
   assert.equal(cleanMessageUpdate({ role: 'user' }, 'user'), null)
+})
+
+test('assistant enrichment string built by Chat.jsx is accepted', () => {
+  const assigned = {
+    id: '3f2b8f0e-5c1a-4d2e-9a77-1b2c3d4e5f60',
+    title: 'Email five churned customers',
+    action: 'Send a 3 line email to 5 customers who cancelled in September',
+    success_criteria: 'At least 2 replies by tonight',
+    expires_at: '2026-10-14T20:00:00.000Z',
+  }
+  for (const cleanText of ['', 'Here is your move for today.']) {
+    const content = `${cleanText}\n\n<experiment>\n${JSON.stringify(assigned)}\n</experiment>`
+    assert.deepEqual(cleanMessageUpdate({ content }, 'assistant'), { content })
+  }
+})
+
+test('message access decisions', () => {
+  const session = { id: 's1', user_id: 'u1' }
+  const asst = { id: 'm1', role: 'assistant', session_id: 's1' }
+  const usr = { id: 'm2', role: 'user', session_id: 's1' }
+  assert.deepEqual(decideMessageAccess({ message: asst, session, userId: 'u1', action: 'delete' }), { allowed: true })
+  assert.deepEqual(decideMessageAccess({ message: usr, session, userId: 'u1', action: 'update' }), { allowed: true })
+  assert.equal(decideMessageAccess({ message: asst, session, userId: 'u2', action: 'update' }).status, 404)
+  assert.equal(decideMessageAccess({ message: asst, session, userId: 'u2', action: 'delete' }).status, 404)
+  assert.equal(decideMessageAccess({ message: asst, session: null, userId: 'u1', action: 'update' }).status, 404)
+  assert.equal(decideMessageAccess({ message: null, session, userId: 'u1', action: 'update' }).status, 404)
+  assert.equal(decideMessageAccess({ message: usr, session, userId: 'u1', action: 'delete' }).status, 403)
+})
+
+test('thread ownership decision', () => {
+  const thread = { id: 't1', user_id: 'u1', session_id: 's1' }
+  assert.equal(isThreadOwnedBy(thread, 'u1', 's1'), true)
+  assert.equal(isThreadOwnedBy(thread, 'u1', 's2'), false)
+  assert.equal(isThreadOwnedBy(thread, 'u2', 's1'), false)
+  assert.equal(isThreadOwnedBy(null, 'u1', 's1'), false)
 })

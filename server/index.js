@@ -19,6 +19,8 @@ import {
   cleanAppSessionStart,
   cleanMessageCreate,
   cleanMessageUpdate,
+  decideMessageAccess,
+  isThreadOwnedBy,
   cleanThreadPayload,
   cleanMessagesSentAmount,
   cleanOnboardingPayload,
@@ -263,6 +265,16 @@ const onboardingRateLimit = rateLimit({
 const sessionWriteRateLimit = rateLimit({
   windowMs: 60 * 1000,
   max: 120,
+  keyGenerator: (req) => req.user.id,
+  message: { error: 'Too many requests, please slow down.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+// Message and thread writes: one per chat turn plus edits, so a higher cap.
+const messageWriteRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 300,
   keyGenerator: (req) => req.user.id,
   message: { error: 'Too many requests, please slow down.' },
   standardHeaders: true,
@@ -1519,7 +1531,7 @@ async function ownsSession(userId, sessionId) {
 }
 
 // Idempotent on id: an existing thread owned by the caller is returned as is.
-app.post('/api/threads', sessionWriteRateLimit, async (req, res) => {
+app.post('/api/threads', messageWriteRateLimit, async (req, res) => {
   if (!supabaseAdmin) return res.status(503).json({ error: 'Service not configured' })
   const payload = cleanThreadPayload(req.body)
   if (!payload) return res.status(400).json({ error: 'Invalid thread data' })
@@ -1537,7 +1549,7 @@ app.post('/api/threads', sessionWriteRateLimit, async (req, res) => {
         .maybeSingle()
       if (existingError) throw existingError
       if (existing) {
-        if (existing.user_id !== req.user.id || existing.session_id !== payload.session_id) {
+        if (!isThreadOwnedBy(existing, req.user.id, payload.session_id)) {
           return res.status(404).json({ error: 'Thread not found' })
         }
         return res.json({ id: existing.id })
@@ -1570,7 +1582,7 @@ app.post('/api/threads', sessionWriteRateLimit, async (req, res) => {
 })
 
 // Server inserts still hit the table, so sync_conversation_thread_from_message fires.
-app.post('/api/messages', sessionWriteRateLimit, async (req, res) => {
+app.post('/api/messages', messageWriteRateLimit, async (req, res) => {
   if (!supabaseAdmin) return res.status(503).json({ error: 'Service not configured' })
   const payload = cleanMessageCreate(req.body)
   if (!payload) return res.status(400).json({ error: 'Invalid message data' })
@@ -1604,25 +1616,34 @@ app.post('/api/messages', sessionWriteRateLimit, async (req, res) => {
   }
 })
 
-// Loads a message the caller owns through its session, or null.
-async function findOwnedMessage(userId, messageId) {
+// Loads a message and its session, then lets the pure decision rule answer.
+async function loadMessageAccess(userId, messageId, action) {
   const { data: message, error } = await supabaseAdmin
     .from('messages')
     .select('id, role, session_id')
     .eq('id', messageId)
     .maybeSingle()
   if (error) throw error
-  if (!message?.session_id) return null
-  return (await ownsSession(userId, message.session_id)) ? message : null
+  let session = null
+  if (message?.session_id) {
+    const { data, error: sessionError } = await supabaseAdmin
+      .from('sessions')
+      .select('id, user_id')
+      .eq('id', message.session_id)
+      .maybeSingle()
+    if (sessionError) throw sessionError
+    session = data
+  }
+  return { message, decision: decideMessageAccess({ message, session, userId, action }) }
 }
 
-app.patch('/api/messages/:id', sessionWriteRateLimit, async (req, res) => {
+app.patch('/api/messages/:id', messageWriteRateLimit, async (req, res) => {
   if (!supabaseAdmin) return res.status(503).json({ error: 'Service not configured' })
   if (!isUuid(req.params.id)) return res.status(400).json({ error: 'Invalid message id' })
 
   try {
-    const message = await findOwnedMessage(req.user.id, req.params.id)
-    if (!message) return res.status(404).json({ error: 'Message not found' })
+    const { message, decision } = await loadMessageAccess(req.user.id, req.params.id, 'update')
+    if (!decision.allowed) return res.status(decision.status).json({ error: 'Message not found' })
     const updates = cleanMessageUpdate(req.body, message.role)
     if (!updates) return res.status(400).json({ error: 'Invalid message update' })
 
@@ -1639,14 +1660,17 @@ app.patch('/api/messages/:id', sessionWriteRateLimit, async (req, res) => {
 })
 
 // The browser only deletes assistant replies (regenerate and edit).
-app.delete('/api/messages/:id', sessionWriteRateLimit, async (req, res) => {
+app.delete('/api/messages/:id', messageWriteRateLimit, async (req, res) => {
   if (!supabaseAdmin) return res.status(503).json({ error: 'Service not configured' })
   if (!isUuid(req.params.id)) return res.status(400).json({ error: 'Invalid message id' })
 
   try {
-    const message = await findOwnedMessage(req.user.id, req.params.id)
-    if (!message) return res.status(404).json({ error: 'Message not found' })
-    if (message.role !== 'assistant') return res.status(403).json({ error: 'Message cannot be deleted' })
+    const { message, decision } = await loadMessageAccess(req.user.id, req.params.id, 'delete')
+    if (!decision.allowed) {
+      return res.status(decision.status).json({
+        error: decision.status === 403 ? 'Message cannot be deleted' : 'Message not found',
+      })
+    }
 
     const { error } = await supabaseAdmin.from('messages').delete().eq('id', message.id)
     if (error) throw error
