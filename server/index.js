@@ -1149,6 +1149,11 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
       res.write(`${JSON.stringify({ type: 'chunk', data: chunk })}\n`)
     }
 
+    if (clientAborted) {
+      loggedError = 'client_aborted'
+      return
+    }
+
     res.write(`${JSON.stringify({ type: 'done' })}\n`)
     res.end()
 

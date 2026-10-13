@@ -280,7 +280,7 @@ export async function generateEmbedding(text) {
     () =>
       openai.embeddings.create({
         model: EMBED_MODEL,
-        input: String(text).slice(0, EMBEDDING_MAX_CHARS),
+        input: typeof text === 'string' ? text.slice(0, EMBEDDING_MAX_CHARS) : text,
       }, { timeoutMs: 7000 }),
     { retries: 1, baseDelayMs: 200 }
   )

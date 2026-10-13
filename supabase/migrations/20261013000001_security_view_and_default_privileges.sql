@@ -4,6 +4,10 @@
 -- (20260929000000_baseline_live_public_schema.sql), NOT a live dump. Check it
 -- against a live schema dump before it is pushed.
 --
+-- CLAUDE.md requires a migration plan based on a live schema dump. That check
+-- is NOT done yet. Do not push until it is. The model_usage_logs policy swap
+-- must also be confirmed against the live policies.
+--
 -- Idempotent and non-destructive: no DROP of tables, views or columns, no data
 -- changes. Only privileges, one view option and one RLS policy change.
 
@@ -15,7 +19,7 @@
 do $$
 begin
   if to_regclass('public.user_conversations') is not null then
-    revoke all on public.user_conversations from anon, authenticated, public;
+    revoke all on public.user_conversations from anon, authenticated, PUBLIC;
     alter view public.user_conversations set (security_invoker = true);
   end if;
 end
