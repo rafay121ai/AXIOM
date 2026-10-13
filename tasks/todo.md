@@ -108,3 +108,18 @@ Branch: `cleanup/remove-old-product`
 - [x] Final metrics: LOC 23,266 -> 14,501. Static prompt 73,025 -> 50,959. Assembled prompt: plain 24,877 -> 24,354; experiment report 24,018 -> 23,698; structured request 25,492 -> 24,875; artifact turn 30,500 -> 24,489; ghosted history 25,186 -> 23,800.
 - [x] Write `audit/CLEANUP_REPORT.md`.
 - [x] Commit Stage 5 only; do not merge.
+
+## Pending migrations (feature/cost-tracking + feature/backend-hardening)
+
+Push order. None have been pushed. Every one needs a live schema dump diff first (CLAUDE.md).
+
+1. `20260930000001_fix_model_usage_logging.sql`: unknown tokens and cost on model_usage_logs become null instead of 0. Live-dump diff: NOT DONE. Deploy: with or after the cost server deploy (0001 must not precede code that tolerates it, and the cost server needs it).
+2. `20260930000002_create_product_events.sql`: creates product_events (internal analytics, RLS on, no policies, service_role only). Live-dump diff: NOT DONE.
+3. `20261013000001_security_view_and_default_privileges.sql`: user_conversations view security, default privileges revoked, model_usage_logs write policy swap. Live-dump diff: NOT DONE.
+4. `20261013000002_revoke_browser_writes.sql`: revokes browser (anon/authenticated) writes on app tables. Live-dump diff: NOT DONE. Deploy: only after the hardening server and frontend are deployed, since the browser must no longer write directly.
+5. `20261013000003_create_founder_profiles.sql`: creates founder_profiles (one row per user, own-row SELECT for the browser, bounded columns and open_answers <= 3). Live-dump diff: NOT DONE. Also confirm no drifted live founder_profiles table exists, because `create table if not exists` would skip it.
+
+### Open questions
+
+- Customer market region list is undefined in PRODUCT.md ("a list of regions plus Global"). The API accepts any short label, lowercased and deduped, until it is defined.
+- supabase_admin default privileges may be skipped under the postgres migration role. After pushing 20261013000001, verify `pg_default_acl` for both roles.
