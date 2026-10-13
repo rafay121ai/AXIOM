@@ -7,6 +7,9 @@ import {
   cleanAppSessionStart,
   cleanMessagesSentAmount,
   isExperimentExpired,
+  cleanThreadPayload,
+  cleanMessageCreate,
+  cleanMessageUpdate,
 } from './writeValidation.js'
 
 const token = '123e4567-e89b-42d3-a456-426614174000'
@@ -84,4 +87,40 @@ test('session memory sanitizes malformed model output', () => {
   assert.equal(cleanSessionMemoryPayload({ concept_progress: entries }).concept_progress.length, 50)
   assert.equal(cleanSessionMemoryPayload({ concept_progress: [{ nope: 1 }] }), null)
   assert.deepEqual(cleanSessionMemoryPayload({ concept_progress: 'bad', session_notes: 'n' }), { session_notes: 'n' })
+})
+
+const U1 = '11111111-1111-4111-8111-111111111111'
+const U2 = '22222222-2222-4222-8222-222222222222'
+
+test('thread payload validation', () => {
+  assert.deepEqual(cleanThreadPayload({ id: U1, session_id: U2, title: 'T', primary_pillar: 'money_game', user_id: 'x' }),
+    { id: U1, session_id: U2, title: 'T', primary_pillar: 'money_game' })
+  assert.deepEqual(cleanThreadPayload({ session_id: U2 }), { id: null, session_id: U2, title: null, primary_pillar: null })
+  assert.equal(cleanThreadPayload({ id: 'bad', session_id: U2 }), null)
+  assert.equal(cleanThreadPayload({ session_id: 'bad' }), null)
+  assert.equal(cleanThreadPayload({ session_id: U2, primary_pillar: 'nope' }), null)
+  assert.equal(cleanThreadPayload({ session_id: U2, title: 5 }), null)
+  assert.equal(cleanThreadPayload(null), null)
+})
+
+test('message create validation', () => {
+  const ok = { session_id: U1, thread_id: U2, role: 'assistant', content: 'hi' }
+  assert.deepEqual(cleanMessageCreate({ ...ok, extra: 1 }), ok)
+  assert.equal(cleanMessageCreate({ ...ok, thread_id: null }).thread_id, null)
+  assert.equal(cleanMessageCreate({ ...ok, role: 'system' }), null)
+  assert.equal(cleanMessageCreate({ ...ok, thread_id: 'x' }), null)
+  assert.equal(cleanMessageCreate({ ...ok, content: 5 }), null)
+  assert.equal(cleanMessageCreate({ ...ok, content: 'x'.repeat(100001) }), null)
+  assert.equal(cleanMessageCreate({ ...ok, content: 'x'.repeat(100000) }).content.length, 100000)
+  assert.equal(cleanMessageCreate({ ...ok, session_id: undefined }), null)
+})
+
+test('message update validation keeps today capabilities', () => {
+  assert.deepEqual(cleanMessageUpdate({ content: 'edited' }, 'user'), { content: 'edited' })
+  assert.equal(cleanMessageUpdate({ content: '  ' }, 'user'), null)
+  assert.equal(cleanMessageUpdate({ content: 'plain' }, 'assistant'), null)
+  const enriched = 'text\n\n<experiment>\n{"a":1}\n</experiment>'
+  assert.deepEqual(cleanMessageUpdate({ content: enriched }, 'assistant'), { content: enriched })
+  assert.equal(cleanMessageUpdate({ content: 'x' }, 'system'), null)
+  assert.equal(cleanMessageUpdate({ role: 'user' }, 'user'), null)
 })

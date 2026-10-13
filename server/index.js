@@ -17,6 +17,9 @@ import { createEventTracker, PRODUCT_EVENTS } from './productEvents.js'
 import { summarizeUsage } from './usageSummary.js'
 import {
   cleanAppSessionStart,
+  cleanMessageCreate,
+  cleanMessageUpdate,
+  cleanThreadPayload,
   cleanMessagesSentAmount,
   cleanOnboardingPayload,
   cleanSessionMemoryPayload,
@@ -296,6 +299,8 @@ app.use('/api/admin', requireAuth)
 app.use('/api/events', requireAuth)
 app.use('/api/onboarding', requireAuth)
 app.use('/api/app-sessions', requireAuth)
+app.use('/api/threads', requireAuth)
+app.use('/api/messages', requireAuth)
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
@@ -1497,6 +1502,158 @@ app.post('/api/session/:id/memory', sessionWriteRateLimit, async (req, res) => {
   } catch (error) {
     console.error('[Session] memory update failed', error)
     return res.status(500).json({ error: 'Failed to update session' })
+  }
+})
+
+// ─── Threads and messages (browser writes moved behind the API) ─────────────
+
+async function ownsSession(userId, sessionId) {
+  const { data, error } = await supabaseAdmin
+    .from('sessions')
+    .select('id')
+    .eq('id', sessionId)
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (error) throw error
+  return Boolean(data)
+}
+
+// Idempotent on id: an existing thread owned by the caller is returned as is.
+app.post('/api/threads', sessionWriteRateLimit, async (req, res) => {
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Service not configured' })
+  const payload = cleanThreadPayload(req.body)
+  if (!payload) return res.status(400).json({ error: 'Invalid thread data' })
+
+  try {
+    if (!(await ownsSession(req.user.id, payload.session_id))) {
+      return res.status(404).json({ error: 'Session not found' })
+    }
+
+    if (payload.id) {
+      const { data: existing, error: existingError } = await supabaseAdmin
+        .from('conversation_threads')
+        .select('id, user_id, session_id')
+        .eq('id', payload.id)
+        .maybeSingle()
+      if (existingError) throw existingError
+      if (existing) {
+        if (existing.user_id !== req.user.id || existing.session_id !== payload.session_id) {
+          return res.status(404).json({ error: 'Thread not found' })
+        }
+        return res.json({ id: existing.id })
+      }
+    }
+
+    const now = new Date().toISOString()
+    const row = {
+      user_id: req.user.id,
+      session_id: payload.session_id,
+      title: payload.title,
+      primary_pillar: payload.primary_pillar,
+      started_at: now,
+      last_message_at: now,
+      status: 'active',
+      updated_at: now,
+    }
+    if (payload.id) row.id = payload.id
+    const { data, error } = await supabaseAdmin
+      .from('conversation_threads')
+      .insert(row)
+      .select('id')
+      .single()
+    if (error) throw error
+    return res.json({ id: data.id })
+  } catch (error) {
+    console.error('[Threads] create failed', error)
+    return res.status(500).json({ error: 'Failed to create thread' })
+  }
+})
+
+// Server inserts still hit the table, so sync_conversation_thread_from_message fires.
+app.post('/api/messages', sessionWriteRateLimit, async (req, res) => {
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Service not configured' })
+  const payload = cleanMessageCreate(req.body)
+  if (!payload) return res.status(400).json({ error: 'Invalid message data' })
+
+  try {
+    if (!(await ownsSession(req.user.id, payload.session_id))) {
+      return res.status(404).json({ error: 'Session not found' })
+    }
+    if (payload.thread_id) {
+      const { data: thread, error: threadError } = await supabaseAdmin
+        .from('conversation_threads')
+        .select('id')
+        .eq('id', payload.thread_id)
+        .eq('session_id', payload.session_id)
+        .eq('user_id', req.user.id)
+        .maybeSingle()
+      if (threadError) throw threadError
+      if (!thread) return res.status(404).json({ error: 'Thread not found' })
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('messages')
+      .insert(payload)
+      .select('id, created_at')
+      .single()
+    if (error) throw error
+    return res.json(data)
+  } catch (error) {
+    console.error('[Messages] create failed', error)
+    return res.status(500).json({ error: 'Failed to save message' })
+  }
+})
+
+// Loads a message the caller owns through its session, or null.
+async function findOwnedMessage(userId, messageId) {
+  const { data: message, error } = await supabaseAdmin
+    .from('messages')
+    .select('id, role, session_id')
+    .eq('id', messageId)
+    .maybeSingle()
+  if (error) throw error
+  if (!message?.session_id) return null
+  return (await ownsSession(userId, message.session_id)) ? message : null
+}
+
+app.patch('/api/messages/:id', sessionWriteRateLimit, async (req, res) => {
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Service not configured' })
+  if (!isUuid(req.params.id)) return res.status(400).json({ error: 'Invalid message id' })
+
+  try {
+    const message = await findOwnedMessage(req.user.id, req.params.id)
+    if (!message) return res.status(404).json({ error: 'Message not found' })
+    const updates = cleanMessageUpdate(req.body, message.role)
+    if (!updates) return res.status(400).json({ error: 'Invalid message update' })
+
+    const { error } = await supabaseAdmin
+      .from('messages')
+      .update(updates)
+      .eq('id', message.id)
+    if (error) throw error
+    return res.json({ ok: true })
+  } catch (error) {
+    console.error('[Messages] update failed', error)
+    return res.status(500).json({ error: 'Failed to update message' })
+  }
+})
+
+// The browser only deletes assistant replies (regenerate and edit).
+app.delete('/api/messages/:id', sessionWriteRateLimit, async (req, res) => {
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Service not configured' })
+  if (!isUuid(req.params.id)) return res.status(400).json({ error: 'Invalid message id' })
+
+  try {
+    const message = await findOwnedMessage(req.user.id, req.params.id)
+    if (!message) return res.status(404).json({ error: 'Message not found' })
+    if (message.role !== 'assistant') return res.status(403).json({ error: 'Message cannot be deleted' })
+
+    const { error } = await supabaseAdmin.from('messages').delete().eq('id', message.id)
+    if (error) throw error
+    return res.json({ ok: true })
+  } catch (error) {
+    console.error('[Messages] delete failed', error)
+    return res.status(500).json({ error: 'Failed to delete message' })
   }
 })
 

@@ -143,3 +143,63 @@ export function isExperimentExpired(experiment, nowMs) {
     : new Date(experiment.assigned_at).getTime() + experiment.window_hours * 3600 * 1000
   return nowMs > dueAt
 }
+
+// ─── Messages and conversation threads ───────────────────────────────────────
+
+// Roles the app actually writes. messages.role has no DB CHECK in the baseline.
+export const MESSAGE_ROLES = ['user', 'assistant']
+// Assistant replies are capped by max_tokens 4000 (~16k chars); this leaves
+// generous headroom and rejects only abuse.
+export const MESSAGE_CONTENT_MAX = 100_000
+export const THREAD_TITLE_MAX = 200
+export const THREAD_PILLARS = [
+  'human_mind', 'money_game', 'how_companies_win', 'whats_coming', 'think_sharper', 'move_people',
+]
+
+// Returns { id (or null), session_id, title, primary_pillar } or null.
+export function cleanThreadPayload(body) {
+  if (!isPlainObject(body)) return null
+  if (!isUuid(body.session_id)) return null
+  if (body.id !== undefined && body.id !== null && !isUuid(body.id)) return null
+  let title = null
+  if (body.title !== undefined && body.title !== null) {
+    if (typeof body.title !== 'string') return null
+    title = body.title.slice(0, THREAD_TITLE_MAX)
+  }
+  let pillar = null
+  if (body.primary_pillar !== undefined && body.primary_pillar !== null) {
+    if (!THREAD_PILLARS.includes(body.primary_pillar)) return null
+    pillar = body.primary_pillar
+  }
+  return { id: body.id || null, session_id: body.session_id, title, primary_pillar: pillar }
+}
+
+// Returns { session_id, thread_id (or null), role, content } or null.
+export function cleanMessageCreate(body) {
+  if (!isPlainObject(body)) return null
+  if (!isUuid(body.session_id)) return null
+  if (body.thread_id !== undefined && body.thread_id !== null && !isUuid(body.thread_id)) return null
+  if (!MESSAGE_ROLES.includes(body.role)) return null
+  if (typeof body.content !== 'string' || body.content.length > MESSAGE_CONTENT_MAX) return null
+  return {
+    session_id: body.session_id,
+    thread_id: body.thread_id || null,
+    role: body.role,
+    content: body.content,
+  }
+}
+
+export function hasExperimentBlock(content) {
+  return typeof content === 'string' && /<experiment>[\s\S]*<\/experiment>\s*$/.test(content)
+}
+
+// The browser edits only content. A user message may be edited freely (non
+// empty); an assistant message only to attach the experiment block it already
+// had. Returns { content } or null.
+export function cleanMessageUpdate(body, role) {
+  if (!isPlainObject(body)) return null
+  if (typeof body.content !== 'string' || body.content.length > MESSAGE_CONTENT_MAX) return null
+  if (role === 'user') return body.content.trim() ? { content: body.content } : null
+  if (role === 'assistant') return hasExperimentBlock(body.content) ? { content: body.content } : null
+  return null
+}

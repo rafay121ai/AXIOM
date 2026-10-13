@@ -16,7 +16,7 @@ import { searchPersonalMemory, formatNamedPatternsContext, formatPersonalMemoryC
 import { getCachedTurnContext, setCachedTurnContext } from '../lib/sessionTurnContext'
 import { ensureConversationThread } from '../lib/conversationThreads'
 import { incrementAppSessionMessagesSent } from '../lib/appSessionTracker'
-import { getApiJson, postApiJson, trackProductEvent } from '../lib/api'
+import { getApiJson, postApiJson, sendApiWrite, trackProductEvent } from '../lib/api'
 import { validateExperimentQuality } from '../lib/experimentQuality'
 
 // ─── Message Tag Parsing ─────────────────────────────────────────────────────
@@ -793,7 +793,7 @@ export default function Chat() {
   // ── Opening Message (new sessions only) ──────────────────────────────────
   // Saved to DB — becomes part of permanent conversation history.
   async function saveAssistantOpening(sess, msgId, content) {
-    await supabase.from('messages').insert({
+    await sendApiWrite('POST', '/api/messages', {
       session_id: sess.id,
       thread_id: threadId,
       role: 'assistant',
@@ -913,16 +913,12 @@ export default function Chat() {
 
     try {
       if (!reuseUserMessage) {
-        const { data: savedUser, error: userInsertError } = await supabase
-          .from('messages')
-          .insert({
+        const { data: savedUser, error: userInsertError } = await sendApiWrite('POST', '/api/messages', {
             session_id: session.id,
             thread_id: threadId,
             role: 'user',
             content: text,
           })
-          .select('id, created_at')
-          .single()
 
         if (userInsertError) throw userInsertError
         markLatency('supabase:user_message_saved')
@@ -1040,16 +1036,12 @@ export default function Chat() {
           )
         )
 
-        const { data: savedReportAssistant, error: reportInsertError } = await supabase
-          .from('messages')
-          .insert({
+        const { data: savedReportAssistant, error: reportInsertError } = await sendApiWrite('POST', '/api/messages', {
             session_id: session.id,
             thread_id: threadId,
             role: 'assistant',
             content: immediateAssistantText,
           })
-          .select('id, created_at')
-          .single()
 
         if (reportInsertError) {
           console.error('Failed to save experiment outcome clarification message', reportInsertError)
@@ -1090,16 +1082,12 @@ export default function Chat() {
           )
         )
 
-        const { data: savedIncidentAssistant, error: incidentInsertError } = await supabase
-          .from('messages')
-          .insert({
+        const { data: savedIncidentAssistant, error: incidentInsertError } = await sendApiWrite('POST', '/api/messages', {
             session_id: session.id,
             thread_id: threadId,
             role: 'assistant',
             content: incidentQuestion,
           })
-          .select('id, created_at')
-          .single()
 
         if (incidentInsertError) throw incidentInsertError
         markLatency('supabase:incident_assistant_saved')
@@ -1425,16 +1413,12 @@ export default function Chat() {
       )
 
       // Save assistant message (raw content with experiment tag intact for audit)
-      const { data: savedAssistant, error: assistantInsertError } = await supabase
-        .from('messages')
-        .insert({
+      const { data: savedAssistant, error: assistantInsertError } = await sendApiWrite('POST', '/api/messages', {
           session_id: sessionForTurn.id,
           thread_id: threadId,
           role: 'assistant',
           content: fullContent,
         })
-        .select('id, created_at')
-        .single()
 
       if (assistantInsertError) throw assistantInsertError
       markLatency('supabase:assistant_message_saved')
@@ -1471,10 +1455,7 @@ export default function Chat() {
             const assigned = findMatchingExperiment(sessionForMemory.experiments, experiment)
             if (assigned) {
               const enrichedContent = `${cleanText}\n\n<experiment>\n${JSON.stringify(assigned)}\n</experiment>`
-              supabase
-                .from('messages')
-                .update({ content: enrichedContent })
-                .eq('id', assistantMsgId)
+              sendApiWrite('PATCH', `/api/messages/${assistantMsgId}`, { content: enrichedContent })
                 .then(({ error }) => {
                   if (error) console.error('Failed to persist enriched experiment message', error)
                 })
@@ -1896,7 +1877,7 @@ export default function Chat() {
     await retireAssistantExperiment(targetAssistant, 'Cancelled by assistant regeneration.')
 
     if (targetAssistant?.id) {
-      await supabase.from('messages').delete().eq('id', targetAssistant.id)
+      await sendApiWrite('DELETE', `/api/messages/${targetAssistant.id}`)
     }
 
     setMessages((prev) => prev.filter((msg) => msg.id !== targetAssistant?.id))
@@ -1927,17 +1908,14 @@ export default function Chat() {
     const targetAssistant = followingAssistantFor(message)
     abortControllerRef.current?.abort()
 
-    const { error } = await supabase
-      .from('messages')
-      .update({ content: text })
-      .eq('id', message.id)
+    const { error } = await sendApiWrite('PATCH', `/api/messages/${message.id}`, { content: text })
 
     if (error) return
 
     await retireAssistantExperiment(targetAssistant, 'Cancelled by user message edit.')
 
     if (targetAssistant?.id) {
-      await supabase.from('messages').delete().eq('id', targetAssistant.id)
+      await sendApiWrite('DELETE', `/api/messages/${targetAssistant.id}`)
     }
 
     const editedMessage = { ...message, content: text }
@@ -1991,16 +1969,12 @@ export default function Chat() {
       },
     ])
 
-    const { data, error } = await supabase
-      .from('messages')
-      .insert({
+    const { data, error } = await sendApiWrite('POST', '/api/messages', {
         session_id: session.id,
         thread_id: threadId,
         role: 'assistant',
         content: EXPERIMENT_CANCEL_REASON_QUESTION,
       })
-      .select('id, created_at')
-      .single()
 
     if (error) {
       console.error('Failed to save experiment cancellation negotiation question', error)

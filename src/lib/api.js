@@ -66,6 +66,26 @@ export async function postApiJson(path, body = {}, { keepalive = false } = {}) {
   return response.json()
 }
 
+// Same shape as a supabase write ({ data, error }, never throws) so call sites
+// keep their existing error handling.
+export async function sendApiWrite(method, path, body) {
+  try {
+    const authHeaders = await getAuthHeaders()
+    const response = await fetch(apiUrl(path), {
+      method,
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    })
+    if (!response.ok) {
+      const data = await readError(response)
+      return { data: null, error: new Error(data?.error || data?.reason || response.statusText) }
+    }
+    return { data: await response.json(), error: null }
+  } catch (error) {
+    return { data: null, error }
+  }
+}
+
 export async function getApiJson(path) {
   const authHeaders = await getAuthHeaders()
   const response = await fetch(apiUrl(path), {

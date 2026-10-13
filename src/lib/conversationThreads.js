@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { sendApiWrite } from './api'
 
 function shortTitle(value = '') {
   const text = String(value || '').replace(/\s+/g, ' ').trim()
@@ -23,22 +24,12 @@ export async function ensureConversationThread({
 
   if (existing?.id) return existing
 
-  const now = new Date().toISOString()
-  const { data, error } = await supabase
-    .from('conversation_threads')
-    .insert({
-      id: threadId,
-      user_id: userId,
-      session_id: sessionId,
-      title: shortTitle(title),
-      primary_pillar: primaryPillar,
-      started_at: now,
-      last_message_at: now,
-      status: 'active',
-      updated_at: now,
-    })
-    .select('id')
-    .single()
+  const { data, error } = await sendApiWrite('POST', '/api/threads', {
+    id: threadId,
+    session_id: sessionId,
+    title: shortTitle(title),
+    primary_pillar: primaryPillar,
+  })
 
   if (error) return null
   return data
