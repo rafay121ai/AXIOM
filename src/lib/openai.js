@@ -1,9 +1,9 @@
 import { supabase } from './supabase.js'
 
-export const PROFILE_MODEL = 'gpt-5.2-2025-12-11'
+const PROFILE_MODEL = 'gpt-5.2-2025-12-11'
 export const CHAT_MODEL = 'gpt-5.4-mini-2026-03-17'
-export const UTILITY_MODEL = 'gpt-4.1-mini'
-export const EMBED_MODEL = 'text-embedding-3-small'
+const UTILITY_MODEL = 'gpt-4.1-mini'
+const EMBED_MODEL = 'text-embedding-3-small'
 const WIKI_CONTEXT_CONFIDENCE_FLOOR = 0.30
 
 const viteEnv = import.meta.env || {}

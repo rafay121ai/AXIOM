@@ -75,7 +75,7 @@ function prune(entries, now = Date.now()) {
     .slice(0, MAX_ENTRIES)
 }
 
-export function isLikelyFollowUpTurn(text = '') {
+function isLikelyFollowUpTurn(text = '') {
   const clean = compactText(text)
   if (!clean || NEW_TOPIC_RE.test(clean) || EXPLICIT_STRUCTURE_RE.test(clean)) return false
   return clean.length <= 90 || FOLLOW_UP_RE.test(clean)
@@ -130,13 +130,4 @@ export function setCachedTurnContext(sessionId, text, payload, scope = '') {
     entries: [entry, ...entries].slice(0, MAX_ENTRIES),
     last: entry,
   })
-}
-
-export function clearSessionTurnContext() {
-  if (!canUseStorage()) return
-  try {
-    window.sessionStorage.removeItem(STORAGE_KEY)
-  } catch {
-    // no-op
-  }
 }

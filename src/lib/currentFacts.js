@@ -19,11 +19,11 @@ const CURRENT_FACT_DOMAINS = [
   MOVE_PEOPLE,
 ]
 
-export function isFreshnessAsk(text = '') {
+function isFreshnessAsk(text = '') {
   return /\b(now|today|current|currently|latest|recent|recently|this week|this month|this year|live|news|update|updates|what happened|what (?:is|are) .* doing|what has .* done|how is .* moving)\b/i.test(text)
 }
 
-export function isCurrentFactDomain(text = '') {
+function isCurrentFactDomain(text = '') {
   return CURRENT_FACT_DOMAINS.some((pattern) => pattern.test(text))
 }
 

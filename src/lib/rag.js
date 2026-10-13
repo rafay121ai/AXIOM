@@ -759,7 +759,7 @@ async function fetchConceptsForSources(sources, options = {}) {
 // ─── Main Search ─────────────────────────────────────────────────────────────
 // Returns { chunks, sources, confidence } where confidence is the top similarity score.
 // If no chunk clears CONFIDENCE_THRESHOLD, returns { chunks: [], sources: [], confidence: 0 }.
-export async function searchWiki(query, matchCount = 3, filterPillar = null, options = {}) {
+async function searchWiki(query, matchCount = 3, filterPillar = null, options = {}) {
   const rawResults = await searchSingleQuery(query, matchCount * 3, filterPillar, options)
   const rawSearch = await buildWikiSearchResult([rawResults], matchCount, options)
   if (rawSearch.confidence >= QUERY_EXPANSION_CONFIDENCE_FLOOR) {

@@ -4,7 +4,7 @@ import { clearStoredSessionToken, getStoredSessionToken, supabase } from '../lib
 import { generateWelcomeRead } from '../lib/openai'
 
 export const AXIOM_WELCOME_SEEN_KEY = 'axiom_welcome_seen'
-export const AXIOM_WELCOME_PENDING_KEY = 'axiom_welcome_pending'
+const AXIOM_WELCOME_PENDING_KEY = 'axiom_welcome_pending'
 const welcomeGenerationCache = new Map()
 
 function markWelcomeSeen() {
@@ -25,7 +25,7 @@ function hasPendingAxiomWelcome() {
   catch { return false }
 }
 
-export function hasSeenAxiomWelcome() {
+function hasSeenAxiomWelcome() {
   try { return localStorage.getItem(AXIOM_WELCOME_SEEN_KEY) === '1' }
   catch { return false }
 }
