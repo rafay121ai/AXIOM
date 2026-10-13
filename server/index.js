@@ -25,6 +25,7 @@ import {
   cleanThreadPayload,
   cleanMessagesSentAmount,
   cleanOnboardingPayload,
+  cleanFounderProfilePayload,
   cleanSessionMemoryPayload,
   isExperimentExpired,
   isUuid,
@@ -332,6 +333,15 @@ const messageWriteRateLimit = rateLimit({
   legacyHeaders: false,
 })
 
+const founderProfileRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  keyGenerator: (req) => req.user.id,
+  message: { error: 'Too many requests, please slow down.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
 const ipRateLimit = rateLimit({
   windowMs: 60 * 1000,
   max: 300,
@@ -364,6 +374,7 @@ app.use('/api/onboarding', requireAuth)
 app.use('/api/app-sessions', requireAuth)
 app.use('/api/threads', requireAuth)
 app.use('/api/messages', requireAuth)
+app.use('/api/founder-profile', requireAuth)
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
@@ -1423,6 +1434,44 @@ app.post('/api/onboarding/complete', onboardingRateLimit, async (req, res) => {
   } catch (error) {
     console.error('[Onboarding] complete failed', error)
     return res.status(500).json({ error: 'Failed to complete onboarding' })
+  }
+})
+
+app.get('/api/founder-profile', founderProfileRateLimit, async (req, res) => {
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Service not configured' })
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('founder_profiles')
+      .select('*')
+      .eq('user_id', req.user.id)
+      .maybeSingle()
+    if (error) throw error
+    return res.json({ profile: data || null })
+  } catch (error) {
+    console.error('[FounderProfile] read failed', error)
+    return res.status(500).json({ error: 'Failed to load profile' })
+  }
+})
+
+app.put('/api/founder-profile', founderProfileRateLimit, async (req, res) => {
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Service not configured' })
+  const cleaned = cleanFounderProfilePayload(req.body)
+  if (!cleaned.ok) return res.status(400).json({ error: 'Invalid profile data' })
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('founder_profiles')
+      .upsert(
+        { ...cleaned.value, user_id: req.user.id, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id' },
+      )
+      .select('*')
+      .single()
+    if (error) throw error
+    return res.json({ profile: data })
+  } catch (error) {
+    console.error('[FounderProfile] save failed', error)
+    return res.status(500).json({ error: 'Failed to save profile' })
   }
 })
 

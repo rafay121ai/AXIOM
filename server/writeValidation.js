@@ -233,3 +233,114 @@ export function capExperimentMetadata(original, essentials) {
   }
   return { ...essentials, original_dropped: true }
 }
+
+// ─── Founder profile ──────────────────────────────────────────────────────────
+
+export const FOUNDER_STAGES = ['idea', 'validating', 'first_paying_customer', 'first_10_customers', 'repeatable_sales', 'scaling']
+export const BUSINESS_MODELS = ['b2b', 'b2c', 'marketplace', 'services', 'other']
+export const CUSTOMER_MARKETS_MAX = 10
+export const CUSTOMER_MARKET_MAX_LEN = 60
+export const PROFILE_COUNTRY_MAX = 80
+export const PROFILE_GOAL_MAX = 1_000
+export const PROFILE_TIMEZONE_MAX = 64
+export const PROFILE_OPEN_ANSWERS_MAX = 3
+export const PROFILE_OPEN_QUESTION_MAX = 500
+export const PROFILE_OPEN_ANSWER_MAX = 5_000
+export const PROFILE_INPUT_MODES = ['voice', 'text']
+
+function isValidTimeZone(value) {
+  try {
+    new Intl.DateTimeFormat(undefined, { timeZone: value })
+    return true
+  } catch {
+    return false
+  }
+}
+
+function isValidIsoDate(value) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!m) return false
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])))
+  return d.toISOString().slice(0, 10) === value
+}
+
+// Partial update: absent keys are left out of the result, unknown keys are
+// ignored, null clears a nullable column. customer_markets and open_answers
+// are NOT NULL in the database, so null is rejected for them.
+// Returns { ok: true, value } or { ok: false, error }.
+export function cleanFounderProfilePayload(body) {
+  if (!isPlainObject(body)) return { ok: false, error: 'Invalid profile data' }
+  const value = {}
+  const fail = (field) => ({ ok: false, error: `Invalid ${field}` })
+  const has = (key) => Object.prototype.hasOwnProperty.call(body, key)
+
+  for (const [key, allowed] of [['stage', FOUNDER_STAGES], ['business_model', BUSINESS_MODELS]]) {
+    if (!has(key)) continue
+    const v = body[key]
+    if (v === null) value[key] = null
+    else if (typeof v === 'string' && allowed.includes(v)) value[key] = v
+    else return fail(key)
+  }
+
+  if (has('customer_markets')) {
+    // Product decision pending: PRODUCT.md says "a list of regions plus
+    // Global" but defines no region list. Until it does, any short label is
+    // accepted (lowercased); 'global' is just one such label.
+    const v = body.customer_markets
+    if (!Array.isArray(v) || v.length > CUSTOMER_MARKETS_MAX) return fail('customer_markets')
+    const seen = new Set()
+    for (const item of v) {
+      if (typeof item !== 'string') return fail('customer_markets')
+      const t = item.trim().toLowerCase()
+      if (!t || t.length > CUSTOMER_MARKET_MAX_LEN || seen.has(t)) return fail('customer_markets')
+      seen.add(t)
+    }
+    value.customer_markets = [...seen]
+  }
+
+  for (const [key, max] of [['country', PROFILE_COUNTRY_MAX], ['goal', PROFILE_GOAL_MAX]]) {
+    if (!has(key)) continue
+    const v = body[key]
+    if (v === null) value[key] = null
+    else if (typeof v === 'string' && v.trim().length <= max) value[key] = v.trim() || null
+    else return fail(key)
+  }
+
+  if (has('timezone')) {
+    const v = body.timezone
+    if (v === null) value.timezone = null
+    else if (typeof v === 'string' && v.trim() && v.trim().length <= PROFILE_TIMEZONE_MAX && isValidTimeZone(v.trim())) {
+      value.timezone = v.trim()
+    } else return fail('timezone')
+  }
+
+  if (has('deadline')) {
+    const v = body.deadline
+    if (v === null) value.deadline = null
+    else if (typeof v === 'string' && isValidIsoDate(v)) value.deadline = v
+    else return fail('deadline')
+  }
+
+  if (has('report_time_local')) {
+    const v = body.report_time_local
+    if (v === null) value.report_time_local = null
+    else if (typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(v)) value.report_time_local = v
+    else return fail('report_time_local')
+  }
+
+  if (has('open_answers')) {
+    const v = body.open_answers
+    if (!Array.isArray(v) || v.length > PROFILE_OPEN_ANSWERS_MAX) return fail('open_answers')
+    const out = []
+    for (const item of v) {
+      if (!isPlainObject(item)) return fail('open_answers')
+      if (typeof item.question !== 'string' || item.question.length > PROFILE_OPEN_QUESTION_MAX) return fail('open_answers')
+      if (typeof item.answer !== 'string' || item.answer.length > PROFILE_OPEN_ANSWER_MAX) return fail('open_answers')
+      if (!PROFILE_INPUT_MODES.includes(item.input_mode)) return fail('open_answers')
+      out.push({ question: item.question, answer: item.answer, input_mode: item.input_mode })
+    }
+    value.open_answers = out
+  }
+
+  return { ok: true, value }
+}

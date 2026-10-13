@@ -12,6 +12,7 @@ import {
   cleanMessageUpdate,
   decideMessageAccess,
   isThreadOwnedBy,
+  cleanFounderProfilePayload,
 } from './writeValidation.js'
 
 const token = '123e4567-e89b-42d3-a456-426614174000'
@@ -160,4 +161,75 @@ test('thread ownership decision', () => {
   assert.equal(isThreadOwnedBy(thread, 'u1', 's2'), false)
   assert.equal(isThreadOwnedBy(thread, 'u2', 's1'), false)
   assert.equal(isThreadOwnedBy(null, 'u1', 's1'), false)
+})
+
+const fullProfile = () => ({
+  stage: 'validating',
+  business_model: 'b2b',
+  customer_markets: [' Europe ', 'GLOBAL'],
+  country: ' Portugal ',
+  goal: 'Ten paying customers',
+  deadline: '2026-12-31',
+  report_time_local: '21:30',
+  timezone: 'Europe/Lisbon',
+  open_answers: [{ question: 'q', answer: 'a', input_mode: 'voice', extra: 1 }],
+})
+
+test('cleanFounderProfilePayload accepts a valid full payload', () => {
+  const r = cleanFounderProfilePayload(fullProfile())
+  assert.equal(r.ok, true)
+  assert.deepEqual(r.value, {
+    stage: 'validating',
+    business_model: 'b2b',
+    customer_markets: ['europe', 'global'],
+    country: 'Portugal',
+    goal: 'Ten paying customers',
+    deadline: '2026-12-31',
+    report_time_local: '21:30',
+    timezone: 'Europe/Lisbon',
+    open_answers: [{ question: 'q', answer: 'a', input_mode: 'voice' }],
+  })
+})
+test('cleanFounderProfilePayload accepts a partial payload', () => {
+  assert.deepEqual(cleanFounderProfilePayload({ goal: 'x' }), { ok: true, value: { goal: 'x' } })
+  assert.deepEqual(cleanFounderProfilePayload({}), { ok: true, value: {} })
+})
+test('cleanFounderProfilePayload rejects a bad stage', () => {
+  assert.equal(cleanFounderProfilePayload({ stage: 'Idea' }).ok, false)
+  assert.equal(cleanFounderProfilePayload({ stage: 'nope' }).ok, false)
+})
+test('cleanFounderProfilePayload rejects a bad business_model', () => {
+  assert.equal(cleanFounderProfilePayload({ business_model: 'saas' }).ok, false)
+})
+test('cleanFounderProfilePayload rejects too many markets', () => {
+  const markets = Array.from({ length: 11 }, (_, i) => `m${i}`)
+  assert.equal(cleanFounderProfilePayload({ customer_markets: markets }).ok, false)
+})
+test('cleanFounderProfilePayload rejects an invalid timezone', () => {
+  assert.equal(cleanFounderProfilePayload({ timezone: 'Mars/Olympus' }).ok, false)
+})
+test('cleanFounderProfilePayload rejects an invalid deadline', () => {
+  assert.equal(cleanFounderProfilePayload({ deadline: '2026-02-30' }).ok, false)
+  assert.equal(cleanFounderProfilePayload({ deadline: '12/31/2026' }).ok, false)
+})
+test('cleanFounderProfilePayload rejects an invalid report time', () => {
+  assert.equal(cleanFounderProfilePayload({ report_time_local: '24:00' }).ok, false)
+  assert.equal(cleanFounderProfilePayload({ report_time_local: '9pm' }).ok, false)
+})
+test('cleanFounderProfilePayload rejects more than 3 open answers', () => {
+  const a = { question: 'q', answer: 'a', input_mode: 'text' }
+  assert.equal(cleanFounderProfilePayload({ open_answers: [a, a, a, a] }).ok, false)
+})
+test('cleanFounderProfilePayload rejects a bad input_mode', () => {
+  const r = cleanFounderProfilePayload({ open_answers: [{ question: 'q', answer: 'a', input_mode: 'video' }] })
+  assert.equal(r.ok, false)
+})
+test('cleanFounderProfilePayload drops unknown keys', () => {
+  const r = cleanFounderProfilePayload({ goal: 'x', user_id: 'evil', role: 'admin' })
+  assert.deepEqual(r, { ok: true, value: { goal: 'x' } })
+})
+test('cleanFounderProfilePayload null clears nullable fields', () => {
+  const r = cleanFounderProfilePayload({ stage: null, country: null, deadline: null, timezone: null, report_time_local: null })
+  assert.deepEqual(r, { ok: true, value: { stage: null, country: null, deadline: null, timezone: null, report_time_local: null } })
+  assert.equal(cleanFounderProfilePayload({ customer_markets: null }).ok, false)
 })
