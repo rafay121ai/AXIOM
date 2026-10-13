@@ -10,9 +10,18 @@ export function apiUrl(path) {
   return `${API_BASE}${path}`
 }
 
+// Kept current synchronously so a pagehide close can fire fetch immediately,
+// without awaiting getSession/refreshSession (best effort: an expired token
+// just means the close is rejected).
+let cachedAccessToken = null
+supabase.auth.onAuthStateChange((_event, session) => {
+  cachedAccessToken = session?.access_token || null
+})
+
 async function getAuthHeaders() {
   const { data } = await supabase.auth.getSession()
   let token = data.session?.access_token
+  if (token) cachedAccessToken = token
 
   if (!token) {
     const { data: refreshed } = await supabase.auth.refreshSession()
@@ -35,7 +44,10 @@ async function readError(response) {
 }
 
 export async function postApiJson(path, body = {}, { keepalive = false } = {}) {
-  const authHeaders = await getAuthHeaders()
+  // keepalive callers run during pagehide: use the cached token, no awaiting.
+  const authHeaders = keepalive && cachedAccessToken
+    ? { Authorization: `Bearer ${cachedAccessToken}` }
+    : await getAuthHeaders()
   const response = await fetch(apiUrl(path), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders },

@@ -39,7 +39,8 @@ test('session memory payload only accepts the two fields', () => {
   assert.deepEqual(cleanSessionMemoryPayload({ session_notes: 'n', user_id: 'x' }), { session_notes: 'n' })
   assert.equal(cleanSessionMemoryPayload({}), null)
   assert.equal(cleanSessionMemoryPayload({ session_notes: 5 }), null)
-  assert.equal(cleanSessionMemoryPayload({ session_notes: 'x'.repeat(20001) }), null)
+  assert.equal(cleanSessionMemoryPayload('x'), null)
+  assert.equal(cleanSessionMemoryPayload({ session_notes: 'x'.repeat(20001) }).session_notes.length, 20000)
   assert.equal(cleanSessionMemoryPayload({ user_id: 'x' }), null)
 })
 
@@ -47,8 +48,8 @@ test('concept progress shape', () => {
   const ok = [{ topic: 'Game Theory', concepts_completed: ['A'], concepts_remaining: ['B'] }]
   assert.deepEqual(cleanConceptProgress(ok), ok)
   assert.equal(cleanConceptProgress('x'), null)
-  assert.equal(cleanConceptProgress([{ topic: 1 }]), null)
-  assert.equal(cleanConceptProgress([{ topic: 't', concepts_completed: [1] }]), null)
+  assert.deepEqual(cleanConceptProgress([{ topic: 1 }]), [])
+  assert.deepEqual(cleanConceptProgress([{ topic: 't', concepts_completed: [1, 'a', null] }]), [{ topic: 't', concepts_completed: ['a'], concepts_remaining: [] }])
   assert.deepEqual(cleanConceptProgress([{ topic: 't' }]), [{ topic: 't', concepts_completed: [], concepts_remaining: [] }])
 })
 
@@ -67,4 +68,20 @@ test('experiment expiry rule', () => {
   assert.equal(isExperimentExpired({ status: 'active', due_at: '2026-10-13T13:00:00Z' }, now), false)
   assert.equal(isExperimentExpired({ status: 'active', assigned_at: '2026-10-12T00:00:00Z', window_hours: 24 }, now), true)
   assert.equal(isExperimentExpired({ status: 'completed', due_at: '2020-01-01T00:00:00Z' }, now), false)
+})
+
+test('session memory sanitizes malformed model output', () => {
+  const many = Array.from({ length: 150 }, (_, i) => `c${i}`)
+  const out = cleanSessionMemoryPayload({
+    session_notes: 'y'.repeat(50000),
+    concept_progress: [{ concepts_completed: ['x'] }, null, { topic: 't', concepts_completed: many, concepts_remaining: [5, {}, 'ok'] }],
+  })
+  assert.equal(out.session_notes.length, 20000)
+  assert.equal(out.concept_progress.length, 1)
+  assert.equal(out.concept_progress[0].concepts_completed.length, 100)
+  assert.deepEqual(out.concept_progress[0].concepts_remaining, ['ok'])
+  const entries = Array.from({ length: 80 }, (_, i) => ({ topic: `t${i}` }))
+  assert.equal(cleanSessionMemoryPayload({ concept_progress: entries }).concept_progress.length, 50)
+  assert.equal(cleanSessionMemoryPayload({ concept_progress: [{ nope: 1 }] }), null)
+  assert.deepEqual(cleanSessionMemoryPayload({ concept_progress: 'bad', session_notes: 'n' }), { session_notes: 'n' })
 })

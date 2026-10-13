@@ -42,7 +42,7 @@ export default function Home() {
           .select('id,title,last_message_at,updated_at')
           .eq('session_id', session.id)
           .order('last_message_at', { ascending: false }),
-        getApiJson(`/api/experiments?session_id=${encodeURIComponent(session.id)}&limit=50`).catch(() => ({ experiments: [] })),
+        getApiJson(`/api/experiments?session_id=${encodeURIComponent(session.id)}&limit=50&skip_ghosting=1`).catch(() => ({ experiments: [] })),
       ])
 
       if (cancelled) return

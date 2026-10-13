@@ -1392,12 +1392,13 @@ app.post('/api/app-sessions/:id/close', sessionWriteRateLimit, async (req, res) 
   try {
     const { data: row, error: fetchError } = await supabaseAdmin
       .from('app_sessions')
-      .select('id, started_at')
+      .select('id, started_at, ended_at')
       .eq('id', req.params.id)
       .eq('user_id', req.user.id)
       .maybeSingle()
     if (fetchError) throw fetchError
     if (!row) return res.status(404).json({ error: 'App session not found' })
+    if (row.ended_at) return res.json({ ok: true })
 
     const endedAt = new Date()
     const updates = { ended_at: endedAt.toISOString(), last_ping_at: endedAt.toISOString() }
@@ -1411,6 +1412,7 @@ app.post('/api/app-sessions/:id/close', sessionWriteRateLimit, async (req, res) 
       .update(updates)
       .eq('id', row.id)
       .eq('user_id', req.user.id)
+      .is('ended_at', null)
     if (error) throw error
     return res.json({ ok: true })
   } catch (error) {

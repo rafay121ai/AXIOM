@@ -12,6 +12,7 @@ export const FIRST_NAME_MAX = 100
 export const CONCEPT_PROGRESS_MAX_ENTRIES = 50
 export const CONCEPT_LIST_MAX = 100
 export const CONCEPT_TEXT_MAX = 300
+// 'brain' stays until the DB CHECK constraint on app_sessions.entry_point is migrated.
 export const APP_SESSION_ENTRY_POINTS = ['direct', 'resume', 'experiment', 'brain']
 export const APP_SESSION_DEVICE_MAX = 200
 export const MESSAGES_SENT_MAX_INCREMENT = 20
@@ -69,47 +70,49 @@ export function cleanOnboardingPayload(body) {
   }
 }
 
+// Model output is untrusted and sloppy: sanitize instead of rejecting so
+// founder memory is saved whenever anything usable is present.
 function cleanConceptList(value) {
-  if (value === undefined || value === null) return []
-  if (!Array.isArray(value) || value.length > CONCEPT_LIST_MAX) return null
+  if (!Array.isArray(value)) return []
   const out = []
   for (const item of value) {
-    if (typeof item !== 'string') return null
+    if (out.length >= CONCEPT_LIST_MAX) break
+    if (typeof item !== 'string' || !item.trim()) continue
     out.push(item.slice(0, CONCEPT_TEXT_MAX))
   }
   return out
 }
 
+// Returns a cleaned array, or null when the value is not an array. Entries
+// without a string topic are skipped; counts are capped by truncation.
 export function cleanConceptProgress(value) {
-  if (!Array.isArray(value) || value.length > CONCEPT_PROGRESS_MAX_ENTRIES) return null
+  if (!Array.isArray(value)) return null
   const out = []
   for (const entry of value) {
-    if (!isPlainObject(entry) || typeof entry.topic !== 'string') return null
-    const completed = cleanConceptList(entry.concepts_completed)
-    const remaining = cleanConceptList(entry.concepts_remaining)
-    if (!completed || !remaining) return null
+    if (out.length >= CONCEPT_PROGRESS_MAX_ENTRIES) break
+    if (!isPlainObject(entry) || typeof entry.topic !== 'string' || !entry.topic.trim()) continue
     out.push({
       topic: entry.topic.slice(0, CONCEPT_TEXT_MAX),
-      concepts_completed: completed,
-      concepts_remaining: remaining,
+      concepts_completed: cleanConceptList(entry.concepts_completed),
+      concepts_remaining: cleanConceptList(entry.concepts_remaining),
     })
   }
   return out
 }
 
-// Returns { updates } holding only the fields present, or null when invalid
-// or empty. Nothing outside session_notes / concept_progress is ever accepted.
+// Returns { updates } holding only the usable fields, or null when the body is
+// not an object or nothing usable remains. Nothing outside session_notes /
+// concept_progress is ever accepted.
 export function cleanSessionMemoryPayload(body) {
   if (!isPlainObject(body)) return null
   const updates = {}
-  if (body.session_notes !== undefined) {
-    if (typeof body.session_notes !== 'string' || body.session_notes.length > SESSION_NOTES_MAX) return null
-    updates.session_notes = body.session_notes
+  if (typeof body.session_notes === 'string') {
+    updates.session_notes = body.session_notes.slice(0, SESSION_NOTES_MAX)
   }
-  if (body.concept_progress !== undefined) {
+  if (Array.isArray(body.concept_progress)) {
     const cleaned = cleanConceptProgress(body.concept_progress)
-    if (!cleaned) return null
-    updates.concept_progress = cleaned
+    // An explicit empty array is kept; a non-empty array with no usable entry is dropped.
+    if (cleaned.length > 0 || body.concept_progress.length === 0) updates.concept_progress = cleaned
   }
   return Object.keys(updates).length > 0 ? updates : null
 }
