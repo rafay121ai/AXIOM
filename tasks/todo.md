@@ -93,7 +93,7 @@ Branch: `cleanup/remove-old-product`
 - [x] Payment, pricing and premium: searched prompts, UI copy, `index.html` and server; no payment claims, pricing copy or premium gates exist in the app (matches audit H-13). Nothing to remove.
 - [x] Prompt size: static 50,959 (from 73,025 before cleanup); assembled plain 24,354 (24,877), experiment report 23,698 (24,018), structured request 24,875 (25,492), artifact turn 24,489 (30,500), ghosted history 23,800 (25,186).
 - [x] Verify: build passed (93 modules); backend/frontend start and probes pass (one run showed "build was canceled" in the Vite log because the probe stopped Vite while it re-optimized deps after the Recharts removal; rerun clean); router test returns the same modes/pillars as Stage 3; tag-stripping test 6/6. LOC 14,590.
-  - Kept on purpose: "Not as a warning." in the cost-of-inaction voice rule (voice guidance, not the warning system); `EXPLICIT_STRUCTURE_RE` in `sessionTurnContext.js` (follow-up cache detection); learning-map prompt text (protected); jailbreak termination flow (security, not the removal system).
+  - Kept on purpose: "Not as a warning." in the cost-of-inaction voice rule (voice guidance, not the warning system); `EXPLICIT_STRUCTURE_RE` in `sessionTurnContext.js` (follow-up cache detection); learning-map prompt text (protected).
 - [x] Commit Stage 4 only.
 
 ## Stage 5: Tests and repository cleanup
@@ -108,6 +108,17 @@ Branch: `cleanup/remove-old-product`
 - [x] Final metrics: LOC 23,266 -> 14,501. Static prompt 73,025 -> 50,959. Assembled prompt: plain 24,877 -> 24,354; experiment report 24,018 -> 23,698; structured request 25,492 -> 24,875; artifact turn 30,500 -> 24,489; ghosted history 25,186 -> 23,800.
 - [x] Write `audit/CLEANUP_REPORT.md`.
 - [x] Commit Stage 5 only; do not merge.
+
+- [x] Jailbreak termination flow removed (owner decision 2026-10-13); sessions.jailbreak_attempts column kept, unused.
+- [x] Daily $1 per founder cost cap per UTC day, server-enforced before every OpenAI call; client aborts charged a conservative estimate; usage rows paged; client shows reset time in local time.
+- [x] npm audit fix applied (no --force). Remaining: vite major, react-router-dom major, qs via express.
+
+### Open items
+
+- [ ] Cap fail-open on lookup failure awaiting owner confirmation.
+- [ ] Concurrency overshoot of the daily cap accepted (bounded).
+- [ ] Crisis handling blocks Read Back and Seek build.
+- [ ] Two-move race deferred to the Act and Report rebuild.
 
 ## Pending migrations (feature/cost-tracking + feature/backend-hardening)
 

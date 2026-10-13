@@ -213,6 +213,9 @@ before the lesson reaches the founder.
   before real users arrive.
 - Log cost per call, per step and per active founder.
 - Daily cap on situations per founder to protect a free product.
+- Daily cost cap: $1 per founder per UTC day, server-enforced before every
+  OpenAI call (owner decision 2026-10-13). Lookup failure fails open pending
+  owner confirmation. Concurrent requests can overshoot by a bounded amount.
 - Use cheaper models for non critical calls (theory updates, anonymization
   drafts).
 
