@@ -1,12 +1,6 @@
 -- Security hardening: user_conversations view, default privileges, model_usage_logs writes.
 --
--- WARNING: written against the checked-in baseline
--- (20260929000000_baseline_live_public_schema.sql), NOT a live dump. Check it
--- against a live schema dump before it is pushed.
---
--- CLAUDE.md requires a migration plan based on a live schema dump. That check
--- is NOT done yet. Do not push until it is. The model_usage_logs policy swap
--- must also be confirmed against the live policies.
+-- Checked against a live schema dump on 2026-10-13: no conflicts. Push order: see tasks/todo.md.
 --
 -- Idempotent and non-destructive: no DROP of tables, views or columns, no data
 -- changes. Only privileges, one view option and one RLS policy change.
@@ -61,3 +55,23 @@ create policy "Users read their model usage logs"
   for select
   to authenticated
   using (auth.uid() = user_id);
+
+-- ─── B4. Table grants tightened ─────────────────────────────────────────────
+-- Browser roles never need TRUNCATE, REFERENCES or TRIGGER on any table.
+revoke truncate, references, trigger on all tables in schema public from anon, authenticated;
+
+-- personal_memories, wiki_chunks, wiki_sources: all writes go through the
+-- Express API (service_role). grep of src/, server/, scripts/ shows no browser
+-- write. wiki_chunks/wiki_sources are read in the browser only from the
+-- separate knowledge project, and by service-role scripts here.
+revoke insert, update, delete on public.personal_memories, public.wiki_chunks, public.wiki_sources from anon, authenticated;
+
+-- anon SELECT: the only main-project browser read is match_personal_memories
+-- (SECURITY INVOKER) from the signed-in Chat page; with no session
+-- auth.uid() is null so the "Users read own memories" policy returns nothing.
+-- Nothing reads these tables without a signed-in session, so anon loses SELECT.
+-- authenticated keeps SELECT: the personal_memories policy and
+-- match_personal_memories rely on it.
+revoke select on public.personal_memories from anon;
+revoke select on public.wiki_chunks from anon;
+revoke select on public.wiki_sources from anon;

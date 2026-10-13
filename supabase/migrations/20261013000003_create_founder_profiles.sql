@@ -2,9 +2,7 @@
 --
 -- ROLLBACK: drop table public.founder_profiles;  (no other object depends on it)
 --
--- WRITTEN AGAINST the checked-in baseline, NOT a live schema dump.
--- CLAUDE.md requires a plan based on a live dump before this is pushed.
--- DO NOT PUSH until that is recorded in tasks/todo.md.
+-- Checked against a live schema dump on 2026-10-13: no conflicts. Push order: see tasks/todo.md.
 --
 -- Depends on 20261013000001 (default privileges revoked), so the grants
 -- below are explicit. Writes go through the Express API (service_role);
@@ -12,8 +10,8 @@
 --
 -- updated_at is set by the API on every write; there is no trigger.
 -- `create table if not exists` silently skips a live table that already
--- exists with a different shape, so the live-dump check matters: confirm no
--- drifted public.founder_profiles exists before pushing.
+-- exists with a different shape; the 2026-10-13 live dump showed no drifted
+-- public.founder_profiles.
 
 create table if not exists public.founder_profiles (
   user_id uuid primary key references auth.users(id) on delete cascade,
