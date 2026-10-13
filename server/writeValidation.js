@@ -35,38 +35,38 @@ export function cleanOnboardingPayload(body) {
 
   if (!isUuid(body.session_token)) return null
 
-  const firstName = cleanFirstName(body.first_name)
-  if (firstName === undefined) return null
+  // Free text and model output are sanitized (truncate or drop), never rejected.
+  const firstNameRaw = cleanFirstName(body.first_name)
+  const firstName = firstNameRaw === undefined ? null : firstNameRaw
 
-  if (!Array.isArray(body.answers) || body.answers.length === 0 || body.answers.length > ONBOARDING_MAX_ANSWERS) {
-    return null
-  }
+  if (!Array.isArray(body.answers)) return null
   const answers = []
-  for (const item of body.answers) {
-    if (!isPlainObject(item)) return null
-    if (typeof item.question !== 'string' || typeof item.answer !== 'string') return null
-    if (item.question.length > ONBOARDING_QUESTION_MAX || item.answer.length > ONBOARDING_ANSWER_MAX) return null
-    answers.push({ question: item.question, answer: item.answer })
+  for (const item of body.answers.slice(0, ONBOARDING_MAX_ANSWERS)) {
+    if (!isPlainObject(item) || typeof item.question !== 'string' || typeof item.answer !== 'string') continue
+    answers.push({
+      question: item.question.slice(0, ONBOARDING_QUESTION_MAX),
+      answer: item.answer.slice(0, ONBOARDING_ANSWER_MAX),
+    })
   }
 
-  if (!isPlainObject(body.pillar_weights)) return null
-  const keys = Object.keys(body.pillar_weights)
-  if (keys.length > 20) return null
   const pillarWeights = {}
-  for (const key of keys) {
-    const value = body.pillar_weights[key]
-    if (key.length > 60 || typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1000) return null
-    pillarWeights[key] = value
+  if (isPlainObject(body.pillar_weights)) {
+    for (const key of Object.keys(body.pillar_weights).slice(0, 20)) {
+      const value = body.pillar_weights[key]
+      if (key.length > 60 || typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1000) continue
+      pillarWeights[key] = value
+    }
   }
 
-  if (typeof body.axiom_profile !== 'string' || body.axiom_profile.length > AXIOM_PROFILE_MAX) return null
+  // Model output: a missing or malformed profile is stored as null (column is nullable), long ones truncated.
+  const axiomProfile = typeof body.axiom_profile === 'string' ? body.axiom_profile.slice(0, AXIOM_PROFILE_MAX) : null
 
   return {
     session_token: body.session_token,
     first_name: firstName,
     onboarding_answers: answers,
     pillar_weights: pillarWeights,
-    axiom_profile: body.axiom_profile,
+    axiom_profile: axiomProfile,
   }
 }
 

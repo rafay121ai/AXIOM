@@ -352,6 +352,7 @@ export default function Onboarding() {
                 className="onboarding__textarea"
                 placeholder={currentQ.placeholder}
                 value={textAnswer}
+                maxLength={5000}
                 onChange={(event) => setTextAnswer(event.target.value)}
               />
               <button

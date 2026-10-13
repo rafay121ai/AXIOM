@@ -31,14 +31,30 @@ test('onboarding payload cleans and strips extra answer keys', () => {
   assert.deepEqual(out.onboarding_answers, [{ question: 'q', answer: 'a' }])
 })
 
+test('onboarding truncates an answer over 5000 chars and accepts it', () => {
+  const out = cleanOnboardingPayload({ ...good(), answers: [{ question: 'q', answer: 'x'.repeat(6000) }] })
+  assert.equal(out.onboarding_answers[0].answer.length, 5000)
+})
+
+test('onboarding accepts null axiom_profile', () => {
+  assert.equal(cleanOnboardingPayload({ ...good(), axiom_profile: null }).axiom_profile, null)
+})
+
+test('onboarding accepts non-string axiom_profile as null', () => {
+  assert.equal(cleanOnboardingPayload({ ...good(), axiom_profile: { a: 1 } }).axiom_profile, null)
+})
+
+test('onboarding truncates a very long axiom_profile', () => {
+  assert.equal(cleanOnboardingPayload({ ...good(), axiom_profile: 'x'.repeat(30000) }).axiom_profile.length, 20000)
+})
+
 test('onboarding payload rejects bad shapes', () => {
   assert.equal(cleanOnboardingPayload(null), null)
   assert.equal(cleanOnboardingPayload({ ...good(), session_token: 'nope' }), null)
-  assert.equal(cleanOnboardingPayload({ ...good(), answers: [] }), null)
-  assert.equal(cleanOnboardingPayload({ ...good(), answers: [{ question: 1, answer: 'a' }] }), null)
-  assert.equal(cleanOnboardingPayload({ ...good(), pillar_weights: { a: 'x' } }), null)
-  assert.equal(cleanOnboardingPayload({ ...good(), axiom_profile: 'x'.repeat(20001) }), null)
-  assert.equal(cleanOnboardingPayload({ ...good(), first_name: 5 }), null)
+  assert.equal(cleanOnboardingPayload({ ...good(), answers: 'nope' }), null)
+  assert.deepEqual(cleanOnboardingPayload({ ...good(), answers: [{ question: 1, answer: 'a' }] }).onboarding_answers, [])
+  assert.deepEqual(cleanOnboardingPayload({ ...good(), pillar_weights: { a: 'x' } }).pillar_weights, {})
+  assert.equal(cleanOnboardingPayload({ ...good(), first_name: 5 }).first_name, null)
   assert.equal(cleanOnboardingPayload({ ...good(), first_name: null }).first_name, null)
 })
 
