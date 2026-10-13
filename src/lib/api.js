@@ -34,12 +34,13 @@ async function readError(response) {
   }
 }
 
-export async function postApiJson(path, body = {}) {
+export async function postApiJson(path, body = {}, { keepalive = false } = {}) {
   const authHeaders = await getAuthHeaders()
   const response = await fetch(apiUrl(path), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders },
     body: JSON.stringify(body),
+    ...(keepalive ? { keepalive: true } : {}),
   })
 
   if (!response.ok) {

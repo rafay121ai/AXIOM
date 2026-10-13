@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getStoredSessionToken, setStoredSessionToken, supabase } from '../lib/supabase'
 import { generateAxiomProfile } from '../lib/openai'
-import { trackProductEvent } from '../lib/api'
+import { postApiJson, trackProductEvent } from '../lib/api'
 import { AXIOM_WELCOME_SEEN_KEY, markAxiomWelcomePending } from './Welcome'
 
 // ─── Question Pool ───────────────────────────────────────────────────────────
@@ -225,16 +225,10 @@ export default function Onboarding() {
         return
       }
 
-      // Upsert user record so sessions can be queried by email
       const firstName =
         activeUser.user_metadata?.given_name ||
         activeUser.user_metadata?.name?.split(' ')[0] ||
         null
-
-      await supabase.from('users').upsert(
-        { id: activeUser.id, email: activeUser.email, first_name: firstName },
-        { onConflict: 'id' }
-      )
 
       const { data: existingSession, error: existingError } = await supabase
         .from('sessions')
@@ -252,19 +246,17 @@ export default function Onboarding() {
       const qaPairs = finalAnswered.map(({ question, answer }) => ({ question, answer }))
       const axiomProfile = await generateAxiomProfile(qaPairs)
 
-      const sessionToken = crypto.randomUUID()
-      const sessionPayload = {
-        session_token: sessionToken,
-        user_id: activeUser.id,
-        onboarding_answers: qaPairs,
+      // The server upserts the user row and stores the session. A retry gets
+      // the already stored session back instead of an error.
+      const { session: storedSession } = await postApiJson('/api/onboarding/complete', {
+        session_token: crypto.randomUUID(),
+        first_name: firstName,
+        answers: qaPairs,
         pillar_weights: pillarWeights,
         axiom_profile: axiomProfile,
-      }
-
-      const { error: insertError } = await supabase
-        .from('sessions')
-        .insert(sessionPayload)
-      if (insertError) throw insertError
+      })
+      const sessionToken = storedSession?.session_token
+      if (!sessionToken) throw new Error('Onboarding response missing session')
 
       setStoredSessionToken(sessionToken)
       void trackProductEvent('onboarding_completed', {

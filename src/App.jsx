@@ -84,7 +84,7 @@ function AppSessionTracker() {
     function closeCurrent() {
       if (closed || !appSession?.id) return
       closed = true
-      closeAppSession(appSession.id, appSession.started_at)
+      closeAppSession(appSession.id)
     }
 
     begin()

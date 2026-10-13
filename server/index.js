@@ -16,6 +16,14 @@ import { estimateModelCost, USAGE_CALL_TYPES } from './modelUsage.js'
 import { createEventTracker, PRODUCT_EVENTS } from './productEvents.js'
 import { summarizeUsage } from './usageSummary.js'
 import {
+  cleanAppSessionStart,
+  cleanMessagesSentAmount,
+  cleanOnboardingPayload,
+  cleanSessionMemoryPayload,
+  isExperimentExpired,
+  isUuid,
+} from './writeValidation.js'
+import {
   validateChatMessages,
   isAllowedResponseFormat,
   validateEmbeddingInput,
@@ -239,6 +247,25 @@ const experimentWriteRateLimit = rateLimit({
   legacyHeaders: false,
 })
 
+const onboardingRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  keyGenerator: (req) => req.user.id,
+  message: { error: 'Too many requests, please slow down.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+// App session ping/close/start plus per-turn session writes (touch, memory).
+const sessionWriteRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  keyGenerator: (req) => req.user.id,
+  message: { error: 'Too many requests, please slow down.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
 const ipRateLimit = rateLimit({
   windowMs: 60 * 1000,
   max: 300,
@@ -267,6 +294,8 @@ app.use('/api/experiments', requireAuth)
 app.use('/api/personal-memories', requireAuth)
 app.use('/api/admin', requireAuth)
 app.use('/api/events', requireAuth)
+app.use('/api/onboarding', requireAuth)
+app.use('/api/app-sessions', requireAuth)
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
@@ -914,7 +943,7 @@ app.get('/api/experiments', experimentWriteRateLimit, async (req, res) => {
     if (!ownership.ok) return res.status(ownership.status).json({ error: ownership.error })
 
     const limit = Math.min(50, Math.max(1, Number(req.query?.limit) || 50))
-    const { data, error } = await supabaseAdmin
+    const loadExperiments = () => supabaseAdmin
       .from('experiments')
       .select('*')
       .eq('session_id', sessionId)
@@ -922,7 +951,32 @@ app.get('/api/experiments', experimentWriteRateLimit, async (req, res) => {
       .order('assigned_at', { ascending: true })
       .limit(limit)
 
+    let { data, error } = await loadExperiments()
     if (error) throw error
+
+    // Lazily ghost this caller's expired active experiments (same rule and
+    // fields the browser used to write). The caller can skip this while a
+    // report is being clarified. No warnings, strikes or events.
+    if (req.query?.skip_ghosting !== '1') {
+      const nowMs = Date.now()
+      const expired = (data || []).filter((item) => item.id && isExperimentExpired(item, nowMs))
+      if (expired.length > 0) {
+        const ghostedAt = new Date().toISOString()
+        await Promise.all(expired.map(async ({ id }) => {
+          const { error: ghostError } = await supabaseAdmin
+            .from('experiments')
+            .update({ status: 'ghosted', outcome_reason: 'ghosted', ghosted_at: ghostedAt })
+            .eq('id', id)
+            .eq('user_id', req.user.id)
+            .eq('status', 'active')
+          if (ghostError) console.error('[Experiments] ghosting update failed', { experiment_id: id, error: ghostError })
+        }))
+        const refreshed = await loadExperiments()
+        if (refreshed.error) throw refreshed.error
+        data = refreshed.data
+      }
+    }
+
     return res.json({ experiments: data || [] })
   } catch (error) {
     console.error('[Experiments] list failed', error)
@@ -1235,6 +1289,214 @@ app.post('/api/session/:id/jailbreak', async (req, res) => {
   res.json({ jailbreak_attempts: next })
 })
 
+
+// ─── Browser writes moved behind the API ─────────────────────────────────────
+
+app.post('/api/onboarding/complete', onboardingRateLimit, async (req, res) => {
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Service not configured' })
+
+  const payload = cleanOnboardingPayload(req.body)
+  if (!payload) return res.status(400).json({ error: 'Invalid onboarding data' })
+  const email = typeof req.user.email === 'string' ? req.user.email.trim() : ''
+  if (!email) return res.status(400).json({ error: 'Account has no email' })
+
+  try {
+    const { error: userError } = await supabaseAdmin
+      .from('users')
+      .upsert({ id: req.user.id, email, first_name: payload.first_name }, { onConflict: 'id' })
+    if (userError) throw userError
+
+    const loadExisting = () => supabaseAdmin
+      .from('sessions')
+      .select('*')
+      .eq('user_id', req.user.id)
+      .maybeSingle()
+
+    // One session per user: a retry returns the stored session untouched.
+    const existing = await loadExisting()
+    if (existing.error) throw existing.error
+    if (existing.data) return res.json({ session: existing.data, created: false })
+
+    const { data, error } = await supabaseAdmin
+      .from('sessions')
+      .insert({
+        session_token: payload.session_token,
+        user_id: req.user.id,
+        onboarding_answers: payload.onboarding_answers,
+        pillar_weights: payload.pillar_weights,
+        axiom_profile: payload.axiom_profile,
+      })
+      .select('*')
+      .single()
+
+    if (error) {
+      if (error.code === '23505') {
+        const raced = await loadExisting()
+        if (!raced.error && raced.data) return res.json({ session: raced.data, created: false })
+      }
+      throw error
+    }
+    return res.json({ session: data, created: true })
+  } catch (error) {
+    console.error('[Onboarding] complete failed', error)
+    return res.status(500).json({ error: 'Failed to complete onboarding' })
+  }
+})
+
+app.post('/api/app-sessions', sessionWriteRateLimit, async (req, res) => {
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Service not configured' })
+  const start = cleanAppSessionStart(req.body)
+  if (!start) return res.status(400).json({ error: 'Invalid app session data' })
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('app_sessions')
+      .insert({
+        user_id: req.user.id,
+        entry_point: start.entry_point,
+        last_ping_at: new Date().toISOString(),
+        device: start.device,
+      })
+      .select('id, started_at')
+      .single()
+    if (error) throw error
+    return res.json({ id: data.id, started_at: data.started_at })
+  } catch (error) {
+    console.error('[AppSessions] start failed', error)
+    return res.status(500).json({ error: 'Failed to start app session' })
+  }
+})
+
+app.post('/api/app-sessions/:id/ping', sessionWriteRateLimit, async (req, res) => {
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Service not configured' })
+  if (!isUuid(req.params.id)) return res.status(400).json({ error: 'Invalid app session id' })
+
+  try {
+    const { error } = await supabaseAdmin
+      .from('app_sessions')
+      .update({ last_ping_at: new Date().toISOString() })
+      .eq('id', req.params.id)
+      .eq('user_id', req.user.id)
+    if (error) throw error
+    return res.json({ ok: true })
+  } catch (error) {
+    console.error('[AppSessions] ping failed', error)
+    return res.status(500).json({ error: 'Failed to update app session' })
+  }
+})
+
+app.post('/api/app-sessions/:id/close', sessionWriteRateLimit, async (req, res) => {
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Service not configured' })
+  if (!isUuid(req.params.id)) return res.status(400).json({ error: 'Invalid app session id' })
+
+  try {
+    const { data: row, error: fetchError } = await supabaseAdmin
+      .from('app_sessions')
+      .select('id, started_at')
+      .eq('id', req.params.id)
+      .eq('user_id', req.user.id)
+      .maybeSingle()
+    if (fetchError) throw fetchError
+    if (!row) return res.status(404).json({ error: 'App session not found' })
+
+    const endedAt = new Date()
+    const updates = { ended_at: endedAt.toISOString(), last_ping_at: endedAt.toISOString() }
+    const startedMs = new Date(row.started_at).getTime()
+    if (Number.isFinite(startedMs)) {
+      updates.duration_seconds = Math.max(0, Math.round((endedAt.getTime() - startedMs) / 1000))
+    }
+
+    const { error } = await supabaseAdmin
+      .from('app_sessions')
+      .update(updates)
+      .eq('id', row.id)
+      .eq('user_id', req.user.id)
+    if (error) throw error
+    return res.json({ ok: true })
+  } catch (error) {
+    console.error('[AppSessions] close failed', error)
+    return res.status(500).json({ error: 'Failed to close app session' })
+  }
+})
+
+// No increment RPC exists and migrations are out of scope, so the increment is
+// a compare-and-swap on the current value, retried on contention.
+app.post('/api/app-sessions/:id/messages-sent', sessionWriteRateLimit, async (req, res) => {
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Service not configured' })
+  if (!isUuid(req.params.id)) return res.status(400).json({ error: 'Invalid app session id' })
+  const amount = cleanMessagesSentAmount(req.body)
+  if (amount === null) return res.status(400).json({ error: 'Invalid amount' })
+
+  try {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const { data: row, error: fetchError } = await supabaseAdmin
+        .from('app_sessions')
+        .select('messages_sent')
+        .eq('id', req.params.id)
+        .eq('user_id', req.user.id)
+        .maybeSingle()
+      if (fetchError) throw fetchError
+      if (!row) return res.status(404).json({ error: 'App session not found' })
+
+      const current = Number(row.messages_sent || 0)
+      const { data: updated, error } = await supabaseAdmin
+        .from('app_sessions')
+        .update({ messages_sent: current + amount, last_ping_at: new Date().toISOString() })
+        .eq('id', req.params.id)
+        .eq('user_id', req.user.id)
+        .eq('messages_sent', current)
+        .select('messages_sent')
+      if (error) throw error
+      if (updated?.length) return res.json({ messages_sent: updated[0].messages_sent })
+    }
+    return res.status(409).json({ error: 'Please retry' })
+  } catch (error) {
+    console.error('[AppSessions] messages-sent failed', error)
+    return res.status(500).json({ error: 'Failed to update app session' })
+  }
+})
+
+app.post('/api/session/:id/touch', sessionWriteRateLimit, async (req, res) => {
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Service not configured' })
+  if (!isUuid(req.params.id)) return res.status(400).json({ error: 'Invalid session id' })
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('sessions')
+      .update({ last_active: new Date().toISOString() })
+      .eq('id', req.params.id)
+      .eq('user_id', req.user.id)
+      .select('id')
+    if (error) throw error
+    if (!data?.length) return res.status(404).json({ error: 'Session not found' })
+    return res.json({ ok: true })
+  } catch (error) {
+    console.error('[Session] touch failed', error)
+    return res.status(500).json({ error: 'Failed to update session' })
+  }
+})
+
+app.post('/api/session/:id/memory', sessionWriteRateLimit, async (req, res) => {
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Service not configured' })
+  if (!isUuid(req.params.id)) return res.status(400).json({ error: 'Invalid session id' })
+  const updates = cleanSessionMemoryPayload(req.body)
+  if (!updates) return res.status(400).json({ error: 'Invalid session memory data' })
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('sessions')
+      .update(updates)
+      .eq('id', req.params.id)
+      .eq('user_id', req.user.id)
+      .select('id')
+    if (error) throw error
+    if (!data?.length) return res.status(404).json({ error: 'Session not found' })
+    return res.json({ ok: true })
+  } catch (error) {
+    console.error('[Session] memory update failed', error)
+    return res.status(500).json({ error: 'Failed to update session' })
+  }
+})
 
 // Final error handler: fixed messages only, details stay in server logs.
 app.use((err, _req, res, _next) => {

@@ -242,10 +242,7 @@ export async function updatePersonalMemory(session, recentMessages, userMessage,
     }
 
     if (Object.keys(sessionUpdates).length > 0) {
-      await supabase
-        .from('sessions')
-        .update(sessionUpdates)
-        .eq('id', session.id)
+      await postApiJson(`/api/session/${encodeURIComponent(session.id)}/memory`, sessionUpdates).catch(() => {})
     }
 
     await savePersonalMemories(session.id, session.user_id || null, update.memories || [])

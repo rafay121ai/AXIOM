@@ -496,9 +496,11 @@ function normalizeExperiment(row) {
   }
 }
 
-async function fetchSessionExperiments(sessionId) {
+// The server ghosts this user's expired active experiments while listing,
+// unless skipGhosting is set (outcome clarification in progress).
+async function fetchSessionExperiments(sessionId, { skipGhosting = false } = {}) {
   try {
-    const payload = await getApiJson(`/api/experiments?session_id=${encodeURIComponent(sessionId)}&limit=50`)
+    const payload = await getApiJson(`/api/experiments?session_id=${encodeURIComponent(sessionId)}&limit=50${skipGhosting ? '&skip_ghosting=1' : ''}`)
     return (payload?.experiments || []).map(normalizeExperiment)
   } catch {
     return null
@@ -526,11 +528,12 @@ function getUnresolvedExperiment(experiments, messages) {
   return null
 }
 
-async function checkAndUpdateGhosting(session) {
+// Local view of ghosting only. The database write happens server-side when
+// experiments are fetched (GET /api/experiments).
+function checkAndUpdateGhosting(session) {
   const now = Date.now()
   const experiments = session.experiments || []
   let changed = false
-  const rowUpdates = []
 
   const updatedExperiments = experiments.map((exp) => {
     if (exp.status !== 'active') return exp
@@ -538,35 +541,13 @@ async function checkAndUpdateGhosting(session) {
     const dueAt = exp.due_at
       ? new Date(exp.due_at).getTime()
       : new Date(exp.assigned_at).getTime() + exp.window_hours * 3600 * 1000
-    const expired = now > dueAt
-
-    if (!expired) return exp
+    if (!(now > dueAt)) return exp
 
     changed = true
-
-    const ghostedAt = new Date().toISOString()
-    const updated = { ...exp, status: 'ghosted', outcome_reason: 'ghosted', ghosted_at: ghostedAt }
-    rowUpdates.push({ id: exp.id, status: updated.status, outcome_reason: 'ghosted', ghosted_at: ghostedAt })
-    return updated
-
+    return { ...exp, status: 'ghosted', outcome_reason: 'ghosted', ghosted_at: new Date().toISOString() }
   })
 
   if (!changed) return session
-
-  await Promise.all(
-    rowUpdates
-      .filter((update) => update.id)
-      .map(({ id, ...updates }) =>
-        supabase
-          .from('experiments')
-          .update(updates)
-          .eq('id', id)
-          .then(({ error }) => {
-            if (error) console.error('Failed to update ghosted experiment', { error, experiment_id: id })
-          })
-      )
-  )
-
   return { ...session, experiments: updatedExperiments }
 }
 
@@ -700,7 +681,7 @@ export default function Chat() {
     }
 
     // Check and update ghosting state
-	    const updatedSession = await checkAndUpdateGhosting(hydratedSession)
+	    const updatedSession = checkAndUpdateGhosting(hydratedSession)
 	    setSession(updatedSession)
 
 	    if (threadId) {
@@ -744,10 +725,7 @@ export default function Chat() {
     }
 
     // Update last_active
-    await supabase
-      .from('sessions')
-      .update({ last_active: new Date().toISOString() })
-      .eq('id', updatedSession.id)
+    await postApiJson(`/api/session/${encodeURIComponent(updatedSession.id)}/touch`).catch(() => {})
 
     const normalizedMsgs = existing.map(normalizeMsg)
 
@@ -1019,7 +997,9 @@ export default function Chat() {
         : searchPersonalMemory(session.user_id, text, 5, memoryTimingOptions))
         .then((value) => ({ ok: true, value }))
         .catch((error) => ({ ok: false, error }))
-      const latestExperimentsPromise = fetchSessionExperiments(session.id)
+      const latestExperimentsPromise = fetchSessionExperiments(session.id, {
+        skipGhosting: isAwaitingExperimentOutcomeClarification(baseMessages),
+      })
       markLatency('preflight:parallel_started', {
         cacheHit: Boolean(cachedTurnContext),
         routeCached: Boolean(cachedTurnContext?.route),
@@ -1037,7 +1017,7 @@ export default function Chat() {
         experiment_negotiation: experimentNegotiationRef.current,
       }
       if (!isAwaitingExperimentOutcomeClarification(baseMessages)) {
-        sessionForTurn = await checkAndUpdateGhosting(sessionForTurn)
+        sessionForTurn = checkAndUpdateGhosting(sessionForTurn)
         markLatency('experiments:ghosting_checked')
       } else {
         markLatency('experiments:ghosting_skipped_outcome_clarification')
