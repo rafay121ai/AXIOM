@@ -120,7 +120,7 @@ const supabaseServiceKeyRole = getJwtRole(supabaseServiceKey)
 const hasAppServiceRoleKey = supabaseServiceKeyRole === 'service_role'
 
 if (!supabaseUrl || !supabaseServiceKey) {
-  console.warn('[Axiom API] Missing Supabase credentials — auth and jailbreak endpoints will not function')
+  console.warn('[Axiom API] Missing Supabase credentials — auth endpoints will not function')
 } else if (!hasAppServiceRoleKey) {
   console.warn('[Axiom API] SUPABASE_SERVICE_ROLE_KEY is not a service_role key — server-owned writes may fail RLS')
 }
@@ -1323,7 +1323,6 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
     // res 'close' fires on client disconnect; req 'close' can fire early once the body is read.
     res.on('close', abortUpstream)
     const streamResp = await openai.chat.completions.create(safePayload, { signal: upstreamAbort.signal })
-    let streamedContent = ''
     let finalUsage = null
 
     for await (const chunk of streamResp) {
@@ -1331,8 +1330,6 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
         finalUsage = chunk.usage
         loggedUsage = finalUsage
       }
-      const delta = chunk.choices?.[0]?.delta?.content || ''
-      streamedContent += delta
       res.write(`${JSON.stringify({ type: 'chunk', data: chunk })}\n`)
     }
 
@@ -1343,29 +1340,6 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
 
     res.write(`${JSON.stringify({ type: 'done' })}\n`)
     res.end()
-
-    // Auto-increment jailbreak counter when AI signals a jailbreak event.
-    // session_id ownership is verified before updating.
-    if (session_id && supabaseAdmin) {
-      const isJailbreak =
-        streamedContent.includes('[JAILBREAK_REDIRECT]') ||
-        streamedContent.trim() === 'AXIOM_SESSION_TERMINATED'
-      if (isJailbreak) {
-        supabaseAdmin
-          .from('sessions')
-          .select('user_id, jailbreak_attempts')
-          .eq('id', session_id)
-          .single()
-          .then(({ data }) => {
-            if (!data || data.user_id !== req.user.id) return
-            return supabaseAdmin
-              .from('sessions')
-              .update({ jailbreak_attempts: (data.jailbreak_attempts || 0) + 1 })
-              .eq('id', session_id)
-          })
-          .catch((err) => console.error('[Chat] Jailbreak increment failed:', err))
-      }
-    }
   } catch (err) {
     console.error('[Chat]', err)
 
@@ -1382,45 +1356,6 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
   } finally {
     logUsageOnce()
   }
-})
-
-
-app.post('/api/session/:id/jailbreak', async (req, res) => {
-  if (!supabaseAdmin) {
-    return res.status(503).json({ error: 'Supabase not configured' })
-  }
-
-  const { id } = req.params
-  if (!UUID_PATTERN.test(String(id || ''))) return res.status(404).json({ error: 'Session not found' })
-
-  const { data: session, error: fetchError } = await supabaseAdmin
-    .from('sessions')
-    .select('user_id, jailbreak_attempts')
-    .eq('id', id)
-    .single()
-
-  if (fetchError) {
-    console.error('[Jailbreak] Fetch error:', fetchError)
-    return res.status(500).json({ error: 'Failed to fetch session' })
-  }
-
-  if (!session || session.user_id !== req.user.id) {
-    return res.status(403).json({ error: 'Forbidden' })
-  }
-
-  const next = (session.jailbreak_attempts || 0) + 1
-
-  const { error: updateError } = await supabaseAdmin
-    .from('sessions')
-    .update({ jailbreak_attempts: next })
-    .eq('id', id)
-
-  if (updateError) {
-    console.error('[Jailbreak] Update error:', updateError)
-    return res.status(500).json({ error: 'Failed to update session' })
-  }
-
-  res.json({ jailbreak_attempts: next })
 })
 
 

@@ -465,7 +465,6 @@ function stripForDisplay(text) {
   return sanitizeVisibleAssistantText(text)
     .replace(/<experiment>[\s\S]*?<\/experiment>/g, '')
     .replace(/<experiment[\s\S]*$/, '')
-    .replace(/\[JAILBREAK_REDIRECT\]\s*$/g, '')
     .trim()
 }
 
@@ -1349,20 +1348,6 @@ export default function Chat() {
       })
 
       abortControllerRef.current = null
-
-      // Jailbreak: termination — server auto-increments via session_id in the request
-      if (fullContent.trim() === 'AXIOM_SESSION_TERMINATED') {
-        setMessages((prev) => prev.filter((m) => m.id !== assistantMsgId))
-        navigate('/home')
-        return
-      }
-
-      // Jailbreak: redirect (attempts 1 & 2) — server auto-increments; update local state optimistically
-      const isJailbreakRedirect = fullContent.includes('[JAILBREAK_REDIRECT]')
-      if (isJailbreakRedirect) {
-        fullContent = fullContent.replace(/\[JAILBREAK_REDIRECT\]\s*$/, '').trimEnd()
-        setSession((prev) => ({ ...prev, jailbreak_attempts: (prev.jailbreak_attempts || 0) + 1 }))
-      }
 
       // Parse experiment tags and drop any artifact markup — done exactly once after stream ends
       const withoutArtifacts = stripArtifactMarkup(fullContent)
