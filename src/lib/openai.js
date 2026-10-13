@@ -55,6 +55,22 @@ function requestSignalWithTimeout(signal, timeoutMs = 30000) {
   }
 }
 
+// Thrown when the server reports the founder's daily AI cost cap is reached.
+// Background callers treat it like any failure and skip their step; the chat
+// turn shows err.message to the founder and saves nothing.
+export class DailyCapError extends Error {
+  constructor(body) {
+    super(body?.message || 'Daily limit reached.')
+    this.name = 'DailyCapError'
+    this.isDailyCap = true
+    this.resetsAt = body?.resets_at || null
+  }
+}
+
+export function isDailyCapError(error) {
+  return Boolean(error?.isDailyCap)
+}
+
 async function postJson(path, body, options = {}) {
   const authHeaders = await getAuthHeaders()
   const requestSignal = requestSignalWithTimeout(options.signal, options.timeoutMs ?? 30000)
@@ -80,7 +96,9 @@ async function postJson(path, body, options = {}) {
     throw new Error(await readError(response))
   }
 
-  return response.json()
+  const data = await response.json()
+  if (data?.capped === true) throw new DailyCapError(data)
+  return data
 }
 
 async function createChatStream(payload, options = {}) {
@@ -94,6 +112,13 @@ async function createChatStream(payload, options = {}) {
 
   if (!response.ok) {
     throw new Error(await readError(response))
+  }
+
+  // A capped response is plain JSON, not an NDJSON stream.
+  if ((response.headers.get('content-type') || '').includes('application/json')) {
+    const data = await response.json()
+    if (data?.capped === true) throw new DailyCapError(data)
+    throw new Error('Unexpected chat response')
   }
 
   const reader = response.body.getReader()
@@ -245,6 +270,7 @@ function wait(ms) {
 }
 
 function isTransientNetworkError(error) {
+  if (error?.isDailyCap) return false
   const message = String(error?.message || error || '').toLowerCase()
   return (
     message.includes('failed to fetch') ||

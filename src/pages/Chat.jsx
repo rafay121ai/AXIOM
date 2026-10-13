@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import MessageBubble from '../components/MessageBubble'
 import ExperimentCard from '../components/ExperimentCard'
 import { clearStoredSessionToken, getStoredSessionToken, supabase } from '../lib/supabase'
-import { openai, CHAT_MODEL, generateEmbedding, generateOpeningMessage, buildSystemPrompt, getLastPromptDiagnostics } from '../lib/openai'
+import { openai, isDailyCapError, CHAT_MODEL, generateEmbedding, generateOpeningMessage, buildSystemPrompt, getLastPromptDiagnostics } from '../lib/openai'
 import {
   routeQuestionMode,
   searchWikiForRoute,
@@ -1254,7 +1254,7 @@ export default function Chat() {
       // Build conversation history for OpenAI (last 10 msgs, exclude the placeholder).
       // Session notes carry the longer memory, so this keeps routine turns cheaper.
       const history = baseMessages
-        .filter((m) => !m.streaming && m.content && m.id !== userMsgId)
+        .filter((m) => !m.streaming && !m.capped && m.content && m.id !== userMsgId)
         .slice(-10)
         .map((m) => ({ role: m.role, content: m.content }))
 
@@ -1491,7 +1491,7 @@ export default function Chat() {
           })
 
           const assistantTurnCount = baseMessages.filter((message) =>
-            message.role === 'assistant' && !message.streaming
+            message.role === 'assistant' && !message.streaming && !message.capped
           ).length + 1
           const memoryDecision = shouldRunMemoryUpdate(text, cleanText, {
             assistantTurnCount,
@@ -1525,8 +1525,18 @@ export default function Chat() {
         name: err?.name,
         message: err?.message,
       })
-      // AbortError is intentional (pagehide or component unmount) — don't show an error
-      if (err.name === 'AbortError') {
+      if (isDailyCapError(err)) {
+        // Daily cap: show Axiom's message in the thread only. Not saved, not
+        // parsed for experiments, no memory or concept updates, no retry.
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId
+              ? { ...m, content: err.message, streaming: false, status: null, experiment: null, capped: true }
+              : m
+          )
+        )
+      } else if (err.name === 'AbortError') {
+        // AbortError is intentional (pagehide or component unmount) — don't show an error
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsgId

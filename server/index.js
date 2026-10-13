@@ -15,6 +15,7 @@ import { validateExperimentQuality } from './experimentQuality.js'
 import { estimateModelCost, USAGE_CALL_TYPES } from './modelUsage.js'
 import { createEventTracker, PRODUCT_EVENTS, toReportedOutcome, shouldEmitExperimentReported } from './productEvents.js'
 import { summarizeUsage } from './usageSummary.js'
+import { utcDayStart, dailyCapDecision } from './dailyCap.js'
 import { capExperimentMetadata } from './writeValidation.js'
 import {
   cleanAppSessionStart,
@@ -144,6 +145,28 @@ function queueModelUsageLog(payload) {
   logModelUsage(payload).catch((err) => {
     console.error('[Usage Log]', err.message || err)
   })
+}
+
+// Daily cost cap. Returns the capped body when the founder has spent the cap
+// since 00:00 UTC, else null. Fails open if the lookup errors (logged).
+async function getDailyCapResponse(userId) {
+  if (!supabaseAdmin || !userId) return null
+  try {
+    const now = new Date()
+    const { data, error } = await supabaseAdmin
+      .from('model_usage_logs')
+      .select('estimated_cost_usd')
+      .eq('user_id', userId)
+      .gte('created_at', utcDayStart(now).toISOString())
+    if (error) {
+      console.error('[Daily Cap] lookup failed', error.message)
+      return null
+    }
+    return dailyCapDecision((data || []).map((row) => row.estimated_cost_usd), now)
+  } catch (err) {
+    console.error('[Daily Cap] lookup failed', err.message || err)
+    return null
+  }
 }
 
 // Browser-supplied ids are untrusted: keep only those that belong to the
@@ -1170,6 +1193,9 @@ app.post('/api/openai/embeddings', embeddingsRateLimit, async (req, res) => {
       return res.status(400).json({ error: 'Invalid embedding request' })
     }
 
+    const capped = await getDailyCapResponse(req.user.id)
+    if (capped) return res.status(200).json(capped)
+
     const response = await openai.embeddings.create({
       model: 'text-embedding-3-small',
       input,
@@ -1231,6 +1257,9 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
   if (safePayload.stream) {
     safePayload.stream_options = { include_usage: true }
   }
+
+  const capped = await getDailyCapResponse(req.user.id)
+  if (capped) return res.status(200).json(capped)
 
   const startedAt = Date.now()
   const rawUsageContext = usage_context && typeof usage_context === 'object'
