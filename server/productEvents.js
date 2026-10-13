@@ -35,3 +35,17 @@ export function createEventTracker({ supabase, logger = console } = {}) {
     }
   }
 }
+
+// Maps an experiment row (or update) to the reported outcome used in analytics.
+export function toReportedOutcome(status, reason) {
+  if (status === 'completed') return 'done'
+  if (status === 'cancelled' && (reason === 'couldnt' || reason === 'didnt')) return reason
+  return null
+}
+
+// Corrections emit a new event; identical retries do not.
+export function shouldEmitExperimentReported(previous, next) {
+  const before = toReportedOutcome(previous?.status, previous?.outcome_reason)
+  const after = toReportedOutcome(next?.status, next?.outcome_reason)
+  return after !== null && after !== before
+}

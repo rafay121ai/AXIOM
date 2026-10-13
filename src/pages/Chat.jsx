@@ -576,6 +576,7 @@ export default function Chat() {
   const textareaRef = useRef(null)
   const sendingRef = useRef(false)        // sync guard against rapid double-submit
   const resumedThreadRef = useRef(null)   // thread_resumed fires once per thread load
+  const startedThreadRef = useRef(new Set()) // chat_started fires once per thread per page lifetime
   const initCalledRef = useRef(false)     // guard against StrictMode double-invoke
   const abortControllerRef = useRef(null) // current active stream abort handle
   const initialInputAppliedRef = useRef(false)
@@ -711,17 +712,19 @@ export default function Chat() {
     const existing = msgs || []
     const isNew = freshThread || existing.length === 0
 
+    const threadKey = threadId ?? `default:${updatedSession.id}`
+    const threadProps = {
+      session_id: updatedSession.id,
+      ...(threadId ? { thread_id: threadId } : {}),
+    }
     if (isNew) {
-      void trackProductEvent('chat_started', {
-        session_id: updatedSession.id,
-        thread_id: threadId,
-      })
-    } else if (threadId && resumedThreadRef.current !== threadId) {
-      resumedThreadRef.current = threadId
-      void trackProductEvent('thread_resumed', {
-        session_id: updatedSession.id,
-        thread_id: threadId,
-      })
+      if (!startedThreadRef.current.has(threadKey)) {
+        startedThreadRef.current.add(threadKey)
+        void trackProductEvent('chat_started', threadProps)
+      }
+    } else if (resumedThreadRef.current !== threadKey) {
+      resumedThreadRef.current = threadKey
+      void trackProductEvent('thread_resumed', threadProps)
     }
 
     // Update last_active

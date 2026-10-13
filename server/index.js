@@ -13,7 +13,7 @@ import { createClient } from '@supabase/supabase-js'
 import rateLimit from 'express-rate-limit'
 import { validateExperimentQuality } from './experimentQuality.js'
 import { estimateModelCost, USAGE_CALL_TYPES } from './modelUsage.js'
-import { createEventTracker, PRODUCT_EVENTS } from './productEvents.js'
+import { createEventTracker, PRODUCT_EVENTS, toReportedOutcome, shouldEmitExperimentReported } from './productEvents.js'
 import { summarizeUsage } from './usageSummary.js'
 import {
   cleanAppSessionStart,
@@ -1054,14 +1054,9 @@ app.post('/api/experiments/:id/status', experimentWriteRateLimit, async (req, re
 
     if (error) throw error
 
-    const reportedOutcome = payload.status === 'completed'
-      ? 'done'
-      : payload.status === 'cancelled' && ['couldnt', 'didnt'].includes(payload.outcome_reason)
-        ? payload.outcome_reason
-        : null
+    const reportedOutcome = toReportedOutcome(data.status, data.outcome_reason)
 
-    // Corrections emit a new event; identical retries do not.
-    if (reportedOutcome && (existing.status !== payload.status || (existing.outcome_reason ?? null) !== (payload.outcome_reason ?? null))) {
+    if (shouldEmitExperimentReported(existing, data)) {
       void trackEvent(req.user.id, 'experiment_reported', {
         experiment_id: data.id,
         session_id: data.session_id,
