@@ -157,8 +157,14 @@ Rules for this branch:
 
 ## Stage 3: all 10 books
 
-- [ ] Repeat the Stage 2 process for the remaining 9 books.
-- [ ] Report counts per book and flag any book where extraction looks broken.
+- [x] Extracted the remaining nine books locally with PyMuPDF and completed cached `gpt-4.1-mini` chapter boundary passes. All ten have draft `chunks.jsonl` exports; no database/Supabase/ingestion/cost-tracking operations.
+- [x] Added `scripts/knowledge_pilot_stage3.py`; capped each API attempt at 40 seconds without retries, preserved caches, backtracked omitted review IDs to individual requests, and discarded invalid boundary IDs without losing source paragraphs.
+- [x] Corrected observed extraction failures: mixed-font emphasis misclassified as headings, chapter-title substring deletion, drop-cap placement, table/choice labels, footnote markers, and negative scientific exponents. Source limitations remain documented in ignored QA files and `knowledge_pilot/ROOT_ISSUES.md`.
+- [x] Applied content-reviewed short-chunk merges to Everything Store, 7 Powers, Lean Startup, Never Split, Thinking in Bets, and selected observed failures in other books. Everything Store is now 309 chunks / 12 under 120 words. Manual decisions and pre-merge backups remain under `knowledge_pilot/` for reproduction.
+- [x] Wrote per-book counts, word distributions, suspected size-only boundaries, under-120 counts, oversized ranges and incomplete audits in `knowledge_pilot/STAGE3.md`. Requested full samples are in `stage3_review_samples.md` and `.jsonl`; these are explicitly draft, not approved final chunks.
+- [x] API credits exhausted during independent audits. Replayed completed chapter requests locally; conservatively merged short passages with uncached reviews and explicitly marked uncached boundary audits pending. Returned-usage Stage 3 cost estimate: $4.104255, including discarded attempts; not a provider invoice. No further API calls, enrichment or embeddings.
+- [x] Checkpoint verification: 8 Stage 3 tests plus 7 Stage 2 tests pass; local structural checks pass for all ten books. Draft total: 4,027 chunks, 1,680 pending boundary audits, 77 oversized chunks. These counts are diagnostic, not a Stage 3 approval.
+- [ ] Finish Stage 3 semantic validation: pending boundary audits, model false positives for self-contained short chunks, and chunks over 700 words remain unresolved. Passing structural coverage/metadata checks is not a semantic-quality pass. Root causes and follow-up are documented; do not start Stage 4.
 
 ## Stage 4: enrich
 
