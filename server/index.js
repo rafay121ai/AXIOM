@@ -15,7 +15,7 @@ import { validateExperimentQuality } from './experimentQuality.js'
 import { estimateModelCost, USAGE_CALL_TYPES } from './modelUsage.js'
 import { createEventTracker, PRODUCT_EVENTS, toReportedOutcome, shouldEmitExperimentReported } from './productEvents.js'
 import { summarizeUsage } from './usageSummary.js'
-import { utcDayStart, dailyCapDecision } from './dailyCap.js'
+import { resolveDailyCap, sumChargesPaged, CHAT_MAX_COMPLETION_TOKENS } from './dailyCap.js'
 import { capExperimentMetadata } from './writeValidation.js'
 import {
   cleanAppSessionStart,
@@ -149,24 +149,20 @@ function queueModelUsageLog(payload) {
 
 // Daily cost cap. Returns the capped body when the founder has spent the cap
 // since 00:00 UTC, else null. Fails open if the lookup errors (logged).
-async function getDailyCapResponse(userId) {
-  if (!supabaseAdmin || !userId) return null
-  try {
-    const now = new Date()
+function getDailyCapResponse(userId) {
+  if (!supabaseAdmin) return Promise.resolve(null)
+  return resolveDailyCap(userId, (id, since) => sumChargesPaged(async (from, to) => {
     const { data, error } = await supabaseAdmin
       .from('model_usage_logs')
-      .select('estimated_cost_usd')
-      .eq('user_id', userId)
-      .gte('created_at', utcDayStart(now).toISOString())
-    if (error) {
-      console.error('[Daily Cap] lookup failed', error.message)
-      return null
-    }
-    return dailyCapDecision((data || []).map((row) => row.estimated_cost_usd), now)
-  } catch (err) {
-    console.error('[Daily Cap] lookup failed', err.message || err)
-    return null
-  }
+      .select('estimated_cost_usd, model, error')
+      .eq('user_id', id)
+      .gte('created_at', since)
+      .order('created_at')
+      .order('id')
+      .range(from, to)
+    if (error) throw new Error(error.message)
+    return data
+  }))
 }
 
 // Browser-supplied ids are untrusted: keep only those that belong to the
@@ -1251,7 +1247,7 @@ app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
     model,
     messages,
     stream: stream === true,
-    max_completion_tokens: Math.min(Number(max_completion_tokens) || 1000, 4000),
+    max_completion_tokens: Math.min(Number(max_completion_tokens) || 1000, CHAT_MAX_COMPLETION_TOKENS),
     ...(response_format ? { response_format: { type: 'json_object' } } : {}),
   }
   if (safePayload.stream) {
