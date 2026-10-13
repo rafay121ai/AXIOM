@@ -180,3 +180,16 @@ test('resolveDailyCap returns capped body before any OpenAI call, null under cap
   assert.equal(await resolveDailyCap('u1', async () => { throw new Error('db') }, now, () => {}), null)
   assert.equal(await resolveDailyCap(null, async () => 5, now), null)
 })
+
+test('lookup failure fails open and warns with the founder id', async () => {
+  const calls = []
+  const body = await resolveDailyCap('founder-42', async () => { throw new Error('db down') }, new Date(), (...args) => calls.push(args))
+  assert.equal(body, null)
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0][0], '[DailyCap] lookup failed, failing open')
+  assert.deepEqual(calls[0][1], { user_id: 'founder-42', error: 'db down' })
+})
+
+test('cap message is the exact owner copy', () => {
+  assert.equal(DAILY_CAP_MESSAGE, "You've hit today's limit. Come back after midnight UTC to keep going.")
+})

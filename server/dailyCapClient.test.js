@@ -15,13 +15,13 @@ test('isCappedBody only for capped:true', () => {
 test('DailyCapError from a server body uses local reset time', () => {
   const err = new DailyCapError(body)
   const time = new Date(body.resets_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
-  assert.equal(err.message, `Today's limit is reached. Your thread is saved. Come back after ${time} and we pick up from here.`)
+  assert.equal(err.message, `You've hit today's limit. Come back after ${time} to keep going.`)
   assert.equal(isDailyCapError(err), true)
   assert.equal(err.resetsAt, body.resets_at)
 })
 
 test('local message formats a known instant in en-US', () => {
-  assert.match(localizeCapMessage(body.message, '2026-10-14T00:00:00.000Z', 'en-US'), /Come back after \d{1,2}:\d{2}\s?(AM|PM) and we pick up/)
+  assert.match(localizeCapMessage(body.message, '2026-10-14T00:00:00.000Z', 'en-US'), /^You've hit today's limit\. Come back after \d{1,2}:\d{2}\s?(AM|PM) to keep going\.$/)
 })
 
 test('missing or invalid resetsAt keeps the server string', () => {

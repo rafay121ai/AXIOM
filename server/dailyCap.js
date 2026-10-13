@@ -15,8 +15,9 @@ export const CHARGED_ERROR_MARKERS = Object.freeze([CLIENT_ABORTED_MARKER, STREA
 export const CAP_PAGE_SIZE = 1000
 
 // Single place to change the copy shown to a founder who hit the cap.
+// The client swaps "midnight UTC" for the founder's local reset time.
 export const DAILY_CAP_MESSAGE =
-  "Today's limit is reached. Your thread is saved. Come back after midnight UTC and we pick up from here."
+  "You've hit today's limit. Come back after midnight UTC to keep going."
 
 export function utcDayStart(now = new Date()) {
   const d = new Date(now)
@@ -105,13 +106,13 @@ export async function sumChargesPaged(fetchPage, cap = DAILY_COST_CAP_USD, pageS
 
 // lookup(userId, sinceIso) -> total charge. Returns the capped body or null.
 // Fails open if the lookup throws (pending owner confirmation).
-export async function resolveDailyCap(userId, lookup, now = new Date(), log = console.error) {
+export async function resolveDailyCap(userId, lookup, now = new Date(), log = console.warn) {
   if (!userId) return null
   try {
     const total = await lookup(userId, utcDayStart(now).toISOString())
     return isOverDailyCap([total]) ? buildCappedResponse(now) : null
   } catch (err) {
-    log('[Daily Cap] lookup failed', err?.message || err)
+    log('[DailyCap] lookup failed, failing open', { user_id: userId, error: err?.message || String(err) })
     return null
   }
 }
