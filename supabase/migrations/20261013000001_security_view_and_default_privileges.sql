@@ -1,6 +1,8 @@
 -- Security hardening: user_conversations view, default privileges, model_usage_logs writes.
 --
--- Checked against a live schema dump on 2026-10-13: no conflicts. Push order: see tasks/todo.md.
+-- Sections A-B3 checked against a live schema dump on 2026-10-13: no conflicts. Section B4 (table grant
+-- tightening) checked against the baseline only; re-check against a fresh live dump before push.
+-- Push order: see tasks/todo.md.
 --
 -- Idempotent and non-destructive: no DROP of tables, views or columns, no data
 -- changes. Only privileges, one view option and one RLS policy change.

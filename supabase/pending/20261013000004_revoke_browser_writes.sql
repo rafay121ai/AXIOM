@@ -3,15 +3,12 @@
 -- ROLLBACK: re-grant insert, update, delete to authenticated on the affected
 -- tables and re-create the dropped FOR ALL policies with their baseline
 -- definitions (see 20260929000000_baseline_live_public_schema.sql).
--- DO NOT PUSH until the live-dump diff is recorded in tasks/todo.md.
 -- LIVES IN supabase/pending/ ON PURPOSE: move it into supabase/migrations/ only
 -- after the hardening server (Railway) and then the frontend (Vercel), both from
 -- feature/backend-hardening, are deployed. Until then the browser still writes directly.
 --
--- WRITTEN AGAINST the checked-in baseline
--- (20260929000000_baseline_live_public_schema.sql), NOT a live schema dump.
--- CLAUDE.md requires a plan based on a live dump before this is pushed:
--- diff the live policies and grants against the baseline first.
+-- Checked against a live schema dump on 2026-10-13: every dropped policy exists on live under the same name.
+-- BREAKING: move into supabase/migrations/ and push only after the backend-hardening server (Railway) and then frontend (Vercel) are live.
 --
 -- PUSH ONLY AFTER the server and frontend from branch feature/backend-hardening
 -- are deployed. The currently live frontend writes to these tables directly

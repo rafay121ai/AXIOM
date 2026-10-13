@@ -100,6 +100,7 @@ export async function sumChargesPaged(fetchPage, cap = DAILY_COST_CAP_USD, pageS
     if (total >= cap || rows.length < pageSize) return total
     const last = rows[rows.length - 1]
     if (last?.created_at == null || last?.id == null) throw new Error('cap page rows need created_at and id')
+    if (cursor && cursor.created_at === last.created_at && cursor.id === last.id) throw new Error('cap paging did not advance')
     cursor = { created_at: last.created_at, id: last.id }
   }
 }

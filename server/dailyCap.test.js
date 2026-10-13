@@ -193,3 +193,8 @@ test('lookup failure fails open and warns with the founder id', async () => {
 test('cap message is the exact owner copy', () => {
   assert.equal(DAILY_CAP_MESSAGE, "You've hit today's limit. Come back after midnight UTC to keep going.")
 })
+
+test('sumChargesPaged throws when the cursor does not advance', async () => {
+  const page = [{ id: 'a', created_at: 't', estimated_cost_usd: 0.001 }, { id: 'b', created_at: 't', estimated_cost_usd: 0.001 }]
+  await assert.rejects(() => sumChargesPaged(async () => page, 100, 2), /cap paging did not advance/)
+})
