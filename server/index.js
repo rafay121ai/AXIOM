@@ -14,6 +14,7 @@ import rateLimit from 'express-rate-limit'
 import { validateExperimentQuality } from './experimentQuality.js'
 import { estimateModelCost, USAGE_CALL_TYPES } from './modelUsage.js'
 import { createEventTracker, PRODUCT_EVENTS } from './productEvents.js'
+import { summarizeUsage } from './usageSummary.js'
 
 const app = express()
 const port = process.env.PORT || 3001
@@ -254,6 +255,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 const eventsRateLimit = rateLimit({
   windowMs: 60 * 1000,
   max: 120,
+  keyGenerator: (req) => req.user.id,
   message: { error: 'Too many requests, please slow down.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -273,29 +275,42 @@ async function sanitizeEventProperties(userId, event, raw) {
   if (sessionId !== undefined || threadId !== undefined || messageId !== undefined) {
     let sessionOk = false
     if (typeof sessionId === 'string' && UUID_PATTERN.test(sessionId) && supabaseAdmin) {
-      const { data } = await supabaseAdmin
+      const { data, error } = await supabaseAdmin
         .from('sessions')
         .select('user_id')
         .eq('id', sessionId)
         .maybeSingle()
-      sessionOk = data?.user_id === userId
+      if (error) console.error('[Events] session lookup failed', { event, sessionId, error })
+      sessionOk = !error && data?.user_id === userId
     }
     if (!sessionOk) {
       delete clean.session_id
       delete clean.thread_id
       delete clean.message_id
     } else {
-      if (typeof threadId !== 'string' || !UUID_PATTERN.test(threadId)) delete clean.thread_id
+      if (threadId !== undefined) {
+        const { data, error } = typeof threadId === 'string' && UUID_PATTERN.test(threadId)
+          ? await supabaseAdmin
+            .from('conversation_threads')
+            .select('id')
+            .eq('id', threadId)
+            .eq('session_id', sessionId)
+            .maybeSingle()
+          : { data: null, error: null }
+        if (error) console.error('[Events] thread lookup failed', { event, threadId, error })
+        if (error || !data) delete clean.thread_id
+      }
       if (messageId !== undefined) {
-        const { data } = typeof messageId === 'string' && UUID_PATTERN.test(messageId)
+        const { data, error } = typeof messageId === 'string' && UUID_PATTERN.test(messageId)
           ? await supabaseAdmin
             .from('messages')
             .select('id')
             .eq('id', messageId)
             .eq('session_id', sessionId)
             .maybeSingle()
-          : { data: null }
-        if (!data) delete clean.message_id
+          : { data: null, error: null }
+        if (error) console.error('[Events] message lookup failed', { event, messageId, error })
+        if (error || !data) delete clean.message_id
       }
     }
   }
@@ -729,47 +744,7 @@ app.get('/api/admin/diagnostics', async (req, res) => {
     ])
 
     const usage = usageRows.error ? [] : (usageRows.data || [])
-    const usageSummary = usage.reduce((summary, row) => {
-      const key = row.call_type || 'unknown'
-      summary.by_call_type[key] = summary.by_call_type[key] || {
-        count: 0,
-        total_tokens: 0,
-        estimated_cost_usd: 0,
-        errors: 0,
-        unpriced_calls: 0,
-        avg_latency_ms: 0,
-      }
-      const bucket = summary.by_call_type[key]
-      bucket.count += 1
-      bucket.total_tokens += Number(row.total_tokens || 0)
-      if (row.estimated_cost_usd != null) bucket.estimated_cost_usd += Number(row.estimated_cost_usd)
-      bucket.errors += row.error ? 1 : 0
-      bucket.avg_latency_ms += Number(row.latency_ms || 0)
-      if (row.estimated_cost_usd == null) {
-        summary.unpriced_calls += 1
-        bucket.unpriced_calls += 1
-      } else {
-        summary.total_cost_usd += Number(row.estimated_cost_usd)
-      }
-      summary.total_tokens += Number(row.total_tokens || 0)
-      summary.errors += row.error ? 1 : 0
-      return summary
-    }, {
-      total_calls: usage.length,
-      total_tokens: 0,
-      total_cost_usd: 0,
-      unpriced_calls: 0,
-      cost_is_partial: false,
-      errors: 0,
-      by_call_type: {},
-    })
-
-    for (const bucket of Object.values(usageSummary.by_call_type)) {
-      bucket.avg_latency_ms = bucket.count ? Math.round(bucket.avg_latency_ms / bucket.count) : 0
-      bucket.estimated_cost_usd = Number(bucket.estimated_cost_usd.toFixed(6))
-    }
-    usageSummary.total_cost_usd = Number(usageSummary.total_cost_usd.toFixed(6))
-    usageSummary.cost_is_partial = usageSummary.unpriced_calls > 0
+    const usageSummary = summarizeUsage(usage)
 
     return res.json({
       window_hours: 24,
@@ -942,7 +917,7 @@ app.post('/api/experiments/:id/status', experimentWriteRateLimit, async (req, re
   try {
     const { data: existing, error: existingError } = await supabaseAdmin
       .from('experiments')
-      .select('id,session_id,user_id')
+      .select('id,session_id,user_id,status')
       .eq('id', experimentId)
       .single()
 
@@ -982,7 +957,7 @@ app.post('/api/experiments/:id/status', experimentWriteRateLimit, async (req, re
         ? payload.outcome_reason
         : null
 
-    if (reportedOutcome) {
+    if (reportedOutcome && existing.status !== payload.status) {
       void trackEvent(req.user.id, 'experiment_reported', {
         experiment_id: data.id,
         session_id: data.session_id,
