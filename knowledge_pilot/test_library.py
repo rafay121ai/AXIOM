@@ -835,3 +835,76 @@ class GluedAndDiagramTests(unittest.TestCase):
 
     def test_lesson_list_lines_are_list_items(self):
         self.assertTrue(lt.is_list_item("Lesson #2 Why Teach Financial Literacy?"))
+
+
+class DialogueSetupAndLabelRules(unittest.TestCase):
+    def P(self, text, chapter="C1", section=None, **kw):
+        return le.Para(text, 1, 1, chapter, section, **kw)
+
+    def chunk(self, cid, text, **kw):
+        return {"id": cid, "text": text, "chapter": kw.pop("chapter", "C1"), **kw}
+
+    # 1. question stays with its answer
+    def test_question_glued_to_answer_but_not_across_scene_break(self):
+        q = self.P("My dad put down the evening paper. “Why do you want to get rich, son?”")
+        a = self.P("“Because today Jimmy's mom drove up in a new Cadillac.”")
+        self.assertTrue(lc._glued([q, a], 0, 1))
+        self.assertFalse(lc._glued([q, self.P("Later.", scene_break=True)], 0, 1))
+
+    def test_qa_flags_chunk_ending_on_bare_question(self):
+        body = filler(300, "q")
+        res = qa.qa_chunks([self.chunk("a", body + "\n\n“Why do you want to get rich, son?”"),
+                            self.chunk("b", "“Because Jimmy's mom drove up in a Cadillac.” " + body)])
+        self.assertEqual(res["heuristic_counts"]["question_answer_split"], 1)
+
+    # 2. never open inside a quotation
+    def test_mid_quote_detection_and_glue(self):
+        self.assertTrue(lt.opens_mid_quote("“I will tell you why", "“And that is the end of it.”"))
+        self.assertTrue(lt.opens_mid_quote(None, "and then he left.” She smiled."))
+        self.assertFalse(lt.opens_mid_quote("Plain text.", "“Hello,” she said."))
+        self.assertTrue(lc._glued([self.P("“I will tell you why"), self.P("“And that is the end of it.”")], 0, 1))
+        res = qa.qa_chunks([self.chunk("a", filler(300, "m") + "\n\n“I will tell you why"),
+                            self.chunk("b", "“And that is the end of it.” " + filler(300, "n"))])
+        self.assertEqual(res["heuristic_counts"]["opens_mid_quote"], 1)
+
+    # 3. setup stays with payoff
+    def test_setup_without_payoff(self):
+        self.assertTrue(lt.ends_with_setup("Every empire in history rested on three powers."))
+        self.assertTrue(lt.ends_with_setup("There are two reasons for this."))
+        self.assertFalse(lt.ends_with_setup("He went to the market and sold the cow."))
+        self.assertFalse(lt.ends_with_setup("Why did these three powers collapse?"))
+        self.assertTrue(lc._glued([self.P("There are two reasons for this."), self.P("First, the money ran out.")], 0, 1))
+        res = qa.qa_chunks([self.chunk("a", filler(300, "s") + "\n\nThere are two reasons for this."),
+                            self.chunk("b", "First, the money ran out. " + filler(300, "t"))])
+        self.assertEqual(res["heuristic_counts"]["setup_without_payoff"], 1)
+
+    # 4. section only repeats the chapter -> null
+    def test_section_restating_chapter_is_null(self):
+        self.assertTrue(lt.section_restates_chapter("CHAPTER TWO", "CHAPTER TWO"))
+        self.assertTrue(lt.section_restates_chapter("Lesson One: The Rich Don't Work", "Chapter Two: Lesson One: The Rich Don't Work"))
+        self.assertFalse(lt.section_restates_chapter("INVEST FIRST IN EDUCATION", "Chapter Nine: Overcoming Obstacles"))
+        paras = [self.P("Para one. " * 100, chapter="CHAPTER TWO", section="CHAPTER TWO")]
+        chunks, _, _ = lc.build_chunks(paras, {"source_id": "t"}, lc.BoundaryProvider(Path(tempfile.mkdtemp()), offline=True))
+        self.assertIsNone(chunks[0]["section"])
+        res = qa.qa_chunks([self.chunk("a", filler(300, "u"), chapter="CHAPTER TWO", section="Chapter Two")])
+        self.assertEqual(res["heuristic_counts"]["section_restates_chapter"], 1)
+
+    # 5. chapter field carries the title
+    def test_chapter_title_found_under_bare_label(self):
+        def line(text, y, size, bold=False):
+            return le.Line(text=text, x0=72, y0=y, x1=300, y1=y + size, size=size, bold=bold, italic=False, block=0)
+        blocks = [[line("CHAPTER TWO", 60, 20, True)], [line("Lesson One: The Rich Don't Work For Money", 100, 16, True)],
+                  [line("“Dad, Can You Tell Me How to Get Rich?” My dad put down the paper.", 140, 12)]]
+        self.assertEqual(le.find_chapter_title(blocks, "CHAPTER TWO", 12), "Lesson One: The Rich Don't Work For Money")
+        prose_only = [[line("CHAPTER TWO", 60, 20, True)], [line("My dad put down the evening paper and sighed.", 100, 12)]]
+        self.assertIsNone(le.find_chapter_title(prose_only, "CHAPTER TWO", 12))
+
+    def test_bare_chapter_label_flagged_unless_book_has_no_titles(self):
+        body = filler(300, "v")
+        bare = qa.qa_chunks([self.chunk("a", body, chapter="CHAPTER THREE")])
+        self.assertEqual(bare["heuristic_counts"]["chapter_title_missing"], 1)
+        ok = qa.qa_chunks([self.chunk("a", body, chapter="CHAPTER THREE", flags=["chapter_untitled"]),
+                           self.chunk("b", body, chapter="Chapter Four: Money")])
+        self.assertEqual(ok["heuristic_counts"]["chapter_title_missing"], 0)
+        self.assertTrue(lt.is_bare_chapter_label("CHAPTER THREE"))
+        self.assertFalse(lt.is_bare_chapter_label("Chapter Three: The Richest Businessmen"))

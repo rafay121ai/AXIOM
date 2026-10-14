@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from library_text import (  # noqa: E402
     DATELINE_RE, FOOTNOTE_MARK_RE, NOTE_DIGIT_RE, SUPERSCRIPT_DIGITS, dictionary, ends_with_lead_in,
+    ends_with_question, ends_with_setup, is_bare_chapter_label, opens_mid_quote, section_restates_chapter,
     is_attribution, is_figure_caption, is_list_item, is_sentence_complete, opens_dependent, word_count,
 )
 
@@ -37,6 +38,9 @@ HEURISTICS = (
     "continuation_opener", "no_terminal_punctuation", "lead_in_at_end", "under_150_words",
     "over_700_unflagged", "lost_hyphen", "footnote_marker", "figure_caption",
     "epigraph_at_chapter_end", "runin_heading_or_dateline", "question_options_split",
+    # Added with the dialogue / setup / label rules.
+    "question_answer_split", "opens_mid_quote", "setup_without_payoff", "section_restates_chapter",
+    "chapter_title_missing",
 )
 
 HYPHEN_FORM_RE = re.compile(r"[A-Za-z][A-Za-z]*(?:-[A-Za-z][A-Za-z]*)+")
@@ -216,6 +220,20 @@ def qa_chunks(chunks: list[dict[str, Any]]) -> dict[str, Any]:
             hit("epigraph_at_chapter_end", cid)
         if RUNIN_RE.match(text) or (paras and DATELINE_RE.match(paras[0].strip()) and len(paras[0].split()) <= 8):
             hit("runin_heading_or_dateline", cid)
+        same_chapter_next = nxt is not None and nxt.get("chapter") == c.get("chapter")
+        if same_chapter_next and ends_with_question(text):
+            next_paras = _paragraphs(nxt)
+            reply = bool(next_paras) and next_paras[0].lstrip()[:1] in ("“", '"')
+            if word_count(paras[-1]) <= 45 or reply:   # a bare question, or a spoken reply follows
+                hit("question_answer_split", cid)
+        if prev is not None and not chapter_start and paras and opens_mid_quote(_paragraphs(prev)[-1] if _paragraphs(prev) else "", paras[0]):
+            hit("opens_mid_quote", cid)
+        if same_chapter_next and ends_with_setup(text):
+            hit("setup_without_payoff", cid)
+        if c.get("section") and section_restates_chapter(c.get("section"), c.get("chapter")):
+            hit("section_restates_chapter", cid)
+        if is_bare_chapter_label(c.get("chapter")) and "chapter_untitled" not in flags:
+            hit("chapter_title_missing", cid)
         if nxt is not None and text.rstrip().endswith("?") and is_list_item(_paragraphs(nxt)[0] if _paragraphs(nxt) else ""):
             hit("question_options_split", cid)
     sizes = [_wc(c) for c in chunks]

@@ -28,7 +28,8 @@ from typing import Any, Callable
 
 from library_extract import Para
 from library_text import (
-    OUTCOME_RE, PIPELINE_VERSION, ends_with_lead_in, is_attribution, is_heading_like, is_list_item, opens_dependent,
+    OUTCOME_RE, PIPELINE_VERSION, ends_with_lead_in, ends_with_question, ends_with_setup, has_unclosed_quote, is_attribution, is_bare_chapter_label,
+    opens_mid_quote, section_restates_chapter, is_heading_like, is_list_item, opens_dependent,
     word_count,
 )
 
@@ -109,6 +110,12 @@ def _glued(paras: list[Para], a: int, b: int) -> bool:
         return True
     if ends_with_lead_in(pa.text):
         return True
+    if ends_with_setup(pa.text) and pa.chapter == pb.chapter:
+        return True   # "there are three powers." - the payoff is the next paragraph
+    if ends_with_question(pa.text) and pa.chapter == pb.chapter:
+        return True   # a question stays with its answer
+    if opens_mid_quote(pa.text, pb.text):
+        return True   # a speech or quotation continues into the next paragraph
     if is_attribution(pb.text) and not pa.text.rstrip().startswith(("—", "–", "-")) and pa.words <= 120:
         return True   # a quotation stays with the line that credits it
     if is_attribution(pa.text) and pb.words > 0:
@@ -548,12 +555,16 @@ def build_chunks(paras: list[Para], meta: dict[str, Any], provider: BoundaryProv
         body = paras[u.s:u.e]
         text = "\n\n".join(p.text for p in body)
         wc = word_count(text)
-        flags = sorted(u.flags | _size_flags(u, wc, len(body)))
+        flags = set(u.flags | _size_flags(u, wc, len(body)))
+        if getattr(body[0], "chapter_untitled", False) and is_bare_chapter_label(chapter_title):
+            flags.add("chapter_untitled")   # the book prints no chapter title; the bare label is all there is
+        flags = sorted(flags)
         pages = [p.page_start for p in body if p.page_start is not None], [p.page_end for p in body if p.page_end is not None]
         cid = f"{meta['source_id']}_{n:04d}"
         chunks.append({
             "id": cid, "source_id": meta["source_id"], "book": meta.get("book"), "author": meta.get("author"),
-            "pillar": meta.get("pillar"), "chapter": chapter_title, "section": body[0].section,
+            "pillar": meta.get("pillar"), "chapter": chapter_title,
+            "section": None if section_restates_chapter(body[0].section, chapter_title) else body[0].section,
             "page_start": min(pages[0]) if pages[0] else None, "page_end": max(pages[1]) if pages[1] else None,
             "prev_id": None, "next_id": None, "continues": bool(u.continues), "word_count": wc,
             "flags": flags, "text": text, "pipeline_version": PIPELINE_VERSION})

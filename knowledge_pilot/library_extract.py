@@ -22,7 +22,7 @@ from typing import Any
 
 from library_text import (
     clean_inline, dictionary, is_attribution, is_dateline, is_figure_caption, is_photo_credit,
-    looks_like_index, is_heading_like, repair_glued_words, strip_ascii_diagram, is_scene_break, split_runin_heading, is_sentence_complete, join_lines, strip_footnote_markers, word_count,
+    looks_like_index, is_heading_like, repair_glued_words, is_bare_chapter_label, section_restates_chapter, strip_ascii_diagram, is_scene_break, split_runin_heading, is_sentence_complete, join_lines, strip_footnote_markers, word_count,
 )
 
 try:  # PyMuPDF is only needed for PDFs; text sources and tests work without it.
@@ -45,6 +45,7 @@ class Para:
     kind: str = "body"          # body | epigraph
     scene_break: bool = False   # a scene break (* * *) precedes this paragraph
     italic: bool = False
+    chapter_untitled: bool = False   # the book prints no title for this chapter (only a number)
 
     @property
     def words(self) -> int:
@@ -596,11 +597,94 @@ def extract_pdf(path: Path, title: str | None = None, source_id: str = "") -> tu
     paras = _repair_glued(paras, report)
     if detection == "fixed":
         paras = _assign_fixed_sections(paras)
+    paras = _apply_chapter_titles(doc_path=path, plans=plans, paras=paras, body=body, report=report)
     report["chapters"] = [{"title": p.title, "start_page": p.start_page, "end_page": p.end_page,
                            "sections_in_outline": len(p.sections)} for p in plans] if detection != "fixed" else []
     report["meta_author"] = meta_author
     report["removed"] = dict(report["removed"])
     return paras, report
+
+
+def find_chapter_title(blocks: list[list[Line]], label: str, body: float) -> str | None:
+    """The title printed under a bare chapter label ("CHAPTER TWO" / "Lesson One: The Rich Don't Work For Money")."""
+    target = norm(label)
+    for bi, block in enumerate(blocks):
+        lines = [l.text.strip() for l in block]
+        if norm(lines[0]) != target:
+            continue
+        rest = block[1:]
+        if not rest and bi + 1 < len(blocks):
+            rest = blocks[bi + 1]
+        if not rest:
+            return None
+        first = rest[0]
+        parts = [first.text.strip()]
+        for nxt in rest[1:3]:   # a title may wrap onto a second line of the same size
+            joined = " ".join(parts)
+            dangling = joined.rstrip().endswith((":", "-", "—")) or \
+                joined.split()[-1].lower().strip(",") in {"of", "the", "and", "a", "an", "in", "to", "for", "on", "or",
+                                                          "at", "by", "with", "from", "as", "is", "that"}
+            if abs(nxt.size - first.size) < 0.4 and nxt.bold == first.bold and word_count(joined) < 12 and dangling:
+                parts.append(nxt.text.strip())
+            else:
+                break
+        title = re.sub(r":(?=\S)", ": ", clean_inline(" ".join(parts)))
+        n = word_count(title)
+        if not title or n > 14 or title[:1].islower() or ROMAN_OR_DIGIT_RE.match(title):
+            return None
+        if re.search(r"[.!,;]$", title) or is_dateline(title) or is_figure_caption(title):
+            return None
+        full = max((l.x1 for l in rest), default=first.x1) - min((l.x0 for l in rest), default=first.x0)
+        short_line = len(rest) > 1 and (first.x1 - first.x0) < 0.75 * full and word_count(title) <= 10
+        styled = short_line or first.size >= body * 1.05 or first.bold or title == title.upper() \
+            or all(w[0].isupper() or w.lower() in {"of", "the", "and", "a", "an", "in", "to", "for", "on", "or", "is",
+                                                    "it", "at", "by", "with", "from", "don't", "do", "not", "your", "my"}
+                   or not w[0].isalpha() for w in title.split())
+        return title if styled else None
+    return None
+
+
+def _apply_chapter_titles(doc_path: Path, plans: list[ChapterPlan], paras: list[Para], body: float,
+                          report: dict) -> list[Para]:
+    """Carry the printed chapter title in the chapter field ("Chapter Two: <Title>") and drop section
+    labels that only repeat the chapter. A book that prints only numbers keeps the bare label, marked untitled."""
+    bare = [p for p in plans if is_bare_chapter_label(p.title)]
+    renames: dict[str, str] = {}
+    untitled: set[str] = set()
+    if bare and fitz is not None:
+        doc = fitz.open(doc_path)
+        try:
+            for plan in bare:
+                title = None
+                for pn in range(plan.start_page, min(plan.start_page + 3, len(doc) + 1)):   # outlines are often a page early
+                    title = find_chapter_title(read_page_blocks(doc[pn - 1]), plan.title, body)
+                    if title:
+                        break
+                if title and norm(title) != norm(plan.title):
+                    label = plan.title.title() if plan.title.isupper() else plan.title
+                    renames[plan.title] = f"{label}: {title}"
+                else:
+                    untitled.add(plan.title)
+        finally:
+            doc.close()
+    for p in paras:
+        old = p.chapter
+        if p.section and (section_restates_chapter(p.section, old)
+                          or section_restates_chapter(p.section, renames.get(old))):
+            p.section = None
+        if old in renames:
+            p.chapter = renames[old]
+        elif old in untitled:
+            p.chapter_untitled = True
+    # A section left over that repeats the new chapter title.
+    for p in paras:
+        if p.section and section_restates_chapter(p.section, p.chapter):
+            p.section = None
+    if renames:
+        report["chapter_titles_attached"] = renames
+    if untitled:
+        report["chapters_without_title"] = sorted(untitled)
+    return paras
 
 
 def _repair_glued(paras: list[Para], report: dict) -> list[Para]:

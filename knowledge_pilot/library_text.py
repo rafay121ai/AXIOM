@@ -417,3 +417,107 @@ def strip_ascii_diagram(text: str) -> tuple[str, str]:
     if word_count(cleaned) <= 25 and not SENTENCE_END_RE.search(cleaned):
         return "", text
     return cleaned, " ".join(art)
+
+
+# ----------------------------------------------------------------------------
+# Dialogue, setups, chapter and section labels
+# ----------------------------------------------------------------------------
+
+_CLOSERS = "\"”’')]*"
+
+
+def ends_with_question(text: str) -> bool:
+    """The passage's last sentence is a question ("...son?" or '..."why?"')."""
+    t = text.strip().rstrip(_CLOSERS).rstrip()
+    return t.endswith("?")
+
+
+_OPENING = "“‘"
+_CLOSING = "”’"
+
+
+def _curly_balance(text: str) -> int:
+    """Open double curly quotes minus closed ones (single quotes are apostrophes too often to count)."""
+    return text.count("“") - text.count("”")
+
+
+def has_unclosed_quote(text: str) -> bool:
+    """The passage ends inside a quotation (multi-paragraph speech, or a speaker cut off)."""
+    if "“" in text or "”" in text:
+        return _curly_balance(text) > 0
+    return text.count('"') % 2 == 1
+
+
+def starts_with_quote_mark(text: str) -> bool:
+    return text.lstrip()[:1] in ("“", '"')
+
+
+def opens_mid_quote(prev_text: str | None, text: str) -> bool:
+    """A passage that starts inside a quotation whose opening and speaker are in the passage before it.
+
+    Two signs: the first quote mark in the text is a CLOSING one, or the passage before ends inside a
+    quotation and this one resumes it with a fresh opening mark (the convention for long speeches).
+    """
+    t = text.lstrip()
+    first = next((ch for ch in t if ch in "“”"), None)
+    if first == "”":
+        return True
+    if prev_text and has_unclosed_quote(prev_text.strip()) and starts_with_quote_mark(t):
+        return True
+    return False
+
+
+_NUMBER_WORDS = (r"two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|several|a few|a couple of|"
+                 r"many|numerous|\d{1,2}")
+_SETUP_NOUNS = (r"reasons?|ways?|powers?|steps?|things?|lessons?|rules?|principles?|types?|kinds?|questions?|"
+                r"ideas?|factors?|elements?|points?|stages?|parts?|mistakes?|habits?|strateg(?:y|ies)|tips?|"
+                r"keys?|pillars?|laws?|options?|choices?|differences?|categories|approaches|problems?|"
+                r"benefits?|skills?|areas|forces|traits|qualities|myths?|truths?|tools?|examples?|cases|"
+                r"secrets?|lenses|models?|levers?|ingredients?|components?")
+SETUP_RE = re.compile(
+    rf"\b(?:{_NUMBER_WORDS})\s+(?:[A-Za-z’'-]+\s+){{0,3}}(?:{_SETUP_NOUNS})\b"
+    r"|\b(?:the following|as follows|here (?:are|is)|these are|those are|they are|they were|namely|"
+    r"consider these|look at these|let me explain)\b", re.I)
+
+
+def ends_with_setup(text: str) -> bool:
+    """The last sentence announces a set of things ("three powers", "two reasons", "the following")
+    and the passage stops there, so the payoff must be in the next passage."""
+    t = text.strip()
+    if not t:
+        return False
+    last_para = t.split("\n\n")[-1].strip()
+    sentences = [s for s in re.split(r"(?<=[.!?:])[\"”’)]*\s+", last_para) if s.strip()]
+    last = sentences[-1] if sentences else last_para
+    if word_count(last) > 35 or last.rstrip().endswith("?"):
+        return False
+    if not re.search(r"[.:;—–-][\"”’)]*$", last.rstrip()) and not is_sentence_complete(last):
+        return False
+    return bool(SETUP_RE.search(last))
+
+
+BARE_CHAPTER_RE = re.compile(
+    r"^\s*(?:chapter|ch\.?|part|lesson|book|section)?\s*(?:\d{1,3}|[ivxlc]{1,7}|one|two|three|four|five|six|"
+    r"seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)"
+    r"\s*[.:)-]?\s*$", re.I)
+
+
+def is_bare_chapter_label(chapter: str | None) -> bool:
+    """"CHAPTER THREE", "Chapter 12", "7" - a chapter label with no title."""
+    return bool(chapter) and bool(BARE_CHAPTER_RE.match(chapter or "")) and bool(re.search(r"\w", chapter or ""))
+
+
+def _norm_words(text: str) -> str:
+    return re.sub(r"[\W_]+", " ", (text or "").lower()).strip()
+
+
+def section_restates_chapter(section: str | None, chapter: str | None) -> bool:
+    """True when a section label only repeats the chapter (its number, its title, or both)."""
+    s, c = _norm_words(section), _norm_words(chapter)
+    if not s or not c:
+        return False
+    if s == c or f" {s} " in f" {c} ":
+        return True
+    # "Chapter Two: Lesson One: ..." chapter vs section "Lesson One: ...": the section is the title restated.
+    title = _norm_words((chapter or "").split(":", 1)[1]) if ":" in (chapter or "") else ""
+    return bool(title) and s == title
