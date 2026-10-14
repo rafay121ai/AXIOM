@@ -279,7 +279,8 @@ def should_split(prev: Item, cur: Item, geo: Geometry, para_first: Item | None =
         return sig + "+title_line"
     # A list item (it opened with a bullet or number) rarely ends in a full stop. The text after the
     # list is a new paragraph when separated by a gap/block/short line; a bare indent is a hanging wrap.
-    if para_first is not None and is_list_start(para_first.text) and sig != "indent":
+    # Only a one-line item: a numbered paragraph that runs over several lines (numbered aphorisms) is prose.
+    if para_first is not None and para_first is prev and is_list_start(para_first.text) and sig != "indent":
         return sig + "+after_list"
     # A lead-in colon followed by a list item that has a layout signal: the item is its own paragraph.
     if ends_colon(prev.text) and is_list_start(cur.text):

@@ -6,6 +6,7 @@ unit-testable and so qa_check judges chunks by the same rules that built them.
 
 from __future__ import annotations
 
+import functools
 import re
 from functools import lru_cache
 from pathlib import Path
@@ -30,6 +31,11 @@ def is_sentence_complete(text: str) -> bool:
 # Line joining (hyphen rule)
 # ----------------------------------------------------------------------------
 
+# Optional hook set by extract.py: called as hook(text_so_far, next_line) at a line-end hyphen and returns
+# True when the hyphen is only a typesetter's break (drop it). None keeps every hyphen (default behaviour).
+HYPHEN_DROP_HOOK = None
+
+
 def join_lines(lines: list[str]) -> str:
     """Join physical lines into one paragraph string.
 
@@ -50,7 +56,10 @@ def join_lines(lines: list[str]) -> str:
         if out.endswith("\xad"):
             out = out[:-1] + line
         elif re.search(r"\w[-‐‑]$", out) and not out.endswith(" -"):
-            out = out + line
+            if HYPHEN_DROP_HOOK is not None and out[-1] == "-" and HYPHEN_DROP_HOOK(out, line):
+                out = out[:-1] + line
+            else:
+                out = out + line
         elif out[-1] in DASH_CHARS:
             out = out + line
         else:
@@ -298,6 +307,7 @@ OUTCOME_RE = re.compile(
 # ----------------------------------------------------------------------------
 
 @lru_cache(maxsize=1)
+@functools.lru_cache(maxsize=1)
 def dictionary() -> frozenset[str]:
     path = Path("/usr/share/dict/words")
     if not path.exists():
