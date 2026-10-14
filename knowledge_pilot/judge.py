@@ -384,6 +384,7 @@ def main(argv: list[str] | None = None, client: Any = None) -> int:
     ap.add_argument("--golden", help="reference lessons JSONL (paragraph_ids, tier core|minor); adds recall, no API")
     ap.add_argument("--recall-only", action="store_true", help="skip judging, compute recall only")
     ap.add_argument("--state", help="library_state path (tests)")
+    ap.add_argument("--cache", help="judgment cache path (default knowledge_pilot/judge_cache.jsonl)")
     args = ap.parse_args(argv)
 
     lessons = load_jsonl(args.lessons)
@@ -393,7 +394,8 @@ def main(argv: list[str] | None = None, client: Any = None) -> int:
         if args.sample and args.sample < len(lessons):
             chosen = random.Random(args.seed).sample(lessons, args.sample)
         source_id = Path(args.lessons).resolve().parent.name or "judge"
-        judge = Judge(client or get_client(), source_id=source_id, state_path=args.state)
+        judge = Judge(client or get_client(), source_id=source_id, state_path=args.state,
+                      cache_path=args.cache)
         results = judge.judge(chosen)
         report = build_report(chosen, results, judge, source_file=str(args.lessons),
                               sample=args.sample, seed=args.seed)

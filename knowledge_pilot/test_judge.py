@@ -161,7 +161,8 @@ def test_report_shape_and_cli(env):
     lp.write_text("\n".join(json.dumps(lesson(i)) for i in range(0, 20, 2)) + "\n")
     c = FakeClient(lambda ids, n: j.BatchOut(verdicts=[passing(i, specific=1) if i == "L0" else passing(i) for i in ids]))
     out = env.tmp / "rep.json"
-    j.main(["--lessons", str(lp), "--sample", "4", "--seed", "1", "--out", str(out), "--state", str(env.sp)], client=c)
+    j.main(["--lessons", str(lp), "--sample", "4", "--seed", "1", "--out", str(out), "--state", str(env.sp),
+            "--cache", str(env.cache)], client=c)
     rep = json.loads(out.read_text())
     assert rep["lessons_judged"] == 4 and set(rep["pass_rates"]) == set(j.TESTS)
     assert rep["overall_pass_rate"] == 0.75 and rep["pass_rates"]["specific"] == 0.75
