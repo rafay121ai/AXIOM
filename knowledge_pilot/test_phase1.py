@@ -25,6 +25,7 @@ def make_cfg(tmp_path, sources, **kw):
     m.write_text(json.dumps({"sources": sources}))
     kw.setdefault("enrich_fn", lambda sid: {"failed": []})
     kw.setdefault("embed_fn", lambda sid: {})
+    kw.setdefault("merge_fn", lambda sid: {"failed": []})
     return P.Cfg(manifest=m, state_path=tmp_path / "state.json", library_root=tmp_path / "lib",
                  archive_root=tmp_path / "arch", tasks_dir=tmp_path, quiet=True, **kw)
 
@@ -205,3 +206,51 @@ def test_dry_run_estimates_no_api(tmp_path, capsys):
     cfg = make_cfg(tmp_path, [src("a", size=200), src("b", "biography", 50)])
     total = P.dry_run(cfg, P.pending_sources(cfg))
     assert total > 0 and "projected total cost" in capsys.readouterr().out
+
+
+def test_flow_is_enrich_then_merge_then_embed_then_done(tmp_path, monkeypatch):
+    order = []
+    cfg = make_cfg(tmp_path, [src("a")],
+                   enrich_fn=lambda sid: order.append("enrich") or {"failed": []},
+                   merge_fn=lambda sid: order.append("merge") or {"failed": []},
+                   embed_fn=lambda sid: order.append("embed") or {})
+    fake_pipeline(monkeypatch, cfg)
+    assert P.process_source(cfg, src("a")) == "done"
+    assert order == ["enrich", "merge", "embed"]
+    assert state.load(cfg.state_path)["sources"]["a"]["merge_done"] is True
+
+
+def test_merge_reenrichment_failure_stops_before_embedding(tmp_path, monkeypatch):
+    order = []
+    cfg = make_cfg(tmp_path, [src("a")],
+                   merge_fn=lambda sid: {"failed": ["a-3"]},
+                   embed_fn=lambda sid: order.append("embed") or {})
+    fake_pipeline(monkeypatch, cfg)
+    assert P.process_source(cfg, src("a")) == "needs_review"
+    assert order == []   # nothing embedded: the final text is not final
+
+
+def test_resume_does_not_enrich_or_merge_twice(tmp_path, monkeypatch):
+    calls = []
+    cfg = make_cfg(tmp_path, [src("a")],
+                   enrich_fn=lambda sid: calls.append("enrich") or {"failed": []},
+                   merge_fn=lambda sid: calls.append("merge") or {"failed": []},
+                   embed_fn=lambda sid: (_ for _ in ()).throw(RuntimeError("network down")))
+    fake_pipeline(monkeypatch, cfg)
+    assert P.process_source(cfg, src("a")) == "needs_review"   # embed blew up after merge
+    cfg.embed_fn = lambda sid: calls.append("embed") or {}
+    state.set_status("a", "enriched", cfg.state_path)
+    assert P.process_source(cfg, src("a"), retry=True) == "done"
+    assert calls == ["enrich", "merge", "embed"]
+
+
+def test_estimate_includes_merge_reenrichment_margin():
+    import enrich_library as E
+    chunks = [{"word_count": 300, "text": "x"}] * 40
+    with_margin = E.estimate_source_cost(chunks, ("enrich",))
+    E.MERGE_REENRICH_MARGIN, saved = 1.0, E.MERGE_REENRICH_MARGIN
+    try:
+        without = E.estimate_source_cost(chunks, ("enrich",))
+    finally:
+        E.MERGE_REENRICH_MARGIN = saved
+    assert 1.14 < with_margin / without < 1.16

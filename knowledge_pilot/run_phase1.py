@@ -2,7 +2,8 @@
 """Phase 1 driver for the real library run.
 
 Order: books, then biographies, then everything else; smallest size_kb first in each group.
-Per source: budget check -> extract -> chunk -> qa -> gate -> enrich -> embed -> done.
+Per source: budget check -> extract -> chunk -> qa -> gate -> enrich (with boundary) -> merge_pass
+(re-enrich merged chunks) -> embed (final text) -> done.
 
   python knowledge_pilot/run_phase1.py --dry-run
   python knowledge_pilot/run_phase1.py --limit 3
@@ -49,7 +50,7 @@ class Cfg:
                  tasks_dir: Path | None = None, budget: float = BUDGET_USD,
                  quiet: bool = False, enrich_fn: Callable | None = None,
                  embed_fn: Callable | None = None, legacy_root: Path | None = None,
-                 offline: bool = False):
+                 offline: bool = False, merge_fn: Callable | None = None):
         self.manifest = Path(manifest or rl.DEFAULT_MANIFEST)
         self.state_path = Path(state_path or state.DEFAULT_STATE_PATH)
         self.library_root = Path(library_root or rl.LIBRARY_ROOT)
@@ -59,6 +60,7 @@ class Cfg:
         self.quiet = quiet
         self.enrich_fn = enrich_fn
         self.embed_fn = embed_fn
+        self.merge_fn = merge_fn
         self.legacy_root = legacy_root
         self.offline = offline
 
@@ -210,13 +212,15 @@ def mark(cfg: Cfg, sid: str, status: str, note: str | None = None, **fields) -> 
 
 
 def run_enrich_embed(cfg: Cfg, entry: dict) -> str:
+    """enrich (with boundary) -> merge_pass (re-enrich merged chunks) -> embed the FINAL text -> done."""
     sid = entry["source_id"]
-    if cfg.enrich_fn is None or cfg.embed_fn is None:
-        import enrich_library as E
-        enrich_fn = cfg.enrich_fn or (lambda s: E.enrich_source(s, log=lambda *_: None))
-        embed_fn = cfg.embed_fn or (lambda s: E.embed_source(s, log=lambda *_: None))
-    else:
-        enrich_fn, embed_fn = cfg.enrich_fn, cfg.embed_fn
+    import enrich_library as E
+    enrich_fn = cfg.enrich_fn or (lambda s: E.enrich_source(s, log=lambda *_: None))
+    embed_fn = cfg.embed_fn or (lambda s: E.embed_source(s, log=lambda *_: None))
+    merge_fn = cfg.merge_fn
+    if merge_fn is None:
+        import merge_library
+        merge_fn = lambda s: merge_library.merge_pass(s, log=lambda *_: None)  # noqa: E731
     est = estimate_entry(entry, cfg)["total"]
     state.refuse_to_start(est, cfg.state_path)
     if not state.at_least(sid, "enriched", cfg.state_path):
@@ -226,6 +230,14 @@ def run_enrich_embed(cfg: Cfg, entry: dict) -> str:
                  f"{res['failed'][:5]}")
             return "needs_review"
         mark(cfg, sid, "enriched")
+    if not state.load(cfg.state_path)["sources"].get(sid, {}).get("merge_done") \
+            and not state.at_least(sid, "embedded", cfg.state_path):
+        res = merge_fn(sid) or {}
+        if res.get("failed"):
+            mark(cfg, sid, "needs_review", f"re-enrichment after boundary merge failed for "
+                 f"{len(res['failed'])} chunks: {res['failed'][:5]}")
+            return "needs_review"
+        state.update_fields(sid, cfg.state_path, merge_done=True)
     if not state.at_least(sid, "embedded", cfg.state_path):
         embed_fn(sid)
         mark(cfg, sid, "embedded")

@@ -19,6 +19,10 @@ class FakeState:
     def add_cost(self, s, usd, purpose):
         self.costs.append((s, usd, purpose))
 
+    def update_fields(self, s, **fields):
+        self.fields = getattr(self, 'fields', {})
+        self.fields.setdefault(s, {}).update(fields)
+
     def budget_remaining(self):
         return self.budget - sum(c[1] for c in self.costs)
 
@@ -32,7 +36,7 @@ def item(cid, **kw):
              key_takeaway="Test price changes on a small segment first.",
              example_questions=["How do I test a price rise?", "When should I change pricing?"],
              chunk_type="story", applies_when=["pricing", "early-revenue"],
-             pillars=["money_game"], lesson_strength="strong")
+             pillars=["money_game"], lesson_strength="strong", boundary="complete")
     d.update(kw)
     return E.ChunkEnrichment(**d)
 
@@ -271,3 +275,80 @@ def test_embed_requires_enrichment(env):
     write_chunks(make_chunks(1))
     with pytest.raises(RuntimeError):
         E.embed_source(SRC, client=FakeClient(), log=lambda *_: None)
+
+
+# ------------------------------------------------------------- boundary judgement
+def test_prompt_defines_boundary_and_neighbour_fields():
+    p = E.SYSTEM_PROMPT
+    assert "prev_tail" in p and "next_head" in p
+    assert '"starts_mid" if the passage opens in the middle of an argument, story, list or dialogue' in p
+    assert '"ends_early" if the passage stops before the payoff, outcome, answer or explanation' in p
+    assert "read-only context" in p and "ONLY to judge boundary" in p
+
+
+def test_boundary_must_be_one_of_three():
+    with pytest.raises(Exception):
+        item("x", boundary="whatever")
+    assert E.BOUNDARIES == ["complete", "starts_mid", "ends_early"]
+
+
+def test_neighbour_context_is_60_words_and_stays_in_chapter(env):
+    chunks = make_chunks(3, text="alpha " * 100)
+    chunks[2]["chapter"] = "Other"
+    ctx = E.neighbour_context(chunks)
+    assert ctx["c000"][0] is None and len(ctx["c000"][1].split()) == 60
+    assert len(ctx["c001"][0].split()) == 60 and ctx["c001"][1] is None   # next chunk is another chapter
+    assert ctx["c002"] == (None, None)
+
+
+def test_payload_carries_neighbours_and_batch_keeps_10(env):
+    write_chunks(make_chunks(12))
+    cl = FakeClient()
+    E.enrich_source(SRC, client=cl, log=lambda *_: None)
+    first = json.loads(cl.calls[0]["messages"][1]["content"])
+    assert len(first) == 10
+    assert first[0]["prev_tail"] is None and first[0]["next_head"].startswith("Some plain passage")
+    assert first[1]["prev_tail"].startswith("Some plain passage")
+    assert "boundary" in E.read_jsonl(E.source_dir(SRC) / "chunks.jsonl")[0]
+
+
+def test_cache_rows_carry_version_and_old_versions_are_ignored(env):
+    write_chunks(make_chunks(2))
+    cache_file = E.source_dir(SRC) / "enrichment_cache.jsonl"
+    old_rows = [{"id": c["id"], "hash": E.text_hash(c["text"]), "fields": {"summary": "stale"}, "flags": []}
+                for c in make_chunks(2)]          # a row written before enrichment_version existed
+    cache_file.write_text("".join(json.dumps(r) + "\n" for r in old_rows))
+    cl = FakeClient()
+    E.enrich_source(SRC, client=cl, log=lambda *_: None)
+    assert len(cl.calls) == 1                      # the stale cache was not reused
+    rows = E.read_jsonl(cache_file)
+    assert rows[:2] == old_rows                    # ... and not deleted either
+    assert all(r["version"] == E.ENRICHMENT_VERSION for r in rows[2:]) and len(rows) == 4
+    cl2 = FakeClient()
+    E.enrich_source(SRC, client=cl2, log=lambda *_: None)
+    assert cl2.calls == []                         # same version: cached
+
+
+def test_estimate_includes_context_and_merge_margin():
+    chunks = [{"word_count": 300, "text": "x"}] * 40
+    base = E.estimate_source_cost(chunks, ("enrich",))
+    assert base > 0
+    no_margin = E.MERGE_REENRICH_MARGIN
+    assert no_margin == 1.15
+    assert E.estimate_source_cost(chunks, ("enrich", "embed")) > base
+
+
+def test_embed_drops_vectors_of_changed_chunks(env):
+    chunks = make_chunks(2)
+    for c in chunks:
+        c.update(item(c["id"]).model_dump(exclude={"id"}))
+    write_chunks(chunks)
+    cl = FakeClient()
+    E.embed_source(SRC, client=cl, log=lambda *_: None)
+    out = E.read_jsonl(E.source_dir(SRC) / "chunks.jsonl")
+    assert all(len(c["embedding"]) == 512 and c["embedding_hash"] for c in out)
+    out[0]["summary"] = "A different summary after a merge re-enrichment."
+    write_chunks(out)
+    cl2 = FakeClient()
+    E.embed_source(SRC, client=cl2, log=lambda *_: None)
+    assert len(cl2.embed_calls) == 1 and len(cl2.embed_calls[0]["input"]) == 1   # only the changed chunk

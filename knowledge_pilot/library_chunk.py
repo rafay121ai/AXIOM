@@ -169,7 +169,7 @@ def _make_unit(paras: list[Para], s: int, e: int, section_start: bool, **kw: Any
 
 def _merge(paras: list[Para], a: Unit, b: Unit) -> Unit:
     return Unit(s=a.s, e=b.e, words=a.words + b.words, section_start=a.section_start,
-                continues=a.continues or b.continues, method=a.method if a.method == b.method else "mixed",
+                continues=a.continues, method=a.method if a.method == b.method else "mixed",
                 flags=(a.flags | b.flags) & {"boundary_rule_fallback"}, frozen=False)
 
 
@@ -197,7 +197,8 @@ def split_unit(paras: list[Para], chapter: Chapter, u: Unit) -> tuple[Unit, Unit
     pool = topical or cands
     pos, left, right = min(pool, key=lambda c: abs(c[1] - middle))
     keep = u.flags & {"boundary_rule_fallback"}
-    a = Unit(u.s, pos, left, u.section_start, True, "split_rule", set(keep))
+    # Only the pieces AFTER the cut continue something; the first piece starts where the unit started.
+    a = Unit(u.s, pos, left, u.section_start, u.continues, "split_rule", set(keep))
     b = Unit(pos, u.e, right, False, True, "split_rule", set(keep))
     return a, b
 
@@ -224,7 +225,7 @@ def size_split(paras: list[Para], chapter: Chapter, u: Unit) -> tuple[Unit, Unit
 
     pos, left, right = min(cands, key=score)
     keep = u.flags & {"boundary_rule_fallback"}
-    return (Unit(u.s, pos, left, u.section_start, True, "split_rule", set(keep)),
+    return (Unit(u.s, pos, left, u.section_start, u.continues, "split_rule", set(keep)),
             Unit(pos, u.e, right, False, True, "split_rule", set(keep)))
 
 
@@ -542,6 +543,11 @@ def build_chunks(paras: list[Para], meta: dict[str, Any], provider: BoundaryProv
                 units.append(_make_unit(paras, a, b, sec_start and k == 0, method=method))
         units = _repair(paras, chapter, units, counter)
         units = _size_pass(paras, chapter, units, counter)
+        if units:
+            units[0].continues = False   # a chapter's first chunk continues nothing
+        for u in units:
+            if u.section_start:
+                u.continues = False       # nor does the first chunk of a section
         for u in units:
             all_units.append((chapter_title, chapter, u))
 
@@ -566,7 +572,7 @@ def build_chunks(paras: list[Para], meta: dict[str, Any], provider: BoundaryProv
             "pillar": meta.get("pillar"), "chapter": chapter_title,
             "section": None if section_restates_chapter(body[0].section, chapter_title) else body[0].section,
             "page_start": min(pages[0]) if pages[0] else None, "page_end": max(pages[1]) if pages[1] else None,
-            "prev_id": None, "next_id": None, "continues": bool(u.continues), "word_count": wc,
+            "position": n, "prev_id": None, "next_id": None, "continues": bool(u.continues), "word_count": wc,
             "flags": flags, "text": text, "pipeline_version": PIPELINE_VERSION})
         rows.append({"id": cid, "chapter": chapter_title, "start_paragraph": u.s, "end_paragraph": u.e - 1,
                      "paragraphs": u.e - u.s, "method": u.method})

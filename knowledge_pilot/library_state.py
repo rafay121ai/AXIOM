@@ -159,6 +159,12 @@ def set_status(source_id: str, status: str, path: Path | str | None = None,
         entry.update(fields)
 
 
+def update_fields(source_id: str, path: Path | str | None = None, **fields: Any) -> None:
+    """Record extra per-source fields (counts, flags) without touching the status."""
+    with transaction(path) as state:
+        _entry(state, source_id).update(fields)
+
+
 def add_cost(source_id: str, usd: float, purpose: str, path: Path | str | None = None,
              model: str | None = None, usage: dict | None = None) -> float:
     """Record API spend for a source. usd must come from returned usage.

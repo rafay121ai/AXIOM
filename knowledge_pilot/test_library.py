@@ -282,8 +282,8 @@ class ChunkRules(unittest.TestCase):
         chunks, stats = build(paras)
         self.assertEqual(len(chunks), 2)
         self.assertGreaterEqual(stats.get("size_splits", 0), 1)
-        self.assertTrue(chunks[0]["continues"])
-        self.assertTrue(chunks[1]["continues"])
+        self.assertFalse(chunks[0]["continues"])   # the first piece starts the chapter
+        self.assertTrue(chunks[1]["continues"])    # only the piece after the cut continues
         self.assertEqual(chunks[0]["next_id"], chunks[1]["id"])
         self.assertEqual(chunks[1]["prev_id"], chunks[0]["id"])
         self.assertTrue(all(c["word_count"] >= 150 for c in chunks))
@@ -374,7 +374,8 @@ class ChunkRules(unittest.TestCase):
         for c in chunks:
             self.assertLessEqual(c["word_count"], 700)
             self.assertGreaterEqual(c["word_count"], 150)
-            self.assertTrue(c["continues"])
+        self.assertFalse(chunks[0]["continues"])
+        self.assertTrue(all(c["continues"] for c in chunks[1:]))
         # Never inside a paragraph: every chunk is made of whole source paragraphs.
         sources = {p.text for p in paras}
         for c in chunks:
@@ -908,3 +909,28 @@ class DialogueSetupAndLabelRules(unittest.TestCase):
         self.assertEqual(ok["heuristic_counts"]["chapter_title_missing"], 0)
         self.assertTrue(lt.is_bare_chapter_label("CHAPTER THREE"))
         self.assertFalse(lt.is_bare_chapter_label("Chapter Three: The Richest Businessmen"))
+
+
+class ContinuesDefinition(unittest.TestCase):
+    def test_continues_only_on_pieces_created_by_a_split(self):
+        # Two sections: the first is split by size, the second is short. Section starts never continue.
+        paras = ([para(filler(w, f"a{i}"), section="S1") for i, w in enumerate([200, 180, 160, 120])]
+                 + [para(filler(200, "b0"), section="S2"), para(filler(150, "b1"), section="S2")])
+        chunks, _ = build(paras)
+        by_section = {}
+        for c in chunks:
+            by_section.setdefault(c["section"], []).append(c)
+        for section_chunks in by_section.values():
+            self.assertFalse(section_chunks[0]["continues"], "first chunk of a section must not continue")
+        self.assertTrue(by_section["S1"][1]["continues"])
+        self.assertFalse(any(c["continues"] for c in by_section["S2"]))
+
+    def test_merging_units_does_not_inherit_a_later_pieces_continuation(self):
+        a = lc.Unit(0, 1, 100, True, False)
+        b = lc.Unit(1, 2, 100, False, True)
+        paras = [para("x " * 100), para("y " * 100)]
+        self.assertFalse(lc._merge(paras, a, b).continues)
+
+    def test_chunks_carry_position(self):
+        chunks, _ = build([para(filler(300, "p1")), para(filler(300, "p2"), scene_break=True)])
+        self.assertEqual([c["position"] for c in chunks], list(range(1, len(chunks) + 1)))
