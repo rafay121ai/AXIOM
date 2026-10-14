@@ -38,6 +38,7 @@ PROGRESS_ORDER = ("pending", "extracted", "chunked", "qa_passed", "enriched", "e
 # USD per 1M tokens.
 PRICING = {
     "gpt-4.1-mini": {"input": 0.40, "cached_input": 0.10, "output": 1.60},
+    "gpt-4.1": {"input": 2.00, "cached_input": 0.50, "output": 8.00},
     "text-embedding-3-small": {"input": 0.02, "cached_input": 0.02, "output": 0.0},
 }
 
@@ -185,6 +186,19 @@ def add_cost(source_id: str, usd: float, purpose: str, path: Path | str | None =
         entry["costs"].append(row)
         total = round(sum(s.get("cost_usd", 0.0) for s in state["sources"].values()), 8)
         return total
+
+
+def cost_by_model(source_id: str | None = None, path: Path | str | None = None) -> dict[str, float]:
+    """USD per model, from the cost rows (one source, or all sources when source_id is None).
+    Rows recorded without a model are grouped under "unknown"."""
+    out: dict[str, float] = {}
+    for sid, entry in load(path)["sources"].items():
+        if source_id is not None and sid != source_id:
+            continue
+        for row in entry.get("costs", []):
+            m = row.get("model") or "unknown"
+            out[m] = round(out.get(m, 0.0) + row.get("usd", 0.0), 8)
+    return out
 
 
 def total_cost(path: Path | str | None = None) -> float:
