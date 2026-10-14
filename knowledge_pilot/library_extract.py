@@ -21,8 +21,8 @@ from pathlib import Path
 from typing import Any
 
 from library_text import (
-    clean_inline, dictionary, is_attribution, is_dateline, is_figure_caption,
-    is_scene_break, is_sentence_complete, join_lines, strip_footnote_markers, word_count,
+    clean_inline, dictionary, is_attribution, is_dateline, is_figure_caption, is_photo_credit,
+    looks_like_index, is_heading_like, repair_glued_words, strip_ascii_diagram, is_scene_break, split_runin_heading, is_sentence_complete, join_lines, strip_footnote_markers, word_count,
 )
 
 try:  # PyMuPDF is only needed for PDFs; text sources and tests work without it.
@@ -103,7 +103,9 @@ def plan_chapters_from_toc(toc: list[list], n_pages: int) -> list[ChapterPlan]:
         return []
     first_main = next((i for i, (_, t, _) in enumerate(entries)
                        if (CHAPTER_TITLE_RE.match(t) or MAIN_UNNUMBERED_RE.match(t)) and not PART_RE.match(t)), None)
-    if first_main is None:
+    numbered_any = any(CHAPTER_TITLE_RE.match(t) and not PART_RE.match(t) and not BACK_RE.match(t)
+                       and not FRONT_RE.match(t) for _, t, _ in entries)
+    if first_main is None or not numbered_any:
         # Unnumbered chapter titles: take the shallowest level that is not Part/front matter.
         usable = [(l, t, p) for l, t, p in entries if not FRONT_RE.match(t) and not BACK_RE.match(t) and not PART_RE.match(t)]
         if len(usable) < 2:
@@ -366,10 +368,20 @@ def extract_pdf(path: Path, title: str | None = None, source_id: str = "") -> tu
         heights[n] = h
         for block in blocks:
             text = " ".join(l.text for l in block)
-            if word_count(text) <= 8:
+            block_in_margin = block[0].y0 < h * 0.11 or block[-1].y1 > h * 0.90
+            if word_count(text) <= 8 or (block_in_margin and word_count(text) <= 20):
                 furniture[re.sub(r"\d+", "#", norm(text))] += 1
+    margin_texts: Counter = Counter()
+    for n in body_pages:
+        for block in page_blocks[n]:
+            if block[0].y0 < heights[n] * 0.11 or block[-1].y1 > heights[n] * 0.90:
+                text = " ".join(l.text for l in block)
+                if 1 <= word_count(text) <= 14:
+                    margin_texts[re.sub(r"\d+", "#", norm(text))] += 1
     repeated = {k for k, c in furniture.items() if k and c >= max(5, int(len(body_pages) * 0.25))}
     margin_repeated = {k for k, c in furniture.items() if k and c >= max(4, int(len(body_pages) * 0.12))}
+    # A running head repeats verbatim (page number aside) in the margin; body text never does.
+    margin_repeated |= {k for k, c in margin_texts.items() if k.strip("# ") and c >= 3}
 
     chapter_by_page: dict[int, ChapterPlan] = {}
     for plan in plans:
@@ -424,6 +436,13 @@ def extract_pdf(path: Path, title: str | None = None, source_id: str = "") -> tu
                 cur_chapter = owner.title
                 cur_section = None
                 pending_scene_break = False
+            # A bare page number sitting in the margin inside a larger block is furniture, not text.
+            while len(block) > 1 and ROMAN_OR_DIGIT_RE.match(block[-1].text.strip()) and block[-1].y1 > h * 0.90:
+                block = block[:-1]
+                report["removed"]["headers_footers_page_numbers"] += 1
+            while len(block) > 1 and ROMAN_OR_DIGIT_RE.match(block[0].text.strip()) and block[0].y0 < h * 0.11:
+                block = block[1:]
+                report["removed"]["headers_footers_page_numbers"] += 1
             text_block = " ".join(l.text for l in block).strip()
             tn = re.sub(r"\d+", "#", norm(text_block))
             in_margin = block[0].y0 < h * 0.11 or block[-1].y1 > h * 0.90
@@ -468,9 +487,25 @@ def extract_pdf(path: Path, title: str | None = None, source_id: str = "") -> tu
                     if is_scene_break(text):
                         pending_scene_break = True
                         continue
-                    if is_figure_caption(text):
+                    if is_figure_caption(text) or is_photo_credit(text):
                         report["figure_captions_dropped"].append({"page": n, "text": text})
                         continue
+                    if re.search(r"-{5,}|-{2,}>|\+-{3,}", text):
+                        text, diagram = strip_ascii_diagram(text)
+                        report["removed"]["ascii_diagram_art"] += 1
+                        if diagram:
+                            report["figure_captions_dropped"].append({"page": n, "text": diagram, "why": "diagram"})
+                        if not text:
+                            continue
+                    if looks_like_index(text):
+                        report["removed"]["index_or_page_reference_debris"] += 1
+                        continue
+                    runin = split_runin_heading(text)
+                    if runin:
+                        head, text = runin
+                        _claim_trailing_epigraph(paras, cur_chapter, head, report)
+                        cur_section = head
+                        report["run_in_or_standalone_headings"].append({"page": n, "text": head, "kind": "runin_caps"})
                     dl = re.match(r"^((?:January|February|March|April|May|June|July|August|September|October|November|December)"
                                   r"\s+\d{1,2},?\s+\d{4})\s+(?=[A-Z“\"])", text)
                     if dl and word_count(text) - word_count(dl.group(1)) >= 8:
@@ -557,6 +592,8 @@ def extract_pdf(path: Path, title: str | None = None, source_id: str = "") -> tu
     doc.close()
     paras = _tag_epigraphs(paras, report)
     paras = _relocate_trailing_epigraphs(paras, plans, report)
+    paras = _drop_trailing_heading_debris(paras, report)
+    paras = _repair_glued(paras, report)
     if detection == "fixed":
         paras = _assign_fixed_sections(paras)
     report["chapters"] = [{"title": p.title, "start_page": p.start_page, "end_page": p.end_page,
@@ -564,6 +601,38 @@ def extract_pdf(path: Path, title: str | None = None, source_id: str = "") -> tu
     report["meta_author"] = meta_author
     report["removed"] = dict(report["removed"])
     return paras, report
+
+
+def _repair_glued(paras: list[Para], report: dict) -> list[Para]:
+    new_texts, fixes = repair_glued_words([p.text for p in paras])
+    if fixes:
+        for p, t in zip(paras, new_texts):
+            p.text = t
+        report["glued_words_repaired"] = fixes
+    return paras
+
+
+def _drop_trailing_heading_debris(paras: list[Para], report: dict) -> list[Para]:
+    """A bare title-like line left at the end of a section or chapter, directly after prose, is a
+    stray heading, running head, picture caption or the next chapter's number. It is not body text
+    and cannot end a chunk, so it is taken out (and recorded in the report for audit)."""
+    out: list[Para] = []
+    dropped = 0
+    for i, p in enumerate(paras):
+        nxt = paras[i + 1] if i + 1 < len(paras) else None
+        boundary = nxt is not None and (nxt.chapter != p.chapter or nxt.section != p.section)
+        prev = out[-1] if out else None
+        if (boundary and p.kind == "body" and not p.scene_break and prev is not None
+                and prev.chapter == p.chapter and prev.kind == "body" and prev.words >= 12
+                and is_sentence_complete(prev.text)
+                and (is_heading_like(p.text) or re.search(r"^[^()]*\)$", p.text.strip()) and p.words <= 8)):
+            report["removed"]["trailing_heading_debris"] = report["removed"].get("trailing_heading_debris", 0) + 1
+            report.setdefault("trailing_heading_debris", []).append(
+                {"page": p.page_start, "chapter": p.chapter, "text": p.text})
+            dropped += 1
+            continue
+        out.append(p)
+    return out
 
 
 def _claim_trailing_epigraph(paras: list[Para], chapter: str, new_section: str, report: dict) -> None:
@@ -595,6 +664,9 @@ def _is_chapter_furniture(tnorm: str, chapter_norm: str, on_start_page: bool, bi
     return bool(re.fullmatch(r"(?:chapter|part)\s+\w+|\d+", tnorm))
 
 
+LIST_ITEM_LINE_RE = re.compile(r"^(?:[•●▪◦]\s*\S|\d{1,2}[.)]\s+[A-Z]|(?:Lesson|Step|Rule|Principle|Tip)\s*#\s*\d+\b)")
+
+
 def _split_paragraph_lines(lines: list[Line], base_x: float) -> list[list[Line]]:
     pieces: list[list[Line]] = []
     current: list[Line] = []
@@ -610,6 +682,10 @@ def _split_paragraph_lines(lines: list[Line], base_x: float) -> list[list[Line]]
                 pieces.append(current)   # a caption line is its own piece, never glued to prose
                 current = []
                 current.append(line)
+                continue
+            if LIST_ITEM_LINE_RE.match(line.text) and (complete or not re.match(r"\d", line.text)):
+                pieces.append(current)   # each list entry is its own paragraph
+                current = [line]
                 continue
             indent = line.x0 > base_x + 0.5 * line.size and line.x0 > prev.x0 + 0.4 * line.size
             gap = line.y0 - prev.y1 > 0.55 * line.size
@@ -637,10 +713,23 @@ def _join_drop_cap(letter: str, text: str) -> str:
 def _append_paragraph(paras: list[Para], new: Para) -> None:
     if paras:
         last = paras[-1]
+        # A lowercase opener on the next page continues the previous paragraph even when an outline
+        # entry (chapter or section) starts on that page: the heading sits below, the text belongs above.
+        if (last.kind == "body" and new.text[:1].islower() and not new.scene_break
+                and (last.chapter != new.chapter or last.section != new.section)
+                and not is_sentence_complete(last.text)
+                and 0 <= (new.page_start or 0) - (last.page_end or 0) <= 1):
+            last.text = join_lines([last.text, new.text])
+            last.page_end = new.page_end
+            return
+        # A long paragraph that stops on a lowercase word or a comma has not ended, even when the PDF
+        # started a new text block (same page) for the rest of the sentence.
+        open_ended = bool(re.search(r"[a-z,;][”\"’]?$", last.text.rstrip())) and word_count(last.text) >= 12
         if (last.kind == "body" and last.chapter == new.chapter and last.section == new.section
                 and not new.scene_break and not is_sentence_complete(last.text)
-                and (new.page_start != last.page_end or new.text[:1].islower())
-                and (new.text[:1].islower() or last.text.rstrip().endswith(("-", ",")) or (new.page_start or 0) > (last.page_end or 0))):
+                and (new.page_start != last.page_end or new.text[:1].islower() or open_ended)
+                and (new.text[:1].islower() or last.text.rstrip().endswith(("-", ",")) or open_ended
+                     or (new.page_start or 0) > (last.page_end or 0))):
             last.text = join_lines([last.text, new.text])
             last.page_end = new.page_end
             return
@@ -752,6 +841,35 @@ def _first_body_page(doc: Any) -> int:
 # Plain text sources (transcripts, articles)
 # ----------------------------------------------------------------------------
 
+def _pack_caption_dump(lines: list[str], target: int = 120) -> list[str]:
+    """Caption/transcript dumps: one sentence per physical line, the full stop sometimes written at the
+    start of the NEXT line (". and once Warren was..."). Move it back to the end of its own sentence,
+    then pack whole sentences into paragraphs of about `target` words. No sentence is split or invented."""
+    sentences: list[str] = []
+    for line in lines:
+        t = line.strip()
+        if t.startswith(". ") or t == ".":
+            if sentences and not sentences[-1].endswith((".", "!", "?")):
+                sentences[-1] += "."
+            t = t[1:].strip()
+        if t:
+            sentences.append(t)
+    if sentences and not sentences[-1].endswith((".", "!", "?", "\"", "”")):
+        sentences[-1] += "."
+    packed: list[str] = []
+    cur: list[str] = []
+    words = 0
+    for sent in sentences:
+        cur.append(sent)
+        words += word_count(sent)
+        if words >= target:
+            packed.append(" ".join(cur))
+            cur, words = [], 0
+    if cur:
+        packed.append(" ".join(cur))
+    return packed
+
+
 def extract_text_file(path: Path, title: str | None = None) -> tuple[list[Para], dict[str, Any]]:
     raw = path.read_text(encoding="utf-8", errors="replace")
     report: dict[str, Any] = {"format": "txt", "chapter_detection": "single", "warnings": [], "removed": {},
@@ -761,7 +879,7 @@ def extract_text_file(path: Path, title: str | None = None) -> tuple[list[Para],
     if blocks and max(word_count(b) for b in blocks) > 900 and len(raw.splitlines()) > 5:
         # Caption dumps arrive with no blank lines: fall back to physical lines.
         report["warnings"].append("No blank-line paragraphs; split on physical lines. Text is unpunctuated, expect QA review.")
-        blocks = [l for l in raw.splitlines() if l.strip()]
+        blocks = _pack_caption_dump([l for l in raw.splitlines() if l.strip()])
     chapter = title or path.stem
     paras: list[Para] = []
     pending_break = False
@@ -776,6 +894,7 @@ def extract_text_file(path: Path, title: str | None = None) -> tuple[list[Para],
             continue
         paras.append(Para(text, None, None, chapter, None, "body", pending_break))
         pending_break = False
+    paras = _repair_glued(paras, report)
     return paras, report
 
 

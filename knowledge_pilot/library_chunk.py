@@ -28,7 +28,7 @@ from typing import Any, Callable
 
 from library_extract import Para
 from library_text import (
-    OUTCOME_RE, PIPELINE_VERSION, ends_with_lead_in, is_list_item, opens_dependent,
+    OUTCOME_RE, PIPELINE_VERSION, ends_with_lead_in, is_attribution, is_heading_like, is_list_item, opens_dependent,
     word_count,
 )
 
@@ -109,6 +109,12 @@ def _glued(paras: list[Para], a: int, b: int) -> bool:
         return True
     if ends_with_lead_in(pa.text):
         return True
+    if is_attribution(pb.text) and not pa.text.rstrip().startswith(("—", "–", "-")) and pa.words <= 120:
+        return True   # a quotation stays with the line that credits it
+    if is_attribution(pa.text) and pb.words > 0:
+        return True   # ... and the credited quotation opens what follows, it does not close what precedes
+    if pa.kind == "body" and is_heading_like(pa.text) and pa.section == pb.section:
+        return True   # an undetected heading line belongs to the text it introduces, never to the chunk before
     if pa.text.rstrip().endswith("?") and is_list_item(pb.text):
         return True
     if is_list_item(pa.text) and is_list_item(pb.text):

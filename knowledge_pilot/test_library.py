@@ -738,3 +738,100 @@ class OfflineFixtureRegression(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RichDadRegressionTests(unittest.TestCase):
+    """Defects found on the first real source; each real defect must still flag."""
+    def chunk(self, cid, text, **kw):
+        return {"id": cid, "text": text, "chapter": "C1", **kw}
+
+    def test_runin_caps_heading_split_off(self):
+        import library_text as lt
+        head, rest = lt.split_runin_heading("INVEST FIRST IN EDUCATION: In reality, the only real asset you have is your mind.")
+        self.assertEqual(head, "INVEST FIRST IN EDUCATION")
+        self.assertTrue(rest.startswith("In reality"))
+        self.assertIsNone(lt.split_runin_heading("ON THE CONCORDE BACK TO NEW YORK, Brad tells me it is destiny."))
+
+    def test_trailing_page_number_stripped(self):
+        import library_text as lt
+        self.assertEqual(lt.strip_footnote_markers("I could do it.” 69")[0], "I could do it.”")
+
+    def test_heading_like_line_is_glued_to_what_it_introduces(self):
+        from library_extract import Para
+        paras = [Para("Body text ends here.", 1, 1, "C", None), Para("Market Timing", 1, 1, "C", None),
+                 Para("Timing the market is hard.", 1, 1, "C", None)]
+        self.assertTrue(lc._glued(paras, 1, 2))
+        self.assertFalse(lc._glued(paras, 0, 1))
+
+    def test_open_ended_paragraph_merges_across_blocks_on_same_page(self):
+        from library_extract import Para, _append_paragraph
+        paras = [Para("word " * 14 + "in or near", 5, 5, "C", None)]
+        _append_paragraph(paras, Para("Chicago.”", 5, 5, "C", None))
+        self.assertEqual(len(paras), 1)
+        paras = [Para("word " * 14 + "Done.", 5, 5, "C", None)]
+        _append_paragraph(paras, Para("Next.", 5, 5, "C", None))
+        self.assertEqual(len(paras), 2)
+
+
+class SweepFixTests(unittest.TestCase):
+    def test_continuation_crosses_chapter_boundary_on_lowercase_opener(self):
+        from library_extract import Para, _append_paragraph
+        paras = [Para("It reduces " + "word " * 14 + "which the reorganisation", 788, 788, "Chapter 08", None)]
+        _append_paragraph(paras, Para("reduces to a figure that was covered.", 789, 789, "Chapter 09", None))
+        self.assertEqual(len(paras), 1)
+        self.assertEqual(paras[0].chapter, "Chapter 08")
+
+    def test_caption_dump_period_moves_back_and_sentences_pack(self):
+        lines = ["he was on the board", ". and once Warren was there he helped", ". so it went"]
+        packed = le._pack_caption_dump(lines, target=5)
+        self.assertEqual(" ".join(packed), "he was on the board. and once Warren was there he helped. so it went.")
+        self.assertTrue(all(p.endswith(".") for p in packed))
+
+    def test_trailing_heading_debris_dropped_but_prose_kept(self):
+        from library_extract import Para, _drop_trailing_heading_debris
+        prose = "This is a complete paragraph of prose that clearly ends. " * 2
+        paras = [Para(prose, 1, 1, "C1", "S1"), Para("Market Timing", 1, 1, "C1", "S1"),
+                 Para("Next section begins here with real prose.", 2, 2, "C1", "S2")]
+        report = {"removed": {}}
+        out = _drop_trailing_heading_debris(paras, report)
+        self.assertEqual([p.text for p in out], [prose, "Next section begins here with real prose."])
+        self.assertEqual(report["trailing_heading_debris"][0]["text"], "Market Timing")
+        keep = [Para(prose, 1, 1, "C1", "S1"), Para("Yes, it ended there.", 1, 1, "C1", "S1"),
+                Para("Next.", 2, 2, "C1", "S2")]
+        self.assertEqual(len(_drop_trailing_heading_debris(keep, {"removed": {}})), 3)
+
+    def test_quotation_stays_with_attribution_and_opens_what_follows(self):
+        from library_extract import Para
+        paras = [Para("Earlier prose ends here.", 1, 1, "C", "S"),
+                 Para("“Hang on to it for a short while.”", 1, 1, "C", "S"),
+                 Para("—EARL CONRAD, A MEMOIR", 1, 1, "C", "S"),
+                 Para("In the first few days she missed her village.", 1, 1, "C", "S")]
+        self.assertFalse(lc._glued(paras, 0, 1) and not lc._glued(paras, 1, 2))
+        self.assertTrue(lc._glued(paras, 1, 2))
+        self.assertTrue(lc._glued(paras, 2, 3))
+        self.assertFalse(lc._glued(paras, 0, 1))
+
+    def test_toc_without_numbered_chapters_does_not_crash(self):
+        toc = [[1, "Prologue", 5], [1, "Why Things Break", 20], [1, "The Fix", 60], [1, "Epilogue", 100]]
+        plans = le.plan_chapters_from_toc(toc, 120)
+        self.assertGreaterEqual(len(plans), 2)
+
+
+class GluedAndDiagramTests(unittest.TestCase):
+    def test_glued_words_repaired_with_evidence_only(self):
+        texts = ["He steppedacross the floor.", "The gap between the haves and havenots grew, the have-nots said.",
+                 "Over a threemonth period.", "A mindset shaped him; that mindset stayed; the mindset won; mind-set once."]
+        out, fixes = lt.repair_glued_words(texts)
+        self.assertEqual(out[0], "He stepped across the floor.")
+        self.assertIn("have-nots", out[1])
+        self.assertIn("three-month", out[2])
+        self.assertEqual(out[3], texts[3])   # majority solid spelling is left alone
+
+    def test_ascii_diagram_stripped_prose_kept_labels_dropped(self):
+        text, art = lt.strip_ascii_diagram("The bottom diagram is the Balance Sheet. +----------+ | Assets | -------> It is called that because it balances.")
+        self.assertIn("The bottom diagram is the Balance Sheet.", text)
+        self.assertNotIn("+---", text)
+        self.assertEqual(lt.strip_ascii_diagram("How the Rich Play the Game ------------ ---------> Income")[0], "")
+
+    def test_lesson_list_lines_are_list_items(self):
+        self.assertTrue(lt.is_list_item("Lesson #2 Why Teach Financial Literacy?"))

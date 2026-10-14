@@ -9,9 +9,9 @@ Gate: flagged < 3% and median 200-450 words.
 | Run | Chunks | Flagged | Median words | Gate | continuation_opener | no_terminal_punctuation | lead_in_at_end | under_150_words | over_700_unflagged | lost_hyphen | footnote_marker | figure_caption | epigraph_at_chapter_end | runin_heading_or_dateline | question_options_split |
 |---|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | everything_store BEFORE | 309 | 87 (28.16%) | 357 | FAIL | 14 | 0 | 0 | 25 | 0 | 54 | 0 | 0 | 0 | 0 | 0 |
-| everything_store AFTER | 291 | 0 (0.0%) | 377 | PASS | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| everything_store AFTER | 293 | 0 (0.0%) | 375 | PASS | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | thinking_in_bets BEFORE | 250 | 143 (57.2%) | 189 | FAIL | 9 | 0 | 0 | 90 | 10 | 30 | 23 | 0 | 0 | 0 | 0 |
-| thinking_in_bets AFTER | 193 | 0 (0.0%) | 307 | PASS | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| thinking_in_bets AFTER | 202 | 0 (0.0%) | 296 | PASS | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 
 ## How boundaries were obtained (AFTER)
 
@@ -41,14 +41,14 @@ Cache misses are handled by the rule split (paragraph boundary nearest the middl
 ### everything_store_0186: opens on a continuation: 'And then Manber decided to leave.'
 
 - OLD: `And then Manber decided to leave. Manber said he didn’t like running a remote office and felt isolated from the decision-making in Seattle. Privately, he was annoyed that Bezos had allowed Holden’s rival search effort to take root in Seattle. He told Be...`
-- NEW (everything_store_0174, 404 words): `...But when Holden left, Bezos lost one of his oldest friends at the company and one of Amazon’s most versatile innovators. Fortunately, he still had Udi Manber.  //  And then Manber decided to leave. Manber said he didn’t like running a remote office and felt isolated from the decision-making in Seattle. Privately, he was annoyed that Bezos had allowed Holden’s rival search effort to take root in Seattle. He told Be...`
+- NEW (everything_store_0175, 404 words): `...But when Holden left, Bezos lost one of his oldest friends at the company and one of Amazon’s most versatile innovators. Fortunately, he still had Udi Manber.  //  And then Manber decided to leave. Manber said he didn’t like running a remote office and felt isolated from the decision-making in Seattle. Privately, he was annoyed that Bezos had allowed Holden’s rival search effort to take root in Seattle. He told Be...`
 - NEW chunk opens: `Now everyone was in a difficult spot. Bezos came back and told Holden and Manber to form a joint team to evaluate the new approach. There ar`
 - Fixed: yes
 
 ### thinking_in_bets_0223: footnote marker '*' spliced into the body: 'budgeting.* ASAS, founded...'
 
 - OLD: `...ew years ago, I consulted with a national nonprofit organization, AfterSchool All-Stars (ASAS), to work with them on incorporating scenario planning into their budgeting.* ASAS, founded in 1992 by Arnold Schwarzenegger, provides three hours of structured after-school programming for over 70,000 underserved youth in eighteen cities across the United States. They depend heavily on grants fo...`
-- NEW (thinking_in_bets_0178, 383 words): `A few years ago, I consulted with a national nonprofit organization, After-School All-Stars (ASAS), to work with them on incorporating scenario planning into their budgeting. ASAS, founded in 1992 by Arnold Schwarzenegger, provides three hours of structured after-school programming for over 70,000 underserved youth in eighteen cities across the United States. They depend heavily on grants for funding and ...`
+- NEW (thinking_in_bets_0187, 383 words): `A few years ago, I consulted with a national nonprofit organization, After-School All-Stars (ASAS), to work with them on incorporating scenario planning into their budgeting. ASAS, founded in 1992 by Arnold Schwarzenegger, provides three hours of structured after-school programming for over 70,000 underserved youth in eighteen cities across the United States. They depend heavily on grants for funding and ...`
 - NEW chunk opens: `A few years ago, I consulted with a national nonprofit organization, After-School All-Stars (ASAS), to work with them on incorporating scena`
 - Fixed: yes
 
@@ -86,5 +86,5 @@ Cache misses are handled by the rule split (paragraph boundary nearest the middl
 
 | Book | Paragraphs | Words | Chapters | Detection | Footnote markers stripped | Datelines removed | Figure captions dropped | Epigraphs moved |
 |---|---:|---:|---:|---|---:|---:|---:|---:|
-| everything_store | 1231 | 113872 | 12 | toc | 0 | 0 | 0 | 0 |
-| thinking_in_bets | 702 | 64132 | 7 | toc | 25 | 0 | 0 | 0 |
+| everything_store | 1231 | 113873 | 12 | toc | 0 | 0 | 0 | 0 |
+| thinking_in_bets | 699 | 64132 | 7 | toc | 25 | 0 | 0 | 0 |
