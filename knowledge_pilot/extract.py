@@ -40,8 +40,8 @@ sys.path.insert(0, str(HERE))
 import library_paragraphs as lp  # noqa: E402
 import library_text as lt  # noqa: E402
 
-EXTRACT_VERSION = "v3.1"
-DEFAULT_VERSION = "v3.1"
+EXTRACT_VERSION = "v3.2"
+DEFAULT_VERSION = "v3.2"
 DEFAULT_OUT_ROOT = HERE / "library"
 WORDLIST_PATH = HERE / "data" / "solid_words.txt"
 
@@ -446,6 +446,10 @@ def build_source(entry: dict, version: str = DEFAULT_VERSION) -> dict:
     for b in report.get("back_matter", []):
         notes["excluded"].append({"kind": "back_matter", "pages": b["pages"], "words": b["words"],
                                   "reason": b["why"], "starts": b.get("starts", "")[:160]})
+    for c in report.get("copyright_pages", []):
+        notes["excluded"].append({"kind": "front_matter", "pages": [c["page"], c["page"]], "words": c["words"],
+                                  "reason": "copyright / publishing details (ISBN, CIP, rights, publisher address)",
+                                  "starts": c.get("starts", "")[:160]})
     for t in report.get("tables", []):
         notes["excluded"].append({"kind": "table", "pages": [t["page"], t["page"]], "words": t["words"],
                                   "reason": "cells aligned in columns: not running prose, left out"})
@@ -458,6 +462,9 @@ def build_source(entry: dict, version: str = DEFAULT_VERSION) -> dict:
         notes["sponsor_reads_removed_words"] = report.get("sponsor_reads_removed", 0)
         notes["punct_artifacts_collapsed"] = report.get("punct_artifacts_collapsed", 0)
     notes["epigraph_blocks_flagged"] = report.get("epigraph_blocks", 0)
+    notes["epigraphs_kept_as_body_sidebars"] = report.get("epigraphs_kept_as_body", 0)
+    if report.get("equation_pages"):
+        notes["equation_or_diagram"] = sorted(set(report["equation_pages"]))
     notes["ocr_noise_removed"] = prep.get("ocr_noise_removed", 0)
     notes["figure_labels_stripped"] = prep.get("figure_labels_stripped", 0)
     notes["stripped_furniture"] = report.get("removed", {})
@@ -633,7 +640,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--source", action="append", default=[], help="source id (repeatable)")
     ap.add_argument("--all", action="store_true", help="every non-duplicate source in the manifest")
     ap.add_argument("--out-root", default=str(DEFAULT_OUT_ROOT))
-    ap.add_argument("--version", default=DEFAULT_VERSION, help="tag used in file names (default v3.1)")
+    ap.add_argument("--version", default=DEFAULT_VERSION, help="tag used in file names (default v3.2)")
     ap.add_argument("--report", action="store_true", help="write EXTRACTION_REPORT.md from existing metrics")
     ap.add_argument("--report-path", default=str(HERE / "EXTRACTION_REPORT.md"))
     ap.add_argument("--jobs", type=int, default=6)

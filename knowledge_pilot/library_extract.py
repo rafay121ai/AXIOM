@@ -191,6 +191,8 @@ class Line:
     block: int
     big_first: bool = False  # starts with a drop-cap sized span
     bullet: bool = False     # a drawn (graphic) bullet sits left of this line
+    font: str = ""           # dominant font face of the line (by characters)
+    eq: bool = False         # the line carries an equation-like superscript (letters, not a note number)
 
 
 def _is_bold(span: dict) -> bool:
@@ -201,15 +203,42 @@ def _is_italic(span: dict) -> bool:
     return bool(span["flags"] & 2) or bool(re.search(r"italic|oblique", span["font"], re.I))
 
 
+_SEP_SPAN_RE = re.compile(r"^\s*[,;\-\u2013\u2014]?\s*$")
+_ORDINAL_SUP = {"st", "nd", "rd", "th", "s", "®", "™"}
+
+
+def _is_note_sup(span: dict) -> bool:
+    return bool(span["flags"] & 1) and bool(re.fullmatch(r"[-\u2212]?\d+", span["text"].strip()))
+
+
+def has_equation_sup(spans: list[dict]) -> bool:
+    """A superscript that is a letter or Greek symbol (not a note number or an ordinal): equation-like text
+    whose position cannot be kept in plain text."""
+    for sp in spans:
+        t = sp["text"].strip()
+        if sp["flags"] & 1 and t and not t.isdigit() and t.lower() not in _ORDINAL_SUP and len(t) <= 4 \
+                and not re.fullmatch(r"[*\u2020\u2021\u00a7]+", t):
+            return True
+    return False
+
+
 def _span_text(spans: list[dict]) -> str:
     out = ""
-    for span in spans:
+    n = len(spans)
+    for k, span in enumerate(spans):
         value = span["text"]
-        if span["flags"] & 1 and re.fullmatch(r"[-−]?\d+", value.strip()):
+        if _is_note_sup(span):
             # Superscript number: a note reference, unless it is an exponent after 10 or a unit.
             if re.search(r"(?:\b10|\b(?:m|cm|km|s))$", out):
-                out += "^" + value.strip().replace("−", "-")
+                out += "^" + value.strip().replace("\u2212", "-")
             continue
+        if _SEP_SPAN_RE.match(value) and value.strip():
+            # The separator inside a run of note markers ("95 , 96") goes with the markers.
+            prev_note = k > 0 and (_is_note_sup(spans[k - 1]) or _SEP_SPAN_RE.match(spans[k - 1]["text"]) is not None
+                                   and k > 1 and _is_note_sup(spans[k - 2]))
+            next_note = k + 1 < n and _is_note_sup(spans[k + 1])
+            if prev_note and next_note and not re.search(r"(?:\b10|\b(?:m|cm|km|s))$", out):
+                continue
         out += value
     return re.sub(r"\bfn\d{1,3}\b", "", out)
 
@@ -238,11 +267,15 @@ def read_page_blocks(page: Any) -> list[list[Line]]:
             if not total:
                 continue
             size = weight.most_common(1)[0][0]
+            fonts: Counter = Counter()
+            for s in spans:
+                fonts[re.sub(r"^[A-Z]{6}\+", "", s["font"])] += len(s["text"].strip())
             first = next((s for s in spans if s["text"].strip()), spans[0])
             big_first = len(first["text"].strip()) <= 2 and first["size"] >= size * 1.6 and total > 3
             lines.append(Line(text=text, x0=line["bbox"][0], y0=line["bbox"][1], x1=line["bbox"][2],
                               y1=line["bbox"][3], size=size, bold=bold_chars >= total * 0.9,
-                              italic=italic_chars >= total * 0.7, block=bi, big_first=big_first))
+                              italic=italic_chars >= total * 0.7, block=bi, big_first=big_first,
+                              font=fonts.most_common(1)[0][0] if fonts else "", eq=has_equation_sup(spans)))
         if lines:
             blocks.append(lines)
     return blocks

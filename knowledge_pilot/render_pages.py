@@ -33,7 +33,7 @@ def pick_pages(paragraphs: list[dict], n: int, seed: int) -> list[int]:
     return sorted(rng.sample(pages, min(n, len(pages))))
 
 
-def render(source_id: str, n: int, seed: int, version: str = "v3.1", lib_root: Path | None = None,
+def render(source_id: str, n: int, seed: int, version: str = "v3.2", lib_root: Path | None = None,
            out_root: Path | None = None, pages: list[int] | None = None) -> list[Path]:
     import fitz
     lib_root = lib_root or HERE / "library"
@@ -64,7 +64,7 @@ def main() -> None:
     ap.add_argument("--source", required=True)
     ap.add_argument("--n", type=int, default=4)
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--version", default="v3.1")
+    ap.add_argument("--version", default="v3.2")
     ap.add_argument("--out-dir", default=None, help="output root (default visual_check/)")
     ap.add_argument("--pages", default=None, help="comma separated exact PDF pages instead of random ones")
     a = ap.parse_args()

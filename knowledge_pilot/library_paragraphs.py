@@ -43,7 +43,7 @@ sys.path.insert(0, str(HERE))
 
 import library_extract as lx  # noqa: E402
 from library_text import (  # noqa: E402
-    clean_inline, dictionary, is_attribution, is_attribution_line, is_caption_line, is_dateline,
+    clean_inline, collapse_dash_punct, dictionary, is_attribution, is_attribution_line, is_caption_line, is_dateline,
     is_figure_caption, is_photo_credit, is_scene_break, join_lines, looks_like_index, repair_glued_words,
     split_bullet_separators, strip_ascii_diagram, strip_footnote_markers, strip_leading_label,
     strip_ocr_noise, strip_sponsor_reads, tidy_spacing, word_count, CAPTION_START_RE,
@@ -134,6 +134,14 @@ def ends_terminal(text: str) -> bool:
     return True
 
 
+INITIAL_END_RE = re.compile(r"(?<![\w.])[A-Z]\.[\"”’')\]]*$")
+
+
+def ends_initial(text: str) -> bool:
+    """The line ends in a lone capital and a full stop: 'Harry S.' or 'choices B and C.'"""
+    return bool(INITIAL_END_RE.search(text.rstrip()))
+
+
 def starts_paragraph(text: str) -> bool:
     """Capital, opening quote or digit (after any opening bracket); bullets start list items."""
     t = text.lstrip()
@@ -174,6 +182,9 @@ class Item:
     bullet: bool = False      # a drawn bullet sits left of this line (list item start)
     epi: bool = False         # the line belongs to an epigraph block (indented italic / smaller quotation)
     attr: bool = False        # the line is an attribution or credit line ("—NAME", "TRANSLATED BY ...")
+    small: bool = False       # displayed block: type clearly smaller than the body (set in assemble)
+    deep: bool = False        # displayed block: indented well beyond a first-line indent (set in assemble)
+    label: bool = False       # one of several short unpunctuated display lines (set in assemble)
 
 
 @dataclass
@@ -244,8 +255,10 @@ def compute_geometry(items: list[Item]) -> Geometry:
     xs = sorted(l.x1 for l in lines)
     geo.right_margin = xs[int(len(xs) * 0.9)] if xs else 0.0
     sizes = statistics.median(l.size for l in lines)
-    near = sum(1 for l in lines if l.x1 >= geo.right_margin - 1.5 * sizes)
-    geo.short_valid = near / len(lines) >= 0.55
+    # A justified body has most lines ending AT the right margin; a ragged-right body spreads its line ends, so
+    # a short line means nothing there (it was firing at paragraph ends that were not paragraph ends).
+    near = sum(1 for l in lines if l.x1 >= geo.right_margin - 0.5 * sizes)
+    geo.short_valid = near / len(lines) >= 0.5
     return geo
 
 
@@ -288,11 +301,14 @@ def should_split(prev: Item, cur: Item, geo: Geometry, para_first: Item | None =
     sentence end. A colon-ended line followed by a line that starts a paragraph with a real layout signal
     (indent, gap, new block) starts a new paragraph: the lead-in is its own paragraph."""
     sig = layout_signal(prev, cur, geo, para_first)
+    # A lone capital + full stop at a line end is an initial ("Harry S.") OR the last word of a sentence
+    # ("combinations B and C."). A first-line indent or a vertical gap after it settles it: a new paragraph.
+    term_prev = ends_terminal(prev.text) or (sig in ("indent", "gap") and ends_initial(prev.text))
     if cur.bullet:
         return sig or "bullet"
     marker = is_list_start(cur.text)
     in_list = para_first is not None and (para_first.bullet or is_list_start(para_first.text))
-    if sig is None and marker and (ends_terminal(prev.text) or ends_colon(prev.text) or in_list):
+    if sig is None and marker and (term_prev or ends_colon(prev.text) or in_list):
         sig = "marker"
     if in_list:
         if marker:
@@ -302,28 +318,28 @@ def should_split(prev: Item, cur: Item, geo: Geometry, para_first: Item | None =
         size = cur.size or 12.0
         if para_first is prev and sig and sig != "indent":
             return sig + "+after_list"          # one-line item, then ordinary text
-        if sig in ("gap", "new_column") or (sig == "block" and ends_terminal(prev.text)):
+        if sig in ("gap", "new_column") or (sig == "block" and term_prev):
             return sig + "+after_list"
         # A short list item (one or two lines) that ends a sentence at a page end, followed by a first-line
         # indented line on the next page, is the end of the list: ordinary text follows.
         rel_x = cur.x0 - geo.base_x.get(cur.page, geo.default_base_x)
         if (sig == "indent" or (sig in (None, "short_line") and rel_x > 0.5 * size)) and cur.page != prev.page \
-                and ends_terminal(prev.text) and n_lines is not None and n_lines <= 2:
+                and term_prev and n_lines is not None and n_lines <= 2:
             return "indent+after_list_page"
         # A numbered paragraph without a hanging indent (its lines all start at one margin) is not a list item:
         # a first-line indent after a full stop starts the next paragraph.
-        if sig == "indent" and para_first is not prev and ends_terminal(prev.text) \
+        if sig == "indent" and para_first is not prev and term_prev \
                 and cur.page == prev.page and cur.x0 > prev.x0 + 0.5 * size and para_first.x0 >= prev.x0 - 1.0 \
                 and not para_first.bullet:
             return "indent+after_numbered"
-        if cur.page == prev.page and cur.x0 < prev.x0 - 0.5 * size and ends_terminal(prev.text):
+        if cur.page == prev.page and cur.x0 < prev.x0 - 0.5 * size and term_prev:
             return "dedent"
         return None
     if sig is None:
         return None
     if not starts_paragraph(cur.text):
         return None
-    if ends_terminal(prev.text):
+    if term_prev:
         return sig
     # A lone Title Case line (no terminal punctuation) standing apart from the next line is a heading.
     if para_first is prev and is_title_case_line(prev.text) and sig != "indent":
@@ -338,6 +354,9 @@ def should_split(prev: Item, cur: Item, geo: Geometry, para_first: Item | None =
 # Assembly: items -> paragraphs
 # ----------------------------------------------------------------------------
 
+LABEL_SEP = "\u241e"   # placeholder for " / " between display lines; protected from the OCR-noise cleanup
+
+
 @dataclass
 class RawPara:
     lines: list[Item]
@@ -346,13 +365,35 @@ class RawPara:
     scene_break: bool = False
 
     @property
+    def display(self) -> bool:
+        return any(l.small or l.deep or l.label for l in self.lines)
+
+    @property
     def text(self) -> str:
-        return join_lines([l.text for l in self.lines])
+        texts = [l.text for l in self.lines]
+        if self.display and len(texts) >= 2 and is_label_block(texts):
+            # Displayed labels or option lines ("A. sure gain / B. 25% chance ..."): keep each on its own line.
+            return f" {LABEL_SEP} ".join(t.strip() for t in texts if t.strip())
+        return join_lines(texts)
+
+
+def is_label_block(texts: list[str]) -> bool:
+    """Every line after the first starts with a capital or digit and none but the last ends a sentence:
+    a list of labels, options or diagram lines, not running text."""
+    for k, t in enumerate(texts):
+        t = t.strip()
+        if k > 0 and not (t[:1].isupper() or t[:1].isdigit()):
+            return False
+        if k < len(texts) - 1 and ends_terminal(t):
+            return False
+    return True
 
 
 def hard_boundary(prev: Item, cur: Item) -> bool:
     """Epigraphs are their own blocks: a change between epigraph and body, a new epigraph block, or the line
-    after an attribution always starts a new paragraph, so two epigraphs never merge."""
+    after an attribution always starts a new paragraph, so two epigraphs never merge. A displayed block (type
+    clearly smaller than the body, or indented well beyond a first-line indent) and a run of display labels
+    are closed as their own paragraph: a change of margin or type size always ends a paragraph."""
     if prev.epi != cur.epi:
         return True
     if cur.epi:
@@ -360,11 +401,116 @@ def hard_boundary(prev: Item, cur: Item) -> bool:
             return True
         if prev.page == cur.page and cur.block != prev.block and not cur.attr:
             return True
+        return False
+    if prev.signal is not None or cur.signal is not None:
+        return False      # explicit layout override (text source, or a heading returned to the body): no geometry
+    if prev.small != cur.small or prev.label != cur.label:
+        return True
+    if prev.page == cur.page and prev.deep != cur.deep:
+        return True
     return False
+
+
+def mark_display(items: list[Item], geo: Geometry) -> None:
+    """Flag displayed lines: small type, deep indent, and runs of short unpunctuated labels (justified text
+    only). A flagged run is a real display block only when it is a block: it follows a finished sentence (or a
+    colon) and the text after it starts a new paragraph. Anything else (a running head in the middle of a
+    sentence, OCR size jitter, an equation inside a sentence) is not flagged, so no sentence is ever cut."""
+    idx = [k for k, i in enumerate(items) if i.kind == "line"]
+    if not idx:
+        return
+    for it in items:
+        it.small = it.deep = it.label = False
+    plain = [k for k in idx if items[k].signal is None and not items[k].epi]
+    if not plain:
+        return
+    med = statistics.median(items[k].size or 12.0 for k in plain)
+
+    def gate(k0: int, k1: int, attr: str) -> bool:
+        before = items[k0 - 1] if k0 > 0 else None
+        after = items[k1 + 1] if k1 + 1 < len(items) else None
+        ok_before = before is None or before.kind != "line" or getattr(before, attr) or before.signal is not None \
+            or ends_terminal(before.text) or ends_colon(before.text) or ends_initial(before.text)
+        ok_after = after is None or after.kind != "line" or getattr(after, attr) or after.signal is not None \
+            or starts_paragraph(after.text)
+        return ok_before and ok_after
+
+    def flag(run: list[int], attr: str) -> None:
+        if run and gate(run[0], run[-1], attr):
+            for k in run:
+                setattr(items[k], attr, True)
+
+    # Small type: two or more consecutive lines of one clearly smaller size, between lines of normal size.
+    run: list[int] = []
+    for k in idx:
+        it = items[k]
+        small = it.signal is None and not it.epi and (it.size or med) < 0.85 * med
+        if small and (not run or abs(it.size - items[run[0]].size) <= 0.08 * items[run[0]].size
+                      and k == run[-1] + 1):
+            run.append(k)
+            continue
+        if len(run) >= 2:
+            before = items[run[0] - 1] if run[0] > 0 else None
+            after = it if not small else None
+            normal = lambda x: x is None or x.kind != "line" or x.signal is not None or (x.size or med) >= 0.92 * med  # noqa: E731
+            if normal(before) and normal(after):
+                flag(run, "small")
+        run = [k] if small else []
+    if len(run) >= 2:
+        flag(run, "small")
+
+    # Deep indent: a run of consecutive lines on one page that share a left edge and sit well in from the lines
+    # just before AND just after the run. The comparison is with the neighbouring lines, not with a page margin,
+    # so a jittery margin or a first-line indent never counts.
+    T = 2.5 * med
+    n = 0
+    while n < len(idx):
+        k0 = idx[n]
+        run = [k0]
+        while n + len(run) < len(idx):
+            k1 = idx[n + len(run)]
+            if k1 == run[-1] + 1 and items[k1].page == items[k0].page and abs(items[k1].x0 - items[k0].x0) <= 2.5 \
+                    and items[k1].signal is None and not items[k1].epi:
+                run.append(k1)
+            else:
+                break
+        first, last = items[run[0]], items[run[-1]]
+        a = items[run[0] - 1] if run[0] > 0 else None
+        b = items[run[-1] + 1] if run[-1] + 1 < len(items) else None
+        a = a if a is not None and a.kind == "line" and a.page == first.page and not a.epi and a.signal is None else None
+        b = b if b is not None and b.kind == "line" and b.page == first.page and not b.epi and b.signal is None else None
+        # A fragment on the same text row as its neighbour (PyMuPDF cut the row in two) is not a displayed block.
+        same_row = (a is not None and abs(a.y0 - first.y0) < 0.5 * med) or (b is not None and abs(b.y0 - last.y0) < 0.5 * med)
+        if first.signal is None and not first.epi and not same_row and (a is not None or b is not None) \
+                and (a is None or first.x0 - a.x0 > T) and (b is None or first.x0 - b.x0 > T):
+            flag(run, "deep")
+        n += len(run)
+    if not geo.short_valid:
+        return
+
+    # Labels: consecutive short lines without a full stop, each followed by a line that starts with a capital.
+    def label_line(k: int) -> bool:
+        l = items[k]
+        t = l.text.rstrip()
+        nxt = items[k + 1] if k + 1 < len(items) else None
+        return bool(t) and l.signal is None and not l.epi and l.x1 < geo.right_margin - 4 * (l.size or 12.0) \
+            and not ends_terminal(t) and not ends_colon(t) and not t.endswith((",", ";", "-", "\u2014")) \
+            and not l.bullet and not is_list_start(t) and nxt is not None and nxt.kind == "line" \
+            and nxt.page == l.page and nxt.signal is None and starts_paragraph(nxt.text) and not nxt.epi
+
+    run = []
+    for k in idx + [len(items)]:
+        if k < len(items) and label_line(k) and (not run or k == run[-1] + 1):
+            run.append(k)
+            continue
+        if len(run) >= 2:
+            flag(run, "label")
+        run = [k] if k < len(items) and label_line(k) else []
 
 
 def assemble(items: list[Item], geo: Geometry | None = None) -> list[RawPara]:
     geo = geo or compute_geometry(items)
+    mark_display(items, geo)
     out: list[RawPara] = []
     chapter, section = "Body", None
     cur: RawPara | None = None
@@ -403,7 +549,7 @@ def finish_text(text: str, report: dict) -> str:
     text, noise = strip_ocr_noise(text)
     if noise:
         report["ocr_noise_removed"] = report.get("ocr_noise_removed", 0) + noise
-    return tidy_spacing(text)
+    return tidy_spacing(text).replace(f" {LABEL_SEP} ", " / ").replace(LABEL_SEP, " / ")
 
 
 TITLE_FILLER = {"of", "and", "the", "in", "by", "vs", "for", "to", "a", "an", "on", "at", "with", "from", "or", "is",
@@ -685,6 +831,108 @@ def detect_table_blocks(blocks: list[list[lx.Line]], body: float) -> tuple[set[i
     return inside, total
 
 
+PUBLISHING_MARKERS = [re.compile(p, re.I) for p in (
+    r"\bISBN(?:-1[03])?\b", r"\ball rights reserved\b", r"\bfirst (?:published|edition|printing|u\.?s\.? edition)\b",
+    r"\b(?:copyright|\u00a9)\s*(?:\u00a9|\(c\))?\s*(?:\d{4}|by\b|[A-Z][a-z]+ [A-Z])", r"\bcataloging[- ]in[- ]publication\b",
+    r"\bcataloguing in publication\b", r"\blibrary of congress\b", r"\bCIP\b", r"\bprinted in (?:the )?[A-Z]",
+    r"\bno part of this (?:book|publication)\b", r"\bmay be reproduced\b", r"\bpublished by\b",
+    r"\bwhilst every effort has been made\b", r"\bmoral rights\b", r"\bthe right of .{3,60} to be identified as\b",
+    r"\bbritish library\b", r"\bpermission of the publisher\b")]
+
+
+def publishing_markers(text: str) -> int:
+    return sum(1 for rx in PUBLISHING_MARKERS if rx.search(text))
+
+
+def is_copyright_page(text: str) -> bool:
+    """A copyright / publishing-details page: ISBN, CIP data, 'First published', 'All rights reserved',
+    publisher address blocks. Three distinct markers on one page is never body prose."""
+    return word_count(text) <= 450 and publishing_markers(text) >= 3
+
+
+def is_subhead_block(block: list, body: float, bold_frac: float, body_font: str, mid: float, left: float,
+                     following: Any | None) -> bool:
+    """A sentence-length subhead set apart by weight and face: every line bold (a bold lead-in inside a body
+    line never is: it covers part of the line only), type at least body size, and either centred on the text
+    column or in another typeface than the body; followed by plain body text. Length and final punctuation do
+    not matter."""
+    if not block or len(block) > 5 or bold_frac >= 0.25:
+        return False
+    text = " ".join(l.text.strip() for l in block)
+    if not 1 <= word_count(text) <= 40 or text[:1].islower():
+        return False
+    if not all(l.bold and l.size >= body * 0.95 and not l.big_first for l in block):
+        return False
+    if following is None or following.bold or not following.text.strip()[:1] \
+            or following.text.strip()[:1].islower() or following.block == block[-1].block:
+        return False   # a bold lead-in line, or a bold line that flows on into the same block or a lowercase line
+    if re.search(r"[,;:\u2014-]$", text.rstrip()):
+        return False
+    centered = all(abs((l.x0 + l.x1) / 2 - mid) <= 6 for l in block) and any(l.x0 > left + 4 for l in block)
+    other_face = bool(body_font) and all(l.font and l.font != body_font for l in block)
+    return centered or other_face
+
+
+def find_subhead_runs(flat: list, eflags: dict, body: float, bold_frac: float, body_font: str,
+                      left: float, right: float) -> dict[int, list]:
+    """id(first line) -> the lines of a typographic subhead: consecutive bold lines (they may be split over
+    several PyMuPDF blocks) that pass is_subhead_block."""
+    out: dict[int, list] = {}
+    k = 0
+    while k < len(flat):
+        l = flat[k]
+        if not l.bold or l.size < body * 0.95 or id(l) in eflags:
+            k += 1
+            continue
+        run = [l]
+        while k + len(run) < len(flat):
+            nxt, last = flat[k + len(run)], run[-1]
+            if nxt.bold and abs(nxt.size - l.size) < 0.4 and 0 <= nxt.y0 - last.y1 < 0.8 * l.size and id(nxt) not in eflags:
+                run.append(nxt)
+            else:
+                break
+        following = flat[k + len(run)] if k + len(run) < len(flat) else None
+        if is_subhead_block(run, body, bold_frac, body_font, (left + right) / 2, left, following):
+            out[id(run[0])] = run
+        k += len(run)
+    return out
+
+
+def demote_sidebar_epigraphs(items: list[Item]) -> int:
+    """Epigraph lines only OPEN a chapter or section: the block comes right after a chapter or heading
+    marker, or right before one (the printed title sits below it), or is the first thing in the book. Indented
+    italic text in the middle of body text is a sidebar or pull quote: it goes back to the body. Returns the
+    number of lines returned to the body. Only real prose qualifies (body-size type, 12+ words, mostly
+    letters): small-type debris flagged as an epigraph stays out."""
+    n = 0
+    k = 0
+    sizes = [it.size for it in items if it.kind == "line" and it.size]
+    med = statistics.median(sizes) if sizes else 12.0
+    while k < len(items):
+        if not (items[k].kind == "line" and items[k].epi):
+            k += 1
+            continue
+        j = k
+        while j < len(items) and items[j].kind == "line" and items[j].epi:
+            j += 1
+        before = items[k - 1].kind if k > 0 else "chapter"
+        after = items[j].kind if j < len(items) else "chapter"
+        run = items[k:j]
+        txt = " ".join(it.text for it in run)
+        letters = sum(c.isalpha() for c in txt)
+        real = word_count(txt) >= 12 and statistics.median(it.size or med for it in run) >= 0.9 * med \
+            and letters >= 0.7 * max(1, len(txt.replace(" ", "")))
+        if real and before not in ("chapter", "heading", "break") and after not in ("chapter", "heading"):
+            for it in items[k:j]:
+                if it.attr:
+                    continue          # the credit line ("-NAME, TITLE") teaches nothing: it stays out
+                it.epi = False
+                it.was_epi = True
+                n += 1
+        k = j
+    return n
+
+
 def pdf_items(path: Path, report: dict, title: str | None = None) -> list[Item]:
     """Read a PDF into ordered Items, stripping furniture, footnotes, front and back matter."""
     if fitz is None:
@@ -751,6 +999,16 @@ def pdf_items(path: Path, report: dict, title: str | None = None) -> list[Item]:
     margins = _doc_margins(page_blocks, body)
     report["tables"] = []
     report["epigraph_blocks"] = 0
+    report["copyright_pages"] = []
+    report["equation_pages"] = []
+    font_chars: Counter = Counter()
+    for blocks_ in page_blocks.values():
+        for block_ in blocks_:
+            for l_ in block_:
+                if abs(l_.size - body) < 0.3 and not l_.bold:
+                    font_chars[l_.font] += len(l_.text.strip())
+    body_font = font_chars.most_common(1)[0][0] if font_chars else ""
+    prev_copyright = False
 
     chapter_by_page: dict[int, lx.ChapterPlan] = {}
     for plan in plans:
@@ -784,10 +1042,22 @@ def pdf_items(path: Path, report: dict, title: str | None = None) -> list[Item]:
             blocks = [b for bi, b in enumerate(blocks) if bi not in table_idx]
             if not blocks:
                 continue
+        page_text = " ".join(l.text for b in blocks for l in b)
+        if is_copyright_page(page_text) or (prev_copyright and word_count(page_text) <= 250
+                                            and publishing_markers(page_text) >= 1):
+            report["copyright_pages"].append({"page": n, "words": word_count(page_text),
+                                              "starts": clean_inline(page_text)[:160]})
+            prev_copyright = True
+            continue
+        prev_copyright = False
+        if any(l.eq for b in blocks for l in b):
+            report["equation_pages"].append(n)
         eflags = epigraph_flags(blocks, body, margins[f"left{n % 2}"], margins["right"])
         report["epigraph_blocks"] += len({id(b) for b in blocks if any(id(l) in eflags for l in b)})
         flat = [l for b in blocks for l in b]
         next_line = {id(a): b for a, b in zip(flat, flat[1:])}
+        sub_runs = find_subhead_runs(flat, eflags, body, bold_frac, body_font, margins[f"left{n % 2}"],
+                                     margins["right"])
         chapter_norm = lx.norm(plan.title)
         sub_norms = {lx.norm(s) for s in plan.subtitles}
         toc_sections = {lx.norm(t) for t, p in plan.sections if p == n}
@@ -890,19 +1160,25 @@ def pdf_items(path: Path, report: dict, title: str | None = None) -> list[Item]:
                     report["removed"]["ornaments_and_rules"] += 1
                     i += 1
                     continue
-                kind = lx._heading_candidate(line, body, bold_frac, single, i == 0, run_in_ok=len(block) > 1,
-                                             following=next_line.get(id(line)))
+                sub = sub_runs.get(id(line))
+                kind = "subhead" if sub else lx._heading_candidate(
+                    line, body, bold_frac, single, i == 0, run_in_ok=len(block) > 1, following=next_line.get(id(line)))
                 if kind:
                     j = i + 1
                     parts = [line.text.strip()]
-                    while j < len(block) and kind != "bold" and abs(block[j].size - line.size) < 0.4 \
+                    if sub:
+                        parts = [l.text.strip() for l in sub]
+                        in_block = {id(l) for l in block}
+                        j = i + sum(1 for l in sub if id(l) in in_block)
+                        absorbed.update(id(l) for l in sub[1:] if id(l) not in in_block)
+                    while j < len(block) and kind not in ("bold", "subhead") and abs(block[j].size - line.size) < 0.4 \
                             and block[j].bold == line.bold and sum(word_count(x) for x in parts) < 14 \
                             and (kind == "size" or lx._heading_candidate(block[j], body, bold_frac, single, False, False) == kind):
                         parts.append(block[j].text.strip())
                         j += 1
                     tail = block[j - 1]
                     nl = next_line.get(id(tail))
-                    while kind != "bold" and nl is not None and id(nl) not in absorbed and j >= len(block) \
+                    while kind not in ("bold", "subhead") and nl is not None and id(nl) not in absorbed and j >= len(block) \
                             and abs(nl.size - line.size) < 0.4 and nl.bold == line.bold \
                             and 0 <= nl.y0 - tail.y1 < 0.9 * line.size and sum(word_count(x) for x in parts) < 14 \
                             and not re.search(r"[.!?][\"”’)]*$", " ".join(parts)):
@@ -918,7 +1194,7 @@ def pdf_items(path: Path, report: dict, title: str | None = None) -> list[Item]:
                             in_margin=line.y0 < h * 0.11 or line.y1 > h * 0.90)):
                         if is_dateline(text) or is_figure_caption(text) or lx.WATERMARK_RE.match(text):
                             report["removed"]["dateline_caption_or_watermark_heading"] += 1
-                        elif kind != "size" and plan.sections and tnorm not in toc_sections \
+                        elif kind not in ("size", "subhead") and plan.sections and tnorm not in toc_sections \
                                 and (re.search(r"\d", text) or lx_caps_ratio(text) < 0.2 and word_count(text) > 8):
                             # With an outline, a bold or caps line that is not in it is a heading only when it
                             # reads like one: figure labels, numbered labels and long bold lines are not.
@@ -948,6 +1224,7 @@ def pdf_items(path: Path, report: dict, title: str | None = None) -> list[Item]:
                 break
         if stopped_at is not None:
             break
+    report["epigraphs_kept_as_body"] = demote_sidebar_epigraphs(items)
     # Back matter that the outline already excluded.
     last_body = body_pages[-1] if body_pages else n_pages
     if stopped_at is None and last_body < n_pages:
@@ -1054,7 +1331,8 @@ def text_items(raw: str, report: dict) -> list[Item]:
                    "duplicate_blocks": [], "sponsor_reads_removed": 0, "punct_artifacts_collapsed": 0})
     # Transcript artifact: a question or exclamation mark followed by a stray full stop ("?.", "!.").
     raw, n_art = re.subn(r"(?<=[?!])\.(?=\s|$)", "", raw)
-    report["punct_artifacts_collapsed"] = n_art
+    raw, n_dash = collapse_dash_punct(raw)
+    report["punct_artifacts_collapsed"] = n_art + n_dash
     blocks = []
     for b in re.split(r"\n\s*\n", raw.replace("\r\n", "\n")):
         # A speaker label (**Name:**) is a layout signal: each turn is its own block.

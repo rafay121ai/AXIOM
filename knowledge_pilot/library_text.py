@@ -594,9 +594,22 @@ def strip_ocr_noise(text: str) -> tuple[str, int]:
     return text, n
 
 
+# Terminal punctuation left after a dash ("it was—." or "—,"): the dash already ends the thought.
+DASH_PUNCT_RE = re.compile(r"(?<=[—–―])[.,;](?=\s|$|[\"”’'])")
+# A comma left behind when footnote markers "95 , 96" were removed: 'made.”, Although'.
+STRAY_COMMA_RE = re.compile(r"(?<=[.!?][”\"’')\]])\s*,(?=\s+[A-Z“\"‘])")
+
+
+def collapse_dash_punct(text: str) -> tuple[str, int]:
+    """'—.' -> '—' and similar terminal punctuation after a dash. Returns (text, fixes)."""
+    return DASH_PUNCT_RE.subn("", text)
+
+
 def tidy_spacing(text: str) -> str:
     text = SPACE_BEFORE_PUNCT_RE.sub(r"\1", text)
     text = SPACE_BEFORE_DASH_RE.sub(r"\1", text)
+    text = DASH_PUNCT_RE.sub("", text)
+    text = STRAY_COMMA_RE.sub("", text)
     return text
 
 
