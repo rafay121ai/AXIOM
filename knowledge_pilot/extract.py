@@ -41,7 +41,7 @@ import library_paragraphs as lp  # noqa: E402
 import library_text as lt  # noqa: E402
 
 EXTRACT_VERSION = "v3.1"
-DEFAULT_VERSION = "v3"
+DEFAULT_VERSION = "v3.1"
 DEFAULT_OUT_ROOT = HERE / "library"
 WORDLIST_PATH = HERE / "data" / "solid_words.txt"
 
@@ -633,7 +633,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--source", action="append", default=[], help="source id (repeatable)")
     ap.add_argument("--all", action="store_true", help="every non-duplicate source in the manifest")
     ap.add_argument("--out-root", default=str(DEFAULT_OUT_ROOT))
-    ap.add_argument("--version", default=DEFAULT_VERSION, help="tag used in file names (default v3)")
+    ap.add_argument("--version", default=DEFAULT_VERSION, help="tag used in file names (default v3.1)")
     ap.add_argument("--report", action="store_true", help="write EXTRACTION_REPORT.md from existing metrics")
     ap.add_argument("--report-path", default=str(HERE / "EXTRACTION_REPORT.md"))
     ap.add_argument("--jobs", type=int, default=6)

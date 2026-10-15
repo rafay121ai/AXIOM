@@ -130,7 +130,7 @@ DATELINE_RE = re.compile(
 ATTRIBUTION_RE = re.compile(r"^[—–―-]{1,2}\s*[A-Z][^.!?]{1,80}$")
 SCENE_BREAK_RE = re.compile(
     r"^(?:\*\s*){3,}$|^(?:[#•·~=_-]\s*){3,}$|^\*\s*\*\s*\*$|^#$"
-    r"|^[\u2014\u2013\u2015\-]{1,6}$|^[•·◆◇■□▪✦❖]$|^(?:[•·◆◇✦❖]\s*){1,6}$")
+    r"|^[\u2014\u2013\u2015\-]{1,6}$|^[•·◆◇■□▪✦❖]$|^(?:[•·◆◇✦❖]\s*){1,6}$|^(?:[—–―\-]\s*){2,6}$|^[~∼]{1,3}$|^[*•·✱✲❋]+$")
 
 
 def is_figure_caption(text: str) -> bool:
@@ -546,7 +546,7 @@ def section_restates_chapter(section: str | None, chapter: str | None) -> bool:
 # A space before sentence punctuation that follows a word, closing quote or bracket and is followed by a space
 # or the end ("Complexity ." after an italic run). An ellipsis written ". . ." is left alone because the
 # punctuation there follows a full stop, not a word.
-SPACE_BEFORE_PUNCT_RE = re.compile(r"(?<=[A-Za-z0-9”’\"')\]])\s+([.,;:!?])(?=\s|$)")
+SPACE_BEFORE_PUNCT_RE = re.compile(r"(?<=[A-Za-z0-9”’\"')\]])\s+([.,;:!?])(?=\s|$)(?!\s\.\s\.)")
 # A dash that is tight against the word on its right but has a space on its left ("humility —humility"):
 # the space came from a span or line boundary.
 SPACE_BEFORE_DASH_RE = re.compile(r"(?<=[A-Za-z0-9])\s+([—–])(?=[A-Za-z])")
