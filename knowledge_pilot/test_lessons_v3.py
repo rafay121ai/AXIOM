@@ -173,7 +173,7 @@ def test_extract_cache_cost_and_outputs(env):
     assert cost["cost_usd"] == pytest.approx(state.cost_from_usage("gpt-4.1-mini", 4000, 500))
     assert state.total_cost(env.state) == pytest.approx(cost["cost_usd"])
     rows = [json.loads(l) for l in (env.out / "lessons.jsonl").read_text().splitlines()]
-    assert rows[0]["evidence_paragraphs"][0]["id"] == "s_p0001" and rows[0]["prompt_version"] == "lessons-v3.0"
+    assert rows[0]["evidence_paragraphs"][0]["id"] == "s_p0001" and rows[0]["prompt_version"] == "lessons-v3.4"
     assert (env.out / "dropped.jsonl").read_text().strip()
     # second run: served from cache, no call, no cost
     ex2 = l3.ExtractorV3(client, examples=examples(), cache_path=env.cache, state_path=env.state)

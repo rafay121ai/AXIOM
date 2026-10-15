@@ -34,7 +34,7 @@ import library_state as state  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 JUDGE_MODEL = "gpt-4.1"
-JUDGE_PROMPT_VERSION = "judge-v1"
+JUDGE_PROMPT_VERSION = "judge-v5"
 BATCH_SIZE = 8
 MAX_ATTEMPTS = 3
 MAX_COMPLETION_TOKENS = 4000
@@ -58,6 +58,13 @@ THE FIVE TESTS
 
 5. findable. The three example_questions are questions this idea genuinely answers, in a founder's voice. Fail if any question is answered better by a different idea, is not really answered by the lesson, or if there are fewer than three questions.
 
+HOW TO APPLY THE TESTS (follow these steps, they are where lenient reviewers go wrong)
+- grounded: list every factual claim, number, name, mechanism and causal link in author_argues and principle, and find each one in the cited paragraphs. One claim you cannot find is a fail. Do not let plausible background knowledge stand in for the text.
+- specific: write down what the lesson says in one sentence and ask whether it would still be true and useful pasted into an unrelated book. If the principle restates the title in more general words, drops the particular case, number or mechanism the paragraphs give, or amounts to 'do the right thing carefully', FAIL. A lesson passes only if the paragraphs' own distinct mechanism is visible in the principle.
+- one_idea: split author_argues and principle into the separate claims they contain. If the lesson joins two claims that appear in different paragraphs, or a title with 'and' that joins two points, or a principle that could be split into two lessons that each stand alone, FAIL. A story plus the single point it makes is one idea. A title or principle built as 'X and Y' / 'both X and Y' where X and Y are different mechanisms FAILS even if the lesson calls them related.
+- attributed: first copy the name credited in author_argues, then find the paragraph that carries the lesson's main claim and copy who speaks it (the speaker label at its start in a transcript; the narrator or the quoted person in a book). If the two names differ, FAIL, even if the credited person is mentioned or agrees elsewhere in the passage. In transcripts, check the speaker label of each paragraph: if the lesson names speaker X but the paragraph carrying the claim is spoken by Y (or X only asks the question or rebuts it), FAIL. If a character's story, a quoted third party's view, or an interviewer's framing is presented as the author's general claim, FAIL. If the author describes a view only to reject it, FAIL. If a quoted person's own guess or interpretation ('I think they recognized...') is presented as what the author argues or as established fact, FAIL.
+- findable: for each of the three questions, say in your reason whether the principle answers it. If any question asks for something the lesson does not tell, FAIL.
+
 WORKED EXAMPLES
 
 Example A (passes all five).
@@ -70,13 +77,18 @@ Cited paragraphs: "Every founder I interviewed told me the same thing: you have 
 Lesson: title "Persistence is the key to startup success"; author_argues "The author argues that persistence is what separates successful founders from the rest and that founders must never give up."; principle "Never give up and keep pushing no matter what."; short_quote "persistence is what separates"; example_questions ["How do I stay motivated?", "What is the best way to price my product?", "How do I find investors?"].
 Verdict: grounded FAIL (the paragraphs say nothing about separating successful founders from the rest, and the quote does not appear); specific FAIL (a slogan with no mechanism that fits any business book); one_idea pass; attributed FAIL (the stubbornness is Maria's own account, not the author's argument, and the lesson does not say so); findable FAIL (two of the three questions are not answered by this lesson).
 
+Example C (fails specific). Paragraphs describe how a bakery chain found that customers bought more when the cheapest loaf sat at eye level next to a pricier loaf, because the comparison made the pricier one look like a trade-up. Lesson principle: "Think carefully about how you present your prices." Verdict: specific FAIL (true of any book; it drops the mechanism, which is a side-by-side comparison that frames the pricier item as a trade-up).
+Example D (fails attributed). A podcast paragraph spoken by the guest says rural clinics lose money on every visit; a later paragraph spoken by the host says subsidies might fix it. The lesson credits the guest with the subsidy point. Verdict: attributed FAIL (the subsidy idea is the host's).
+Example E (fails one_idea). Lesson title "Pricing tests and hiring speed both decide early survival", with a principle that joins running price experiments weekly with hiring the first ten staff within a month. Verdict: one_idea FAIL (two separable ideas from different paragraphs).
+
 OUTPUT
 Return one verdict per lesson, in the same order, using the lesson_id shown with each lesson. Return exactly as many verdicts as lessons. Do not add commentary outside the structured fields."""
 
 
 class TestVerdict(BaseModel):
-    passed: bool
+    work: str = Field(description="Your working, written BEFORE deciding. grounded: each claim in author_argues/principle with the quoted paragraph words that support it, or 'NOT FOUND'. specific: the one-sentence content and what the paragraphs' particular mechanism is. one_idea: a numbered list of the distinct claims. attributed: (a) the name credited in author_argues; (b) the paragraph that carries the lesson's MAIN claim and the speaker label or narrator that begins it; (c) whether (a) equals (b), word for word. A transcript turn labelled with a different name is a mismatch. findable: for each of the three questions, the words of the principle that answer it, or 'NOT ANSWERED'.")
     reason: str = Field(description="One short line naming the words that decided it")
+    passed: bool
 
 
 class LessonVerdict(BaseModel):

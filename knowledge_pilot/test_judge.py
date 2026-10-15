@@ -14,7 +14,7 @@ import library_state as state  # noqa: E402
 def passing(lid, **fail):
     kw = {"lesson_id": lid}
     for t in j.TESTS:
-        kw[t] = j.TestVerdict(passed=t not in fail, reason=f"{t} reason")
+        kw[t] = j.TestVerdict(work="w", passed=t not in fail, reason=f"{t} reason")
     return j.LessonVerdict(**kw)
 
 
@@ -90,7 +90,7 @@ def test_cache_key_changes_with_content_and_version(env, monkeypatch):
     b["principle"] = "different"
     assert j.cache_key(a) != j.cache_key(b)
     k = j.cache_key(a)
-    monkeypatch.setattr(j, "JUDGE_PROMPT_VERSION", "judge-v2")
+    monkeypatch.setattr(j, "JUDGE_PROMPT_VERSION", "judge-vtest")
     assert j.cache_key(a) != k
     assert j.cache_key(a, "gpt-4.1-mini") != j.cache_key(a)
 

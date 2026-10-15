@@ -28,7 +28,7 @@ sys.path.insert(0, str(HERE))
 import library_lessons as v2  # noqa: E402  (shared helpers only)
 import library_state as state  # noqa: E402
 
-PROMPT_VERSION = "lessons-v3.0"
+PROMPT_VERSION = "lessons-v3.4"
 MODELS = ("gpt-4.1-mini", "gpt-4.1")
 DEFAULT_MODEL = "gpt-4.1-mini"
 CAP_USD = 6.90
@@ -80,7 +80,7 @@ class WindowOutV3(BaseModel):
 
 INSTRUCTIONS = """You turn one reading window from a book, paper or transcript into LESSONS for startup founders.
 
-A lesson is ONE idea the author or speaker teaches, grounded in 1 to 3 specific paragraphs, with a mechanism a founder can reason with. Zero lessons is a valid and common answer. Return {"lessons": []} when the window teaches nothing a founder could use.
+A lesson is ONE idea the author or speaker teaches, grounded in 1 to 3 specific paragraphs, with a mechanism a founder can reason with. Extract EVERY distinct idea a founder could use. A typical 2,000-word window of real teaching holds 3 to 6 lessons; fewer only when the text is mostly story setup, banter or repetition. Work through the window paragraph by paragraph and ask of each: does it carry an idea with a mechanism, a number, a rule of thumb, a named framework, a warning or a decision test? If yes, it belongs to a lesson. As a guide, expect about one lesson for every 300 to 400 words of teaching text, and cover the whole window from first paragraph to last, not just the opening. Before you answer, check the window paragraph by paragraph: every paragraph that states a mechanism, a number, a rule of thumb, a named framework, a warning, a decision test or a concrete case with a point should be cited by at least one lesson, and dense teaching windows often yield 5 to 8 lessons. A lesson may cite the paragraph that STATES the idea together with the one that gives its best example, but cite the stating paragraph first. Do not stop after the first few ideas, and do not merge neighbouring ideas to save space: if a passage holds two ideas, return two lessons, each citing its own paragraphs. Still keep one idea per lesson. Zero lessons is valid only for a window that truly teaches nothing.
 
 NOT lessons (never write one from these):
 - slogans or sayings with no mechanism ("work smarter, not harder")
@@ -90,15 +90,15 @@ NOT lessons (never write one from these):
 - repeats of an idea already covered by another lesson in this window (write one lesson, cite the best paragraphs)
 
 Rules for each field:
-- paragraph_ids: 1 to 3 ids copied from "PARAGRAPHS YOU MAY CITE". Never cite a CONTEXT ONLY id. One idea per lesson, so cite only the paragraphs that carry it.
+- paragraph_ids: HARD LIMIT of 3 ids; a lesson that lists 4 or more is thrown away. If an idea seems to need more paragraphs, either pick the 1 to 3 paragraphs that carry its core, or split it into two lessons. 1 to 3 ids copied from "PARAGRAPHS YOU MAY CITE". Never cite a CONTEXT ONLY id. One idea per lesson, so cite only the paragraphs that carry it.
 - title: 5 to 10 words naming the idea.
-- author_argues: 2 to 3 sentences. Attribute to the ACTUAL speaker by name, in the voice of the text: if a character speaks, say so ("Kiyosaki recounts rich dad saying..."); in a transcript name the guest or host who said it. Do not put one person's words in another's mouth. Every number you write must appear in the cited paragraphs.
+- author_argues: 2 to 3 sentences. Attribute to the ACTUAL speaker by name, in the voice of the text: if a character speaks, say so ("Kiyosaki recounts rich dad saying..."); in a transcript name the guest or host who said it. Do not put one person's words in another's mouth. Every number you write must appear in the cited paragraphs. Use only words and claims the cited paragraphs support; do not add named concepts, examples or consequences of your own.
 - principle: ONE sentence stating the mechanism (what causes what, or what to do and why). It must not be a slogan. Every number must appear in the cited paragraphs.
 - evidence: one sentence copied VERBATIM from the cited paragraphs (the example, number or story), or null.
 - caveat: one sentence copied VERBATIM from the cited paragraphs that limits the idea, or null. Never infer or invent a caveat.
 - short_quote: an exact quote of 15 words or fewer copied from the cited paragraphs, or null.
 - applies_when: the founder situation in which this applies, in one sentence.
-- example_questions: exactly 3 questions a founder might type, in a founder's own words and specific to this idea.
+- example_questions: exactly 3 questions a founder might type, in a founder's own words and specific to this idea. Write them LAST, from your own principle: each question must be fully answered by the principle and author_argues you wrote, with no extra advice needed. Never ask for a remedy, a timing or a risk the lesson does not state.
 - lesson_type: principle, framework (named steps or parts), story (the point is carried by an episode), or data (a finding or number).
 - pillars: only pillars the lesson clearly belongs to (how_companies_win, human_mind, money_game, move_people, think_sharper, whats_coming); an empty list if unsure.
 
