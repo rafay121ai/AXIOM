@@ -68,6 +68,30 @@ def test_colon_followed_by_plain_continuation_stays_joined():
     assert len(paras(items)) == 1
 
 
+def test_numbered_paragraph_without_hanging_indent_splits_at_first_line_indent():
+    items = [ln("2. In 1639 an army besieged a city and", x0=72, y0=100),
+             ln("took it after a long siege of the walls.", x0=72, y0=114),
+             ln("The next paragraph starts with an indent.", x0=90, y0=128)]
+    assert len(paras(items)) == 2
+
+
+def test_hanging_indent_list_item_is_not_split_by_its_own_wrapped_lines():
+    items = [ln("2. In 1639 an army besieged a city and", x0=72, y0=100),
+             ln("took it after a long siege of the walls. It", x0=90, y0=114),
+             ln("Then continued on with the details of it.", x0=90, y0=128)]
+    assert len(paras(items)) == 1
+
+
+def test_short_list_item_at_page_end_then_indented_prose_splits_but_long_item_continues():
+    short = [ln("• Last item of the list.", x0=72, y0=700, page=1), ln("Now some ordinary prose starts here.", x0=90, y0=100, page=2)]
+    assert len(paras(short)) == 2
+    longer = [ln("• A long item that wraps over three lines", x0=72, y0=670, page=1),
+              ln("and goes on for a while longer here.", x0=90, y0=684, page=1),
+              ln("and it ends with a full stop right here.", x0=90, y0=698, page=1),
+              ln("Another sentence of the same item.", x0=90, y0=100, page=2)]
+    assert len(paras(longer)) == 1
+
+
 # (2) TABLES ---------------------------------------------------------------------------------------
 
 def _table_page_lines(cell_text):
@@ -244,3 +268,8 @@ def test_page_top_indented_note_is_kept(tmp_path):
     ps, _ = lp.build_paragraphs("t", manifest, tmp_path / "t.pdf")
     alltext = " ".join(p["text"] for p in ps)
     assert "Note that this will drop the old notation" in alltext
+
+
+def test_ellipsis_opener_counts_as_paragraph_start():
+    assert lp.starts_paragraph("…It has no plans to bring the service")
+    assert not lp.starts_paragraph("…and then it stopped")

@@ -539,7 +539,7 @@ def build_headings(paras: list[dict], found: list[dict], sid: str) -> list[dict]
 # ---------------------------------------------------------------------------
 
 def _suffix(version: str) -> str:
-    return "" if version == DEFAULT_VERSION else f"_{version}"
+    return "" if version == "v3" else f"_{version}"
 
 
 def write_source(result: dict, entry: dict, out_root: Path, version: str, archive_root: Path | None = None) -> Path:

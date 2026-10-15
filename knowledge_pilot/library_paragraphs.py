@@ -143,7 +143,7 @@ def starts_paragraph(text: str) -> bool:
         return True
     if t[0] in "\"'“‘":
         return True
-    t = t.lstrip(OPENERS + " ")
+    t = t.lstrip(OPENERS + " …")
     return bool(t) and (t[0].isupper() or t[0].isdigit())
 
 
@@ -278,7 +278,8 @@ def layout_signal(prev: Item, cur: Item, geo: Geometry, para_first: Item | None 
 _COLON_SIGNALS = {"indent", "gap", "block", "new_column", "explicit", "marker"}
 
 
-def should_split(prev: Item, cur: Item, geo: Geometry, para_first: Item | None = None) -> str | None:
+def should_split(prev: Item, cur: Item, geo: Geometry, para_first: Item | None = None,
+                n_lines: int | None = None) -> str | None:
     """The general rule. Returns the reason to start a new paragraph, or None to join the lines.
     para_first is the first line of the paragraph being built (used for the list rules).
 
@@ -303,6 +304,18 @@ def should_split(prev: Item, cur: Item, geo: Geometry, para_first: Item | None =
             return sig + "+after_list"          # one-line item, then ordinary text
         if sig in ("gap", "new_column") or (sig == "block" and ends_terminal(prev.text)):
             return sig + "+after_list"
+        # A short list item (one or two lines) that ends a sentence at a page end, followed by a first-line
+        # indented line on the next page, is the end of the list: ordinary text follows.
+        rel_x = cur.x0 - geo.base_x.get(cur.page, geo.default_base_x)
+        if (sig == "indent" or (sig in (None, "short_line") and rel_x > 0.5 * size)) and cur.page != prev.page \
+                and ends_terminal(prev.text) and n_lines is not None and n_lines <= 2:
+            return "indent+after_list_page"
+        # A numbered paragraph without a hanging indent (its lines all start at one margin) is not a list item:
+        # a first-line indent after a full stop starts the next paragraph.
+        if sig == "indent" and para_first is not prev and ends_terminal(prev.text) \
+                and cur.page == prev.page and cur.x0 > prev.x0 + 0.5 * size and para_first.x0 >= prev.x0 - 1.0 \
+                and not para_first.bullet:
+            return "indent+after_numbered"
         if cur.page == prev.page and cur.x0 < prev.x0 - 0.5 * size and ends_terminal(prev.text):
             return "dedent"
         return None
@@ -370,7 +383,7 @@ def assemble(items: list[Item], geo: Geometry | None = None) -> list[RawPara]:
             scene = True
             cur = prev = None
             continue
-        if cur is None or prev is None or hard_boundary(prev, it) or should_split(prev, it, geo, cur.lines[0]):
+        if cur is None or prev is None or hard_boundary(prev, it) or should_split(prev, it, geo, cur.lines[0], len(cur.lines)):
             cur = RawPara([it], chapter, section, scene)
             out.append(cur)
             scene = False
