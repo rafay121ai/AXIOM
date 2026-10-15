@@ -111,6 +111,8 @@ def lesson_principle(lesson: dict) -> str | None:
 
 def evidence_paragraphs(lesson: dict) -> str:
     text = lesson.get("evidence_text")
+    if text is None:
+        text = lesson.get("evidence_paragraphs")  # v3 lessons
     if isinstance(text, list):
         text = "\n\n".join(str(t.get("text", t)) if isinstance(t, dict) else str(t) for t in text)
     return text or ""

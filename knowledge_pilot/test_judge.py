@@ -201,3 +201,9 @@ def test_recall_union_not_assumed_across_lessons():
 def test_recall_empty_tier():
     r = j.recall_report([], [])
     assert r["core_recall"] is None and r["minor_recall"] is None
+
+
+def test_evidence_paragraphs_accepts_v3_key():
+    import judge
+    got = judge.evidence_paragraphs({"evidence_paragraphs": [{"text": "A."}, "B."]})
+    assert "A." in got and "B." in got
