@@ -207,3 +207,20 @@ def test_evidence_paragraphs_accepts_v3_key():
     import judge
     got = judge.evidence_paragraphs({"evidence_paragraphs": [{"text": "A."}, "B."]})
     assert "A." in got and "B." in got
+
+
+def test_attribution_flag_transcript_and_quotes():
+    import judge
+    tr = {"author_argues": "Paul Kedroski argues X.", "paragraph_ids": ["transcripts-x_p0001"],
+          "evidence_paragraphs": [{"id": "transcripts-x_p0001", "text": "Derek Thompson: I think demand will grow."}]}
+    assert "Derek Thompson" in judge.attribution_flag(tr)
+    ok = dict(tr, author_argues="Derek Thompson argues X.")
+    assert judge.attribution_flag(ok) is None
+    book = {"author_argues": "Moore argues X.", "paragraph_ids": ["b_p0001"],
+            "evidence_paragraphs": [{"id": "b_p0001", "text": "According to Kahneman, margins fall. Moore disagrees."}]}
+    assert "Kahneman" in judge.attribution_flag(book)
+    assert judge.attribution_flag(dict(book, author_argues="Moore reports that Kahneman holds X.")) is None
+    # a result that passed is flipped to fail by the deterministic check
+    res = {"passed": True, "tests": {t: {"pass": True, "reason": "r"} for t in judge.TESTS}}
+    out = judge.apply_attribution_check(tr, res)
+    assert out["passed"] is False and out["tests"]["attributed"]["pass"] is False and res["passed"] is True

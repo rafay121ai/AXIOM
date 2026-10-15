@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import random
 import sys
 import time
@@ -34,7 +35,7 @@ import library_state as state  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 JUDGE_MODEL = "gpt-4.1"
-JUDGE_PROMPT_VERSION = "judge-v5"
+JUDGE_PROMPT_VERSION = "judge-v8"
 BATCH_SIZE = 8
 MAX_ATTEMPTS = 3
 MAX_COMPLETION_TOKENS = 4000
@@ -60,9 +61,9 @@ THE FIVE TESTS
 
 HOW TO APPLY THE TESTS (follow these steps, they are where lenient reviewers go wrong)
 - grounded: list every factual claim, number, name, mechanism and causal link in author_argues and principle, and find each one in the cited paragraphs. One claim you cannot find is a fail. Do not let plausible background knowledge stand in for the text.
-- specific: write down what the lesson says in one sentence and ask whether it would still be true and useful pasted into an unrelated book. If the principle restates the title in more general words, drops the particular case, number or mechanism the paragraphs give, or amounts to 'do the right thing carefully', FAIL. A lesson passes only if the paragraphs' own distinct mechanism is visible in the principle.
+- specific: write down what the lesson says in one sentence and ask whether it would still be true and useful pasted into an unrelated book. If the principle restates the title in more general words, drops the particular case, number or mechanism the paragraphs give, or amounts to 'do the right thing carefully', FAIL. Abstract nouns doing the work ('deliberate choices', 'mindset', 'attention', 'approach') with no concrete action, number, case or mechanism from the paragraphs also FAIL, even when each word loosely appears in the text. A lesson passes only if the paragraphs' own distinct mechanism is visible in the principle.
 - one_idea: split author_argues and principle into the separate claims they contain. If the lesson joins two claims that appear in different paragraphs, or a title with 'and' that joins two points, or a principle that could be split into two lessons that each stand alone, FAIL. A story plus the single point it makes is one idea. A title or principle built as 'X and Y' / 'both X and Y' where X and Y are different mechanisms FAILS even if the lesson calls them related.
-- attributed: first copy the name credited in author_argues, then find the paragraph that carries the lesson's main claim and copy who speaks it (the speaker label at its start in a transcript; the narrator or the quoted person in a book). If the two names differ, FAIL, even if the credited person is mentioned or agrees elsewhere in the passage. In transcripts, check the speaker label of each paragraph: if the lesson names speaker X but the paragraph carrying the claim is spoken by Y (or X only asks the question or rebuts it), FAIL. If a character's story, a quoted third party's view, or an interviewer's framing is presented as the author's general claim, FAIL. If the author describes a view only to reject it, FAIL. If a quoted person's own guess or interpretation ('I think they recognized...') is presented as what the author argues or as established fact, FAIL.
+- attributed: first copy the name credited in author_argues, then find the paragraph that carries the lesson's main claim and copy who speaks it (the speaker label at its start in a transcript; the narrator or the quoted person in a book). If the two names differ, FAIL, even if the credited person is mentioned or agrees elsewhere in the passage. In transcripts, check the speaker label of each paragraph: if the lesson names speaker X but the paragraph carrying the claim is spoken by Y (or X only asks the question or rebuts it), FAIL. If a character's story, a quoted third party's view, or an interviewer's framing is presented as the author's general claim, FAIL. If the author describes a view only to reject it, FAIL. A lesson also FAILS attributed if it credits the author (or the book) with any claim, guess, prediction, interpretation or quote that the text gives to someone else: an executive, a character, an interviewee, a quoted expert, another author, or the other speaker in a transcript. Look for quotation marks, 'said', 'told', 'according to', and speaker labels in the cited paragraphs, and check the lesson names that person for that claim. Block quotations count too: if a cited paragraph is an excerpt of an interview, letter, article or speech (the paragraph before it usually introduces it, e.g. 'as noted in an article', 'one executive recalled'), then the guesses, explanations and motives inside it belong to that quoted person. A lesson that states them as 'the author argues' or as the author's own explanation FAILS attributed; it must say whose words they are. If a quoted person's own guess or interpretation ('I think they recognized...') is presented as what the author argues or as established fact, FAIL.
 - findable: for each of the three questions, say in your reason whether the principle answers it. If any question asks for something the lesson does not tell, FAIL.
 
 WORKED EXAMPLES
@@ -83,6 +84,121 @@ Example E (fails one_idea). Lesson title "Pricing tests and hiring speed both de
 
 OUTPUT
 Return one verdict per lesson, in the same order, using the lesson_id shown with each lesson. Return exactly as many verdicts as lessons. Do not add commentary outside the structured fields."""
+
+
+_LABEL_RE = re.compile(r"^\s*([A-Z][A-Za-z.'\-]*(?: [A-Z][A-Za-z.'\-]*){0,3}):\s")
+_SAID_RE = re.compile(r"\b([A-Z][a-z]+(?: [A-Z][a-z]+)?)\s+(?:said|told|says|replied|wrote|argued)\b")
+_ACCORD_RE = re.compile(r"\b[Aa]ccording to ([A-Z][A-Za-z]+(?: [A-Z][A-Za-z]+)?)")
+_NOT_NAMES = {"He", "She", "They", "It", "We", "I", "You", "Someone", "Everyone", "People", "Then", "When", "What", "Mike", "Mother"}
+
+
+def _common_words() -> set[str]:
+    global _COMMON
+    try:
+        return _COMMON
+    except NameError:
+        pass
+    words: set[str] = set()
+    try:
+        for w in Path("/usr/share/dict/words").read_text(encoding="utf-8", errors="ignore").split():
+            if w.islower():
+                words.add(w)
+    except OSError:
+        pass
+    _COMMON = words
+    return words
+
+
+def _is_plausible_name(name: str) -> bool:
+    toks = name.split()
+    if name in _NOT_NAMES:
+        return False
+    if len(toks) == 1 and (toks[0].lower() in _common_words() or toks[0].lower().endswith("ing")):
+        return False
+    return True
+
+
+def _name_tokens(name: str) -> list[str]:
+    return [t.lower() for t in re.split(r"\s+", name.strip()) if len(t) >= 3]
+
+
+_PARA_CACHE: dict[str, list[dict]] = {}
+
+
+def _speaker_of(pid: str, text: str) -> str | None:
+    """Speaker label of a transcript paragraph. An unlabelled paragraph continues the turn of the
+    nearest earlier labelled paragraph of the same source (looked up in paragraphs_v3.2.jsonl)."""
+    m = _LABEL_RE.match(text)
+    if m:
+        return m.group(1)
+    sid, _, num = pid.rpartition("_p")
+    if not (sid and num.isdigit()):
+        return None
+    if sid not in _PARA_CACHE:
+        f = HERE / "library" / sid / "paragraphs_v3.2.jsonl"
+        rows = []
+        if f.exists():
+            rows = [json.loads(x) for x in f.read_text(encoding="utf-8").splitlines() if x.strip()]
+        _PARA_CACHE[sid] = rows
+    rows = _PARA_CACHE[sid]
+    idx = next((i for i, r in enumerate(rows) if r.get("id") == pid or r.get("paragraph_id") == pid), None)
+    if idx is None:
+        return None
+    for j in range(idx, max(-1, idx - 40), -1):
+        mm = _LABEL_RE.match(rows[j].get("text", ""))
+        if mm:
+            return mm.group(1)
+    return None
+
+
+def attribution_flag(lesson: dict) -> str | None:
+    """Deterministic attribution check. If the cited paragraphs name a speaker (a transcript
+    'Name:' label, 'X said/told/says', 'according to X'), author_argues must name at least one
+    of them. Returns a reason string when it does not, else None."""
+    paras = lesson.get("evidence_paragraphs") or lesson.get("evidence_text") or []
+    if isinstance(paras, str):
+        paras = [paras]
+    texts = [str(p.get("text", p)) if isinstance(p, dict) else str(p) for p in paras]
+    if not texts:
+        return None
+    argues = (lesson.get("author_argues") or "").lower()
+    labels, said = [], []
+    pids = [p.get("id") for p in paras if isinstance(p, dict)] or list(lesson.get("paragraph_ids") or [])
+    for n, t in enumerate(texts):
+        pid = pids[n] if n < len(pids) else None
+        if pid and not str(pid).startswith("transcripts-"):
+            sp = None  # speaker labels only exist in transcripts
+        else:
+            sp = _speaker_of(pid, t) if pid else None
+            if sp is None:
+                m = _LABEL_RE.match(t)
+                sp = m.group(1) if m else None
+        if sp:
+            labels.append(sp)
+        for m in _SAID_RE.finditer(t):
+            if _is_plausible_name(m.group(1)):
+                said.append(m.group(1))
+        for m in _ACCORD_RE.finditer(t):
+            if _is_plausible_name(m.group(1)):
+                said.append(m.group(1))
+    if labels:  # transcript: the credited person must be one of the speakers of the cited turns
+        if not any(any(tok in argues for tok in _name_tokens(n)) for n in labels):
+            return f"credits none of the cited speakers {sorted(set(labels))}"
+        return None
+    names = [n for n in said if _name_tokens(n)]
+    if names and not any(any(tok in argues for tok in _name_tokens(n)) for n in names):
+        return f"the cited text attributes statements to {sorted(set(names))}; author_argues names none of them"
+    return None
+
+
+def apply_attribution_check(lesson: dict, result: dict) -> dict:
+    reason = attribution_flag(lesson)
+    if not reason or not result["tests"]["attributed"]["pass"]:
+        return result
+    out = json.loads(json.dumps(result))
+    out["tests"]["attributed"] = {"pass": False, "reason": "deterministic: " + reason}
+    out["passed"] = False
+    return out
 
 
 class TestVerdict(BaseModel):
@@ -320,7 +436,7 @@ class Judge:
         for i, l in enumerate(lessons):
             if results[i] is None:
                 results[i] = self._cache[cache_key(l, self.model)]
-        return results  # type: ignore[return-value]
+        return [apply_attribution_check(l, r) for l, r in zip(lessons, results)]  # type: ignore[arg-type]
 
 
 def build_report(lessons: list[dict], results: list[dict], judge: Judge | None = None, **meta: Any) -> dict:
