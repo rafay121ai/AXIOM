@@ -120,10 +120,19 @@ def plan_chapters_from_toc(toc: list[list], n_pages: int) -> list[ChapterPlan]:
         chapter_level = levels.most_common(1)[0][0] if levels else min(l for l, _, _ in entries)
         main = []
         numbered_pages = {p for l, t, p in numbered if l == chapter_level}
+        in_part = False     # inside a Part whose chapters are listed at the chapter level
         for l, t, p in entries:
-            if PART_RE.match(t) or BACK_RE.match(t) or FRONT_RE.match(t):
+            if PART_RE.match(t):
+                in_part = l < chapter_level
+                continue
+            if BACK_RE.match(t) or FRONT_RE.match(t):
+                if l < chapter_level:
+                    in_part = False
                 continue
             if (CHAPTER_TITLE_RE.match(t) and l == chapter_level) or (MAIN_UNNUMBERED_RE.match(t) and l <= chapter_level):
+                main.append((l, t, p))
+            elif l == chapter_level and in_part and not any(p == m[2] for m in main):
+                # A named chapter inside a Part (the Part's chapters are titled but not numbered).
                 main.append((l, t, p))
             elif l == chapter_level and p not in numbered_pages and p > min(numbered_pages) \
                     and not any(p == m[2] for m in main):
@@ -181,6 +190,7 @@ class Line:
     italic: bool
     block: int
     big_first: bool = False  # starts with a drop-cap sized span
+    bullet: bool = False     # a drawn (graphic) bullet sits left of this line
 
 
 def _is_bold(span: dict) -> bool:
@@ -236,6 +246,38 @@ def read_page_blocks(page: Any) -> list[list[Line]]:
         if lines:
             blocks.append(lines)
     return blocks
+
+
+def mark_graphic_bullets(page: Any, blocks: list[list[Line]], body: float, max_drawings: int = 2500) -> int:
+    """A bullet that is drawn (a small filled or hollow dot or square) instead of typed leaves no character in
+    the text layer. A line that has such a mark just to its left, on its own text line, starts a list item.
+    Returns the number of lines marked."""
+    try:
+        drawings = page.get_drawings()
+    except Exception:
+        return 0
+    if not drawings or len(drawings) > max_drawings:
+        return 0
+    dots = []
+    for d in drawings:
+        r = d.get("rect")
+        if r is None:
+            continue
+        w, h = r.width, r.height
+        if 0.14 * body <= w <= 0.8 * body and 0.14 * body <= h <= 0.8 * body and abs(w - h) <= 0.4 * max(w, h) + 0.5:
+            dots.append((r.x0, r.x1, (r.y0 + r.y1) / 2))
+    if not dots:
+        return 0
+    marked = 0
+    for block in blocks:
+        for line in block:
+            reach = max(3.0 * line.size, 12.0)
+            for x0, x1, cy in dots:
+                if line.y0 - 1 <= cy <= line.y1 + 1 and 0 < line.x0 - x1 <= reach and x1 <= line.x0:
+                    line.bullet = True
+                    marked += 1
+                    break
+    return marked
 
 
 def merge_detached_drop_caps(blocks: list[list[Line]], body: float, words: frozenset[str]) -> int:
@@ -734,12 +776,15 @@ def _claim_trailing_epigraph(paras: list[Para], chapter: str, new_section: str, 
     report["epigraphs_moved"].append({"to_section": new_section, "text": " ".join(p.text for p in group)[:160]})
 
 
-def _is_chapter_furniture(tnorm: str, chapter_norm: str, on_start_page: bool, bi: int, title_idx: int | None) -> bool:
-    """A heading-like line that only restates the chapter title/number (anywhere in the chapter)."""
+def _is_chapter_furniture(tnorm: str, chapter_norm: str, on_start_page: bool, bi: int, title_idx: int | None,
+                          in_margin: bool | None = None) -> bool:
+    """A heading-like line that only restates the chapter title/number. Away from the chapter's first page it
+    counts only in the page margin (a running head); a heading in the page body that happens to repeat the
+    chapter title is a real section heading."""
     if not tnorm:
         return False
     core = re.sub(r"^(?:chapter|ch|part)\s+\w+\s*", "", chapter_norm).strip()
-    if len(core) >= 6 and tnorm == core:
+    if len(core) >= 6 and tnorm == core and (in_margin is None or in_margin or on_start_page):
         return True
     if not on_start_page:
         return False

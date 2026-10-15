@@ -62,6 +62,10 @@ def join_lines(lines: list[str]) -> str:
                 out = out + line
         elif out[-1] in DASH_CHARS:
             out = out + line
+        elif len(line) > 1 and line[0] in DASH_CHARS and not line[1].isspace() and line[1] not in DASH_CHARS:
+            # A dash that opens a line but is tight against the word after it ("outstanding" + "—performance")
+            # is an em dash that the typesetter wrapped, not a new clause: no space is added before it.
+            out = out + line
         else:
             out = out + " " + line
     out = out.replace("\xad", "")
@@ -124,7 +128,9 @@ DATELINE_RE = re.compile(
     rf"|[A-Z][A-Za-z.'’ ]+,\s+(?:[A-Z][A-Za-z.'’ ]+,\s+)?{MONTHS}\s+\d{{1,2}}(?:,\s+\d{{4}})?"
     rf"|(?:[A-Z][A-Za-z.'’ ]+,\s+){{1,2}}(?:19|20)\d{{2}})\.?$")
 ATTRIBUTION_RE = re.compile(r"^[—–―-]{1,2}\s*[A-Z][^.!?]{1,80}$")
-SCENE_BREAK_RE = re.compile(r"^(?:\*\s*){3,}$|^(?:[#•·~=_-]\s*){3,}$|^\*\s*\*\s*\*$|^#$")
+SCENE_BREAK_RE = re.compile(
+    r"^(?:\*\s*){3,}$|^(?:[#•·~=_-]\s*){3,}$|^\*\s*\*\s*\*$|^#$"
+    r"|^[\u2014\u2013\u2015\-]{1,6}$|^[•·◆◇■□▪✦❖]$|^(?:[•·◆◇✦❖]\s*){1,6}$")
 
 
 def is_figure_caption(text: str) -> bool:
@@ -531,3 +537,154 @@ def section_restates_chapter(section: str | None, chapter: str | None) -> bool:
     # "Chapter Two: Lesson One: ..." chapter vs section "Lesson One: ...": the section is the title restated.
     title = _norm_words((chapter or "").split(":", 1)[1]) if ":" in (chapter or "") else ""
     return bool(title) and s == title
+
+
+# ----------------------------------------------------------------------------
+# v3.1 rules: spacing, OCR noise, figure labels, attribution lines, separators, sponsor reads
+# ----------------------------------------------------------------------------
+
+# A space before sentence punctuation that follows a word, closing quote or bracket and is followed by a space
+# or the end ("Complexity ." after an italic run). An ellipsis written ". . ." is left alone because the
+# punctuation there follows a full stop, not a word.
+SPACE_BEFORE_PUNCT_RE = re.compile(r"(?<=[A-Za-z0-9”’\"')\]])\s+([.,;:!?])(?=\s|$)")
+# A dash that is tight against the word on its right but has a space on its left ("humility —humility"):
+# the space came from a span or line boundary.
+SPACE_BEFORE_DASH_RE = re.compile(r"(?<=[A-Za-z0-9])\s+([—–])(?=[A-Za-z])")
+
+# OCR noise: a lone stray punctuation token between spaces inside a sentence.
+_OCR_LONE_PUNCT_RE = re.compile(r"(?<=[A-Za-z0-9,”’\"')])\s+[;.?]\s+(?=[a-z])")
+_OCR_LONE_AFTER_STOP_RE = re.compile(r"(?<=[.!?])\s+\?\s+(?=[A-Z“\"‘])")
+_OCR_SLASH_TOKEN_RE = re.compile(r"(?<=\s)[/|]\w?(?=\s)")
+_OCR_STICKY_SEMI_RE = re.compile(r"\b(but|and|or|the|a|of|to)\s*;\s+(?=[a-z])", re.I)
+_QUOTE_APOS_RE = re.compile(r"([a-z])'(?=[”\"](?:\s|$|[-—,.]))")
+
+
+def _apostrophe_for_question(text: str) -> tuple[str, int]:
+    """A word-final apostrophe right before a closing double quote, where the quotation has no single quote
+    of its own, is an OCR'd question mark: government'" -> government?" """
+    n = 0
+
+    def fix(m: re.Match) -> str:
+        nonlocal n
+        before = text[: m.start()]
+        open_q = max(before.rfind("“"), before.rfind('"'))
+        if open_q < 0:
+            return m.group(0)
+        segment = before[open_q + 1:]
+        if len(segment.split()) < 4 or re.search(r"(?:^|[\s(])['‘`]\w", segment):
+            return m.group(0)
+        n += 1
+        return m.group(1) + "?"
+
+    return _QUOTE_APOS_RE.sub(fix, text), n
+
+
+def strip_ocr_noise(text: str) -> tuple[str, int]:
+    """Remove stray punctuation tokens that OCR put inside a sentence. Real single letters ("a", "I") are never
+    touched. Returns (text, number of fixes)."""
+    n = 0
+    for rx, repl in ((_OCR_LONE_PUNCT_RE, " "), (_OCR_LONE_AFTER_STOP_RE, " "), (_OCR_SLASH_TOKEN_RE, ""),
+                     (_OCR_STICKY_SEMI_RE, lambda m: m.group(1) + " ")):
+        text, k = rx.subn(repl, text)
+        n += k
+    text, k = _apostrophe_for_question(text)
+    n += k
+    if n:
+        text = re.sub(r"\s{2,}", " ", text).strip()
+    return text, n
+
+
+def tidy_spacing(text: str) -> str:
+    text = SPACE_BEFORE_PUNCT_RE.sub(r"\1", text)
+    text = SPACE_BEFORE_DASH_RE.sub(r"\1", text)
+    return text
+
+
+# Figure / table / exhibit labels.
+LABEL_WORDS = r"(?:Figure|Fig\.|Table|Exhibit|Chart|Graph|Illustration|Plate|Map|Diagram)"
+CAPTION_START_RE = re.compile(rf"^{LABEL_WORDS}\s+\d+(?:[.\-]\d+)*[a-z]?(?![\w])", re.I)
+_GLUED_LABEL_RE = re.compile(rf"^{LABEL_WORDS}\s+\d+(?:[.\-]\d+)*[a-z]?(?=\s+[A-Z“\"‘])")
+
+
+def strip_leading_label(text: str) -> tuple[str, bool]:
+    """A bare 'Figure 9.5' glued to the start of a paragraph ("Figure 9.5 This then fully ...") is removed. A
+    label followed by a lowercase verb is a sentence ("Table 3 shows ...") and is left alone."""
+    m = _GLUED_LABEL_RE.match(text)
+    if not m:
+        return text, False
+    return text[m.end():].lstrip(), True
+
+
+def is_caption_line(text: str, italic: bool = False, small: bool = False) -> bool:
+    """A single line that is a figure/table label or caption: starts with the label word and number, is short, and
+    either is italic/small or does not read like a sentence."""
+    t = text.strip()
+    if not CAPTION_START_RE.match(t) or word_count(t) > 24:
+        return False
+    rest = CAPTION_START_RE.sub("", t, count=1).strip(" :.—–-")
+    if not rest:
+        return True
+    if italic or small:
+        return True
+    return not re.search(r"[.!?][\"”’)]*$", t) and (rest[:1].isupper() or rest[:1] == "(")
+
+
+# Attribution and credit lines.
+CREDIT_LINE_RE = re.compile(r"^(?:translated|translation|edited|compiled|illustrated|adapted|retold)\s+by\b|^trans\.\s", re.I)
+DASH_ATTR_RE = re.compile(r"^[—–―]\s*\S")
+
+
+def _caps_ratio(text: str) -> float:
+    letters = [c for c in text if c.isalpha()]
+    return sum(1 for c in letters if c.isupper()) / len(letters) if letters else 0.0
+
+
+def is_attribution_line(text: str) -> bool:
+    """'—JOHANN WOLFGANG GOETHE', '—NAME, TITLE: SUBTITLE', 'TRANSLATED BY E. POWYS MATHERS'."""
+    t = text.strip()
+    if not t:
+        return False
+    if CREDIT_LINE_RE.match(t):
+        return True
+    return bool(DASH_ATTR_RE.match(t)) and _caps_ratio(t) >= 0.6 and word_count(t) <= 30
+
+
+# Separators that sit between two blocks of text on one line ("... dresses. • Kuei-fei was ...").
+_BULLET_SEPARATOR_RE = re.compile(r"(?<=[.!?”\"’'])\s*[•·]\s+(?=[A-Z“\"‘])")
+
+
+def split_bullet_separators(text: str) -> list[str]:
+    parts = [p.strip() for p in _BULLET_SEPARATOR_RE.split(text)]
+    return [p for p in parts if p] or [text]
+
+
+# Sponsor and ad reads in transcripts.
+SPONSOR_TRIGGER_RE = re.compile(
+    r"(?i)\b(?:(?:this|today'?s|the) (?:episode|show|podcast|conversation|segment) (?:of [\w *’'.-]{2,40} )?(?:is|was) "
+    r"(?:presented|sponsored|brought to you) by|presented by|brought to you by|sponsored by|"
+    r"(?:our|today'?s|this episode'?s) (?:newest |latest |first |main )?sponsors?\b|thank (?:one of )?our (?:newest )?sponsors?|"
+    r"a (?:quick )?word from our sponsors?|sponsor message)")
+SPONSOR_END_RE = re.compile(
+    r"(?i)learn more at\b|\b[\w-]+\.(?:com|org|net|io|co|fm|tv)(?:/\S*)?\b|\bpromo code\b|\buse (?:the )?code\b|"
+    r"\boffer code\b|\bvisit \w+|\bgo to \w+\.\w+")
+
+
+def strip_sponsor_reads(text: str) -> tuple[str, int]:
+    """Drop the span of sentences from a sponsor trigger ('presented by', 'brought to you by', ...) through the
+    sentence that gives the address or promo code. Returns (text, removed_word_count)."""
+    if not SPONSOR_TRIGGER_RE.search(text):
+        return text, 0
+    sents = re.split(r"(?<=[.!?])[\"”’)]*\s+", text)
+    out: list[str] = []
+    removed = 0
+    i = 0
+    while i < len(sents):
+        if SPONSOR_TRIGGER_RE.search(sents[i]):
+            end = next((j for j in range(i, min(len(sents), i + 14)) if SPONSOR_END_RE.search(sents[j])), None)
+            if end is not None:
+                removed += sum(word_count(x) for x in sents[i:end + 1])
+                i = end + 1
+                continue
+        out.append(sents[i])
+        i += 1
+    return " ".join(out).strip(), removed

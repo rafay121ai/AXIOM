@@ -40,7 +40,7 @@ sys.path.insert(0, str(HERE))
 import library_paragraphs as lp  # noqa: E402
 import library_text as lt  # noqa: E402
 
-EXTRACT_VERSION = "extract-2026.10.a1"
+EXTRACT_VERSION = "v3.1"
 DEFAULT_VERSION = "v3"
 DEFAULT_OUT_ROOT = HERE / "library"
 WORDLIST_PATH = HERE / "data" / "solid_words.txt"
@@ -402,7 +402,7 @@ def build_source(entry: dict, version: str = DEFAULT_VERSION) -> dict:
     finally:
         lt.HYPHEN_DROP_HOOK = None
     report["footnote_markers_stripped"] = prep.get("footnote_markers_stripped", 0)
-    report["dropped"] = prep.get("dropped", [])
+    report["dropped"] = report.get("dropped", []) + prep.get("dropped", [])
     report.setdefault("headings", []).extend(prep.get("headings", []))
     if plans and fmt == "pdf":
         recs = lp._attach_chapter_titles(path, plans, body_size, recs, report)
@@ -446,6 +446,20 @@ def build_source(entry: dict, version: str = DEFAULT_VERSION) -> dict:
     for b in report.get("back_matter", []):
         notes["excluded"].append({"kind": "back_matter", "pages": b["pages"], "words": b["words"],
                                   "reason": b["why"], "starts": b.get("starts", "")[:160]})
+    for t in report.get("tables", []):
+        notes["excluded"].append({"kind": "table", "pages": [t["page"], t["page"]], "words": t["words"],
+                                  "reason": "cells aligned in columns: not running prose, left out"})
+    for d in report.get("duplicate_blocks", []):
+        notes["excluded"].append({"kind": "duplicate", "pages": None, "words": d["words"],
+                                  "reason": f"second copy of text already in the file (6-gram overlap {d['overlap']})",
+                                  "starts": d["starts"], "kept_leading_turns": d["kept_leading_turns"],
+                                  "unmatched_leading_turns": d["unmatched_leading_turns"]})
+    if fmt != "pdf":
+        notes["sponsor_reads_removed_words"] = report.get("sponsor_reads_removed", 0)
+        notes["punct_artifacts_collapsed"] = report.get("punct_artifacts_collapsed", 0)
+    notes["epigraph_blocks_flagged"] = report.get("epigraph_blocks", 0)
+    notes["ocr_noise_removed"] = prep.get("ocr_noise_removed", 0)
+    notes["figure_labels_stripped"] = prep.get("figure_labels_stripped", 0)
     notes["stripped_furniture"] = report.get("removed", {})
     notes["footnote_markers_stripped"] = report["footnote_markers_stripped"]
     notes["footnote_text_blocks_removed"] = len(report.get("footnotes", []))
@@ -473,13 +487,20 @@ def build_source(entry: dict, version: str = DEFAULT_VERSION) -> dict:
     result.update(paragraphs=paras, headings=heads, metrics=compute_metrics(paras, counts, hyph))
     result["metrics"].update(source_id=sid, title=entry.get("title"), status="ok",
                              excluded_summary=summarize_excluded(notes["excluded"]),
+                             tables_dropped=len(report.get("tables", [])),
+                             ocr_noise_removed=notes["ocr_noise_removed"],
                              unpunctuated_blocks=len(notes["unpunctuated_blocks"]))
     return result
 
 
 def summarize_excluded(excluded: list[dict]) -> str:
     parts = []
+    tables = [e for e in excluded if e["kind"] == "table"]
+    if tables:
+        parts.append(f"table x{len(tables)} ({sum(e['words'] for e in tables)} words)")
     for e in excluded:
+        if e["kind"] == "table":
+            continue
         pg = e.get("pages")
         rng = f" p{pg[0]}-{pg[1]}" if pg else ""
         who = f" ({e['author']})" if e.get("author") else ""

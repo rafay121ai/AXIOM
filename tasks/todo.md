@@ -187,3 +187,31 @@ Rules for this branch:
 ## Stage 7: report
 
 - [ ] Write `/knowledge_pilot/REPORT.md` covering what changed, old vs new scores, failures, total cost, and a recommendation on rechunking the full 127-source library.
+
+# Knowledge library: lesson-based rebuild (2026-10-14)
+
+Replaces the chunk design. Unit = lesson grounded in paragraph ids. Test set: Rich Dad Poor Dad, Crossing the Chasm (argument heavy book), plain-english-ai-economics (transcript; no article/paper sources exist in sources/).
+
+- [ ] Agent definitions updated (chunker, enrichment-checker)
+- [ ] 1. Paragraph detection (general rule, stable ids, strip back matter) + tests; run on 3 test sources, report paragraph counts
+- [ ] 2. Reading windows (~2000 words, 2 paragraphs context)
+- [ ] 3. Lesson extraction (one call per window, structured output, model param)
+- [ ] 4. Deterministic validation + dropped.jsonl
+- [ ] 5. Dedupe (>0.92 embedding similarity)
+- [ ] 6. Embed (512 dims) + lessons.jsonl with evidence text
+- [ ] 7. A/B gpt-4.1-mini vs gpt-4.1 on the 3 test sources, cost per source each
+- [ ] Checks: enrichment-checker 20 lessons/source/model (blind), chunk-auditor recall on 2 Rich Dad chapters
+- [ ] STOP and report; no batch until approved
+
+# Knowledge library v3 (2026-10-14): verified extraction, golden set, judge-tuned lessons
+Spend baseline $1.8994; hard cap $6.90 (ask before exceeding). Judge = gpt-4.1, extraction = gpt-4.1-mini.
+
+- [ ] P1.1 extract.py on every non-duplicate source (general paragraph rule, dictionary hyphen rule, exclude non-author forewords, note them), no API
+- [ ] P1.2 visual check: 4 random pages x 8 sources + worst source, chunk-auditor vs page images; <1 error/page; max 3 rounds of general-rule fixes
+- [ ] P1.3 freeze extraction_version, EXTRACTION_REPORT.md
+- [ ] P2.1 golden set (~12 windows, ~25k words, 5 source types), reference lessons core/minor
+- [ ] P2.2 judge.py (gpt-4.1): grounded, specific, one idea, attributed, findable; core recall by paragraph overlap
+- [ ] P3 lesson prompt v3 (principle field, verbatim evidence/caveat, 1-3 paragraphs, 3 good/3 bad examples) + validation + dedupe; tune on golden set (<=6 rounds, <20c each, target judge >=90% and core recall >=70%)
+- [ ] P4 full Rich Dad, Chasm, transcript; judge 30/source; enrichment-checker 20 blind sign off
+- [ ] P5 Batch API bulk setup (not run), core-library-first order, LIBRARY_REPORT.md, full cost estimate
+- [ ] STOP and report (7 items)
