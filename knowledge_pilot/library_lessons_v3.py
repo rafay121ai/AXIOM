@@ -28,7 +28,7 @@ sys.path.insert(0, str(HERE))
 import library_lessons as v2  # noqa: E402  (shared helpers only)
 import library_state as state  # noqa: E402
 
-PROMPT_VERSION = "lessons-v3.4"
+PROMPT_VERSION = "lessons-v3.3"
 MODELS = ("gpt-4.1-mini", "gpt-4.1")
 DEFAULT_MODEL = "gpt-4.1-mini"
 CAP_USD = 6.90
@@ -92,13 +92,13 @@ NOT lessons (never write one from these):
 Rules for each field:
 - paragraph_ids: HARD LIMIT of 3 ids; a lesson that lists 4 or more is thrown away. If an idea seems to need more paragraphs, either pick the 1 to 3 paragraphs that carry its core, or split it into two lessons. 1 to 3 ids copied from "PARAGRAPHS YOU MAY CITE". Never cite a CONTEXT ONLY id. One idea per lesson, so cite only the paragraphs that carry it.
 - title: 5 to 10 words naming the idea.
-- author_argues: 2 to 3 sentences. Attribute to the ACTUAL speaker by name, in the voice of the text: if a character speaks, say so ("Kiyosaki recounts rich dad saying..."); in a transcript name the guest or host who said it. Do not put one person's words in another's mouth. Every number you write must appear in the cited paragraphs. Use only words and claims the cited paragraphs support; do not add named concepts, examples or consequences of your own.
+- author_argues: 2 to 3 sentences. Attribute to the ACTUAL speaker by name, in the voice of the text: if a character speaks, say so ("Kiyosaki recounts rich dad saying..."); in a transcript name the guest or host who said it. Do not put one person's words in another's mouth. Every number you write must appear in the cited paragraphs.
 - principle: ONE sentence stating the mechanism (what causes what, or what to do and why). It must not be a slogan. Every number must appear in the cited paragraphs.
 - evidence: one sentence copied VERBATIM from the cited paragraphs (the example, number or story), or null.
 - caveat: one sentence copied VERBATIM from the cited paragraphs that limits the idea, or null. Never infer or invent a caveat.
 - short_quote: an exact quote of 15 words or fewer copied from the cited paragraphs, or null.
 - applies_when: the founder situation in which this applies, in one sentence.
-- example_questions: exactly 3 questions a founder might type, in a founder's own words and specific to this idea. Write them LAST, from your own principle: each question must be fully answered by the principle and author_argues you wrote, with no extra advice needed. Never ask for a remedy, a timing or a risk the lesson does not state.
+- example_questions: exactly 3 questions a founder might type, in a founder's own words and specific to this idea.
 - lesson_type: principle, framework (named steps or parts), story (the point is carried by an episode), or data (a finding or number).
 - pillars: only pillars the lesson clearly belongs to (how_companies_win, human_mind, money_game, move_people, think_sharper, whats_coming); an empty list if unsure.
 
@@ -139,8 +139,8 @@ def prompt_hash(system: str, user: str) -> str:
     return hashlib.sha256((system + "\x00" + user).encode()).hexdigest()
 
 
-def cache_key(model: str, system: str, user: str) -> str:
-    return hashlib.sha256(f"{PROMPT_VERSION}|{model}|{prompt_hash(system, user)}".encode()).hexdigest()
+def cache_key(model: str, system: str, user: str, version: str | None = None) -> str:
+    return hashlib.sha256(f"{version or PROMPT_VERSION}|{model}|{prompt_hash(system, user)}".encode()).hexdigest()
 
 
 # ----------------------------------------------------------------------------
@@ -302,6 +302,9 @@ def check_cap(estimate: float, state_path: Path | str | None = None, cap: float 
 
 
 class ExtractorV3:
+    prompt_version = PROMPT_VERSION
+    purpose = "lessons_v3_extract"
+
     def __init__(self, client: Any, model: str = DEFAULT_MODEL, examples: dict | None = None,
                  cache_path: Path = CACHE_PATH, state_path: Path | str | None = None,
                  sleep: Callable[[float], None] | None = None, cap: float = CAP_USD,
@@ -320,9 +323,18 @@ class ExtractorV3:
         book, author = source_info(window["source_id"], self.library_dir)
         return render_user(window, book, author)
 
+    def key_for(self, window: dict) -> str:
+        return cache_key(self.model, self.system, self.user_prompt(window), self.prompt_version)
+
+    def is_cached(self, window: dict) -> bool:
+        return self.key_for(window) in self.cache
+
+    def estimate(self, window: dict) -> float:
+        return estimate_cost(self.model, self.system, self.user_prompt(window))[2]
+
     def extract(self, window: dict) -> list[dict]:
         user = self.user_prompt(window)
-        key = cache_key(self.model, self.system, user)
+        key = cache_key(self.model, self.system, user, self.prompt_version)
         self.stats["windows"] += 1
         if key in self.cache:
             self.stats["cached"] += 1
@@ -338,7 +350,7 @@ class ExtractorV3:
                     response_format=WindowOutV3, max_completion_tokens=MAX_COMPLETION_TOKENS, timeout=TIMEOUT_S)
                 nums = v2.usage_numbers(resp.usage)
                 usd = state.cost_from_usage(self.model, **nums)
-                state.add_cost(window["source_id"], usd, "lessons_v3_extract", self.state_path,
+                state.add_cost(window["source_id"], usd, self.purpose, self.state_path,
                                model=self.model, usage=nums)
                 self.stats["cost_usd"] += usd
                 self.stats["called"] += 1
@@ -347,7 +359,7 @@ class ExtractorV3:
                     raise ValueError("no parsable output")
                 lessons = [l.model_dump() for l in parsed.lessons]
                 row = {"key": key, "window_id": window["window_id"], "model": self.model,
-                       "prompt_version": PROMPT_VERSION, "usage": nums, "cost_usd": round(usd, 8),
+                       "prompt_version": self.prompt_version, "usage": nums, "cost_usd": round(usd, 8),
                        "lessons": lessons}
                 with self.cache_path.open("a", encoding="utf-8") as fh:
                     fh.write(json.dumps(row, ensure_ascii=False) + "\n")
@@ -358,7 +370,7 @@ class ExtractorV3:
             except Exception as exc:  # noqa: BLE001
                 last = exc
                 if v2._is_timeout(exc):
-                    state.add_cost(window["source_id"], est, "lessons_v3_timeout_uncertain", self.state_path,
+                    state.add_cost(window["source_id"], est, self.purpose + "_timeout_uncertain", self.state_path,
                                    model=self.model)
                 if attempt < MAX_ATTEMPTS - 1:
                     self.sleep(2 ** attempt * 2)
