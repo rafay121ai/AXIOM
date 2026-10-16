@@ -4,8 +4,8 @@ Usage:
   python judge.py --lessons PATH [--sample N --seed S] --out PATH
   python judge.py --lessons PATH --golden REFS.jsonl --out PATH   (recall is added to the report)
 
-Five tests per lesson: grounded, specific, one_idea, attributed, findable.
-A lesson passes only if all five pass. Verdicts are cached per
+Seven tests per lesson: grounded, specific, one_idea, attributed, findable, enumeration, usefulness.
+A lesson passes only if all seven pass. Verdicts are cached per
 (JUDGE_PROMPT_VERSION, lesson content hash, model) so reruns cost nothing.
 Cost is recorded per call, from returned usage, through library_state with
 purpose 'judge'. The budget is checked before every call.
@@ -35,19 +35,19 @@ import library_state as state  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 JUDGE_MODEL = "gpt-4.1"
-JUDGE_PROMPT_VERSION = "judge-v8"
-BATCH_SIZE = 8
+JUDGE_PROMPT_VERSION = "judge-v9"
+BATCH_SIZE = 1
 MAX_ATTEMPTS = 3
 MAX_COMPLETION_TOKENS = 4000
 TIMEOUT_S = 120
-TESTS = ("grounded", "specific", "one_idea", "attributed", "findable")
+TESTS = ("grounded", "specific", "one_idea", "attributed", "findable", "enumeration", "usefulness")
 CACHE_PATH = HERE / "judge_cache.jsonl"
 
-SYSTEM_PROMPT = """You are a strict reviewer of lessons extracted from nonfiction books and transcripts for a library that founders use to decide what to do. Each lesson claims to capture one idea from specific paragraphs of the source. You see the lesson and the full text of the paragraphs it cites (evidence_text). Judge each lesson against the five tests below. Judge only against the cited paragraphs; use no outside knowledge of the book. Be strict: when in doubt, fail, and say why in one short sentence.
+SYSTEM_PROMPT = """You are a strict reviewer of lessons extracted from nonfiction books and transcripts for a library that founders use to decide what to do. Each lesson claims to capture one idea from specific paragraphs of the source. You see the lesson and the full text of the paragraphs it cites (evidence_text). Judge each lesson against the seven tests below. Judge only against the cited paragraphs; use no outside knowledge of the book. Be strict: when in doubt, fail, and say why in one short sentence. Earlier reviewers passed too many lessons because they sounded plausible; a pass must be earned by words you can point to in the cited paragraphs.
 
 For every lesson return a pass (true/false) and a one-line reason for each test. Keep each reason under 25 words and point at the specific words that decided it.
 
-THE FIVE TESTS
+THE SEVEN TESTS
 
 1. grounded. Nothing in author_argues or principle may go beyond what the cited paragraphs support. Fail if a claim, number, mechanism, cause, or recommendation appears in the lesson but not in the paragraphs, or if the lesson overstates (a sometimes becomes an always, an anecdote becomes a law). The principle may be phrased as advice, but it must follow from what the author says. Also fail if short_quote, evidence, or caveat is present but is not verbatim (or a faithful near-verbatim restatement, for evidence and caveat) of the paragraphs. A null short_quote, evidence, or caveat is fine.
 
@@ -59,16 +59,26 @@ THE FIVE TESTS
 
 5. findable. The three example_questions are questions this idea genuinely answers, in a founder's voice. Fail if any question is answered better by a different idea, is not really answered by the lesson, or if there are fewer than three questions.
 
+6. enumeration. If the lesson lists or counts steps, components, parts, stages, items or numbers anywhere (title, author_argues, principle, applies_when, questions: "three steps", "four components", "first... second... third"), EACH of them must appear in the cited paragraphs, and any stated count must equal the number the paragraphs give. Fail if the lesson names a list or method whose members are not all in the cited paragraphs (for example the text cited holds items 1 and 2 of a four-part method, or the lesson says "four steps" and the cited text has only one of them). A lesson that lists or counts nothing passes this test.
+
+7. usefulness. Pass only if a founder could use the principle to decide something or change what they do on Monday. Fail platitudes and exhortations (motivation, 'take action', 'learn from everyone', 'your choices shape your future'), advice that could be pasted unchanged into any self-help or business book, market commentary or investor analysis with no founder decision attached, and story setup whose moral or outcome is not in the cited paragraphs.
+
 HOW TO APPLY THE TESTS (follow these steps, they are where lenient reviewers go wrong)
 - grounded: list every factual claim, number, name, mechanism and causal link in author_argues and principle, and find each one in the cited paragraphs. One claim you cannot find is a fail. Do not let plausible background knowledge stand in for the text.
 - specific: write down what the lesson says in one sentence and ask whether it would still be true and useful pasted into an unrelated book. If the principle restates the title in more general words, drops the particular case, number or mechanism the paragraphs give, or amounts to 'do the right thing carefully', FAIL. Abstract nouns doing the work ('deliberate choices', 'mindset', 'attention', 'approach') with no concrete action, number, case or mechanism from the paragraphs also FAIL, even when each word loosely appears in the text. A lesson passes only if the paragraphs' own distinct mechanism is visible in the principle.
 - one_idea: split author_argues and principle into the separate claims they contain. If the lesson joins two claims that appear in different paragraphs, or a title with 'and' that joins two points, or a principle that could be split into two lessons that each stand alone, FAIL. A story plus the single point it makes is one idea. A title or principle built as 'X and Y' / 'both X and Y' where X and Y are different mechanisms FAILS even if the lesson calls them related.
 - attributed: first copy the name credited in author_argues, then find the paragraph that carries the lesson's main claim and copy who speaks it (the speaker label at its start in a transcript; the narrator or the quoted person in a book). If the two names differ, FAIL, even if the credited person is mentioned or agrees elsewhere in the passage. In transcripts, check the speaker label of each paragraph: if the lesson names speaker X but the paragraph carrying the claim is spoken by Y (or X only asks the question or rebuts it), FAIL. If a character's story, a quoted third party's view, or an interviewer's framing is presented as the author's general claim, FAIL. If the author describes a view only to reject it, FAIL. A lesson also FAILS attributed if it credits the author (or the book) with any claim, guess, prediction, interpretation or quote that the text gives to someone else: an executive, a character, an interviewee, a quoted expert, another author, or the other speaker in a transcript. Look for quotation marks, 'said', 'told', 'according to', and speaker labels in the cited paragraphs, and check the lesson names that person for that claim. Block quotations count too: if a cited paragraph is an excerpt of an interview, letter, article or speech (the paragraph before it usually introduces it, e.g. 'as noted in an article', 'one executive recalled'), then the guesses, explanations and motives inside it belong to that quoted person. A lesson that states them as 'the author argues' or as the author's own explanation FAILS attributed; it must say whose words they are. If a quoted person's own guess or interpretation ('I think they recognized...') is presented as what the author argues or as established fact, FAIL.
 - findable: for each of the three questions, say in your reason whether the principle answers it. If any question asks for something the lesson does not tell, FAIL.
+- grounded for stories and frameworks: the moral, outcome, mechanism or steps the lesson states must be stated or plainly shown in the cited paragraphs themselves. If the paragraphs only set up a story (who, where, what happened first) and the payoff or lesson comes in an uncited paragraph, or the lesson supplies a moral the text does not state, FAIL grounded.
+- attributed in transcripts: "the speaker", "the host" or "the guest" instead of a name FAILS.
+- enumeration: scan the lesson for any count or list (words like steps, components, parts, stages, factors, rules, ways, questions with a number; ordinal lists; 'both X and Y'). For each member write where it appears in the cited paragraphs, or NOT FOUND. Any NOT FOUND, or a count that differs from the paragraphs, is a FAIL. If nothing is listed or counted, pass.
+- usefulness: in your work, write the decision as 'WHEN <situation from the paragraphs>, DO <specific action> INSTEAD OF <alternative>, BECAUSE <mechanism the paragraphs give>'. If you cannot fill all four slots with things the paragraphs actually say (not generic words), FAIL. FAIL when the principle's value is an abstract benefit ('valuable insights', 'motivation', 'effectiveness', 'focused expertise', 'financial strategy', 'resilience', 'learning') rather than a specific action with a mechanism. FAIL when the decision is 'be motivated', 'learn from everyone', 'structure your team well' or 'pay attention to X'. FAIL when it is an investor's or commentator's view of markets, companies or valuations and the founder gets no action (explaining why public companies behave a certain way is not a founder decision). FAIL a story whose cited paragraphs end before its moral. Lessons that merely sound sensible are the usual failure here: be strict.
+- grounded, second pass: split the principle into its clauses ('makes offers', 'reveals true market value', 'creates opportunities to close deals'). Each clause needs words in the cited paragraphs that say it. A clause that is a reasonable inference or common sense but is not in the paragraphs ('you only know the right price when a second party wants to deal', 'combining the roles leads to neglect', 'learning over pay builds long-term success') is NOT FOUND, and one NOT FOUND is a FAIL.
+- example_questions: if a question is generic enough to be asked of any book ('How do I find investors?') or unrelated to this lesson, FAIL findable.
 
 WORKED EXAMPLES
 
-Example A (passes all five).
+Example A (passes all seven).
 Cited paragraphs: "Most teams treat the first call with a customer as a pitch. Voss argues the first four minutes should be spent on one thing: getting the counterpart to say 'that's right'. He found that when people hear their own position summarized accurately, they stop defending it and start adding detail. A summary that draws 'you're right' only produces agreement; one that draws 'that's right' produces trust."
 Lesson: title "Summarize their position until they say 'that's right'"; author_argues "Voss argues that summarizing the counterpart's position accurately makes them drop their defences and add detail. He distinguishes 'you're right', which only ends the exchange, from 'that's right', which signals trust."; principle "Before you pitch, restate the customer's situation in your own words and keep adjusting until they answer 'that's right'."; short_quote "stop defending it and start adding detail"; example_questions ["How do I open a sales call with a skeptical customer?", "Why do prospects go quiet when I pitch early?", "How do I know a customer feels understood?"].
 Verdict: grounded pass (every claim is in the paragraphs, quote verbatim); specific pass (names a mechanism: accurate summary lowers defence); one_idea pass; attributed pass (Voss named as arguing it); findable pass.
@@ -81,6 +91,9 @@ Verdict: grounded FAIL (the paragraphs say nothing about separating successful f
 Example C (fails specific). Paragraphs describe how a bakery chain found that customers bought more when the cheapest loaf sat at eye level next to a pricier loaf, because the comparison made the pricier one look like a trade-up. Lesson principle: "Think carefully about how you present your prices." Verdict: specific FAIL (true of any book; it drops the mechanism, which is a side-by-side comparison that frames the pricier item as a trade-up).
 Example D (fails attributed). A podcast paragraph spoken by the guest says rural clinics lose money on every visit; a later paragraph spoken by the host says subsidies might fix it. The lesson credits the guest with the subsidy point. Verdict: attributed FAIL (the subsidy idea is the host's).
 Example E (fails one_idea). Lesson title "Pricing tests and hiring speed both decide early survival", with a principle that joins running price experiments weekly with hiring the first ten staff within a month. Verdict: one_idea FAIL (two separable ideas from different paragraphs).
+
+Example F (fails enumeration). Lesson principle: "Use the four-step method: define the segment, size it, pick a beachhead, and write the pitch." The cited paragraphs describe defining the segment and sizing it; beachhead and pitch appear only in uncited paragraphs. Verdict: enumeration FAIL (two of the four steps are not in the cited paragraphs).
+Example G (fails usefulness). Principle: "Taking consistent daily action toward your goals leads to financial success." Verdict: usefulness FAIL (an exhortation; no decision a founder can make with it; fits any self-help book).
 
 OUTPUT
 Return one verdict per lesson, in the same order, using the lesson_id shown with each lesson. Return exactly as many verdicts as lessons. Do not add commentary outside the structured fields."""
@@ -191,8 +204,15 @@ def attribution_flag(lesson: dict) -> str | None:
     return None
 
 
+_GENERIC_SPEAKER_RE = re.compile(r"\bthe (?:speaker|host|guest|interviewer|interviewee)\b", re.I)
+
+
 def apply_attribution_check(lesson: dict, result: dict) -> dict:
     reason = attribution_flag(lesson)
+    pids = lesson.get("paragraph_ids") or []
+    if not reason and pids and str(pids[0]).startswith("transcripts-") and \
+            _GENERIC_SPEAKER_RE.search(lesson.get("author_argues") or ""):
+        reason = "author_argues says 'the speaker/host/guest' instead of a name"
     if not reason or not result["tests"]["attributed"]["pass"]:
         return result
     out = json.loads(json.dumps(result))
@@ -202,7 +222,7 @@ def apply_attribution_check(lesson: dict, result: dict) -> dict:
 
 
 class TestVerdict(BaseModel):
-    work: str = Field(description="Your working, written BEFORE deciding. grounded: each claim in author_argues/principle with the quoted paragraph words that support it, or 'NOT FOUND'. specific: the one-sentence content and what the paragraphs' particular mechanism is. one_idea: a numbered list of the distinct claims. attributed: (a) the name credited in author_argues; (b) the paragraph that carries the lesson's MAIN claim and the speaker label or narrator that begins it; (c) whether (a) equals (b), word for word. A transcript turn labelled with a different name is a mismatch. findable: for each of the three questions, the words of the principle that answer it, or 'NOT ANSWERED'.")
+    work: str = Field(description="Your working, written BEFORE deciding. grounded: each claim in author_argues/principle with the quoted paragraph words that support it, or 'NOT FOUND'. specific: the one-sentence content and what the paragraphs' particular mechanism is. one_idea: a numbered list of the distinct claims. attributed: (a) the name credited in author_argues; (b) the paragraph that carries the lesson's MAIN claim and the speaker label or narrator that begins it; (c) whether (a) equals (b), word for word. A transcript turn labelled with a different name is a mismatch. findable: for each of the three questions, the words of the principle that answer it, or 'NOT ANSWERED'. enumeration: every listed or counted item in the lesson and the cited words that hold it, or 'NOT FOUND'; write 'no list' if there is none. usefulness: the concrete decision a founder could make with the principle, or 'NONE'.")
     reason: str = Field(description="One short line naming the words that decided it")
     passed: bool
 
@@ -214,6 +234,27 @@ class LessonVerdict(BaseModel):
     one_idea: TestVerdict
     attributed: TestVerdict
     findable: TestVerdict
+    enumeration: TestVerdict
+    usefulness: TestVerdict
+
+
+SKEPTIC_PROMPT = """You are the second, adversarial reviewer of a lesson that a first reviewer PASSED. Your job is to find the strongest reason it should fail. You see the lesson and the full text of the paragraphs it cites. Use only those paragraphs.
+
+Look for exactly these defects:
+- grounded: split author_argues and principle into clauses; any clause that is an inference, a generalisation, or common sense not stated or shown in the cited paragraphs (a sometimes made an always; a moral the paragraphs never state; a benefit, mechanism or consequence added by the writer).
+- specific / usefulness: the principle is an exhortation, motivation, a platitude, or advice that could be pasted into any business or self-help book; or it describes how markets, investors or public companies behave, with no action a founder could take; or it is "learn from X", "persist", "take action", "have a purpose".
+- enumeration: it lists or counts items not all present in the cited paragraphs.
+- attributed: wrong or unnamed speaker ("the speaker", "the host"), or the author is credited with someone else's claim.
+- one_idea: two separable ideas.
+
+Rules: you must point at words. If the lesson is genuinely a specific, grounded, usable idea, answer flaw_found=false. Do not invent flaws; do not fail a lesson because it is short, or because it paraphrases the text, or because a clause is a trivial restatement of what the paragraphs say in other words. A clause is unsupported only when it adds a substantive claim, cause, number or moral the paragraphs do not give. But do not be charitable: if a clause of the principle has no support in the paragraphs, or the only founder decision you can name is generic, that is a flaw. Return failing_test as one of grounded, specific, one_idea, attributed, findable, enumeration, usefulness (or 'none'), and one short sentence quoting the words that decided it."""
+
+
+class SkepticOut(BaseModel):
+    work: str = Field(description="First list each clause of the principle with the quoted paragraph words supporting it or NOT FOUND, then the concrete decision a founder could make and what is generic about it.")
+    flaw_found: bool
+    failing_test: str
+    reason: str
 
 
 class BatchOut(BaseModel):
@@ -270,7 +311,7 @@ def lesson_hash(lesson: dict) -> str:
 
 
 def cache_key(lesson: dict, model: str = JUDGE_MODEL) -> str:
-    return f"{JUDGE_PROMPT_VERSION}:{lesson_hash(lesson)}:{model}"
+    return f"{JUDGE_PROMPT_VERSION}:{hashlib.sha256(SYSTEM_PROMPT.encode()).hexdigest()[:8]}b{BATCH_SIZE}:{lesson_hash(lesson)}:{model}"
 
 
 def render_batch(items: list[tuple[str, dict]]) -> str:
@@ -340,7 +381,8 @@ def _row_from_verdict(v: LessonVerdict) -> dict:
 class Judge:
     def __init__(self, client: Any, source_id: str = "judge", model: str = JUDGE_MODEL,
                  state_path: Path | str | None = None, cache_path: Path | str | None = None,
-                 sleep=time.sleep):
+                 sleep=time.sleep, skeptic: bool = False):
+        self.skeptic = skeptic
         self.client, self.source_id, self.model = client, source_id, model
         self.state_path = state_path
         self.cache_path = Path(cache_path or CACHE_PATH)
@@ -410,6 +452,54 @@ class Judge:
                                f"{type(last).__name__}: {last}") from last
         return got
 
+    def _skeptic(self, lesson: dict, result: dict) -> dict:
+        """Optional second, adversarial read (--skeptic) of lessons the main judge passed; cached.
+        Off by default: on the calibration sets it failed 61% of the reference lessons."""
+        if not self.skeptic or not result["passed"]:
+            return result
+        key = f"skeptic:{hashlib.sha256(SKEPTIC_PROMPT.encode()).hexdigest()[:8]}:{lesson_hash(lesson)}:{self.model}"
+        got = self._cache.get(key)
+        if got is None:
+            v = lesson_view(lesson)
+            cited = v.pop("cited_paragraphs")
+            user = f"LESSON:\n{json.dumps(v, ensure_ascii=False, indent=1)}\nCITED PARAGRAPHS:\n{cited}"
+            est = state.cost_from_usage(self.model, approx_tokens(SKEPTIC_PROMPT + user), 300)
+            last: Exception | None = None
+            for attempt in range(MAX_ATTEMPTS):
+                state.refuse_to_start(est, self.state_path)
+                try:
+                    resp = self.client.beta.chat.completions.parse(
+                        model=self.model, temperature=0,
+                        messages=[{"role": "system", "content": SKEPTIC_PROMPT}, {"role": "user", "content": user}],
+                        response_format=SkepticOut, max_completion_tokens=1500, timeout=TIMEOUT_S)
+                    self.calls += 1
+                    nums = usage_numbers(resp.usage)
+                    usd = state.cost_from_usage(self.model, **nums)
+                    state.add_cost(self.source_id, usd, "judge_skeptic", self.state_path, model=self.model, usage=nums)
+                    self.cost_usd += usd
+                    p = resp.choices[0].message.parsed
+                    if p is None:
+                        raise ValueError("no parsable output")
+                    got = {"flaw_found": p.flaw_found, "failing_test": p.failing_test, "reason": p.reason}
+                    self._save(key, got)
+                    break
+                except state.BudgetExhausted:
+                    raise
+                except Exception as exc:  # noqa: BLE001
+                    last = exc
+                    if attempt < MAX_ATTEMPTS - 1:
+                        self.sleep(2 ** attempt)
+            if got is None:
+                raise RuntimeError(f"skeptic failed after {MAX_ATTEMPTS} attempts: {type(last).__name__}") from last
+        else:
+            self.cache_hits += 1
+        if got["flaw_found"] and got["failing_test"] in TESTS:
+            out = json.loads(json.dumps(result))
+            out["tests"][got["failing_test"]] = {"pass": False, "reason": "skeptic: " + got["reason"]}
+            out["passed"] = False
+            return out
+        return result
+
     def judge(self, lessons: list[dict]) -> list[dict]:
         """Return one result per lesson, in order. Cached lessons cost nothing."""
         results: list[dict | None] = [None] * len(lessons)
@@ -436,7 +526,8 @@ class Judge:
         for i, l in enumerate(lessons):
             if results[i] is None:
                 results[i] = self._cache[cache_key(l, self.model)]
-        return [apply_attribution_check(l, r) for l, r in zip(lessons, results)]  # type: ignore[arg-type]
+        results = [self._skeptic(l, r) for l, r in zip(lessons, results)]  # type: ignore[arg-type]
+        return [apply_attribution_check(l, r) for l, r in zip(lessons, results)]
 
 
 def build_report(lessons: list[dict], results: list[dict], judge: Judge | None = None, **meta: Any) -> dict:
@@ -513,6 +604,7 @@ def main(argv: list[str] | None = None, client: Any = None) -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--golden", help="reference lessons JSONL (paragraph_ids, tier core|minor); adds recall, no API")
     ap.add_argument("--recall-only", action="store_true", help="skip judging, compute recall only")
+    ap.add_argument("--skeptic", action="store_true", help="add the adversarial second pass (stricter)")
     ap.add_argument("--state", help="library_state path (tests)")
     ap.add_argument("--cache", help="judgment cache path (default knowledge_pilot/judge_cache.jsonl)")
     args = ap.parse_args(argv)
@@ -525,7 +617,7 @@ def main(argv: list[str] | None = None, client: Any = None) -> int:
             chosen = random.Random(args.seed).sample(lessons, args.sample)
         source_id = Path(args.lessons).resolve().parent.name or "judge"
         judge = Judge(client or get_client(), source_id=source_id, state_path=args.state,
-                      cache_path=args.cache)
+                      cache_path=args.cache, skeptic=args.skeptic)
         results = judge.judge(chosen)
         report = build_report(chosen, results, judge, source_file=str(args.lessons),
                               sample=args.sample, seed=args.seed)

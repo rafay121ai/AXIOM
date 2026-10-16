@@ -1,12 +1,12 @@
-"""Run the v3.3 lesson extractor over whole sources (optionally the case sweep too). No database.
+"""Run the v4.0 lesson extractor over whole sources (optionally the case sweep too). No database.
 
   python run_source.py --dry-run SOURCE_ID [SOURCE_ID ...]
-  python run_source.py --windows-only SOURCE_ID ...      # writes library/<id>/lessons_v3.3/windows.jsonl, no calls
+  python run_source.py --windows-only SOURCE_ID ...      # writes library/<id>/lessons_v4.0/windows.jsonl, no calls
   python run_source.py [--sweep] [--max-cost USD] SOURCE_ID ...
 
 Windows: same logic as golden_windows.build_windows (about 2,000 words, inside a chapter, heading breaks
 preferred, last 2 paragraphs of the previous window in the same chapter as CONTEXT ONLY), one call per window.
-Output: library/<id>/lessons_v3.3/{lessons.jsonl,dropped.jsonl,cost.json,state.json,windows.jsonl}.
+Output: library/<id>/lessons_v4.0/{lessons.jsonl,dropped.jsonl,cost.json,state.json,windows.jsonl}.
 Resumable: windows already in the cache cost nothing; state.json records progress and failures.
 """
 
@@ -27,7 +27,7 @@ import library_lessons as v2  # noqa: E402
 import library_lessons_v3 as l3  # noqa: E402
 import library_state as state  # noqa: E402
 
-OUT_NAME = "lessons_v3.3"
+OUT_NAME = "lessons_v4.0"
 
 
 def source_windows(source_id: str, library_dir: Path = l3.LIB) -> list[dict]:
@@ -60,8 +60,34 @@ def lesson_rows(window: dict, kept: list[dict], model: str) -> list[dict]:
     return rows
 
 
+def rows_of(path: Path) -> list[dict]:
+    return [json.loads(l) for l in Path(path).read_text(encoding="utf-8").splitlines() if l.strip()]
+
+
 def dump(path: Path, rows: list[dict]) -> None:
     path.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
+
+
+def lesson_embed_text(l: dict) -> str:
+    return "\n".join(str(l.get(k) or "") for k in ("title", "principle", "applies_when")).strip()
+
+
+def finalize(label: str, merged: list[dict], words: int, client, out_dir: Path, state_path=None,
+             threshold: float = l3.DEDUPE_THRESHOLD) -> dict:
+    """Within-source dedupe at `threshold` (keeps the more specific lesson), then lessons per 1,000 words.
+    Writes final.jsonl and dedupe_merges.json into out_dir."""
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    emb = v2.Embedder(label, client, out_dir / "embed_cache.jsonl", state_path).embed(
+        [lesson_embed_text(l) for l in merged])
+    kept, merges = l3.dedupe([{"window_id": l.get("window_id"), "lesson": l} for l in merged], emb, threshold)
+    final = [c["lesson"] for c in kept]
+    dump(out_dir / "final.jsonl", final)
+    (out_dir / "dedupe_merges.json").write_text(json.dumps(merges, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    per_1k = round(len(final) / words * 1000, 2) if words else None
+    return {"before_dedupe": len(merged), "after_dedupe": len(final), "dedupe_threshold": threshold,
+            "words": words, "lessons_per_1000_words": per_1k,
+            "flag_above_3_per_1000": bool(per_1k and per_1k > 3)}
 
 
 def write_windows(source_id: str, windows: list[dict], library_dir: Path = l3.LIB) -> Path:
@@ -131,19 +157,29 @@ def run_source(source_id: str, extractor: l3.ExtractorV3, max_cost: float | None
                                        library_dir=extractor.library_dir)
         remaining = None if max_cost is None else max(0.0, max_cost - cost["cost_usd"])
         cost["sweep"] = case_sweep.run_sweep(windows, lessons, sx, d / "sweep", remaining)
+    if not stopped and not st["failed"]:
+        merged = lessons + (rows_of(d / "sweep" / "sweep_lessons.jsonl") if sweep else [])
+        cost["final"] = finalize(source_id, merged, sum(w["word_count"] for w in windows), extractor.client, d,
+                                 extractor.state_path)
     (d / "cost.json").write_text(json.dumps(cost, indent=2) + "\n", encoding="utf-8")
     return cost
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("source_ids", nargs="+")
+    ap.add_argument("source_ids", nargs="*")
     ap.add_argument("--model", default=l3.DEFAULT_MODEL, choices=l3.MODELS)
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--windows-only", action="store_true")
     ap.add_argument("--sweep", action="store_true")
     ap.add_argument("--max-cost", type=float, default=None, help="USD cap per source for this run")
+    ap.add_argument("--finalize", type=Path, help="merged lessons JSONL: dedupe + per-1,000-word stats (golden set)")
+    ap.add_argument("--words", type=int, help="with --finalize: words in the source text")
+    ap.add_argument("--out-dir", type=Path, help="with --finalize: output directory")
     args = ap.parse_args(argv)
+    if args.finalize:
+        print(json.dumps(finalize("golden", rows_of(args.finalize), args.words or 0, v2.get_client(), args.out_dir), indent=2))
+        return 0
     examples = l3.load_examples()
     if args.dry_run:
         dry_run(args.source_ids, args.model, examples)

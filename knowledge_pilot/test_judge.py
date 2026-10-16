@@ -47,6 +47,12 @@ def lesson(n, v2=False):
     return d
 
 
+@pytest.fixture(autouse=True)
+def batch_of_eight(monkeypatch):
+    """The batching logic is tested at 8; production uses j.BATCH_SIZE (1 since judge-v9, see test below)."""
+    monkeypatch.setattr(j, "BATCH_SIZE", 8)
+
+
 @pytest.fixture
 def env(tmp_path):
     sp = tmp_path / "state.json"
@@ -224,3 +230,21 @@ def test_attribution_flag_transcript_and_quotes():
     res = {"passed": True, "tests": {t: {"pass": True, "reason": "r"} for t in judge.TESTS}}
     out = judge.apply_attribution_check(tr, res)
     assert out["passed"] is False and out["tests"]["attributed"]["pass"] is False and res["passed"] is True
+
+
+def test_v9_defaults(monkeypatch, env):
+    monkeypatch.undo()
+    assert j.JUDGE_PROMPT_VERSION == "judge-v9" and j.BATCH_SIZE == 1
+    assert {"enumeration", "usefulness"} <= set(j.TESTS)
+    c = FakeClient()
+    mk(c, env).judge([lesson(1)])
+    assert len(c.calls) == 1            # skeptic pass is off by default
+
+
+def test_generic_speaker_fails_attribution_on_transcripts(env):
+    l = lesson(1)
+    l["paragraph_ids"] = ["transcripts-x_p0001"]
+    l["author_argues"] = "The speaker says it."
+    c = FakeClient()
+    res = mk(c, env).judge([l])
+    assert res[0]["passed"] is False and res[0]["tests"]["attributed"]["reason"].startswith("deterministic")

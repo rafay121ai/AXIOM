@@ -73,7 +73,7 @@ def test_sweep_end_to_end(env):
     cost = cs.run_sweep([w], existing, ex, env.out)
     assert client.calls == 1 and cost["sweep_lessons_kept"] == 1 and cost["sweep_lessons_dropped"] == 1
     sw = [json.loads(l) for l in (env.out / "sweep_lessons.jsonl").read_text().splitlines()]
-    assert sw[0]["source"] == "sweep" and sw[0]["lesson_type"] == "story" and sw[0]["prompt_version"] == "sweep-v1"
+    assert sw[0]["source"] == "sweep" and sw[0]["lesson_type"] == "story" and sw[0]["prompt_version"] == "sweep-v2"
     assert sw[0]["evidence_paragraphs"][0]["id"] == "s_p0001"
     merged = [json.loads(l) for l in (env.out / "merged.jsonl").read_text().splitlines()]
     assert len(merged) == 2 and merged[0]["lesson_id"] == "x" and "source" not in merged[0]
@@ -86,11 +86,11 @@ def test_sweep_end_to_end(env):
 
 def test_sweep_empty_answer_and_prompt():
     assert "worked case" in cs.SWEEP_INSTRUCTIONS and '{"lessons": []}' in cs.SWEEP_INSTRUCTIONS
-    assert "Do NOT add names" in cs.SWEEP_INSTRUCTIONS and "paragraph_ids" in cs.SWEEP_INSTRUCTIONS
+    assert "never \"the speaker\"" in cs.SWEEP_INSTRUCTIONS and "paragraph_ids" in cs.SWEEP_INSTRUCTIONS
 
 
 def test_sweep_cache_key_differs_from_extractor():
-    assert l3.cache_key("m", "s", "u", "sweep-v1") != l3.cache_key("m", "s", "u")
+    assert l3.cache_key("m", "s", "u", "sweep-v2") != l3.cache_key("m", "s", "u")
 
 
 def test_sweep_dry_run_no_client():
@@ -106,8 +106,8 @@ def test_sweep_max_cost_stops(env):
 
 
 def test_prompt_version_is_v33():
-    assert l3.PROMPT_VERSION == "lessons-v3.3"
-    assert "HARD LIMIT of 3 ids" in l3.INSTRUCTIONS
+    assert l3.PROMPT_VERSION == "lessons-v4.0"
+    assert "Choose lesson_type first" in l3.INSTRUCTIONS
     assert "Write them LAST" not in l3.INSTRUCTIONS and "Use only words and claims" not in l3.INSTRUCTIONS
 
 
@@ -142,13 +142,13 @@ def test_run_source_resumable_and_rows(env):
     n = len(rs.source_windows("s", lib))
     cost = rs.run_source("s", ex, library_dir=lib)
     assert client.calls == n and cost["windows_done"] == n
-    d = lib / "s" / "lessons_v3.3"
+    d = lib / "s" / "lessons_v4.0"
     for f in ("lessons.jsonl", "dropped.jsonl", "cost.json", "state.json"):
         assert (d / f).exists()
     rows = [json.loads(l) for l in (d / "lessons.jsonl").read_text().splitlines()]
     r = rows[0]
     assert r["source_id"] == "s" and r["chapter"] == "C1" and r["window_id"] and r["paragraph_ids"] and \
-        r["evidence_paragraphs"][0]["text"] and "page_start" in r and r["prompt_version"] == "lessons-v3.3"
+        r["evidence_paragraphs"][0]["text"] and "page_start" in r and r["prompt_version"] == "lessons-v4.0"
     # resume: everything served from cache
     ex2 = l3.ExtractorV3(client, examples=l3.load_examples(), cache_path=env.cache, state_path=env.state,
                          library_dir=lib)
@@ -176,7 +176,7 @@ def test_run_source_with_sweep(env):
     ex = l3.ExtractorV3(client, examples=l3.load_examples(), cache_path=env.cache, state_path=env.state,
                         library_dir=lib)
     cost = rs.run_source("s", ex, sweep=True, library_dir=lib)
-    assert cost["sweep"]["runs"] >= 1 and (lib / "s" / "lessons_v3.3" / "sweep" / "merged.jsonl").exists()
+    assert cost["sweep"]["runs"] >= 1 and (lib / "s" / "lessons_v4.0" / "sweep" / "merged.jsonl").exists()
 
 
 def test_dry_run_and_windows_only_make_no_calls(env, capsys):
@@ -185,4 +185,4 @@ def test_dry_run_and_windows_only_make_no_calls(env, capsys):
     t = rs.dry_run(["s"], "gpt-4.1-mini", l3.load_examples(), lib, out=out.append)
     assert t["windows"] >= 2 and t["usd"] > 0
     rs.write_windows("s", rs.source_windows("s", lib), lib)
-    assert (lib / "s" / "lessons_v3.3" / "windows.jsonl").exists()
+    assert (lib / "s" / "lessons_v4.0" / "windows.jsonl").exists()

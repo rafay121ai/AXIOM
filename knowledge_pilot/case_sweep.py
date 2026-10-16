@@ -23,7 +23,7 @@ import library_lessons as v2  # noqa: E402
 import library_lessons_v3 as l3  # noqa: E402
 import library_state as state  # noqa: E402
 
-SWEEP_VERSION = "sweep-v1"
+SWEEP_VERSION = "sweep-v2"
 MIN_RUN = 3
 CAP_USD = l3.CAP_USD
 
@@ -31,12 +31,12 @@ _RULES = l3.INSTRUCTIONS.split("Rules for each field:", 1)[1].split("The window 
 
 SWEEP_INSTRUCTIONS = f"""You read one passage from a book, paper or transcript that a first extraction pass found no lesson in. Answer one question: does this passage contain a worked case or example that demonstrates a principle a startup founder could use?
 
-If no, return {{"lessons": []}}. Scene setting, introductions, transitions, banter and anecdotes with no transferable point are a no. If yes, return one lesson per distinct case (usually one), in the lesson schema below.
+If no, return {{"lessons": []}}. Scene setting, introductions, transitions, banter, exhortations, market commentary and anecdotes with no transferable point are a no. So is any case whose point is not stated or plainly shown by the paragraphs you cite. If yes, return one lesson per distinct case (usually one), in the lesson schema below.
 
 Sweep rules:
-- lesson_type is always "story".
+- lesson_type is always "story": cite up to 8 CONTIGUOUS paragraphs (every paragraph from the first id to the last, no gaps; to skip a paragraph, end the span before it), including the paragraph with the payoff or outcome of the case.
 - principle: what the case demonstrates, grounded ONLY in what the case shows. Do not add concepts, advice or consequences the text does not show.
-- Attribute by the actual speaker's name as it appears in the cited text. Do NOT add names that are not in the cited text; if the text does not name the person, say "the author" or "the speaker".
+- Attribute by the actual speaker's name as it appears in the cited text. In a transcript every paragraph is tagged with its speaker: use that name, never "the speaker", "the host" or "the guest". In a book, do NOT add names that are not in the cited text; if the text does not name the person, say "the author".
 - CONTEXT ONLY paragraphs help you read the case but must never be cited.
 
 Rules for each field:

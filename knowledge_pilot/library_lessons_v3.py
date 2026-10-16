@@ -28,10 +28,10 @@ sys.path.insert(0, str(HERE))
 import library_lessons as v2  # noqa: E402  (shared helpers only)
 import library_state as state  # noqa: E402
 
-PROMPT_VERSION = "lessons-v3.3"
+PROMPT_VERSION = "lessons-v4.0"
 MODELS = ("gpt-4.1-mini", "gpt-4.1")
 DEFAULT_MODEL = "gpt-4.1-mini"
-CAP_USD = 6.90
+CAP_USD = 10.00
 GOLDEN = HERE / "golden"
 EXAMPLES_PATH = GOLDEN / "examples.json"
 WINDOWS_PATH = GOLDEN / "windows.json"
@@ -41,7 +41,9 @@ MAX_QUOTE_WORDS = 15
 MAX_ATTEMPTS = 3
 TIMEOUT_S = 90
 MAX_COMPLETION_TOKENS = 5000
-DEDUPE_THRESHOLD = 0.92
+MAX_SPAN = {"principle": 3, "data": 3, "framework": 8, "story": 8}   # cited paragraphs per lesson type
+CONTIGUOUS_TYPES = ("framework", "story")
+DEDUPE_THRESHOLD = 0.85
 LESSON_TYPES = ("principle", "framework", "story", "data")
 PILLARS = tuple(v2.PILLARS)
 AUTHOR_FALLBACK = {"human-mind-books-thinking-fast-and-slow": "Daniel Kahneman"}
@@ -80,20 +82,24 @@ class WindowOutV3(BaseModel):
 
 INSTRUCTIONS = """You turn one reading window from a book, paper or transcript into LESSONS for startup founders.
 
-A lesson is ONE idea the author or speaker teaches, grounded in 1 to 3 specific paragraphs, with a mechanism a founder can reason with. Extract EVERY distinct idea a founder could use. A typical 2,000-word window of real teaching holds 3 to 6 lessons; fewer only when the text is mostly story setup, banter or repetition. Work through the window paragraph by paragraph and ask of each: does it carry an idea with a mechanism, a number, a rule of thumb, a named framework, a warning or a decision test? If yes, it belongs to a lesson. As a guide, expect about one lesson for every 300 to 400 words of teaching text, and cover the whole window from first paragraph to last, not just the opening. Before you answer, check the window paragraph by paragraph: every paragraph that states a mechanism, a number, a rule of thumb, a named framework, a warning, a decision test or a concrete case with a point should be cited by at least one lesson, and dense teaching windows often yield 5 to 8 lessons. A lesson may cite the paragraph that STATES the idea together with the one that gives its best example, but cite the stating paragraph first. Do not stop after the first few ideas, and do not merge neighbouring ideas to save space: if a passage holds two ideas, return two lessons, each citing its own paragraphs. Still keep one idea per lesson. Zero lessons is valid only for a window that truly teaches nothing.
+A lesson is ONE idea the author or speaker teaches, grounded in specific paragraphs, with a mechanism a founder can use to decide something. Fewer, better lessons beat many thin ones. A typical 2,000-word window of real teaching holds 2 to 5 lessons; fewer when the text is mostly story setup, banter, repetition or exhortation, and zero is valid. Work through the window paragraph by paragraph and ask of each: does it carry an idea with a mechanism, a number, a rule of thumb, a named framework, a warning or a decision test that a founder could act on? Cover the whole window, not just the opening, but only write a lesson when the idea is worth keeping. If a passage holds two ideas, return two lessons, each citing its own paragraphs. Still keep one idea per lesson.
 
 NOT lessons (never write one from these):
 - slogans or sayings with no mechanism ("work smarter, not harder")
+- exhortations, even when the author spends a page on them: "take action", "learn from others", "be persistent", "stay hungry", "think big", "your choices shape your future"
+- any principle that could appear unchanged in any self-help or business book. Test: delete the book's names, numbers and case; if the principle still reads the same and a founder could not decide anything with it, do not write it
 - signposts and previews ("in this chapter we will see...")
 - transitions and summaries of what was just said
-- scene setting and character introductions
+- scene setting and character introductions, and stories whose point is NOT stated in the paragraphs you cite (cite the paragraph with the payoff or outcome, or write no lesson)
+- market commentary or investor analysis a founder cannot use to decide anything
 - repeats of an idea already covered by another lesson in this window (write one lesson, cite the best paragraphs)
 
 Rules for each field:
-- paragraph_ids: HARD LIMIT of 3 ids; a lesson that lists 4 or more is thrown away. If an idea seems to need more paragraphs, either pick the 1 to 3 paragraphs that carry its core, or split it into two lessons. 1 to 3 ids copied from "PARAGRAPHS YOU MAY CITE". Never cite a CONTEXT ONLY id. One idea per lesson, so cite only the paragraphs that carry it.
+- paragraph_ids: copied from "PARAGRAPHS YOU MAY CITE". Never cite a CONTEXT ONLY id. Choose lesson_type first, because it sets the span: if an idea needs more than 3 paragraphs it is NOT a principle or data lesson; make it a framework or story, or split it into separate lessons. principle and data lessons: 1 to 3 ids (a lesson with 4 or more is thrown away); cite the paragraph that STATES the idea first, then at most two more with its best example. framework and story lessons: up to 8 ids that are CONTIGUOUS (every paragraph from the first to the last id, no gaps, in order); they MUST include every paragraph that holds a listed step, component or item, and the payoff or outcome of the story. If the steps or the payoff do not fit in 8 consecutive paragraphs, write a principle lesson about the one mechanism instead.
+- A lesson may only list steps, components, parts or numbers that appear in its cited paragraphs. Never say "four steps" or "three components" and then name only some of them; if you cannot cite them all, do not enumerate.
 - title: 5 to 10 words naming the idea.
-- author_argues: 2 to 3 sentences. Attribute to the ACTUAL speaker by name, in the voice of the text: if a character speaks, say so ("Kiyosaki recounts rich dad saying..."); in a transcript name the guest or host who said it. Do not put one person's words in another's mouth. Every number you write must appear in the cited paragraphs.
-- principle: ONE sentence stating the mechanism (what causes what, or what to do and why). It must not be a slogan. Every number must appear in the cited paragraphs.
+- author_argues: 2 to 3 sentences. Attribute to the ACTUAL speaker by name, in the voice of the text: if a character speaks, say so ("Kiyosaki recounts rich dad saying..."). In a transcript every paragraph is tagged with its speaker: name the tagged speaker who says the idea, and never write "the speaker", "the host" or "the guest". Do not put one person's words in another's mouth. Every number you write must appear in the cited paragraphs.
+- principle: ONE sentence stating the mechanism (what causes what, or what to do and why). It must not be a slogan. Every number must appear in the cited paragraphs, and every claim must be stated or directly shown in them.
 - evidence: one sentence copied VERBATIM from the cited paragraphs (the example, number or story), or null.
 - caveat: one sentence copied VERBATIM from the cited paragraphs that limits the idea, or null. Never infer or invent a caveat.
 - short_quote: an exact quote of 15 words or fewer copied from the cited paragraphs, or null.
@@ -130,9 +136,53 @@ def system_prompt(examples: dict) -> str:
     return INSTRUCTIONS + "\n\n" + examples_block(examples)
 
 
-def render_user(window: dict, book: str | None, author: str | None) -> str:
-    """Source window text: always the LAST thing in the prompt."""
-    return v2.render_window(window, book, author)
+# Transcript speakers: a source is a transcript when many paragraphs open with a "Name:" turn label. Paragraphs
+# without a label continue the nearest earlier turn; text before the first label belongs to that first speaker
+# (the host introducing the episode). Names come from the source's own labels, nothing is guessed.
+_TURN_RE = re.compile(r"^\s*\**([A-Z][A-Za-z.'\-]*(?: [A-Z][A-Za-z.'\-]*){0,3}):\**\s")
+_SPEAKER_CACHE: dict[tuple[str, str], dict[str, str]] = {}
+GENERIC_SPEAKER_RE = re.compile(r"\bthe (?:speaker|host|guest|interviewer|interviewee)\b", re.I)
+
+
+def speaker_map(source_id: str, library_dir: Path = LIB) -> dict[str, str]:
+    """paragraph id -> speaker name; empty when the source is not a transcript."""
+    key = (str(library_dir), source_id)
+    if key in _SPEAKER_CACHE:
+        return _SPEAKER_CACHE[key]
+    out: dict[str, str] = {}
+    f = Path(library_dir) / source_id / "paragraphs_v3.2.jsonl"
+    if f.exists():
+        rows = [json.loads(l) for l in f.read_text(encoding="utf-8").splitlines() if l.strip()]
+        labels = [(_TURN_RE.match(r["text"]) or [None, None])[1] for r in rows]
+        if rows and sum(1 for x in labels if x) >= 10 and sum(1 for x in labels if x) / len(rows) >= 0.2:
+            first = next(x for x in labels if x)
+            cur = first
+            for r, lab in zip(rows, labels):
+                cur = lab or cur
+                out[r["id"]] = cur
+    _SPEAKER_CACHE[key] = out
+    return out
+
+
+SPAN_REMINDER = ("REMINDER: a principle or data lesson cites at most 3 paragraph_ids. A lesson that needs 4 to 8 paragraphs "
+                 "must be lesson_type framework or story with consecutive ids and no gaps; otherwise split it. "
+                 "Fewer, better lessons; no exhortations or platitudes.")
+
+
+def render_user(window: dict, book: str | None, author: str | None, library_dir: Path = LIB) -> str:
+    """Source window text: always the LAST thing in the prompt. Transcript paragraphs carry a speaker tag."""
+    sp = speaker_map(window["source_id"], library_dir) if window.get("source_id") else {}
+    if not sp:
+        return v2.render_window(window, book, author) + "\n\n" + SPAN_REMINDER
+    names = list(dict.fromkeys(sp.values()))
+    tag = lambda p: f"[{p['id']}] (speaker: {sp.get(p['id'], names[0])}) {p['text']}"
+    lines = [f"BOOK: {book or 'unknown'}", "AUTHOR: transcript; speakers are tagged on every paragraph",
+             f"SPEAKERS: {', '.join(names)}", f"CHAPTER: {window.get('chapter') or 'unknown'}"]
+    if window.get("context"):
+        lines += ["", "CONTEXT ONLY (end of the previous window; never cite these ids)"]
+        lines += [tag(p) for p in window["context"]]
+    lines += ["", "PARAGRAPHS YOU MAY CITE"] + [tag(p) for p in window["paragraphs"]]
+    return "\n".join(lines) + "\n\n" + SPAN_REMINDER
 
 
 def prompt_hash(system: str, user: str) -> str:
@@ -183,14 +233,44 @@ def in_text(snippet: str, texts: list[str]) -> bool:
     return bool(s) and any(s in v2.normalize_text(t) for t in texts)
 
 
-def validate_lesson(lesson: dict, window: dict) -> tuple[dict | None, list[str], list[str]]:
+ENUM_RE = re.compile(r"\b(two|three|four|five|six|seven|eight|nine|ten)\b(?:[- ]\w+){0,2}?[- ]"
+                     r"(steps?|components?|parts?|stages?|elements?|principles?|rules?|questions?|criteria|factors?|"
+                     r"pillars?|phases?|types?|kinds?|forces|powers?|laws?|ways|tests?|reasons?|conditions?|requirements?)\b", re.I)
+_NUM_WORDS = {"two": "2", "three": "3", "four": "4", "five": "5", "six": "6", "seven": "7", "eight": "8",
+              "nine": "9", "ten": "10"}
+
+
+def enumeration_problems(lesson: dict, texts: list[str]) -> list[str]:
+    """A count of steps/parts/items stated in the lesson ("four steps") must also appear in the cited text."""
+    blob = " ".join(texts).lower()
+    out = []
+    for f in ("title", "author_argues", "principle"):
+        for m in ENUM_RE.finditer(str(lesson.get(f) or "")):
+            w = m.group(1).lower()
+            if not re.search(rf"\b{w}\b|\b{_NUM_WORDS[w]}\b", blob):
+                out.append(f"enumeration_count_not_in_paragraphs:{m.group(0).lower()}")
+    return out
+
+
+def validate_lesson(lesson: dict, window: dict, library_dir: Path = LIB) -> tuple[dict | None, list[str], list[str]]:
     """Returns (cleaned lesson or None when dropped, drop reasons, notes about fields set to null)."""
     reasons: list[str] = []
     nulled: list[str] = []
     allowed = {p["id"]: p for p in window["paragraphs"]}
     ids = list(lesson.get("paragraph_ids") or [])
-    if not 1 <= len(ids) <= 3:
-        reasons.append(f"paragraph_ids_count:{len(ids)}")
+    lt = lesson.get("lesson_type")
+    limit = MAX_SPAN.get(lt, 3)
+    if not 1 <= len(ids) <= limit:
+        reasons.append(f"paragraph_ids_count:{len(ids)}>{limit}:{lt}")
+    if lt in CONTIGUOUS_TYPES and len(ids) > 1 and not any(r.startswith("paragraph_ids_count") for r in reasons):
+        pos = {p["id"]: n for n, p in enumerate(window["paragraphs"])}
+        if all(i in pos for i in ids) and [pos[i] for i in ids] != list(range(pos[ids[0]], pos[ids[0]] + len(ids))):
+            a, b = min(pos[i] for i in ids), max(pos[i] for i in ids)
+            if b - a + 1 <= limit:
+                ids = [window["paragraphs"][n]["id"] for n in range(a, b + 1)]   # fill the gaps: span only grows
+                nulled.append("span_gaps_filled")
+            else:
+                reasons.append("paragraph_ids_not_contiguous")
     if len(set(ids)) != len(ids):
         reasons.append("duplicate_paragraph_ids")
     for pid in ids:
@@ -212,6 +292,16 @@ def validate_lesson(lesson: dict, window: dict) -> tuple[dict | None, list[str],
         bad = sorted(v2.numbers_in(lesson[f]) - grounded)
         if bad:
             reasons.append(f"number_not_in_paragraphs:{f}:{','.join(bad)}")
+    reasons += enumeration_problems(lesson, texts)
+    sp = speaker_map(window["source_id"], library_dir) if window.get("source_id") else {}
+    if sp:
+        argues = str(lesson.get("author_argues") or "").lower()
+        if GENERIC_SPEAKER_RE.search(argues):
+            reasons.append("generic_speaker_name")
+        else:
+            toks = {t.lower() for i in ids for t in re.split(r"\s+", sp.get(i, "")) if len(t) >= 3}
+            if toks and not any(t in argues for t in toks):
+                reasons.append("speaker_not_named")
     if reasons:
         return None, reasons, nulled
     clean = dict(lesson)
@@ -231,10 +321,10 @@ def validate_lesson(lesson: dict, window: dict) -> tuple[dict | None, list[str],
     return clean, reasons, nulled
 
 
-def validate_all(lessons: list[dict], window: dict) -> tuple[list[dict], list[dict]]:
+def validate_all(lessons: list[dict], window: dict, library_dir: Path = LIB) -> tuple[list[dict], list[dict]]:
     kept, dropped = [], []
     for l in lessons:
-        clean, reasons, nulled = validate_lesson(l, window)
+        clean, reasons, nulled = validate_lesson(l, window, library_dir)
         if clean is None:
             dropped.append({"window_id": window["window_id"], "reasons": reasons, "lesson": l})
         else:
@@ -321,7 +411,7 @@ class ExtractorV3:
 
     def user_prompt(self, window: dict) -> str:
         book, author = source_info(window["source_id"], self.library_dir)
-        return render_user(window, book, author)
+        return render_user(window, book, author, self.library_dir)
 
     def key_for(self, window: dict) -> str:
         return cache_key(self.model, self.system, self.user_prompt(window), self.prompt_version)

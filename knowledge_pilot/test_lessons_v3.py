@@ -146,6 +146,16 @@ class FakeClient:
     def __init__(self, lessons):
         self.lessons, self.calls = lessons, 0
         self.beta = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(parse=self._parse)))
+        self.embeddings = SimpleNamespace(create=self._embed)
+
+    def _embed(self, model, input, dimensions, timeout=None):
+        import hashlib
+        data = []
+        for i, t in enumerate(input):   # one-hot-ish vector per text: distinct texts are never similar
+            v = [0.0] * dimensions
+            v[int(hashlib.sha256(t.encode()).hexdigest(), 16) % dimensions] = 1.0
+            data.append(SimpleNamespace(index=i, embedding=v))
+        return SimpleNamespace(data=data, usage=SimpleNamespace(total_tokens=10))
 
     def _parse(self, **kw):
         self.calls += 1
@@ -173,7 +183,7 @@ def test_extract_cache_cost_and_outputs(env):
     assert cost["cost_usd"] == pytest.approx(state.cost_from_usage("gpt-4.1-mini", 4000, 500))
     assert state.total_cost(env.state) == pytest.approx(cost["cost_usd"])
     rows = [json.loads(l) for l in (env.out / "lessons.jsonl").read_text().splitlines()]
-    assert rows[0]["evidence_paragraphs"][0]["id"] == "s_p0001" and rows[0]["prompt_version"] == "lessons-v3.3"
+    assert rows[0]["evidence_paragraphs"][0]["id"] == "s_p0001" and rows[0]["prompt_version"] == "lessons-v4.0"
     assert (env.out / "dropped.jsonl").read_text().strip()
     # second run: served from cache, no call, no cost
     ex2 = l3.ExtractorV3(client, examples=examples(), cache_path=env.cache, state_path=env.state)
@@ -292,3 +302,49 @@ def test_committed_golden_set_is_consistent():
     for w in doc["windows"]:
         assert (p.parent / "windows_text" / f"{w['window_id']}.txt").exists()
         assert not set(w["context_ids"]) & set(w["paragraph_ids"])
+
+
+# ---- v4.0 rules: span by type, contiguity, enumeration, transcript speakers ----
+
+def test_span_by_lesson_type():
+    ps = [P1, P2] + [para(i, f"Paragraph number {i} with some words.") for i in range(3, 9)]
+    w = window(ps)
+    ids = [p["id"] for p in ps]
+    ok, r, _ = l3.validate_lesson(lesson(paragraph_ids=ids[:4], lesson_type="principle", evidence=None, caveat=None, short_quote=None), w)
+    assert ok is None and any(x.startswith("paragraph_ids_count") for x in r)
+    ok, r, _ = l3.validate_lesson(lesson(paragraph_ids=ids[:6], lesson_type="framework", evidence=None, caveat=None, short_quote=None), w)
+    assert ok is not None and len(ok["paragraph_ids"]) == 6
+    ok, r, _ = l3.validate_lesson(lesson(paragraph_ids=ids[:8] + ["x"], lesson_type="story"), w)
+    assert ok is None
+
+
+def test_framework_gaps_are_filled_when_within_limit():
+    ps = [para(i, f"Paragraph number {i} with some words.") for i in range(1, 7)]
+    w = window(ps)
+    ids = [p["id"] for p in ps]
+    ok, r, nulled = l3.validate_lesson(lesson(paragraph_ids=[ids[0], ids[2], ids[3]], lesson_type="story",
+                                              evidence=None, caveat=None, short_quote=None), w)
+    assert ok is not None and ok["paragraph_ids"] == ids[:4] and "span_gaps_filled" in nulled
+
+
+def test_enumeration_count_must_be_in_paragraphs():
+    w = window([P1, P2])
+    ok, r, _ = l3.validate_lesson(lesson(principle="Follow the four steps to win.", evidence=None, caveat=None, short_quote=None), w)
+    assert ok is None and any(x.startswith("enumeration_count") for x in r)
+
+
+def test_transcript_speakers_must_be_named(tmp_path):
+    d = tmp_path / "t"
+    d.mkdir()
+    rows = [{"id": f"t_p{i:04d}", "text": f"{'Ann Lee' if i % 2 else 'Bob Ray'}: turn {i} words."} for i in range(12)]
+    (d / "paragraphs_v3.2.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    sp = l3.speaker_map("t", tmp_path)
+    assert set(sp.values()) == {"Ann Lee", "Bob Ray"}
+    w = {"window_id": "w", "source_id": "t", "chapter": "c", "paragraphs": [{**r, "word_count": 5} for r in rows[:3]], "context": []}
+    base = dict(paragraph_ids=["t_p0001"], evidence=None, caveat=None, short_quote=None, principle="A mechanism.")
+    ok, r, _ = l3.validate_lesson(lesson(author_argues="The speaker says it works.", **base), w, tmp_path)
+    assert ok is None and "generic_speaker_name" in r
+    ok, r, _ = l3.validate_lesson(lesson(author_argues="Bob Ray says it works.", **base), w, tmp_path)
+    assert ok is None and "speaker_not_named" in r
+    ok, r, _ = l3.validate_lesson(lesson(author_argues="Ann Lee says it works.", **base), w, tmp_path)
+    assert ok is not None
