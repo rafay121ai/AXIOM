@@ -97,7 +97,7 @@ def test_cache_costs_nothing_second_time_and_cost_recorded(env):
     c = FakeClient([out()])
     mk(c, env).edit(lesson())
     rows = state.load(env.sp)["sources"]["nosuch"]["costs"]
-    assert rows[0]["purpose"] == "editor" and rows[0]["model"] == "gpt-4.1"
+    assert rows[0]["purpose"] == "editor" and rows[0]["model"] == ed.MODEL
     e2 = mk(c, env)
     e2.edit(lesson())
     assert c.calls == 1 and e2.stats["cached"] == 1

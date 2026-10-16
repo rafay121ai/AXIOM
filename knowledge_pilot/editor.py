@@ -1,4 +1,4 @@
-"""Editor pass (EDITOR_VERSION 'editor-v1'): one gpt-4.1 call per lesson, keep or drop, rewrite the index card.
+"""Editor pass (EDITOR_VERSION 'editor-v2.0-mini'): one gpt-4.1-mini call per lesson, keep or drop, rewrite the index card.
 
 A lesson is an index card: it points at stored paragraphs and says what idea they hold. The editor sees the
 lesson and its cited paragraphs and either drops it or rewrites title, author_argues, principle and
@@ -35,9 +35,9 @@ import library_lessons as v2  # noqa: E402
 import library_lessons_v3 as l3  # noqa: E402
 import library_state as state  # noqa: E402
 
-EDITOR_VERSION = "editor-v1.1"
-MODEL = "gpt-4.1"
-CAP_USD = 13.00
+EDITOR_VERSION = "editor-v2.0-mini"
+MODEL = "gpt-4.1-mini"
+CAP_USD = 40.00
 MAX_ATTEMPTS = 3
 TIMEOUT_S = 120
 MAX_COMPLETION_TOKENS = 2000
@@ -53,13 +53,17 @@ DROP when any of these is true:
 - scene setting, or story setup whose lesson is not in the cited paragraphs (the payoff is somewhere you cannot see)
 - an anecdote presented as a general rule the paragraphs do not state
 - two or more separate ideas bundled in one card, or paragraphs that do not belong together
+- a single statistic or fact with no decision attached
 - not something a founder could use to decide anything (market commentary, investor analysis, trivia)
+- CORE CLAIM CHECK: you must quote the sentence in the cited paragraphs that states the core claim (stating_sentence). If no such sentence exists, drop.
+- ETHICS: the only lesson is an illegal, deceptive or unethical act itself (fraud, counterfeiting, manipulating or deceiving customers or partners). Drop (verdict drop) only when the cited text offers nothing transferable beyond the act. If the text itself praises or names a transferable quality (creativity, resourcefulness, leverage, reading people), the lesson is that quality: keep it under the ETHICS rewrite rule below, and leave act_is_the_lesson false.
 Otherwise KEEP.
 
 If you KEEP, rewrite (leave a field as it is when it is already right):
 - title: 5 to 10 words naming the idea.
 - author_argues: 1 to 3 sentences. Every claim must be stated or plainly shown in the cited paragraphs, in the text's own words where you can. No added phrases, no consequences, morals, causes or numbers the paragraphs do not give. Attribute correctly. In a book, name the author for the author's own claims, and attribute characters' words to them: "Kiyosaki recounts rich dad saying...", "Moore describes a customer who...". If someone else's claim is quoted, say whose it is. In a transcript every paragraph is tagged with its speaker: name the tagged speaker who says the idea; never write "the speaker", "the host" or "the guest".
 - principle: ONE sentence stating the mechanism or rule, with the same grounding rule. Every number must appear in the cited paragraphs.
+- ETHICS: if the example involves an illegal, deceptive or unethical act (counterfeiting, fraud, manipulation, deceiving customers or partners) but also carries a transferable principle (creativity, resourcefulness, leverage, reading people), keep the principle and never endorse the act. author_argues must state plainly that the act is illegal or unethical (as the text says, or "this act is illegal/unethical"). principle must apply only to legitimate actions and must not say the illegal act is acceptable, even if it fails or is wrong (do not write 'even if illegal'), and example_questions must not ask how to do the act.
 - example_questions: exactly 3 questions a founder would type, in their own words, each answered by what these paragraphs say.
 
 Be strict: the library is better with 60 sharp cards than 100 padded ones, and a founder loses trust in a vague card. When in doubt, drop. Answer the structured checks honestly; a card with no stating sentence, or that reads the same in any book, or that only recounts one episode, or that bundles ideas, is dropped.
@@ -94,6 +98,8 @@ class EditOut(BaseModel):
     same_in_any_book: bool = Field(description="True if, with all names, numbers and cases removed, the principle would read the same in any self-help or business book and gives a founder no specific action or test (motivation, exhortation, 'learn from others', 'be smart with money', 'persist').")
     anecdote_only: bool = Field(description="True if the paragraphs only recount one episode and the speaker does not draw a rule from it in the cited text.")
     bundled: bool = Field(description="True if the card combines two or more separate ideas, or the cited paragraphs hold different ideas.")
+    act_is_the_lesson: bool = Field(default=False, description="True ONLY if the paragraphs name no transferable quality at all (creativity, resourcefulness, leverage, reading people) and the act itself is all there is. False when a speaker names or praises such a quality, even if the act that showed it was illegal or unethical; in that case keep and rewrite per the ETHICS rewrite rule.")
+    single_fact_only: bool = Field(default=False, description="True if the card is a single statistic or fact with no decision attached.")
     verdict: Literal["keep", "drop"]
     drop_reason: str
     title: str
@@ -222,13 +228,14 @@ class Editor:
         res = {"verdict": out.verdict, "drop_reason": out.drop_reason,
                "fields": {f: getattr(out, f) for f in EDITED_FIELDS}, "problems": problems,
                "flags": {"same_in_any_book": out.same_in_any_book, "anecdote_only": out.anecdote_only,
-                         "bundled": out.bundled, "stating_sentence": out.stating_sentence}}
+                         "bundled": out.bundled, "act_is_the_lesson": out.act_is_the_lesson,
+                         "single_fact_only": out.single_fact_only, "stating_sentence": out.stating_sentence}}
         if out.verdict == "keep":
             texts = [p["text"] for p in lesson.get("evidence_paragraphs") or []]
             why = []
             if not sentence_in_text(out.stating_sentence, texts):
                 why.append("no_verbatim_stating_sentence")
-            why += [f for f in ("same_in_any_book", "anecdote_only", "bundled") if getattr(out, f)]
+            why += [f for f in ("same_in_any_book", "anecdote_only", "bundled", "single_fact_only") if getattr(out, f)]
             if why:
                 res.update(verdict="drop", drop_reason="gate: " + ", ".join(why) +
                            (f" ({out.drop_reason})" if out.drop_reason else ""))
