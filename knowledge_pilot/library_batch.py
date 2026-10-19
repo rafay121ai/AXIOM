@@ -976,7 +976,7 @@ def write_report() -> None:
              f"- Lessons total: {lessons}",
              f"- OpenAI spend: ${spent():.2f} of ${run['cap_usd']:.2f} cap (this bulk run: ${run_spend:.2f}; earlier pilot work: ${spent() - run_spend:.2f})",
              f"- Pending batch ids: {', '.join(pend) if pend else 'none'}",
-             f"- Quality checkpoint: {run['checkpoint']['status']}",
+             f"- Quality checkpoint: {run['checkpoint']['status']}" + (f" ({run['checkpoint']['note']})" if run['checkpoint'].get('note') else ""),
              f"- Run halt: {run.get('halt') or 'none'}", "",
              "## Sources", "",
              "| Title | Pillar | Core | Status | Kept | Dropped | Per 1,000 words | Cost | Spot check |",
