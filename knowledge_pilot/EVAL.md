@@ -60,13 +60,30 @@ Reasons that are not a defect in the lesson quality itself, in order of weight:
 
 **whats_coming scored 0 for both.** Neither library has material that helped on AI-timing or AI-agent questions.
 
-## Recommendation
+## Hybrid test: old library picks the sources, lessons supply the results
 
-**Do not cut over to the new library as a replacement.** The data does not support it yet.
+Same 20 situations. For each, the local search was limited to lessons from the sources among the old library's top 5 that exist locally (all 20 situations had at least one), ranked by the same 512-dim similarity, top 5 kept. Old and hybrid results were shuffled together and scored blind by two fresh sonnet subagents. Files: `eval_hybrid.py`, `eval/hybrid_retrieval.json`, `eval/hscores_1.json`, `eval/hscores_2.json`.
 
-What the data does support:
-- Keep `wiki_chunks` as the source for choosing which book or source to teach from.
-- Use the lessons as a second layer: after a source is chosen, retrieve lessons *within that source* (or the top 3 sources) to supply cited paragraphs and the author attribution. This plays to the lessons' strength (verbatim cited text, named author, page range) and avoids their weakness (narrow tactics returned out of context). It is a small test to run: restrict the local search to the sources in the old top 5 and rescore the same 20 situations.
-- Before any wider cutover, add a query-rewrite step and re-run this same eval, then process the deferred biographies and the non-book sources that the old library contains.
+| | Relevant | Partly | Irrelevant | Would genuinely help |
+|---|---|---|---|---|
+| Old (rescored, same scorers as hybrid) | 33% | 39% | 28% | 37% |
+| Hybrid (old's sources, lessons inside them) | 22% | 51% | 27% | 24% |
 
-`sql/create_lessons.sql` and `upload_lessons.py` remain unrun. If the hybrid test passes, uploading is cheap: about 57-78 MB.
+Situations won on 'would help': old 9, hybrid 3, tie 8. Rank-1 result helped: old 6/20, hybrid 7/20.
+
+The old library scored 40% in the first run and 37% here with different scorers, so scorer noise is roughly 3 points. The hybrid (24%) is indistinguishable from the pure new library (25%).
+
+**What this rules out.** Choosing the right book did not rescue the lessons. The gap is not a source-selection problem and not a coverage problem alone. Single lesson cards, returned five at a time, are judged less useful for a founder's situation than the old library's whole-source framework summaries. Hybrid won on situations 8 (pitching) and 18 (cofounder conflict) and lost badly on 9 (negotiation) and 17 (hiring).
+
+**What this does not measure.** The scorers judged the result as a standalone answer. The lesson library's design strength is different: verbatim cited paragraphs, a named author, page range, and a verifiable quote, which the app needs for its own rule that a Learn screen never shows an unverified quote. This test does not score that, and it does not test the app's actual path, where an answer is written from the retrieved paragraphs.
+
+## Recommendation (revised after the hybrid test)
+
+**Do not cut over, and do not rely on lessons as the retrieval layer.** Two tests, both blind, both lose to the old library on 'would help' (25% and 24% against 37-40%).
+
+Options that stay open, in order of cost:
+1. **End-to-end test (recommended next).** For the same 20 situations, have the app's Learn step write an answer from (a) old results only and (b) old-chosen sources plus cited lesson paragraphs, and score the finished answers blind, including whether every quote and attribution verifies. This tests what the lesson library is for, which this eval does not.
+2. **Query rewriting** (turn the situation into a short problem statement before embedding). Cheap, but the hybrid result suggests it will not change the verdict by itself.
+3. **Finish coverage** (biographies, transcripts, non-book sources) only if option 1 shows lessons help in the answer.
+
+`sql/create_lessons.sql` and `upload_lessons.py` stay unrun. Nothing in the app points at the new library.
