@@ -53,9 +53,9 @@ Helpful results by pillar (situations per pillar: how_companies_win 5, move_peop
 
 Reasons that are not a defect in the lesson quality itself, in order of weight:
 1. **Coverage.** The old library holds 196 core sources, including essays, papers, podcasts and articles (Paul Graham, Acquired, Lenny's, Lex Fridman, shareholder letters and so on). The new library has 66 core books only; biographies, transcripts and every non-book source are deferred to save cost. Several situations (pricing, early customers, fundraising, category design) are served by sources the new library does not have.
-2. **Granularity.** The unit is one narrow lesson, so the top 5 are five narrow tactics. In situation 9 (customer demands a 30% discount) three of the five new results are Voss lessons, the right book, but they are about anchoring and incremental offers, not about a big-customer renewal. The old library returns a whole-source framework summary, which the scorer read as more useful.
+2. **Granularity.** The unit is one narrow lesson, so the top 5 are five narrow tactics. In situation 9 (customer demands a 30% discount) three of the five new results are Voss lessons, the right book, but they are about anchoring and incremental offers, not about a big-customer renewal. The old library returns a long chunk-level `key_frameworks` summary (about 2,600 characters), which the scorer may have read as more useful.
 3. **Query shape.** A long first-person situation embedded against a short lesson card gives low similarity scores (0.45-0.50 top). No query rewriting was tried.
-4. **Format asymmetry.** Old results were shown as the stored `key_frameworks` summary (about 2,600 characters per source); new results as one lesson card plus 900 characters of cited text. This favours the old side somewhat.
+4. **Format asymmetry.** Old results were shown as the stored `key_frameworks` text of the matched chunk (about 2,600 characters; it differs from chunk to chunk within a source); new results as one lesson card plus 900 characters of cited text. This favours the old side somewhat.
 5. **Noise.** 20 situations, two scorers of the same model, strict 'helps' definition. A difference of a few situations is within noise; a 15-point gap on 100 results each is not obviously so.
 
 **whats_coming scored 0 for both.** Neither library has material that helped on AI-timing or AI-agent questions.
@@ -73,7 +73,7 @@ Situations won on 'would help': old 9, hybrid 3, tie 8. Rank-1 result helped: ol
 
 The old library scored 40% in the first run and 37% here with different scorers, so scorer noise is roughly 3 points. The hybrid (24%) is indistinguishable from the pure new library (25%).
 
-**What this rules out.** Choosing the right book did not rescue the lessons. The gap is not a source-selection problem and not a coverage problem alone. Single lesson cards, returned five at a time, are judged less useful for a founder's situation than the old library's whole-source framework summaries. Hybrid won on situations 8 (pitching) and 18 (cofounder conflict) and lost badly on 9 (negotiation) and 17 (hiring).
+**What this rules out.** Choosing the right book did not rescue the lessons. The gap is not a source-selection problem and not a coverage problem alone. Single lesson cards, returned five at a time, are judged less useful for a founder's situation than the old library's long chunk-level `key_frameworks` summaries. Hybrid won on situations 8 (pitching) and 18 (cofounder conflict) and lost badly on 9 (negotiation) and 17 (hiring).
 
 **What this does not measure.** The scorers judged the result as a standalone answer. The lesson library's design strength is different: verbatim cited paragraphs, a named author, page range, and a verifiable quote, which the app needs for its own rule that a Learn screen never shows an unverified quote. This test does not score that, and it does not test the app's actual path, where an answer is written from the retrieved paragraphs.
 
