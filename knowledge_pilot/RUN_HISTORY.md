@@ -4,7 +4,7 @@ Reconstructed from: `git log`, `library_state.json` (including `library_run`), `
 
 Two corrections to things I said earlier in the session:
 - I said the two "sterling crisis" failures in the quality checkpoint came from Dalio. They came from **Business Adventures** (`w0066_l02`, `w0068_l00`).
-- In the first version of `EVAL.md` I described old results as one summary per whole source. The stored `key_frameworks` text differs from chunk to chunk within a source, so it is chunk-level. `EVAL.md` was corrected (commit `e3e297a`).
+- In the first version of `EVAL.md` and in my messages I described old results as one framework summary per whole source. Wrong twice: the text differs from chunk to chunk, and the column `key_frameworks` is not a summary at all. It holds the raw, roughly 450-word source passage (the first result in section 4 starts mid-sentence). `EVAL.md` was corrected in commit `e3e297a` (chunk-level) and again afterwards (raw passage).
 
 ---
 
@@ -341,10 +341,10 @@ Total tracked spend to date: **$43.70** (bulk $31.40, plus about $12.30 spent be
 ### What the scorer saw
 | | Old result | New / hybrid result |
 |---|---|---|
-| Fields shown | `title` and `author` from `wiki_chunks`, then `key_frameworks` text (about 2,626 characters on average) | lesson `title`, `author`, `source_title`, `author_argues`, `principle`, then the first 900 characters of the cited paragraphs joined |
-| Not shown | `pillar`, `similarity`, `id`; **no `wiki_sources` fields** (summary_for_retrieval, source_claims, axiom_interpretation, etc.); **no chunk text** because `wiki_chunks` has no text column | `applies_when`, `example_questions`, chapter, pages, similarity, lesson type |
+| Fields shown | `title` and `author` from `wiki_chunks`, then the `key_frameworks` column (about 2,626 characters on average). **That column holds a raw verbatim passage of the source, not a summary** | lesson `title`, `author`, `source_title`, `author_argues`, `principle`, then the first 900 characters of the cited paragraphs joined |
+| Not shown | `pillar`, `similarity`, `id`; **no `wiki_sources` fields** (summary_for_retrieval, source_claims, axiom_interpretation, etc.); `wiki_chunks` has no `content` column; `key_frameworks` is its only text | `applies_when`, `example_questions`, chapter, pages, similarity, lesson type |
 
-Per-chunk observation: for the same source title, `key_frameworks` differs between results (16 of 33 titles seen had more than one distinct text), so it is chunk-level.
+Per-chunk observation: for the same source title, `key_frameworks` differs between results (16 of 33 titles seen had more than one distinct text) and often starts mid-sentence, so each old result is one verbatim chunk (about 450 words). I did not check how the app itself uses this column.
 
 Format shown to the scorer, old: `<title> — <author>\n<key_frameworks>`. New: `<title> — <author>, <source_title>\n<author_argues>\nPrinciple: <principle>\nSource text: <900 chars>`. The two formats are visibly different, so the scorer could tell the two groups apart even though it was never told there were two.
 
@@ -620,8 +620,8 @@ Source text: This new AI approach has already had three important implications. 
 
 ## 6. MY ASSESSMENT (under 200 words)
 
-The new library probably scored lower for three reasons: it covers fewer sources (66 books against the old library's 196 core sources, including essays, podcasts and papers); its unit is one narrow lesson, so five results are five tactics, while an old result is a 2,600-character framework summary that can touch several ideas; and a long first-person query sits far from short lesson cards in embedding space.
+The new library probably scored lower for three reasons: it covers fewer sources (66 books against the old library's 196 core sources, including essays, podcasts and papers); its unit is one narrow lesson, so five results are five tactics, while an old result is a roughly 450-word raw passage that can touch several ideas; and a long first-person query sits far from short lesson cards in embedding space.
 
-The design favoured the old side in four ways: the scorer judged each result as a standalone answer (not the app's use, which writes an answer from cited paragraphs); the old text is five times longer, so it is likelier to contain something relevant; the two formats are distinguishable, so "blind" is partial; and I wrote the situations and the "helps" rule, with one scorer model and no human check.
+The design favoured the old side in four ways: the scorer judged each result as a standalone answer (not the app's use, which writes an answer from cited paragraphs); the old text is about twice as long (about 2,600 against 1,200-1,600 characters), so it is likelier to contain something relevant; the two formats are distinguishable, so "blind" is partial; and I wrote the situations and the "helps" rule, with one scorer model and no human check.
 
 I would trust the direction (lesson cards alone are not a better retrieval unit) and the pipeline counts and costs. I would not trust the absolute percentages, nor read the eval as a verdict on citation quality, which it never tested. The tracked dollars, the fuzzy "core" flags, and the severe counts from one sonnet checker are unverified.
