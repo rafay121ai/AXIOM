@@ -9,7 +9,7 @@ export const BANNED_PHRASES = Object.freeze([
 ])
 
 // Teasers withhold something to create curiosity.
-const TEASER = /\b(want to (see|know|hear|find out)|would you like to (see|know|hear)|shall i|let me show|find out (why|what|how)|here'?s why|but first|more on that)\b/i
+export const TEASER = /\b(want to (see|know|hear|find out)|would you like to (see|know|hear)|shall i|let me show|find out (why|what|how)|here'?s why|but first|more on that)\b/i
 
 const MONTHS = ['january', 'february', 'march', 'april', 'june', 'july', 'august', 'september', 'october', 'november', 'december']
 export const MAX_UNDERLINES = 2
@@ -27,7 +27,7 @@ export function norm(text) {
 }
 
 const trimEdges = (s) => s.replace(/^[\s.,;:!?…"'()-]+|[\s.,;:!?…"'()-]+$/g, '')
-const wordRx = (phrase) => new RegExp(`(?<![a-z0-9])${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![a-z0-9])`, 'i')
+export const wordRx = (phrase) => new RegExp(`(?<![a-z0-9])${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![a-z0-9])`, 'i')
 
 // Double-quoted passages in the text. `unbalanced` is true on an odd quote count.
 export function quotedPhrases(text) {

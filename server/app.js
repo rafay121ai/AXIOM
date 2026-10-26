@@ -267,6 +267,7 @@ export function createApp({
   app.use('/api/founder-profile', requireAuth)
   app.use('/api/signup', requireAuth)
   app.use('/api/first-reading', requireAuth)
+  app.use('/api/situations', requireAuth)
 
   // ─── Routes ───────────────────────────────────────────────────────────────────
 

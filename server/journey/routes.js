@@ -3,6 +3,7 @@
 import rateLimit from 'express-rate-limit'
 import { createSignupHandlers, signupFreeText } from './signup.js'
 import { createFirstReading } from './firstReading.js'
+import { mountSituationRoutes } from './situationRoutes.js'
 
 export function mountJourneyRoutes(app, { supabase, care, callStructured, clock }) {
   const limiter = (max) => rateLimit({
@@ -14,6 +15,8 @@ export function mountJourneyRoutes(app, { supabase, care, callStructured, clock 
     legacyHeaders: false,
   })
   const signup = createSignupHandlers({ supabase, clock })
+
+  mountSituationRoutes(app, { supabase, care, callStructured, clock })
 
   app.get('/api/signup', limiter(60), signup.get)
   app.put('/api/signup/answers/:key', limiter(60), care.careGate(signupFreeText), signup.put)
