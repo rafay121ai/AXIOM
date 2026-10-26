@@ -21,6 +21,7 @@ export function normalize(text) {
     .replace(/[̀-ͯ​-‍﻿]/g, '')
     .toLowerCase()
     .replace(/['‘’`]/g, '')
+  t = t.replace(/[._\-*]+/g, ' ')
   t = t.replace(/\b(?:[a-z][ .\-_*]){3,}[a-z]\b/g, (m) => m.replace(/[ .\-_*]/g, ''))
   t = t
     .split(/(\s+)/)
@@ -39,6 +40,7 @@ const anyMatch = (list, text) => list.some((r) => r.test(text))
 
 // Said about the business, not the person. Removed before the softer checks.
 const IDIOMS = [
+  '(the |this |that |my |our |your )?(deadline|burn rate|launch|this week|investor meeting|board meeting|fundraise|fundraising|runway|pitch) (is |will |would |are )?(kill|killing) (me|us)\\b',
   'kill (the|this|that|our|my|your|a|an|off|it|switch|criteria)\\b(?! myself)',
   'killing it', 'killed it', 'killer (feature|app|product|pitch|demo)',
   'burn rate', 'burn(ing|ed|t)? (through )?(our |the |my )?(cash|runway|money|budget)', 'burn(ing|ed|t) out (the|our) (list|budget)',
@@ -56,7 +58,7 @@ const SUICIDE_IDIOMS = [
 const CLEAR_STRICT = [rx('\\bwant(s|ed)? to die\\b(?!\\s+(on|for)\\b)')] // matched on t0
 
 const CLEAR = [
-  '\\bsuicid(e|al)', '\\bkill(ing)? my ?self',
+  '\\bsuicid(e|al)', '\\bkill(ing)? my ?self', '\\bkill(ing)?myself\\b',
   '\\bend(ing)? (my|this) (own )?life', '\\bend(ing)? it all', '\\btake my (own )?life', '\\btaking my (own )?life',
   '\\bwish i (was|were) (dead|never born)', '\\bbetter off dead', '\\bwant(s|ed)? to be dead',
   '\\bno reason to (live|go on|be alive)', '\\bdont want to (be alive|live\\b(?! (in|at|with|on|off))|exist)( any ?more)?',
@@ -75,6 +77,7 @@ const CLEAR = [
 // except the stretched-letters check which needs t0.
 const UNCLEAR_STRETCH = [/\bd+i+e{3,}\b/, /\bd+i{2,}e+\b/, /\b(wanna|gonna|going to|want to|ima|just) d+i+e+\b(?!\s+(on|for)\b)/]
 const UNCLEAR = [
+  '\\bi?(wanna|wana|wantto|gonna|goingto)die\\b',
   '\\b(wanna|want to|wana) die\\b(?!\\s+(on|for)\\b)', '\\bwant(s|ed)? to (disappear|vanish)', '\\b(just |could |should |wish i could |gonna )disappear',
   '\\bdisappear(ing)? (forever|from (everything|everyone|the world))',
   '\\b(cant|can not|cannot) (do|take|handle) (this|it|any of this) (any ?more|any longer)', '\\b(cant|cannot) go on\\b', '\\b(cant|cannot) keep (going|doing this)',
@@ -86,7 +89,7 @@ const UNCLEAR = [
 
 // Might mean something worrying: the model decides. Floor is "none".
 const WEAK = [
-  '\\bdisappear', '\\bhopeless', '\\bworthless', '\\bwhats the point', '\\bim done\\b', '\\bi am done\\b',
+  '\\bdisappear', '\\bhopeless', '\\bworthless', '\\bwhat(s| is) the point', '\\bi am dying', '\\bwant it (all )?to stop', '\\bim done\\b', '\\bi am done\\b',
   '\\bnothing matters', '\\bno way out', '\\btrapped', '\\bgonna die\\b', '\\bgoing to die\\b', '\\bim dying\\b',
   '\\btired of (everything|living|life|it all)', '\\bsick of (everything|living|life)', '\\bgive up\\b', '\\bburnt out\\b',
   '\\bcant (sleep|breathe|stop crying|stop shaking|eat)', '\\bpanic attack', '\\bbreak ?down\\b', '\\bfeel (empty|numb|nothing)',
@@ -156,6 +159,7 @@ export async function classifyCare({ text, context = [], deps = {} }) {
 
   try {
     const verdict = await askModel({ text, context, deps })
+    if (!Object.hasOwn(RANK, verdict?.level)) throw new Error('invalid model level')
     const level = higher(rules.level, verdict.level)
     return { level, reason: level === rules.level ? rules.reason : 'model' }
   } catch {
