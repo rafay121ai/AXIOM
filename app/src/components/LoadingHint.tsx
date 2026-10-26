@@ -5,6 +5,32 @@ import { fonts, ink } from '../theme';
 import { Logo } from './Logo';
 import { useReduceMotion } from './useReduceMotion';
 
+const SWEEP_MS = 2400;
+
+// The quote under a soft moving light: a bright band passes over the words from left to right, like the mock's sweep.
+function Sweep({ text, still }: { text: string; still: boolean }) {
+  const t = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (still) return;
+    const loop = Animated.loop(Animated.timing(t, { toValue: 1, duration: SWEEP_MS, easing: Easing.linear, useNativeDriver: false }));
+    loop.start();
+    return () => loop.stop();
+  }, [still, t]);
+  const words = text.match(/\S+\s*/g) ?? [];
+  return (
+    <Text style={styles.quoteText}>
+      {words.map((w, n) => {
+        // The band's centre runs from before the first word to past the last; each word lights as it passes.
+        const at = (n + 0.5) / words.length;
+        const lo = Math.max(0, at - 0.28);
+        const hi = Math.min(1, at + 0.28);
+        const color = still ? ink(0.6) : t.interpolate({ inputRange: [0, lo, at, hi, 1], outputRange: [ink(0.42), ink(0.42), 'rgb(255,255,255)', ink(0.42), ink(0.42)] });
+        return <Animated.Text key={n} style={{ color }}>{w}</Animated.Text>;
+      })}
+    </Text>
+  );
+}
+
 // Where Axiom's answer will appear: a small logo drawing itself and two very thin faint lines
 // shimmering in time. No spinner, no dots. The quote and book name (book only, never an author)
 // join in when the library can supply a verified one; without one the logo and the lines are the whole hint.
@@ -29,7 +55,7 @@ export function LoadingHint({ hint = null }: { hint?: LoadingQuote | null }) {
         <Logo size={24} draw />
         {hint && (
           <View style={styles.quote}>
-            <Animated.Text style={[styles.quoteText, { opacity: reduce ? 0.6 : shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.42, 0.9] }) }]}>{hint.quote}</Animated.Text>
+            <Sweep text={hint.quote} still={reduce} />
             <Text style={styles.book}>{hint.book}</Text>
           </View>
         )}

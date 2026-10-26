@@ -3,7 +3,7 @@ import { KeyboardAvoidingView, Platform, ScrollView, type ScrollViewInstance, St
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { newTurnId, sendUntilDelivered } from '../api/delivery';
-import type { HelpLine, LearnReply, LoadingQuote, Screened } from '../api/types';
+import type { HelpLine, LearnReply, LearnTurn, LoadingQuote, Screened } from '../api/types';
 import { routeScreened } from '../care/route';
 import { Chip } from '../components/Choice';
 import { Composer } from '../components/Composer';
@@ -12,6 +12,7 @@ import { Glass } from '../components/Glass';
 import { LoadingHint } from '../components/LoadingHint';
 import { Logo } from '../components/Logo';
 import { Picture } from '../components/Picture';
+import { Words } from '../components/Words';
 import { TextAction } from '../components/TextAction';
 import { copy, failureLine } from '../copy';
 import { applyLearnReply, type LearnChat, type LearnItem, lessonParagraphs, sourceLines, suggestionTurn, tappedIndexes } from '../learn/chat';
@@ -28,6 +29,35 @@ type Props = {
   onCare: (message: string, help: HelpLine[]) => void;
 };
 
+type Chips = { done: number[]; pressed: string | null; onTap: (index: number) => void };
+
+// One Axiom turn: the words fill in paragraph by paragraph, then the source line, the picture and the suggestions.
+function TurnView({ turn, fresh, chips }: { turn: LearnTurn; fresh: boolean; chips: Chips | null }) {
+  const paras = lessonParagraphs(turn.text);
+  const [upTo, setUpTo] = useState(fresh ? 1 : paras.length);
+  const complete = upTo > paras.length;
+  return (
+    <>
+      {paras.slice(0, Math.min(upTo, paras.length)).map((p, n) => (
+        <Words key={n} text={p} animate={fresh} style={[type.reading, styles.para]} onDone={() => setUpTo((u) => Math.max(u, n + 2))} />
+      ))}
+      {complete && (
+        <Fade duration={500}>
+          {sourceLines(turn.sources).map((line) => <Text key={line} style={styles.src}>{line}</Text>)}
+          {turn.picture && <Picture picture={turn.picture} />}
+          {chips && (
+            <View style={styles.chips}>
+              {turn.follow_ups.map((label, n) => (
+                <Chip key={n} role="button" label={label} selected={chips.done.includes(n) || chips.pressed === `${turn.id}:${n}`} onPress={() => { if (!chips.done.includes(n)) chips.onTap(n); }} />
+              ))}
+            </View>
+          )}
+        </Fade>
+      )}
+    </>
+  );
+}
+
 // Learn: Axiom's lesson with author and book named, a picture when it helps, tappable follow-ups,
 // and a move card once the server says the move is ready. Taps never post a founder message.
 export function LearnScreen({ chat, start, send, tap, loadHint, onOpenMove, onCare }: Props) {
@@ -40,6 +70,8 @@ export function LearnScreen({ chat, start, send, tap, loadHint, onOpenMove, onCa
   const [pressed, setPressed] = useState<string | null>(null);
   const [failure, setFailure] = useState<{ text: string; canRetry: boolean; retry: () => void } | null>(null);
   const live = useRef(true);
+  // Axiom's words fill in only for turns that arrive while the screen is open.
+  const seen = useRef(new Set(chat.items.map((i) => i.key)));
   const scroller = useRef<ScrollViewInstance>(null);
   // The screen asks for the lesson once, however often its parent redraws.
   const latest = useRef({ start, loadHint });
@@ -161,19 +193,13 @@ export function LearnScreen({ chat, start, send, tap, loadHint, onOpenMove, onCa
               </Fade>
             );
           }
-          const { turn } = i;
           return (
             <Fade key={i.key} style={styles.ax}>
-              {lessonParagraphs(turn.text).map((p, n) => <Text key={n} style={[type.reading, styles.para]}>{p}</Text>)}
-              {sourceLines(turn.sources).map((line) => <Text key={line} style={styles.src}>{line}</Text>)}
-              {turn.picture && <Picture picture={turn.picture} />}
-              {chips && turn.id === chips.id && (
-                <View style={styles.chips}>
-                  {turn.follow_ups.map((label, n) => (
-                    <Chip key={n} label={label} selected={done.includes(n) || pressed === `${turn.id}:${n}`} onPress={() => { if (!done.includes(n)) void tapSuggestion(turn.id, n); }} />
-                  ))}
-                </View>
-              )}
+              <TurnView
+                turn={i.turn}
+                fresh={!seen.current.has(i.key)}
+                chips={chips?.id === i.turn.id ? { done, pressed, onTap: (n) => void tapSuggestion(i.turn.id, n) } : null}
+              />
             </Fade>
           );
         })}

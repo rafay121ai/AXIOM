@@ -31,14 +31,14 @@ export function Row({ label, selected, onPress, multi = false }: Props & { multi
   );
 }
 
-/** A small rounded glass chip. */
-export function Chip({ label, selected, onPress }: Props) {
+/** A small rounded glass chip. A tick-able option is a checkbox; a suggestion to tap is a button. */
+export function Chip({ label, selected, onPress, role = 'checkbox' }: Props & { role?: 'checkbox' | 'button' }) {
   return (
     <Glass
       onPress={onPress}
       selected={selected}
       radius={99}
-      accessibilityRole="checkbox"
+      accessibilityRole={role}
       accessibilityLabel={label}
       contentStyle={styles.chip}
     >

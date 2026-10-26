@@ -118,7 +118,9 @@ const isReal = (t: string) => t.toLowerCase().replace(/[^a-z0-9%$\s']/g, ' ').sp
 // The mock's "enough": a described situation with one concrete detail.
 const isEnough = (t: string) => t.split(/\s+/).length >= 8 && /\d|\b(one|two|three|four|five|six|seven|eight|nine|ten|twice|once|yesterday)\b/i.test(t);
 
-export function createFakeApi(sim: CareSim = 'none'): AxiomApi {
+// `latencyMs` makes the Learn calls take a while, so the loading hint can be seen.
+export function createFakeApi(sim: CareSim = 'none', latencyMs = 0): AxiomApi {
+  const wait = () => (latencyMs > 0 ? new Promise<void>((r) => setTimeout(r, latencyMs)) : undefined);
   const screen = async (): Promise<Screened> => (sim === 'clear' ? CLEAR : sim === 'unclear' ? UNCLEAR : {});
 
   // Situations kept in memory, so a turn id sent twice gets the same answer, like the server.
@@ -181,9 +183,11 @@ export function createFakeApi(sim: CareSim = 'none'): AxiomApi {
       return isReal(answer.text) ? { status: 'stored', skipped: false, next: 'learn' } : { status: 'say_more', reply: SAY_MORE };
     },
     async startLearn() {
+      await wait();
       return learnReply({ turn: LESSON });
     },
     async sendLearnTurn(_learnId, text, turnId) {
+      await wait();
       const flagged = await screen();
       if (flagged.care) return flagged;
       const seen = learnReplies.get(turnId);
@@ -203,6 +207,7 @@ export function createFakeApi(sim: CareSim = 'none'): AxiomApi {
       return res;
     },
     async tapFollowUp(_learnId, turnId, index) {
+      await wait();
       return learnReply({ turn: learnTurn('followup', FOLLOW_UP_ANSWERS[index] ?? FOLLOW_UP_ANSWERS[0], { for_turn_id: turnId, followup_index: index }) });
     },
     async getLoadingHint() {

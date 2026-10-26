@@ -31,6 +31,7 @@ type Stage =
   | { name: 'situation'; chat: Chat; opening: string; suggestion?: string }
   | { name: 'read'; situationId: string }
   | { name: 'learn'; situationId: string; chat: LearnChat }
+  | { name: 'move'; learnId: string }
   | { name: 'care'; message: string; help: HelpLine[]; back: Stage };
 
 const run = (anim: Animated.CompositeAnimation) => new Promise<void>((resolve) => anim.start(() => resolve()));
@@ -141,10 +142,12 @@ export default function App() {
                 send={(id, text, turnId) => api.sendLearnTurn(id, text, turnId)}
                 tap={(id, turnId, index) => api.tapFollowUp(id, turnId, index)}
                 loadHint={(seed) => api.getLoadingHint(seed)}
-                onOpenMove={() => {}}
+                onOpenMove={(learnId) => goTo({ name: 'move', learnId })}
                 onCare={showCare}
               />
             )}
+            {/* The Move sheet is built separately; until then the card leads to an empty stage. */}
+            {stage.name === 'move' && <View style={styles.flex} />}
             {stage.name === 'reading' && <ReadingScreen reading={stage.reading} onContinue={() => beginSituation(false)} />}
           </Animated.View>
         </View>

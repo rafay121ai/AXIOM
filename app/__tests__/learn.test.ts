@@ -1,3 +1,4 @@
+import { splitAt } from '../src/components/Words';
 import type { Auth } from '../src/api/auth';
 import { sendUntilDelivered } from '../src/api/delivery';
 import { createFakeApi } from '../src/api/fake';
@@ -126,5 +127,14 @@ describe('picture numbers', () => {
     expect(withUnit(40, '$')).toBe('$40');
     expect(withUnit(3, 'hours')).toBe('3 hours');
     expect(withUnit(7)).toBe('7');
+  });
+});
+
+describe('words filling in', () => {
+  it('split a text after n words and keep every character', () => {
+    const text = 'Say it  slowly. Then stop.';
+    expect(splitAt(text, 0)).toEqual(['', text]);
+    expect(splitAt(text, 2)).toEqual(['Say it  ', 'slowly. Then stop.']);
+    expect(splitAt(text, 9)).toEqual([text, '']);
   });
 });
