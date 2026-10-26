@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>In-between states: four designs</title>
+<style>
+  :root { --ink-rgb: 234,236,238; --hl-rgb: 205,178,126; --hl2-rgb: 168,142,94; --hl: linear-gradient(90deg, rgb(var(--hl-rgb)), rgb(var(--hl2-rgb)));
+    --serif: ui-serif, "New York", "Iowan Old Style", "Palatino Linotype", Georgia, serif; --sans: -apple-system, "SF Pro Text", "Inter", system-ui, sans-serif; --ink: rgb(var(--ink-rgb)); }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #101011; color: #b9b8b3; font-family: var(--sans); padding: 40px 20px 90px; }
+  h1 { font-family: var(--serif); font-weight: 500; font-size: 28px; color: #ecebe6; text-align: center; margin: 0 0 6px; }
+  .sub { text-align: center; color: #8e8d88; font-size: 14px; margin: 0 auto 40px; max-width: 560px; line-height: 1.5; }
+  section { max-width: 1080px; margin: 0 auto 64px; } section h2 { font-family: var(--serif); font-weight: 500; font-size: 22px; color: #ecebe6; margin: 0 0 6px; }
+  .why { font-size: 14px; line-height: 1.55; color: #a3a29c; max-width: 700px; margin: 0 0 22px; } .why b { color: #e6e4dc; font-weight: 500; }
+  .row { display: flex; flex-wrap: wrap; gap: 26px; align-items: flex-start; }
+  .cell { width: 300px; } .cap { font-size: 12.5px; line-height: 1.5; color: #a3a29c; margin-top: 12px; padding: 0 4px; } .cap b { display: block; color: #e6e4dc; font-weight: 500; font-size: 13px; margin-bottom: 2px; }
+  .ph { width: 300px; height: 520px; border-radius: 38px; border: 1px solid #2a2a2c; background: #050505; position: relative; overflow: hidden; color: var(--ink); box-shadow: 0 30px 70px rgba(0,0,0,.5); }
+  .ph::before { content: ""; position: absolute; inset: 0; background: radial-gradient(130% 55% at 50% 108%, rgba(205,178,126,.2), rgba(205,178,126,0) 64%), radial-gradient(100% 38% at 50% -8%, rgba(205,178,126,.08), rgba(205,178,126,0) 70%); pointer-events: none; }
+  .ph .nt { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: 84px; height: 22px; border-radius: 99px; background: #000; z-index: 5; }
+  .in { position: absolute; inset: 0; padding: 52px 20px 20px; display: flex; flex-direction: column; z-index: 1; }
+  .ax { font-family: var(--serif); font-size: 15.5px; line-height: 1.5; margin: 0 0 12px; color: rgba(var(--ink-rgb), .96); } .ax.dim { color: rgba(var(--ink-rgb), .5); }
+  .me { font-size: 12.5px; line-height: 1.45; color: rgba(var(--ink-rgb), .7); text-align: right; margin: 6px 0 14px 34px; } .me small { display: block; font-size: 10.5px; color: rgba(var(--ink-rgb), .42); margin-top: 3px; letter-spacing: .04em; }
+  .grow { flex: 1; }
+  .bar { border: 1px solid rgba(var(--ink-rgb), .18); border-radius: 18px; padding: 11px 14px; font-size: 13px; color: rgba(var(--ink-rgb), .35); display: flex; justify-content: space-between; background: rgba(var(--ink-rgb), .06); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); box-shadow: inset 0 1px 0 rgba(255,255,255,.14); }
+  .bar i { font-style: normal; width: 22px; height: 22px; border-radius: 50%; background: rgba(var(--ink-rgb), .2); display: grid; place-items: center; font-size: 12px; color: #0b0907; }
+  .txt { background: none; border: 0; padding: 2px 0; font: inherit; font-size: 13px; color: var(--ink); border-bottom: 1px solid rgba(var(--hl-rgb), .8); cursor: pointer; align-self: flex-start; }
+  /* thinking */
+  .think { margin: 4px 0 0; } .shim { position: relative; height: 1.5px; width: 120px; background: rgba(var(--ink-rgb), .14); overflow: hidden; margin-bottom: 9px; } .shim::after { content: ""; position: absolute; top: 0; bottom: 0; width: 42px; background: var(--hl); animation: slide 1.6s ease-in-out infinite; } @keyframes slide { from { left: -42px; } to { left: 120px; } }
+  .think p { margin: 0; font-size: 13px; color: rgba(var(--ink-rgb), .6); }
+  /* offline strip */
+  .strip { margin: -6px -20px 14px; padding: 9px 20px; font-size: 12px; letter-spacing: .02em; color: rgba(var(--ink-rgb), .85); background: rgba(var(--ink-rgb), .09); border-bottom: 1px solid rgba(var(--ink-rgb), .16); text-align: center; }
+  /* card + settings rows */
+  .card { border: 1px solid rgba(var(--ink-rgb), .16); border-radius: 16px; padding: 13px 14px; margin: 4px 0 14px; background: rgba(var(--ink-rgb), .05); font-size: 13px; line-height: 1.5; color: rgba(var(--ink-rgb), .9); }
+  .mk { display: flex; align-items: center; gap: 9px; margin-top: 10px; } .dot { width: 6px; height: 6px; border-radius: 50%; background: rgb(var(--hl-rgb)); box-shadow: 0 0 0 4px rgba(var(--hl-rgb), .16); }
+  .srow { padding: 13px 0; border-top: 1px solid rgba(var(--ink-rgb), .14); font-size: 14px; } .srow small { display: block; font-size: 11.5px; line-height: 1.45; color: rgba(var(--ink-rgb), .5); margin-top: 3px; } .slab { font-size: 9.5px; letter-spacing: .2em; text-transform: uppercase; color: rgba(var(--ink-rgb), .45); padding-top: 4px; }
+  .src { font-size: 11px; letter-spacing: .04em; color: rgba(var(--ink-rgb), .5); margin: -4px 0 12px; padding-left: 10px; border-left: 1px solid rgba(var(--ink-rgb), .3); }
+  .pic { border: 1px solid rgba(var(--ink-rgb), .16); border-radius: 14px; padding: 10px 12px; margin: 2px 0 12px; font-size: 12px; color: rgba(var(--ink-rgb), .8); } .pic div { padding: 5px 0; display: flex; gap: 9px; align-items: center; } .pic div + div { border-top: 1px solid rgba(var(--ink-rgb), .09); } .pic i { width: 12px; height: 12px; border-radius: 4px; border: 1px solid rgba(var(--ink-rgb), .35); }
+  .greet { font-family: var(--serif); font-size: 19px; line-height: 1.3; text-align: center; margin: 120px 6px 0; color: #f4f4f2; }
+  .tagrow { display: inline-block; font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: #8e8d88; margin-bottom: 8px; }
+  .lg { width: 38px; height: 38px; display: block; margin: 0 auto; overflow: visible; } .lg path { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 4.2s cubic-bezier(.4,.1,.2,1) infinite; } .lg path:nth-child(2) { animation-delay: .25s; }
+  @keyframes draw { 0% { stroke-dashoffset: 1; opacity: 1; } 50% { stroke-dashoffset: 0; opacity: 1; } 82% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+  .lgw { filter: drop-shadow(0 0 14px rgba(205,178,126,.35)); animation: glow 4.2s ease-in-out infinite; } @keyframes glow { 0%, 30% { filter: drop-shadow(0 0 4px rgba(205,178,126,.1)); } 55%, 80% { filter: drop-shadow(0 0 20px rgba(205,178,126,.5)); } 100% { filter: drop-shadow(0 0 4px rgba(205,178,126,.1)); } }
+  .wait { margin-top: 56px; text-align: center; } .tlab { font-size: 9.5px; letter-spacing: .22em; text-transform: uppercase; color: rgba(var(--ink-rgb), .5); margin: 30px 0 10px; }
+  .tho { font-family: var(--serif); font-size: 17px; line-height: 1.4; margin: 0 6px; color: #fff; min-height: 48px; transition: opacity .8s ease; } .saved { margin-top: 18px; font-size: 11.5px; letter-spacing: .04em; color: rgba(var(--ink-rgb), .55); }
+  .off { position: absolute; top: 40px; left: 50%; transform: translateX(-50%); z-index: 6; white-space: nowrap; display: flex; align-items: center; gap: 9px; padding: 8px 14px; border-radius: 99px; font-size: 11.5px; color: #fff; background: rgba(34,34,34,.55); border: 1px solid rgba(var(--ink-rgb), .2); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); box-shadow: inset 0 1px 0 rgba(255,255,255,.18), 0 10px 26px -6px rgba(0,0,0,.7); }
+  .od { width: 6px; height: 6px; border-radius: 50%; background: rgb(var(--hl-rgb)); box-shadow: 0 0 0 4px rgba(var(--hl-rgb), .18); animation: od 2s ease-in-out infinite; } @keyframes od { 50% { box-shadow: 0 0 0 7px rgba(var(--hl-rgb), 0); } }
+  .ax, .me, .card { color: #fff; } .bar span { color: rgba(var(--ink-rgb), .45); } .ax.dim { color: rgba(var(--ink-rgb), .6); } .me { color: rgba(var(--ink-rgb), .85); }
+  .qt { font-family: var(--serif); font-size: 16.5px; line-height: 1.42; margin: 20px 4px 0; color: #fff; min-height: 70px; transition: opacity .8s ease; } .qb { margin-top: 8px; font-size: 11.5px; letter-spacing: .06em; color: rgba(var(--ink-rgb), .6); transition: opacity .8s ease; }
+  .wait { margin-top: 30px; } .tag2 { font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: #8e8d88; margin: 0 0 14px; }
+  .bar span .od { display: inline-block; vertical-align: middle; margin-right: 4px; }
+</style>
+</head>
+<body>
+<h1>The in-between states</h1>
+<p class="sub">Four moments that happen to every founder in the first week. All text is in Axiom's voice: plain, no "sorry", never a spinner. Tell me what to change in any of them.</p>
+
+<section>
+  <h2>1. Thinking</h2>
+  <p class="why">After the founder sends a message, <b>the screen never freezes and never shows a spinner</b>. A small logo draws itself in gold and glows, so the wait is nice to watch. Under it, <b>one real quote that fits their situation, with the book's name</b>. After about 4 seconds a small line says their message is saved. After about 10 seconds it becomes the error in section 2. Quotes come only from the verified library, word for word, and the server picks them to match the situation. If nothing fits, only the logo shows.</p>
+  <div class="row">
+<div class="cell"><div class="ph"><div class="nt"></div><div class="in"><p class="ax dim">What would a real yes from one of those clinics be?</p><p class="me">A booked call with a date and a time</p><div class="wait"><div class="lgw"><svg class="lg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#F0E8DA"/><stop offset=".25" stop-color="#F8F0E3"/><stop offset=".42" stop-color="#B98143"/><stop offset=".6" stop-color="#E9D8BF"/><stop offset=".8" stop-color="#642B35"/><stop offset="1" stop-color="#EDE4D6"/></linearGradient></defs><g fill="none" stroke="url(#g1)" stroke-width="3.2" stroke-linejoin="miter"><path pathLength="1" d="M 8,84 H 28 C 28,55 35,36 50,26 C 55,23 54,18 50,11 C 45,22 40,27 31,33 C 18,43 13,60 13,84"/><path pathLength="1" d="M 92,84 H 72 C 72,55 65,36 50,26 C 45,23 46,18 50,11 C 55,22 60,27 69,33 C 82,43 87,60 87,84"/></g></svg></div><p class="qt" data-q='[{"t": "“No” feels like salvation, like an oasis.", "b": "Never Split the Difference"}]'></p><div class="qb"></div></div><div class="grow"></div><div class="bar"><span>Reply</span><i>↑</i></div></div></div><div class="cap"><b>First 4 seconds</b>Small logo, one verified quote, the book name only.</div></div><div class="cell"><div class="ph"><div class="nt"></div><div class="in"><p class="ax dim">What would a real yes from one of those clinics be?</p><p class="me">A booked call with a date and a time</p><div class="wait"><div class="lgw"><svg class="lg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g2" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#F0E8DA"/><stop offset=".25" stop-color="#F8F0E3"/><stop offset=".42" stop-color="#B98143"/><stop offset=".6" stop-color="#E9D8BF"/><stop offset=".8" stop-color="#642B35"/><stop offset="1" stop-color="#EDE4D6"/></linearGradient></defs><g fill="none" stroke="url(#g2)" stroke-width="3.2" stroke-linejoin="miter"><path pathLength="1" d="M 8,84 H 28 C 28,55 35,36 50,26 C 55,23 54,18 50,11 C 45,22 40,27 31,33 C 18,43 13,60 13,84"/><path pathLength="1" d="M 92,84 H 72 C 72,55 65,36 50,26 C 45,23 46,18 50,11 C 55,22 60,27 69,33 C 82,43 87,60 87,84"/></g></svg></div><p class="qt" data-q='[{"t": "“No” feels like salvation, like an oasis.", "b": "Never Split the Difference"}]'></p><div class="qb"></div><div class="saved">Your message is saved.</div></div><div class="grow"></div><div class="bar"><span>Reply</span><i>↑</i></div></div></div><div class="cap"><b>4 to 10 seconds</b>Same animation, plus a small line that their message is safe.</div></div><div class="cell"><div class="ph"><div class="nt"></div><div class="in"><div style="height:90px"></div><div class="wait"><div class="lgw"><svg class="lg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g3" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#F0E8DA"/><stop offset=".25" stop-color="#F8F0E3"/><stop offset=".42" stop-color="#B98143"/><stop offset=".6" stop-color="#E9D8BF"/><stop offset=".8" stop-color="#642B35"/><stop offset="1" stop-color="#EDE4D6"/></linearGradient></defs><g fill="none" stroke="url(#g3)" stroke-width="3.2" stroke-linejoin="miter"><path pathLength="1" d="M 8,84 H 28 C 28,55 35,36 50,26 C 55,23 54,18 50,11 C 45,22 40,27 31,33 C 18,43 13,60 13,84"/><path pathLength="1" d="M 92,84 H 72 C 72,55 65,36 50,26 C 45,23 46,18 50,11 C 55,22 60,27 69,33 C 82,43 87,60 87,84"/></g></svg></div><p class="qt" data-q='[{"t": "Often the greatest risk is to not take risk at all", "b": "The Great Mental Models Volume 2"}, {"t": "Never be needy for a deal.", "b": "Never Split the Difference"}]'></p><div class="qb"></div></div><div class="grow"></div><div class="bar"><span>Reply</span><i>↑</i></div></div></div><div class="cap"><b>Long waits (first reading, the Read)</b>Nothing about their problem is known yet, so general founder quotes, swapping every 5 seconds.</div></div>
+  </div>
+</section>
+
+<section>
+  <h2>1b. Loading, matched to the business</h2>
+  <p class="why">The same state for two other kinds of founder. <b>All six quotes are real, checked against the library</b>, and each is picked to fit what that founder just said. The founder messages are samples.</p>
+  <div class="tag2">E-commerce makeup brand</div>
+  <div class="row">
+<div class="cell"><div class="ph"><div class="nt"></div><div class="in"><div style="height:14px"></div><p class="me">Customers buy once and never come back.</p><div class="wait"><div class="lgw"><svg class="lg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g4" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#F0E8DA"/><stop offset=".25" stop-color="#F8F0E3"/><stop offset=".42" stop-color="#B98143"/><stop offset=".6" stop-color="#E9D8BF"/><stop offset=".8" stop-color="#642B35"/><stop offset="1" stop-color="#EDE4D6"/></linearGradient></defs><g fill="none" stroke="url(#g4)" stroke-width="3.2" stroke-linejoin="miter"><path pathLength="1" d="M 8,84 H 28 C 28,55 35,36 50,26 C 55,23 54,18 50,11 C 45,22 40,27 31,33 C 18,43 13,60 13,84"/><path pathLength="1" d="M 92,84 H 72 C 72,55 65,36 50,26 C 45,23 46,18 50,11 C 55,22 60,27 69,33 C 82,43 87,60 87,84"/></g></svg></div><p class="qt" data-q='[{"t": "A strong brand can only be created over a lengthy period of reinforcing actions", "b": "7 Powers"}]'></p><div class="qb"></div></div><div class="grow"></div><div class="bar"><span>Reply</span><i>↑</i></div></div></div><div class="cap"><b>Repeat purchases</b>A brand takes a long time to build. Fits someone whose customers do not return.</div></div><div class="cell"><div class="ph"><div class="nt"></div><div class="in"><div style="height:14px"></div><p class="me">My shades look the same as every other brand’s.</p><div class="wait"><div class="lgw"><svg class="lg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g5" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#F0E8DA"/><stop offset=".25" stop-color="#F8F0E3"/><stop offset=".42" stop-color="#B98143"/><stop offset=".6" stop-color="#E9D8BF"/><stop offset=".8" stop-color="#642B35"/><stop offset="1" stop-color="#EDE4D6"/></linearGradient></defs><g fill="none" stroke="url(#g5)" stroke-width="3.2" stroke-linejoin="miter"><path pathLength="1" d="M 8,84 H 28 C 28,55 35,36 50,26 C 55,23 54,18 50,11 C 45,22 40,27 31,33 C 18,43 13,60 13,84"/><path pathLength="1" d="M 92,84 H 72 C 72,55 65,36 50,26 C 45,23 46,18 50,11 C 55,22 60,27 69,33 C 82,43 87,60 87,84"/></g></svg></div><p class="qt" data-q='[{"t": "They don’t sell us better. The most exciting companies sell us different.", "b": "Play Bigger"}]'></p><div class="qb"></div></div><div class="grow"></div><div class="bar"><span>Reply</span><i>↑</i></div></div></div><div class="cap"><b>Looking like everyone else</b>Selling different, not better.</div></div><div class="cell"><div class="ph"><div class="nt"></div><div class="in"><div style="height:14px"></div><p class="me">Customers email support and I reply days later.</p><div class="wait"><div class="lgw"><svg class="lg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g6" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#F0E8DA"/><stop offset=".25" stop-color="#F8F0E3"/><stop offset=".42" stop-color="#B98143"/><stop offset=".6" stop-color="#E9D8BF"/><stop offset=".8" stop-color="#642B35"/><stop offset="1" stop-color="#EDE4D6"/></linearGradient></defs><g fill="none" stroke="url(#g6)" stroke-width="3.2" stroke-linejoin="miter"><path pathLength="1" d="M 8,84 H 28 C 28,55 35,36 50,26 C 55,23 54,18 50,11 C 45,22 40,27 31,33 C 18,43 13,60 13,84"/><path pathLength="1" d="M 92,84 H 72 C 72,55 65,36 50,26 C 45,23 46,18 50,11 C 55,22 60,27 69,33 C 82,43 87,60 87,84"/></g></svg></div><p class="qt" data-q='[{"t": "…everyone the customer touches is effectively a salesperson", "b": "To Sell Is Human"}]'></p><div class="qb"></div></div><div class="grow"></div><div class="bar"><span>Reply</span><i>↑</i></div></div></div><div class="cap"><b>Support as sales</b>Everyone the customer touches sells for you.</div></div>
+  </div>
+  <div class="tag2" style="margin-top:34px">AI automation agency</div>
+  <div class="row">
+<div class="cell"><div class="ph"><div class="nt"></div><div class="in"><div style="height:14px"></div><p class="me">I do all the delivery myself, so I have no time to find clients.</p><div class="wait"><div class="lgw"><svg class="lg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g7" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#F0E8DA"/><stop offset=".25" stop-color="#F8F0E3"/><stop offset=".42" stop-color="#B98143"/><stop offset=".6" stop-color="#E9D8BF"/><stop offset=".8" stop-color="#642B35"/><stop offset="1" stop-color="#EDE4D6"/></linearGradient></defs><g fill="none" stroke="url(#g7)" stroke-width="3.2" stroke-linejoin="miter"><path pathLength="1" d="M 8,84 H 28 C 28,55 35,36 50,26 C 55,23 54,18 50,11 C 45,22 40,27 31,33 C 18,43 13,60 13,84"/><path pathLength="1" d="M 92,84 H 72 C 72,55 65,36 50,26 C 45,23 46,18 50,11 C 55,22 60,27 69,33 C 82,43 87,60 87,84"/></g></svg></div><p class="qt" data-q='[{"t": "…the problem is that they’re doing the wrong work", "b": "The E-Myth Revisited"}]'></p><div class="qb"></div></div><div class="grow"></div><div class="bar"><span>Reply</span><i>↑</i></div></div></div><div class="cap"><b>Stuck doing the work</b>The owner is doing the wrong work.</div></div><div class="cell"><div class="ph"><div class="nt"></div><div class="in"><div style="height:14px"></div><p class="me">Every client wants something custom, so nothing repeats.</p><div class="wait"><div class="lgw"><svg class="lg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g8" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#F0E8DA"/><stop offset=".25" stop-color="#F8F0E3"/><stop offset=".42" stop-color="#B98143"/><stop offset=".6" stop-color="#E9D8BF"/><stop offset=".8" stop-color="#642B35"/><stop offset="1" stop-color="#EDE4D6"/></linearGradient></defs><g fill="none" stroke="url(#g8)" stroke-width="3.2" stroke-linejoin="miter"><path pathLength="1" d="M 8,84 H 28 C 28,55 35,36 50,26 C 55,23 54,18 50,11 C 45,22 40,27 31,33 C 18,43 13,60 13,84"/><path pathLength="1" d="M 92,84 H 72 C 72,55 65,36 50,26 C 45,23 46,18 50,11 C 55,22 60,27 69,33 C 82,43 87,60 87,84"/></g></svg></div><p class="qt" data-q='[{"t": "The winning strategy is built around the entrepreneur being able to “productize” the deliverables", "b": "Crossing the Chasm"}]'></p><div class="qb"></div></div><div class="grow"></div><div class="bar"><span>Reply</span><i>↑</i></div></div></div><div class="cap"><b>Nothing repeats</b>Turning custom work into a product.</div></div><div class="cell"><div class="ph"><div class="nt"></div><div class="in"><div style="height:14px"></div><p class="me">Prospects like the demo, then say they will think about it.</p><div class="wait"><div class="lgw"><svg class="lg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g9" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#F0E8DA"/><stop offset=".25" stop-color="#F8F0E3"/><stop offset=".42" stop-color="#B98143"/><stop offset=".6" stop-color="#E9D8BF"/><stop offset=".8" stop-color="#642B35"/><stop offset="1" stop-color="#EDE4D6"/></linearGradient></defs><g fill="none" stroke="url(#g9)" stroke-width="3.2" stroke-linejoin="miter"><path pathLength="1" d="M 8,84 H 28 C 28,55 35,36 50,26 C 55,23 54,18 50,11 C 45,22 40,27 31,33 C 18,43 13,60 13,84"/><path pathLength="1" d="M 92,84 H 72 C 72,55 65,36 50,26 C 45,23 46,18 50,11 C 55,22 60,27 69,33 C 82,43 87,60 87,84"/></g></svg></div><p class="qt" data-q='[{"t": "…winning companies today market the problem, not just the solution", "b": "Play Bigger"}]'></p><div class="qb"></div></div><div class="grow"></div><div class="bar"><span>Reply</span><i>↑</i></div></div></div><div class="cap"><b>Demo, then silence</b>Sell the problem, not only the solution.</div></div>
+  </div>
+</section>
+
+
+<section>
+  <h2>2. When something goes wrong</h2>
+  <p class="why">Three cases, one rule: <b>the founder never loses what they wrote, and Axiom says what happened in one plain line</b>. No "sorry", no "oops", no error codes (BRAND.md: no customer-service tone).</p>
+  <div class="row">
+    <div class="cell"><div class="ph"><div class="nt"></div><div class="in">
+      <p class="ax dim">What would a real yes from one of those clinics be?</p>
+      <p class="me">A booked call with a date and a time<small>SAVED</small></p>
+      <p class="ax">I couldn't answer that just now. Your message is saved.</p><button class="txt">Try again</button><div class="grow"></div><div class="bar"><span>Reply</span><i>↑</i></div></div></div>
+      <div class="cap"><b>The AI failed or took too long</b>One line, one quiet button. Their message stays in the chat.</div></div>
+    <div class="cell"><div class="ph"><div class="nt"></div><div class="in">
+      
+      <p class="ax dim">What would a real yes from one of those clinics be?</p>
+      <p class="me">A booked call with a date and a time<small>WAITING TO SEND</small></p><div class="grow"></div><div class="bar"><span><span class="od"></span> No connection. Your messages are saved.</span><i>↑</i></div></div></div>
+      <div class="cap"><b>No connection</b>No separate notice. The chat box says it, with a small gold dot. Unsent messages carry a tiny "Waiting to send". Messages send by themselves.</div></div>
+    <div class="cell"><div class="ph"><div class="nt"></div><div class="in">
+      <p class="ax" style="margin-top:78px;text-align:center;font-size:17px">Your check-in is saved.</p>
+      <p class="ax dim" style="text-align:center">I'll send it as soon as you're back online. You can close the app.</p><div class="grow"></div></div></div>
+      <div class="cap"><b>The evening Report with no signal</b>The check-in matters most, so it says plainly that it is safe and will be sent later.</div></div>
+  </div>
+</section>
+
+<section>
+  <h2>3. When there is no book to stand behind</h2>
+  <p class="why">Your rule: <b>when there is no verified source, Axiom says nothing about it.</b> It doesn't apologise, doesn't mention a missing book, and never makes one up. The lesson is built only from the founder's own facts, still has the picture, and still ends with a question. The server decides this, so the founder simply sees a shorter lesson.</p>
+  <div class="row">
+    <div class="cell"><div class="ph"><div class="nt"></div><div class="in">
+      <p class="ax" style="font-size:14.5px">It has been three weeks since either clinic heard from you. That is the problem: two clinics saw it, and you have asked nothing of them since.</p>
+      <p class="ax" style="font-size:14.5px"><b style="color:#f4f4f2">Rob Fitzpatrick</b>, in <i>The Mom Test</i>, makes this point: when someone says they will think about it, you have learned nothing.</p>
+      <div class="src">Rob Fitzpatrick · The Mom Test</div>
+      <div class="pic"><div><i></i>A booked next meeting</div><div><i></i>An introduction</div><div><i></i>Money, or a firm promise of it</div></div>
+      <p class="ax" style="font-size:14.5px">What would a real yes from one of those clinics be?</p></div></div>
+      <div class="cap"><b>Normal: a verified book</b>Author and book named, checked in code.</div></div>
+    <div class="cell"><div class="ph"><div class="nt"></div><div class="in">
+      <p class="ax" style="font-size:14.5px">It has been three weeks since either clinic heard from you. That is the problem: two clinics saw it, and you have asked nothing of them since.</p>
+      <p class="ax" style="font-size:14.5px">Right now each clinic has given you nothing you can count: no booked meeting, no introduction, no money.</p>
+      <div class="pic"><div><i></i>A booked next meeting</div><div><i></i>An introduction</div><div><i></i>Money, or a firm promise of it</div></div>
+      <p class="ax" style="font-size:14.5px">What would a real yes from one of those clinics be?</p></div></div>
+      <div class="cap"><b>No verified source</b>No author line, no apology, no hint anything is missing. Built from what they told us.</div></div>
+  </div>
+</section>
+
+<section>
+  <h2>4. When reminders are refused</h2>
+  <p class="why">If the founder says no to notifications, <b>the check-in must still reach them</b>. Axiom says it once, plainly, without nagging. The evening item on the home screen then stays on screen instead of fading, and Settings shows a quiet row to turn reminders on.</p>
+  <div class="row">
+    <div class="cell"><div class="ph"><div class="nt"></div><div class="in">
+      <p class="tagrow">Your move</p><p class="ax" style="font-size:19px;color:#f4f4f2;margin-bottom:16px">Ask both clinics for one concrete next step.</p>
+      <p class="ax" style="text-align:center;margin-top:18px;font-size:14.5px">Committed.</p>
+      <div class="card" style="margin-top:6px">Reminders are off on your phone. I'll keep tonight's check-in waiting on your home screen.</div>
+      <button class="txt" style="align-self:center">Turn on in phone settings</button></div></div>
+      <div class="cap"><b>Right after they commit</b>Said once, after the phone's own permission box was refused.</div></div>
+    <div class="cell"><div class="ph"><div class="nt"></div><div class="in">
+      <div class="slab">Reminders</div>
+      <div class="srow">Check-in time<small>8:00 pm</small></div>
+      <div class="srow">Reminders are off<small>They're switched off in your phone's settings, so I can't remind you. Tonight's check-in will wait on your home screen.</small><button class="txt" style="margin-top:8px">Open phone settings</button></div>
+      <div class="srow">Morning reminder<small>Off until phone reminders are on.</small></div></div></div>
+      <div class="cap"><b>In Settings</b>One quiet row explains why, with a way to fix it. The switches below are paused.</div></div>
+    <div class="cell"><div class="ph"><div class="nt"></div><div class="in">
+      <p class="greet">Day's nearly done, Rafay. What got done besides email?</p><div class="grow"></div>
+      <div class="mk" style="margin-bottom:10px"><span class="dot"></span><span style="font-size:13px">Tonight: tell me how it went</span></div><div class="bar"><span>What's going on?</span><i>↑</i></div></div></div>
+      <div class="cap"><b>Home that evening</b>The check-in item does not fade like normal. It stays until they report.</div></div>
+  </div>
+</section>
+<script>
+  // Quotes are real and verified in the library (word for word). One quote per wait; long waits swap every 5 seconds. Book name only on this screen.
+  document.querySelectorAll('.qt').forEach(el => { const Q = JSON.parse(el.dataset.q), qb = el.nextElementSibling; let i = 0;
+    const put = () => { el.textContent = Q[i % Q.length].t; qb.textContent = Q[i % Q.length].b; };
+    put(); if (Q.length > 1) setInterval(() => { el.style.opacity = qb.style.opacity = 0; setTimeout(() => { i++; put(); el.style.opacity = qb.style.opacity = 1; }, 800); }, 5000); });
+</script>
+</body>
+</html>

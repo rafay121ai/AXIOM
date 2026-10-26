@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Axiom: sign in and sign-up questions</title>
+<style>
+  :root {
+    --ink-rgb: 161,164,169;                       /* Stone at 82% */
+    --hl-rgb: 205,178,126; --hl2-rgb: 168,142,94; /* Gold, soft gradient (the first colour) */
+    --blur: 16px; --tint: .05; --edge: .1; --bg: #050505;
+    --serif: ui-serif, "New York", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --sans: -apple-system, "SF Pro Text", "Inter", system-ui, "Segoe UI", sans-serif;
+    --ink: rgb(var(--ink-rgb)); --hl: linear-gradient(90deg, rgb(var(--hl-rgb)), rgb(var(--hl2-rgb)));
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: #101011; color: #b9b8b3; font-family: var(--sans); padding: 36px 20px 80px; }
+  .wrap { max-width: 980px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 56px; justify-content: center; align-items: flex-start; }
+
+  /* panel (not part of the app) */
+  .side { width: 340px; font-size: 13.5px; line-height: 1.55; }
+  .side h1 { font-family: var(--serif); font-weight: 500; font-size: 24px; margin: 0 0 6px; color: #ecebe6; }
+  .side .tag { display: inline-block; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #8e8d88; margin-bottom: 12px; }
+  .side h3 { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #8e8d88; margin: 22px 0 10px; font-weight: 500; }
+  .jump { display: flex; flex-wrap: wrap; gap: 6px; }
+  .jump button, .btn2 { font: inherit; font-size: 12px; color: #cfcdc6; background: transparent; border: 1px solid #2c2c2e; border-radius: 99px; padding: 6px 11px; cursor: pointer; }
+  .jump button:hover, .btn2:hover { border-color: #8a8984; } .jump button.on { background: #242426; border-color: #8a8984; color: #f2f1ec; }
+  .why { border: 1px solid #2a2a2c; border-radius: 14px; padding: 13px 15px; background: #121213; }
+  .why b { color: #e4e1d8; font-weight: 500; } .why p { margin: 6px 0 0; color: #a9a8a2; } .why .sv { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; color: #cfcdc6; }
+  .why .num { font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: #8e8d88; }
+
+  /* phone */
+  .phone { width: 390px; height: 840px; border-radius: 52px; border: 1px solid #2a2a2c; overflow: hidden; position: relative; background: var(--bg); color: var(--ink); flex: none; box-shadow: 0 40px 100px rgba(0,0,0,.55); }
+  .phone::before { content: ""; position: absolute; inset: 0; background: radial-gradient(120% 55% at 50% -10%, rgba(var(--ink-rgb), .07), transparent 60%); pointer-events: none; z-index: 0; }
+  .notch { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 112px; height: 28px; border-radius: 99px; background: #000; z-index: 30; }
+  .glass { background: rgba(var(--ink-rgb), var(--tint)); -webkit-backdrop-filter: blur(var(--blur)) saturate(140%); backdrop-filter: blur(var(--blur)) saturate(140%); border: 1px solid rgba(var(--ink-rgb), var(--edge)); }
+  .view { position: absolute; inset: 0; z-index: 1; display: none; flex-direction: column; }
+  .view.on { display: flex; animation: in .45s ease both; }
+  @keyframes in { from { opacity: 0; transform: translateY(8px);} to { opacity: 1; transform: none; } }
+  .logo { display: block; height: 17px; width: auto; }
+  .logo path, .logo g { fill: var(--ink); }
+
+  /* sign in */
+  .si { align-items: center; justify-content: space-between; padding: 150px 34px 52px; text-align: center; }
+  .si .mark .logo { height: 32px; margin: 0 auto; }
+  .si .tagline { font-family: var(--serif); font-size: 19px; line-height: 1.5; color: rgba(var(--ink-rgb), .78); margin: 30px auto 0; max-width: 280px; }
+  .si .bottom { width: 100%; }
+  .gbtn { width: 100%; font: inherit; font-size: 15.5px; color: var(--ink); border-radius: 16px; padding: 17px; cursor: pointer; }
+  .gbtn:hover { border-color: rgba(var(--ink-rgb), .3); }
+  .legal { font-size: 11.5px; line-height: 1.6; color: rgba(var(--ink-rgb), .42); margin: 18px 6px 0; }
+  .legal u { text-decoration: none; border-bottom: 1px solid rgba(var(--ink-rgb), .3); color: rgba(var(--ink-rgb), .62); }
+
+  /* questions */
+  .qhead { padding: 58px 26px 0; display: flex; align-items: center; justify-content: space-between; }
+  .back { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: rgba(var(--ink-rgb), .7); font-size: 18px; cursor: pointer; border: 1px solid transparent; }
+  .back:hover { border-color: rgba(var(--ink-rgb), .2); } .back.off { visibility: hidden; }
+  .count { font-size: 10.5px; letter-spacing: .2em; text-transform: uppercase; color: rgba(var(--ink-rgb), .42); font-variant-numeric: tabular-nums; }
+  .prog { height: 1px; background: rgba(var(--ink-rgb), .12); margin: 14px 26px 0; }
+  .prog i { display: block; height: 2px; margin-top: -.5px; background: var(--hl); transition: width .5s cubic-bezier(.2,.8,.2,1); }
+  .qbody { flex: 1; overflow-y: auto; padding: 34px 26px 130px; scrollbar-width: none; }
+  .qbody::-webkit-scrollbar { display: none; }
+  .qt { font-family: var(--serif); font-weight: 400; font-size: 27px; line-height: 1.26; margin: 0 0 10px; color: var(--ink); letter-spacing: -.003em; }
+  .qs { font-size: 14px; line-height: 1.5; color: rgba(var(--ink-rgb), .5); margin: 0 0 28px; }
+  .lab { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: rgba(var(--ink-rgb), .42); margin: 28px 0 12px; }
+  .opts { border-top: 1px solid rgba(var(--ink-rgb), .12); }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 16px 2px; border-bottom: 1px solid rgba(var(--ink-rgb), .12); cursor: pointer; font-size: 16px; line-height: 1.35; color: rgba(var(--ink-rgb), .78); transition: color .2s; }
+  .row:hover { color: var(--ink); }
+  .ring { flex: none; width: 19px; height: 19px; border-radius: 50%; border: 1px solid rgba(var(--ink-rgb), .35); position: relative; transition: all .2s; }
+  .sq { border-radius: 6px; }
+  .row.on { color: #d4d7dc; }
+  .row.on .ring { border-color: transparent; background: var(--hl); }
+  .row.on .ring::after { content: ""; position: absolute; left: 6.5px; top: 3px; width: 4px; height: 8px; border: solid #0a0806; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); }
+  .chips { display: flex; flex-wrap: wrap; gap: 9px; }
+  .chip { font: inherit; font-size: 14.5px; color: rgba(var(--ink-rgb), .78); background: transparent; border: 1px solid rgba(var(--ink-rgb), .2); border-radius: 99px; padding: 10px 16px; cursor: pointer; transition: all .2s; }
+  .chip:hover { border-color: rgba(var(--ink-rgb), .45); color: var(--ink); }
+  .chip.on { color: #d4d7dc; border-color: transparent; background: linear-gradient(rgba(14,14,14,.96), rgba(14,14,14,.96)) padding-box, var(--hl) border-box; }
+  .field { width: 100%; background: transparent; border: 0; border-bottom: 1px solid rgba(var(--ink-rgb), .22); color: var(--ink); font: inherit; font-size: 17px; padding: 10px 0; outline: 0; }
+  .field:focus { border-bottom-color: rgba(var(--hl-rgb), .8); } .field::placeholder { color: rgba(var(--ink-rgb), .3); }
+  textarea.big { width: 100%; min-height: 210px; resize: none; background: transparent; border: 0; border-top: 1px solid rgba(var(--ink-rgb), .12); border-bottom: 1px solid rgba(var(--ink-rgb), .12); color: var(--ink); font-family: var(--serif); font-size: 19px; line-height: 1.55; padding: 18px 2px; outline: 0; }
+  textarea.big::placeholder { color: rgba(var(--ink-rgb), .28); }
+  .hint { font-size: 12px; color: rgba(var(--ink-rgb), .4); margin-top: 10px; display: flex; justify-content: space-between; }
+  .bar { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 26px 32px; z-index: 5; background: linear-gradient(to top, var(--bg) 62%, rgba(5,5,5,0)); }
+  .go { display: block; width: 100%; font: inherit; font-size: 15.5px; font-weight: 500; padding: 16px; border-radius: 14px; border: 1px solid transparent; background: var(--hl); color: #0a0806; cursor: pointer; letter-spacing: .01em; transition: all .25s; }
+  .go:disabled { background: transparent; border-color: rgba(var(--ink-rgb), .18); color: rgba(var(--ink-rgb), .3); cursor: default; }
+  .go:not(:disabled):active { transform: scale(.99); }
+  .skipnote { text-align: center; font-size: 12px; color: rgba(var(--ink-rgb), .38); margin-top: 12px; }
+
+  /* reading */
+  .rd { align-items: center; justify-content: center; text-align: center; padding: 0 40px; }
+  .rd p { font-family: var(--serif); font-size: 21px; line-height: 1.5; color: rgba(var(--ink-rgb), .85); margin: 0 0 14px; }
+  .rd small { font-size: 12.5px; color: rgba(var(--ink-rgb), .42); letter-spacing: .02em; }
+  .dots { display: flex; gap: 7px; justify-content: center; margin-top: 26px; } .dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--hl); opacity: .25; animation: pulse 1.4s ease-in-out infinite; } .dots i:nth-child(2) { animation-delay: .2s; } .dots i:nth-child(3) { animation-delay: .4s; }
+  @keyframes pulse { 0%, 100% { opacity: .2; } 50% { opacity: 1; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="side">
+    <span class="tag">Mock · screens 1 and 2 · not connected to the app</span>
+    <h1>Sign in and the 13 questions</h1>
+    <p>Click through it as a new founder would. Taps move you on by themselves where there is only one choice; the rest use Continue. Everything saves as you go, so someone interrupted can pick up where they stopped.</p>
+    <h3>Jump to</h3>
+    <div class="jump" id="jump"></div>
+    <div style="margin-top:10px"><button class="btn2" id="fill">Fill sample answers</button> <button class="btn2" id="restart">Start over</button></div>
+    <h3>This question</h3>
+    <div class="why" id="why"></div>
+    <h3>Colour</h3>
+    <p style="margin:0;color:#a9a8a2">Sign-up uses the first colour, Gold, in the soft gradient. The first situation after it takes Seafoam, then Periwinkle, then Rose.</p>
+  </div>
+
+  <div class="phone" id="phone">
+    <div class="notch"></div>
+
+    <!-- 1 sign in -->
+    <div class="view si on" id="signin">
+      <div class="mark">
+        <svg class="logo" viewBox="123 0 360 130" xmlns="http://www.w3.org/2000/svg" aria-label="Axiom"><g><path d="M706 19C661 22 651 32 616 106L367 674H347L139 183C75 37 63 21 15 19V0H213V19C165 19 145 31 145 60C145 72 148 86 153 99L199 216H461L502 120C514 93 521 67 521 53C521 28 504 20 451 19V0H706ZM216 257 331 532 447 257Z" transform="translate(123.000 102) scale(0.11 -0.11)"/><path d="M278 0H479V15C448 15 428 31 397 75L269 271L352 391C371 418 400 433 433 435V450H275V435C305 433 315 427 315 413C315 401 303 379 278 348C273 342 261 324 248 304L240 316C225 339 216 352 214 356C195 387 188 403 188 413C188 428 201 434 231 435V450H24V435H33C63 435 79 422 110 375L204 231L90 66C60 25 50 18 17 15V0H162V15C133 15 122 20 122 33C122 40 128 53 142 74L221 197L312 57C316 51 318 46 318 39C318 21 311 17 278 15Z" transform="translate(198.570 102) scale(0.11 -0.11)"/><path d="M16 0H253V15C187 20 180 29 179 102V457L175 460L20 405V390L28 391C40 393 52 394 62 394C86 394 95 378 95 334V102C93 28 84 18 16 15ZM128 683C101 683 78 660 78 632C78 603 100 581 128 581C158 581 180 603 180 632C180 661 157 683 128 683Z" transform="translate(253.570 102) scale(0.11 -0.11)"/><path d="M250 460C119 460 29 364 29 226C29 90 122 -10 248 -10C374 -10 470 95 470 234C470 366 378 460 250 460ZM237 432C321 432 380 336 380 199C380 85 335 18 260 18C221 18 184 42 163 82C135 134 119 204 119 275C119 370 165 432 237 432Z" transform="translate(284.150 102) scale(0.11 -0.11)"/><path d="M16 0H238V15C187 16 171 27 170 67V349C170 351 178 361 185 368C210 391 253 408 288 408C332 408 354 373 354 303V86C352 29 342 18 286 15V0H510V15C454 15 440 31 438 95V347C468 390 500 408 547 408C604 408 622 381 622 298V87C620 28 614 21 556 15V0H775V15L749 17C717 22 706 37 706 76V282C706 400 667 460 590 460C532 460 481 434 427 376C409 433 375 460 321 460C276 460 249 447 166 383V458L159 460C106 441 72 430 19 415V398C31 401 40 402 51 402C77 402 86 386 86 338V85C84 29 71 15 16 15Z" transform="translate(339.150 102) scale(0.11 -0.11)"/></g></svg>
+        <p class="tagline">You already know you're built different. Prove it.</p>
+      </div>
+      <div class="bottom">
+        <button class="gbtn glass" id="google">Continue with Google</button>
+        <p class="legal">By continuing you agree to the <u>Terms</u> and the <u>Privacy Policy</u>. What you tell Axiom stays private. You choose later whether anything is ever shared.</p>
+      </div>
+    </div>
+
+    <!-- 2 questions -->
+    <div class="view" id="qview">
+      <div class="qhead"><div class="back" id="back">‹</div><div class="count" id="count"></div></div>
+      <div class="prog"><i id="progfill"></i></div>
+      <div class="qbody" id="qbody"></div>
+      <div class="bar"><button class="go" id="next" disabled>Continue</button></div>
+    </div>
+
+    <!-- 3 waiting -->
+    <div class="view rd" id="reading">
+      <p id="rdline">Reading what you told me.</p>
+      <small>This takes a few seconds.</small>
+      <div class="dots"><i></i><i></i><i></i></div>
+      <small id="rdnext" style="margin-top:34px;display:none">Next screen: Axiom's first reading of you.</small>
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const Q = [
+    { k: 'stage', type: 'single', auto: true, title: 'Where are you with it right now?', sub: 'Pick what is true today, not where you hope to be.',
+      opts: ['Just an idea', "I'm talking to people about it", "I'm building it and nobody pays yet", 'Someone has paid me', 'I have 10 or more customers', 'Customers keep coming back', "I'm scaling"],
+      why: 'Decides which lessons fit, and later which founders are one stage ahead of them. Worded as facts, because people overrate their own stage.' },
+    { k: 'months_in', type: 'single', auto: true, title: 'How long have you been on it?', sub: '',
+      opts: ['Under a month', '1 to 3 months', '3 to 6 months', '6 to 12 months', '1 to 2 years', 'More than 2 years'],
+      why: 'Three weeks in and two years in need different readings. A long time with no revenue is itself a pattern Axiom can name.' },
+    { k: 'commitment', type: 'single', title: 'How much of your week goes into it?', sub: '',
+      opts: ['Full time', 'Part time, next to a job', 'Evenings and weekends', 'On and off'],
+      follow: { label: 'About how many hours a week? (optional)', opts: ['Under 5', '5 to 15', '15 to 30', '30 or more'] },
+      why: 'Real capacity. A move has to fit the hours they actually have, not the hours they wish they had.' },
+    { k: 'business_model', type: 'single', auto: true, title: 'Who pays you, or would?', sub: '',
+      opts: ['Businesses', 'Consumers', 'Both sides of a marketplace', 'Clients, for services', 'Something else', 'No one yet'],
+      why: 'How the business makes money changes almost all the advice.' },
+    { k: 'where', type: 'where', title: 'Where are you, and where are your customers?', sub: 'They are often not in the same place.',
+      why: 'The product is global. Pricing norms, how deals get done and regulation differ by market, and Axiom says what carries over.' },
+    { k: 'team', type: 'single', auto: true, title: 'Who is building it with you?', sub: '',
+      opts: ['Just me', 'A cofounder or two', 'A small team of 2 to 5', 'Six or more'],
+      why: 'Cofounder friction is one of the biggest things founders never say in a chat. It also decides whether they can hand anything off.' },
+    { k: 'goal', type: 'goal', title: 'What are you aiming for, and by when?', sub: '',
+      goals: ['My first customer', 'My first 10 customers', 'A revenue number', 'Raise money', 'Quit my job for this', 'Ship it', 'Something else'],
+      dates: ['This month', 'In 3 months', 'In 6 months', 'This year', 'Pick a date'],
+      why: 'What they are racing toward. A date lets Axiom state the real cost of waiting in their own numbers.' },
+    { k: 'background', type: 'single', other: true, title: 'What did you do before this?', sub: '',
+      opts: ['I worked in tech', 'I worked in something else', "I'm a student", 'I ran a business before', 'Other'],
+      why: 'Background and skills. Axiom should not re-teach what they already know.' },
+    { k: 'why', type: 'single', other: true, title: 'Why are you doing this?', sub: 'Pick the one that is most true, even if it is not flattering.',
+      opts: ["To get out of a job I don't want", "I've lived this problem myself", 'I see a big opportunity', 'To prove something to myself or others', 'Freedom and money', 'To build something that matters to me', 'Something else'],
+      why: 'The real reason. Someone escaping a job and someone solving a problem they lived need different advice. The honest-wording line is there to pull out the true answer.' },
+    { k: 'strengths', type: 'two', title: 'Be honest about yourself.', sub: '',
+      a: { label: 'Better than most people at', opts: ['Building the product', 'Selling and talking to people', 'Numbers and planning', 'Leading people', 'Spotting opportunities', 'Not quitting', 'Design and creativity'] },
+      b: { label: 'What I avoid most', opts: ['Talking to customers', 'Asking for money', 'Selling', 'Pricing', 'Hard talks with partners or the team', 'Launching', 'Tracking the numbers', 'Marketing in public'] },
+      why: 'Strengths and avoidance in one screen. What someone avoids is rarely said out loud, and it is where the best patterns hide.' },
+    { k: 'tried', type: 'multi', title: 'What have you already tried?', sub: 'Tick everything that applies.',
+      opts: ['Talked to customers', 'Built a prototype', 'Launched it', 'Cold outreach', 'Ran ads', 'Pitched investors', 'Changed my price', 'None of it yet'], exclusive: 'None of it yet',
+      why: 'Stops Axiom handing back advice they have already tried. The details of what happened come in the last question.' },
+    { k: 'building', type: 'text', min: 12, title: 'What are you building, and for whom?', sub: 'A sentence or two is enough.', ph: 'I am building…',
+      why: 'Their own words. Axiom quotes them back later, which is what makes a reading feel specific.' },
+    { k: 'stuck', type: 'text', min: 20, title: 'What are you most stuck on, or putting off? And what have you tried on it?', sub: 'Numbers help.', ph: 'The thing I keep avoiding is…',
+      why: 'Where the gap between what they say and what they do shows up. This also pre-fills the first Situation, so they never see a blank box.' }
+  ];
+  const A = {}; let i = -1;
+  const COUNTRIES = ['Pakistan', 'India', 'United States', 'United Kingdom', 'United Arab Emirates', 'Saudi Arabia', 'Canada', 'Germany', 'Nigeria', 'Kenya', 'Egypt', 'Bangladesh', 'Singapore', 'Australia', 'Brazil'];
+  const REGIONS = ['My own country', 'North America', 'Europe', 'South Asia', 'Middle East and Africa', 'East Asia and Pacific', 'Latin America', 'Global'];
+  const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+
+  function done(q) { const a = A[q.k];
+    switch (q.type) { case 'single': return !!a && (!q.other || a.v !== 'Other' && a.v !== 'Something else' || true);
+      case 'where': return !!(a && a.country && a.regions && a.regions.length);
+      case 'goal': return !!(a && a.goal && a.when && (a.when !== 'Pick a date' || a.date));
+      case 'two': return !!(a && a.a && a.b); case 'multi': return !!(a && a.length);
+      case 'text': return !!(a && a.trim().length >= q.min); } return false; }
+
+  function render() {
+    const q = Q[i]; $('count').textContent = String(i + 1).padStart(2, '0') + ' / 13'; $('progfill').style.width = ((i + 1) / 13 * 100) + '%';
+    $('back').classList.toggle('off', false);
+    let h = `<h2 class="qt">${esc(q.title)}</h2>${q.sub ? `<p class="qs">${esc(q.sub)}</p>` : '<div style="height:18px"></div>'}`;
+    if (q.type === 'single') {
+      h += `<div class="opts">${q.opts.map(o => `<div class="row ${A[q.k] && A[q.k].v === o ? 'on' : ''}" data-v="${esc(o)}"><span>${esc(o)}</span><i class="ring"></i></div>`).join('')}</div>`;
+      if (q.follow && A[q.k]) h += `<div class="lab">${q.follow.label}</div><div class="chips">${q.follow.opts.map(o => `<button class="chip ${A[q.k].f === o ? 'on' : ''}" data-f="${o}">${o}</button>`).join('')}</div>`;
+      if (q.other && A[q.k] && (A[q.k].v === 'Other' || A[q.k].v === 'Something else')) h += `<div style="margin-top:22px"><input class="field" id="oth" placeholder="In a few words (optional)" value="${esc(A[q.k].o)}"></div>`;
+    } else if (q.type === 'where') {
+      const a = A[q.k] || {};
+      h += `<div class="lab" style="margin-top:6px">Where are you based?</div><input class="field" id="country" list="cl" placeholder="Start typing a country" value="${esc(a.country)}"><datalist id="cl">${COUNTRIES.map(c => `<option>${c}</option>`).join('')}</datalist>
+            <div class="lab">Where are your customers? (choose all that apply)</div><div class="chips">${REGIONS.map(r => `<button class="chip ${(a.regions || []).includes(r) ? 'on' : ''}" data-r="${r}">${r}</button>`).join('')}</div>`;
+    } else if (q.type === 'goal') {
+      const a = A[q.k] || {};
+      h += `<div class="chips" style="margin-top:4px">${q.goals.map(g => `<button class="chip ${a.goal === g ? 'on' : ''}" data-g="${g}">${g}</button>`).join('')}</div>
+            <div class="lab">By when?</div><div class="chips">${q.dates.map(d => `<button class="chip ${a.when === d ? 'on' : ''}" data-d="${d}">${d}</button>`).join('')}</div>
+            ${a.when === 'Pick a date' ? `<div style="margin-top:16px"><input class="field" id="dt" type="date" value="${esc(a.date)}" style="color-scheme:dark"></div>` : ''}`;
+    } else if (q.type === 'two') {
+      const a = A[q.k] || {};
+      h += `<div class="lab" style="margin-top:2px">${q.a.label}</div><div class="chips">${q.a.opts.map(o => `<button class="chip ${a.a === o ? 'on' : ''}" data-a="${esc(o)}">${esc(o)}</button>`).join('')}</div>
+            <div class="lab">${q.b.label}</div><div class="chips">${q.b.opts.map(o => `<button class="chip ${a.b === o ? 'on' : ''}" data-b="${esc(o)}">${esc(o)}</button>`).join('')}</div>`;
+    } else if (q.type === 'multi') {
+      const a = A[q.k] || [];
+      h += `<div class="opts">${q.opts.map(o => `<div class="row ${a.includes(o) ? 'on' : ''}" data-m="${esc(o)}"><span>${esc(o)}</span><i class="ring sq"></i></div>`).join('')}</div>`;
+    } else if (q.type === 'text') {
+      const v = A[q.k] || '';
+      h += `<textarea class="big" id="txt" placeholder="${esc(q.ph)}">${esc(v)}</textarea><div class="hint"><span>${v.trim().length >= q.min ? '' : 'A little more, so Axiom has something real to work with.'}</span><span>${v.trim().length}</span></div>`;
+    }
+    $('qbody').innerHTML = h; $('qbody').scrollTop = 0; bind(q); refresh(); panel();
+  }
+  function refresh() { const q = Q[i]; if (!q) { document.querySelectorAll('#jump button').forEach(b => b.classList.toggle('on', +b.dataset.i === i)); return; } $('next').disabled = !done(q); $('next').textContent = i === 12 ? 'Done' : 'Continue'; document.querySelectorAll('#jump button').forEach(b => b.classList.toggle('on', +b.dataset.i === i)); }
+  function bind(q) {
+    const set = (v) => { A[q.k] = v; };
+    if (q.type === 'single') {
+      document.querySelectorAll('.row').forEach(r => r.addEventListener('click', () => { set({ v: r.dataset.v, f: (A[q.k] || {}).f, o: (A[q.k] || {}).o });
+        if (q.auto) { render(); setTimeout(next, 320); } else render(); }));
+      document.querySelectorAll('[data-f]').forEach(b => b.addEventListener('click', () => { A[q.k].f = b.dataset.f; render(); }));
+      const o = $('oth'); if (o) o.addEventListener('input', () => { A[q.k].o = o.value; });
+    } else if (q.type === 'where') {
+      A[q.k] = A[q.k] || { regions: [] };
+      $('country').addEventListener('input', e => { A[q.k].country = e.target.value; refresh(); });
+      document.querySelectorAll('[data-r]').forEach(b => b.addEventListener('click', () => { const r = b.dataset.r, a = A[q.k]; a.regions = a.regions.includes(r) ? a.regions.filter(x => x !== r) : (r === 'Global' ? ['Global'] : [...a.regions.filter(x => x !== 'Global'), r]); render(); }));
+    } else if (q.type === 'goal') {
+      A[q.k] = A[q.k] || {};
+      document.querySelectorAll('[data-g]').forEach(b => b.addEventListener('click', () => { A[q.k].goal = b.dataset.g; render(); }));
+      document.querySelectorAll('[data-d]').forEach(b => b.addEventListener('click', () => { A[q.k].when = b.dataset.d; render(); }));
+      const dt = $('dt'); if (dt) dt.addEventListener('input', e => { A[q.k].date = e.target.value; refresh(); });
+    } else if (q.type === 'two') {
+      A[q.k] = A[q.k] || {};
+      document.querySelectorAll('[data-a]').forEach(b => b.addEventListener('click', () => { A[q.k].a = b.dataset.a; render(); }));
+      document.querySelectorAll('[data-b]').forEach(b => b.addEventListener('click', () => { A[q.k].b = b.dataset.b; render(); }));
+    } else if (q.type === 'multi') {
+      A[q.k] = A[q.k] || [];
+      document.querySelectorAll('[data-m]').forEach(r => r.addEventListener('click', () => { const v = r.dataset.m; let a = A[q.k];
+        a = v === q.exclusive ? (a.includes(v) ? [] : [v]) : (a.includes(v) ? a.filter(x => x !== v) : [...a.filter(x => x !== q.exclusive), v]); A[q.k] = a; render(); }));
+    } else if (q.type === 'text') {
+      const t = $('txt'); t.addEventListener('input', () => { A[q.k] = t.value; document.querySelector('.hint').innerHTML = `<span>${t.value.trim().length >= q.min ? '' : 'A little more, so Axiom has something real to work with.'}</span><span>${t.value.trim().length}</span>`; refresh(); });
+    }
+  }
+  function panel() { const q = Q[i]; $('why').innerHTML = `<div class="num">Question ${i + 1} of 13</div><p><b>${esc(q.title)}</b></p><p>${esc(q.why)}</p><p>Saves as: <span class="sv">${q.k}</span></p>`; }
+  function show(id) { document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === id)); }
+  function go(n) { if (n < 0) { i = -1; show('signin'); $('why').innerHTML = '<div class="num">Screen 1</div><p><b>Sign in</b></p><p>Google sign-in only, as today. One quiet line covers terms and privacy, and says plainly that answers stay private and sharing is always the founder\'s choice, later.</p><p>The tagline is the one from your brand document. To confirm: still wanted here?</p>'; refresh(); return; }
+    if (n > 12) { finish(); return; } i = n; show('qview'); render(); }
+  function next() { go(i + 1); } function back() { go(i - 1); }
+  function finish() { show('reading'); $('rdnext').style.display = 'none';
+    const b = (A.building || '').trim().split(/\s+/).slice(0, 7).join(' ');
+    $('rdline').textContent = b ? `Reading what you told me about "${b}…"` : 'Reading what you told me.';
+    setTimeout(() => { $('rdnext').style.display = 'block'; }, 3200); $('why').innerHTML = '<div class="num">Between screens</div><p><b>The wait</b></p><p>The first reading takes a few seconds. No spinner: it quotes the founder\'s own words so the wait feels purposeful. The next screen to design is that first reading.</p>'; }
+  $('google').addEventListener('click', () => go(0)); $('next').addEventListener('click', next); $('back').addEventListener('click', back);
+  $('restart').addEventListener('click', () => { for (const k in A) delete A[k]; go(-1); });
+  const SAMPLE = { stage: { v: "I'm building it and nobody pays yet" }, months_in: { v: '6 to 12 months' }, commitment: { v: 'Evenings and weekends', f: '5 to 15' }, business_model: { v: 'Businesses' },
+    where: { country: 'Pakistan', regions: ['North America', 'Europe'] }, team: { v: 'Just me' }, goal: { goal: 'My first customer', when: 'In 3 months' }, background: { v: 'I worked in tech' },
+    why: { v: "I've lived this problem myself" }, strengths: { a: 'Building the product', b: 'Talking to customers' }, tried: ['Built a prototype', 'Talked to customers'],
+    building: 'A scheduling tool for dental clinics, so front desks stop losing bookings to phone tag.', stuck: 'I keep adding features instead of showing it to clinics. I have shown it to two and both said they would think about it.' };
+  $('fill').addEventListener('click', () => { Object.assign(A, JSON.parse(JSON.stringify(SAMPLE))); go(12); });
+  const J = $('jump'); [['Sign in', -1], ...Q.map((q, n) => [String(n + 1), n])].forEach(([l, n]) => { const b = document.createElement('button'); b.textContent = l; b.dataset.i = n; b.addEventListener('click', () => go(n)); J.appendChild(b); });
+  go(-1);
+</script>
+</body>
+</html>

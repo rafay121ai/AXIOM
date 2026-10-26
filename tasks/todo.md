@@ -1,3 +1,33 @@
+# Plan: update the four documents to match every decision (from tasks/decisions.md)
+
+Source of truth for what was decided: tasks/decisions.md, tasks/voice.md, tasks/walkthrough.md, tasks/design/*.html.
+Old versions stay in git history. Nothing is deleted without being rewritten. Where a decision conflicts with a hard rule, it is flagged in the doc and listed at the end of tasks/decisions.md.
+
+- [x] 1. PRODUCT.md: onboarding (13 questions, no personality tests, taps with max 5 options), first reading (no rating), Situation, Read, Learn (conversation first, move after two real replies), Move, Report (push, taps, story before sharing), home (greeting, drawer, fading items), care (two outcomes), settings, history, push rules (max 2 a day), voice summary, measures (remove Read accuracy), removed list.
+- [x] 2. ARCHITECTURE.md: native app (Expo) instead of web only, push notifications and scheduling, the new endpoints (no feedback endpoint), citation checking and loading quotes from verified library, care classifier, daily caps, states (queueing offline), data model additions, privacy (sharing, no user_id on peer outcomes), the parked proactive layer noted as future.
+- [x] 3. DESIGN.md: replace with the new visual language (black base with faint gold wash, bright stone writing, serif for Axiom, glass on floating things only, thin lines, small marks, drawer, loading hint, motion).
+- [x] 4. BRAND.md: update voice (link to tasks/voice.md content), logo (emblem allowed in-app), remove the "Axiom will remove you" and warning language, tagline parked.
+- [x] 5. Check: read each doc back, search for leftover old-product terms, list every conflict with CLAUDE.md for Rafay.
+
+## Result (October 2026)
+All four documents rewritten or updated. Old versions are in git history (PRODUCT.md, ARCHITECTURE.md, DESIGN.md and BRAND.md were tracked).
+BRAND.md: kept the name, the person, distribution, the pillar posts and the writing test; rewrote tagline (parked), what Axiom is, the one-liner, voice, tone, logo, imagery, app icon, positioning edits, launch, pricing (free), growth; retired campaigns 2 and 4 and the removal and Axiom Circle sections. Marketing typography still open.
+Not touched on purpose: CLAUDE.md (instructions file). It now disagrees with the documents in the places listed below and Rafay must decide.
+
+## CLAUDE.md vs the new documents (settled by Rafay and CLAUDE.md updated, see decisions.md)
+1. Stack: CLAUDE.md says web first (Vite + React on Vercel), native later. Documents now say the app is native (Expo) with push.
+2. "Returning founders land on their last open loop, never a blank prompt": the home is now a greeting plus chat bar, with the left-off items fading after about 8 seconds.
+3. "Every Learn screen ends in a Move": Learn now leads into the move (after two real replies or when asked) and ends in a conversation first.
+4. "Author lessons always name the author and book": the loading hint shows the book name only (lessons still name both).
+5. "Consent to share is asked at every report. Default is not shared": a Settings switch "share automatically" (off by default) now exists.
+6. "Peer outcome rows never store a user_id": kept; open whether a separate server-only link may exist for taking down past shares (ARCHITECTURE.md).
+7. Onboarding: CLAUDE.md and old PRODUCT.md imply 7 + 3; now 13 questions.
+8. Deprecated list: "artifact rendering system" is deprecated but a new, smaller, checked picture library is planned.
+
+---
+
+# Earlier plans (history, kept unchanged)
+
 # Migration baseline and security fix
 
 - [x] Confirm the checked-in live dump is internally complete and identify statements that must be excluded from the baseline.
