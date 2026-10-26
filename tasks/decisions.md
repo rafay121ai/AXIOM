@@ -641,3 +641,13 @@ Groups, each divided by thin lines, plain labels:
 - Rafay shared a reference (an isometric "agents office": coloured platforms per team, a central Brain, roads with moving data, team cards, task list on the right). The office page was redone to match: four team platforms (Server, App & Voice, Quality, Learning), Claude's brain in the centre, a task-status list on the right.
 
 - Rafay said go: agent list approved, three sessions approved, 20-minute resume task approved (October 26, 2026).
+
+- Rafay (Oct 26): run B2 to B12 straight through with no checkpoints. Still held for after B12 and his specific yes: applying migrations, any real-model (OpenAI) run, pushes and merges. Home, History, Settings, care wording and the final report are reviewed at the end.
+
+- Models per agent (Oct 26): haiku for mechanical checks (test-runner, dead-code-hunter); sonnet for building and copy (builder, app-builder, voice-checker, learning-loop); opus for safety, security and review (care-tester, backend-auditor, migration-checker, axiom-reviewer) and I pass model opus to the builder on the hardest steps (Learn conversation, Move validator, consent and privacy).
+
+## B5a decisions (builder questions, answered by the conductor, Oct 26)
+- "I don't know what to do" is a statement, not an ask for the move: only explicit asks ("what should I do next", "so what now") trigger the move early. Rafay can change this.
+- The lesson prompt forbids naming any author or book in prose and forbids quote marks in prose: authors, books and quotes appear only as structured citations whose names come from the database row.
+- Chapter and page are kept in the data but never shown in the app (PRODUCT.md).
+- The tappable checklist-with-meter in the mock belongs to the Move sheet, not the five picture types.

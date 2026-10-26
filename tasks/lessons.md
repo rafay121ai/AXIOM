@@ -14,3 +14,13 @@
 - Labels and buttons must say what the founder should DO in plain words. Internal terms (move, report, situation) are not self-explanatory. (Rafay, home screen.)
 - Never assume anyone's gender in copy, samples or examples. Use they/them or rewrite. (Walkthrough, founder story sample.)
 - Before writing a file, check whether it already exists (and read it). tasks/todo.md held 217 lines of earlier completed plans; I overwrote it and had to restore it from git. Append new plans instead. (Caught at commit time.)
+
+## Lesson (B2)
+- Builder tested its own care check with its own examples and passed; the independent care-tester found 9 real gaps (spaced letters, missing spaces, invalid model level treated as none). Rule: safety checks are always tested by a second agent that did not write them.
+
+## Lessons (B2 to B5 review)
+- Copy the founder sees has ONE home (the server) and is compared word for word to the approved mock by a test (server/journey/drift.test.js). The builder never writes or "improves" approved copy; unapproved copy is marked DRAFT and flagged. The app holds placeholders only, labelled. (Care screen: builder copy differed from the mock and lived in server and app.)
+- Fallbacks may only repeat the founder's own words, in fixed sentences that read whole. Never fill a gap with a guessed fact ("no customer yet"). Test them with real-sounding input and with empty input. (First reading fallback, caught only by the voice-checker.)
+- When a decision removes a feature, remove it in the same change from prompt, schema, types, storage and mocks, and add a test that it is gone. Grep for the old name first. (Read underlines.)
+- Tests start their own server on port 0, never a fixed port. Ports 8765 and 8791 belong to the build office page; do not start or stop anything on them. (App agent's duplicate server broke the office page.)
+- A builder that hits a product question (filler in Learn, care blocking Learn, "I don't know what to do") writes it to tasks/todo.md "Open questions" the moment it appears and asks the conductor at once, not at the end. Safety checks are tested by a second agent (see B2 lesson above).

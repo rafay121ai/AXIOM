@@ -317,3 +317,15 @@ Spend baseline $1.8994; hard cap $6.90 (ask before exceeding). Judge = gpt-4.1, 
 - [ ] P4 full Rich Dad, Chasm, transcript; judge 30/source; enrichment-checker 20 blind sign off
 - [ ] P5 Batch API bulk setup (not run), core-library-first order, LIBRARY_REPORT.md, full cost estimate
 - [ ] STOP and report (7 items)
+
+## Notes collected for B10 (migrations) and later steps
+- founder_profiles needs `signup_answers jsonb not null default '{}'` and `first_reading jsonb` (so a reopened app shows the same reading). Consider per-answer rows instead of one rewritten jsonb (two saves in the same instant could lose one).
+- `care_events` table (id, user_id, level, scope_id, created_at, resolved_at; RLS on, no policies) from `supabase/pending/care_events_PROPOSED.sql`.
+- `model_usage_logs.call_type` has no 'read' value; widen the CHECK for read, learn, followup, move, care, report.
+- Old `/api/onboarding/complete` stays until the old web app is retired; then delete it with `sessions.onboarding_answers` readers.
+- `resolveCare` is not called from any route yet: needed after the "how are you" check-in (home screen, B9).
+- Push scheduler (B8) must treat `isCareOpen` failure as paused, and the care_events table must exist first.
+- Care screen layout (do in B11, when wiring the real client): the mock puts the help rows between paragraph 3 and 4 of the care message, but the server sends one `message` string. Root fix: server sends `{ care:'clear', heading, before[], after[], help }` so the app does not need to know which paragraph comes where. Update server/care/middleware.js, copy.js, app CareScreen and tests together.
+- Needs Rafay's OK (copy not in mocks): `returnCheckIn` "How are you doing today?"; server validation and API error lines ("Pick one of the options", "Failed to build the first reading", ...) must be mapped to plain app copy in B11 (app never shows raw server errors).
+- App leftovers (do in B11): resume half-way through questions using GET /api/signup `next`; persist the offline queue (AsyncStorage) so unsent answers survive a restart; handle a rejected save in onSave (no unhandled rejection); `sendMessage` on the interface throws today because the server has no free-message route: either build the route (Situation turns, B4) and implement it, or remove it; real Google sign-in not run against real keys.
+- Open (B9, home): while a care event is open, Learn start/taps and moves must be refused and the next open starts with the gentle check-in; `resolveCare` is called after it. Cap of 2 active moves is enforced in B6 and must be checked when a move is offered in Learn. Filler in Learn gets "Say a bit more." (mock rephrases the question: Rafay's call).
