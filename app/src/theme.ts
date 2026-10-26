@@ -1,3 +1,4 @@
+import { SourceSerif4_400Regular, SourceSerif4_500Medium } from '@expo-google-fonts/source-serif-4';
 import { Platform } from 'react-native';
 
 // Every colour, type size and spacing value lives here.
@@ -23,12 +24,12 @@ export const colors = {
 
 export const goldGradient = [colors.goldFrom, colors.goldTo] as const;
 
+// One free serif (Source Serif 4, OFL), loaded in App.tsx, so Axiom's words look the same everywhere.
+export const serifFiles = { SourceSerif4_400Regular, SourceSerif4_500Medium };
+
 export const fonts = {
-  serif: Platform.select({
-    ios: 'Georgia',
-    android: 'serif',
-    default: 'ui-serif, "New York", "Iowan Old Style", "Palatino Linotype", Georgia, serif',
-  }) as string,
+  serif: 'SourceSerif4_400Regular',
+  serifMedium: 'SourceSerif4_500Medium',
   sans: Platform.select({
     web: '-apple-system, "SF Pro Text", "Inter", system-ui, "Segoe UI", sans-serif',
     default: undefined,
@@ -45,6 +46,8 @@ export const type = {
   big: { fontFamily: fonts.serif, fontSize: 19, lineHeight: 29, color: colors.ink },
   button: { fontFamily: fonts.sans, fontSize: 15.5 },
   legal: { fontFamily: fonts.sans, fontSize: 11.5, lineHeight: 18, color: ink(0.42) },
+  careHead: { fontFamily: fonts.serifMedium, fontSize: 25, lineHeight: 32.5, color: '#f1f1ef' },
+  care: { fontFamily: fonts.serif, fontSize: 17.5, lineHeight: 27, color: colors.body },
   waitLine: { fontFamily: fonts.serif, fontSize: 21, lineHeight: 31.5, color: ink(0.85), textAlign: 'center' as const },
 };
 

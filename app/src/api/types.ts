@@ -81,11 +81,23 @@ export type TextAnswer = string;
 
 export type Answer = SingleAnswer | WhereAnswer | GoalAnswer | TwoAnswer | MultiAnswer | TextAnswer;
 
+/** One line of real help for the founder's country. The server sends these; the app never holds numbers. */
+export type HelpLine = { label: string; value: string };
+
+/** Clear distress: show the care screen. No lesson, no move. */
+export type CareClear = { care: 'clear'; message: string; help: HelpLine[] };
+/** Unclear or slang: Axiom answers softly in the chat. No lesson, no move this turn. */
+export type CareUnclear = { care: 'unclear'; reply: string };
+/** Every text the founder sends is screened first. No `care` field means carry on. */
+export type Screened<T = object> = (T & { care?: undefined }) | CareClear | CareUnclear;
+
 export interface AxiomApi {
   /** Starts Google sign-in. Resolves when the founder is signed in. */
   signInWithGoogle(): Promise<void>;
   /** The onboarding questions, in order. */
   getQuestions(): Promise<Question[]>;
-  /** Saves one answer as soon as it is given, so an interrupted founder can resume. */
-  saveAnswer(key: string, answer: Answer): Promise<void>;
+  /** Saves one answer as soon as it is given, so an interrupted founder can resume. Typed answers are screened. */
+  saveAnswer(key: string, answer: Answer): Promise<Screened>;
+  /** Sends something the founder typed. Screened before anything else happens. */
+  sendMessage(text: string): Promise<Screened>;
 }

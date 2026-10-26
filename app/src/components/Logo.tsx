@@ -11,9 +11,9 @@ const LEFT = 'M 8,84 H 28 C 28,55 35,36 50,26 C 55,23 54,18 50,11 C 45,22 40,27 
 const RIGHT = 'M 92,84 H 72 C 72,55 65,36 50,26 C 45,23 46,18 50,11 C 55,22 60,27 69,33 C 82,43 87,60 87,84';
 const PATH_LENGTH = 190; // measured: 188 viewBox units
 
-type Props = { size: number; draw?: boolean };
+type Props = { size: number; draw?: boolean; glow?: boolean };
 
-export function Logo({ size, draw = false }: Props) {
+export function Logo({ size, draw = false, glow = true }: Props) {
   const gradId = useId().replace(/:/g, '');
   const reduce = useReduceMotion();
   const t = useRef(new Animated.Value(0)).current;
@@ -53,7 +53,7 @@ export function Logo({ size, draw = false }: Props) {
             <Stop offset="1" stopColor={gold(1)} stopOpacity={0} />
           </RadialGradient>
         </Defs>
-        <Circle cx={50} cy={52} r={78} fill={`url(#${gradId}glow)`} />
+        {glow && <Circle cx={50} cy={52} r={78} fill={`url(#${gradId}glow)`} />}
         {drawing ? (
           <G>
             <AnimatedPath d={LEFT} {...common} strokeDasharray={[PATH_LENGTH, PATH_LENGTH]} strokeDashoffset={offset(0)} opacity={opacity} />

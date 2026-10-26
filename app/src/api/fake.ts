@@ -1,4 +1,4 @@
-import type { AxiomApi, Question } from './types';
+import type { AxiomApi, Question, Screened } from './types';
 
 // Fixture questions, word for word from tasks/design/mock-onboarding-v2.html.
 const QUESTIONS: Question[] = [
@@ -36,12 +36,33 @@ const QUESTIONS: Question[] = [
     placeholder: 'The thing I keep avoiding is…', minLength: 20, shortHint: 'A little more, so Axiom has something real to work with.' },
 ];
 
-export function createFakeApi(): AxiomApi {
+// What the fake screening returns, so each route can be seen: 'none' carries on.
+export type CareSim = 'none' | 'clear' | 'unclear';
+
+// Placeholder lines. The real server sends verified lines for the founder's country.
+const CLEAR: Screened = {
+  care: 'clear',
+  message: [
+    'What you just wrote matters more than the business.',
+    "I'm not going to give you a lesson or a move right now.",
+    "If you might hurt yourself, or you're in danger, please call your local emergency number now.",
+  ].join('\n\n'),
+  help: [
+    { label: 'If you are in danger right now', value: 'Emergency number for your country' },
+    { label: 'Talk to someone trained to listen', value: 'A helpline for your country' },
+    { label: 'More help near you', value: 'findahelpline.com' },
+  ],
+};
+const UNCLEAR: Screened = { care: 'unclear', reply: 'That sounded heavy. What is going on?' };
+
+export function createFakeApi(sim: CareSim = 'none'): AxiomApi {
+  const screen = async (): Promise<Screened> => (sim === 'clear' ? CLEAR : sim === 'unclear' ? UNCLEAR : {});
   return {
     async signInWithGoogle() {},
     async getQuestions() {
       return QUESTIONS;
     },
-    async saveAnswer() {},
+    saveAnswer: screen,
+    sendMessage: screen,
   };
 }
