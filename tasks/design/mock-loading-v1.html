@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Loading state</title>
+<style>
+  :root { --ink-rgb: 234,236,238; --hl-rgb: 205,178,126; --hl2-rgb: 168,142,94; --hl: linear-gradient(90deg, rgb(var(--hl-rgb)), rgb(var(--hl2-rgb)));
+    --serif: ui-serif, "New York", "Iowan Old Style", "Palatino Linotype", Georgia, serif; --sans: -apple-system, "SF Pro Text", "Inter", system-ui, sans-serif; --ink: rgb(var(--ink-rgb)); }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: #101011; color: #b9b8b3; font-family: var(--sans); padding: 32px 20px 60px; }
+  .wrap { max-width: 900px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 48px; justify-content: center; align-items: flex-start; }
+  .panel { width: 300px; font-size: 13.5px; line-height: 1.55; } .panel h1 { font-family: var(--serif); font-weight: 500; font-size: 22px; color: #ecebe6; margin: 0 0 8px; }
+  .panel p { margin: 0 0 12px; color: #a3a29c; } .panel h3 { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #8e8d88; font-weight: 500; margin: 20px 0 9px; }
+  .btns { display: flex; flex-wrap: wrap; gap: 6px; } .btns button { font: inherit; font-size: 12px; color: #cfcdc6; background: transparent; border: 1px solid #2c2c2e; border-radius: 99px; padding: 6px 12px; cursor: pointer; } .btns button:hover { border-color: #8a8984; } .btns button.on { background: #242426; border-color: #8a8984; color: #f2f1ec; }
+  .phone { width: 390px; height: 800px; border-radius: 52px; border: 1px solid #2a2a2c; overflow: hidden; position: relative; background: #050505; color: var(--ink); flex: none; box-shadow: 0 40px 100px rgba(0,0,0,.55); order: -1; }
+  .phone::before { content: ""; position: absolute; inset: 0; background: radial-gradient(130% 58% at 50% 108%, rgba(205,178,126,.24), rgba(205,178,126,0) 66%), radial-gradient(100% 40% at 50% -8%, rgba(205,178,126,.09), rgba(205,178,126,0) 72%); pointer-events: none; }
+  .notch { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 112px; height: 28px; border-radius: 99px; background: #000; z-index: 5; }
+  .top { position: absolute; top: 56px; left: 0; right: 0; padding: 0 26px; display: flex; align-items: center; justify-content: space-between; z-index: 2; } .top .em { width: 26px; height: 26px; } .top span { font-size: 10.5px; letter-spacing: .22em; text-transform: uppercase; color: rgba(var(--ink-rgb), .45); }
+  .chat { position: absolute; inset: 104px 0 110px; overflow: hidden; padding: 20px 28px 0; z-index: 1; }
+  .ax { font-family: var(--serif); font-size: 19px; line-height: 1.5; margin: 0 0 18px; color: #fff; } .ax.dim { color: rgba(var(--ink-rgb), .55); font-size: 17px; }
+  .me { font-size: 14.5px; line-height: 1.5; color: rgba(var(--ink-rgb), .85); margin: 22px 0 22px 52px; text-align: right; }
+  .composer { position: absolute; left: 16px; right: 16px; bottom: 30px; z-index: 2; border: 1px solid rgba(var(--ink-rgb), .18); border-radius: 22px; padding: 14px 16px 14px 18px; display: flex; justify-content: space-between; align-items: center; font-size: 15.5px; color: rgba(var(--ink-rgb), .4); background: rgba(var(--ink-rgb), .07); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); box-shadow: inset 0 1.5px 0 rgba(255,255,255,.16), 0 14px 30px -6px rgba(0,0,0,.6); }
+  .composer i { font-style: normal; width: 34px; height: 34px; border-radius: 50%; background: rgba(var(--ink-rgb), .2); display: grid; place-items: center; font-size: 16px; color: #0b0907; }
+
+  /* THE LOADING HINT: tiny, sits where the answer will appear */
+  .hint { opacity: 0; transform: translateY(4px); transition: opacity .6s ease, transform .6s ease, max-height .6s ease, margin .6s ease; max-height: 200px; margin: 4px 0 18px; } .hrow { display: flex; gap: 11px; align-items: flex-start; }
+  .hint.show { opacity: 1; transform: none; } .hint.gone { opacity: 0; max-height: 0; margin: 0; overflow: hidden; }
+  .lg { flex: none; width: 24px; height: 24px; margin-top: 1px; overflow: visible; } .lg path { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 3.6s cubic-bezier(.4,.1,.2,1) infinite; } .lg path:nth-child(2) { animation-delay: .22s; }
+  @keyframes draw { 0% { stroke-dashoffset: 1; opacity: 1; } 50% { stroke-dashoffset: 0; opacity: 1; } 82% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+  .lgw { flex: none; filter: drop-shadow(0 0 8px rgba(205,178,126,.3)); animation: glow 3.6s ease-in-out infinite; } @keyframes glow { 0%, 30% { filter: drop-shadow(0 0 2px rgba(205,178,126,.1)); } 55%, 80% { filter: drop-shadow(0 0 11px rgba(205,178,126,.5)); } 100% { filter: drop-shadow(0 0 2px rgba(205,178,126,.1)); } }
+  .hq { transition: opacity .8s ease; } .hq .q { font-family: var(--serif); font-size: 12.5px; line-height: 1.45; margin: 0; color: transparent; background: linear-gradient(100deg, rgba(234,236,238,.42) 38%, rgba(255,255,255,1) 50%, rgba(234,236,238,.42) 62%); background-size: 260% 100%; -webkit-background-clip: text; background-clip: text; animation: sweep 2.4s linear infinite; } @keyframes sweep { from { background-position: 130% 0; } to { background-position: -30% 0; } } .hq .b { font-size: 10.5px; letter-spacing: .06em; color: rgba(var(--ink-rgb), .45); margin-top: 4px; } .sk { margin-top: 16px; display: flex; flex-direction: column; gap: 11px; } .sk i { display: block; height: 5px; border-radius: 3px; background: rgba(var(--ink-rgb), .05); position: relative; overflow: hidden; } .sk i::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgba(255,255,255,.09) 50%, transparent 70%); transform: translateX(-100%); animation: skm 2.4s linear infinite; } @keyframes skm { to { transform: translateX(100%); } }
+  .w { opacity: 0; transition: opacity .55s ease; } .w.on { opacity: 1; }
+  .answer { opacity: 0; transform: translateY(6px); transition: opacity .8s ease, transform .8s ease; } .answer.show { opacity: 1; transform: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="panel">
+    <h1>The loading state</h1>
+    <p>You send a message. Where the answer will appear, a tiny hint shows that your real answer is being prepared: a small logo drawing itself, one real quote with the book name under a soft moving light, and faint empty lines where the answer will be. Then the real answer fills those lines in.</p>
+    <h3>Founder</h3>
+    <div class="btns" id="biz"></div>
+    <h3>Speed</h3>
+    <div class="btns" id="spd"></div>
+    <h3>Replay</h3>
+    <div class="btns"><button id="replay">Send the message again</button></div>
+    <p style="margin-top:16px">Quotes are real, taken from the library word for word, with the book name only. If nothing fits, only the logo shows. Founder messages and answers here are samples.</p>
+  </div>
+
+  <div class="phone">
+    <div class="notch"></div>
+    <div class="top"><svg class="em" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gt" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#F0E8DA"/><stop offset=".25" stop-color="#F8F0E3"/><stop offset=".42" stop-color="#B98143"/><stop offset=".6" stop-color="#E9D8BF"/><stop offset=".8" stop-color="#642B35"/><stop offset="1" stop-color="#EDE4D6"/></linearGradient></defs><g fill="none" stroke="url(#gt)" stroke-width="3.5"><path d="M 8,84 H 28 C 28,55 35,36 50,26 C 55,23 54,18 50,11 C 45,22 40,27 31,33 C 18,43 13,60 13,84"/><path d="M 92,84 H 72 C 72,55 65,36 50,26 C 45,23 46,18 50,11 C 55,22 60,27 69,33 C 82,43 87,60 87,84"/></g></svg><span>Learn</span></div>
+    <div class="chat" id="chat"></div>
+    <div class="composer"><span>Reply</span><i>↑</i></div>
+  </div>
+</div>
+<script>
+  const $ = id => document.getElementById(id), wait = ms => new Promise(r => setTimeout(r, ms));
+  const EMB = n => `<svg class="lg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g${n}" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#F0E8DA"/><stop offset=".25" stop-color="#F8F0E3"/><stop offset=".42" stop-color="#B98143"/><stop offset=".6" stop-color="#E9D8BF"/><stop offset=".8" stop-color="#642B35"/><stop offset="1" stop-color="#EDE4D6"/></linearGradient></defs><g fill="none" stroke="url(#g${n})" stroke-width="3.4"><path pathLength="1" d="M 8,84 H 28 C 28,55 35,36 50,26 C 55,23 54,18 50,11 C 45,22 40,27 31,33 C 18,43 13,60 13,84"/><path pathLength="1" d="M 92,84 H 72 C 72,55 65,36 50,26 C 45,23 46,18 50,11 C 55,22 60,27 69,33 C 82,43 87,60 87,84"/></g></svg>`;
+  // Real quotes from the verified library, shown exactly as printed (leading … when the original starts mid-sentence). Book name only.
+  const GEN = { t: 'Often the greatest risk is to not take risk at all', b: 'The Great Mental Models Volume 2' }, GEN2 = { t: 'Never be needy for a deal.', b: 'Never Split the Difference' };
+  const BIZ = {
+    'Clinics scheduling tool': { prev: 'What would a real yes from one of those clinics be?', me: 'A booked call with a date and a time', q: [{ t: '“No” feels like salvation, like an oasis.', b: 'Never Split the Difference' }, GEN, GEN2],
+      a: 'A booked call is something each clinic can say yes or no to. Was the person you showed it to the one who decides about buying?' },
+    'E-commerce makeup brand': { prev: 'Where do most of your customers come from right now?', me: 'Customers buy once and never come back.', q: [{ t: 'A strong brand can only be created over a lengthy period of reinforcing actions', b: '7 Powers' }, GEN, GEN2],
+      a: 'Buying once is a trial, not a customer. What did your last 20 buyers get after they paid: a note, a reason to come back, anything?' },
+    'AI automation agency': { prev: 'How many clients do you have right now?', me: 'I do all the delivery myself, so I have no time to find clients.', q: [{ t: '…the problem is that they’re doing the wrong work', b: 'The E-Myth Revisited' }, GEN, GEN2],
+      a: 'Delivery pays the bills, and it is also what keeps you from selling. How many hours a week go to delivery, and how many to finding clients?' } };
+  let biz = 'Clinics scheduling tool', slow = false, run = 0;
+  async function play() { const id = ++run, B = BIZ[biz], C = $('chat'); C.innerHTML = '';
+    C.insertAdjacentHTML('beforeend', `<p class="ax dim">${B.prev}</p><p class="me">${B.me}</p>`);
+    const hint = document.createElement('div'); hint.className = 'hint'; hint.innerHTML = `<div class="hrow"><div class="lgw">${EMB(id)}</div><div class="hq"><p class="q"></p><div class="b"></div></div></div><div class="sk"><i style="width:94%"></i><i style="width:70%"></i></div>`; C.appendChild(hint);
+    const q = hint.querySelector('.q'), b = hint.querySelector('.b'), box = hint.querySelector('.hq'); let i = 0; const put = () => { q.textContent = B.q[i % B.q.length].t; b.textContent = B.q[i % B.q.length].b; }; put();
+    await wait(700); if (id !== run) return; hint.classList.add('show');
+    const total = slow ? 14000 : 7000; let t = 0;
+    while (t < total) { await wait(250); t += 250; if (id !== run) return;
+      if (slow && (t === 5000 || t === 10000)) { box.style.opacity = 0; await wait(800); i++; put(); box.style.opacity = 1; t += 800; } }
+    hint.classList.add('gone'); await wait(500); if (id !== run) return;
+    const ans = document.createElement('p'); ans.className = 'ax'; ans.innerHTML = B.a.split(' ').map(w => `<span class="w">${w} </span>`).join(''); C.appendChild(ans); await wait(60); for (const w of ans.querySelectorAll('.w')) { if (id !== run) return; w.classList.add('on'); await wait(38); } }
+  const mk = (box, items, cur, set) => { box.innerHTML = ''; items.forEach(l => { const b = document.createElement('button'); b.textContent = l; if (l === cur()) b.classList.add('on'); b.addEventListener('click', () => { set(l); [...box.children].forEach(x => x.classList.toggle('on', x.textContent === l)); play(); }); box.appendChild(b); }); };
+  mk($('biz'), Object.keys(BIZ), () => biz, v => biz = v); mk($('spd'), ['Normal (7 s)', 'Slow (14 s, quotes swap)'], () => 'Normal (7 s)', v => slow = v.startsWith('Slow'));
+  $('replay').addEventListener('click', play); play();
+</script>
+</body>
+</html>

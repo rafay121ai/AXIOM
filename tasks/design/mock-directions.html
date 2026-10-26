@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Axiom: three directions for the Learn screen</title>
+<style>
+  :root { --serif: ui-serif, "New York", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+          --sans: -apple-system, "SF Pro Text", "Inter", system-ui, "Segoe UI", sans-serif; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #151516; color: #d8d6d0; font-family: var(--sans); padding: 40px 20px 80px; }
+  header { max-width: 1280px; margin: 0 auto 36px; }
+  header h1 { font-family: var(--serif); font-weight: 500; font-size: 28px; margin: 0 0 8px; color: #f1eee6; }
+  header p { margin: 4px 0; max-width: 760px; line-height: 1.55; color: #a9a7a1; font-size: 15px; }
+  header .tag { display: inline-block; font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+                border: 1px solid #3a3a3c; border-radius: 99px; padding: 4px 10px; color: #a9a7a1; margin-bottom: 14px; }
+  .row { max-width: 1280px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 44px; justify-content: center; }
+  .col { width: 390px; }
+  .col h2 { font-family: var(--serif); font-weight: 500; font-size: 20px; margin: 0 0 4px; color: #f1eee6; }
+  .col .why { font-size: 13.5px; line-height: 1.5; color: #a9a7a1; margin: 0 0 16px; min-height: 60px; }
+  .phone { width: 390px; height: 800px; border-radius: 46px; border: 1px solid #38383a; padding: 0; overflow: hidden;
+           background: var(--bg); color: var(--text); position: relative; box-shadow: 0 30px 80px rgba(0,0,0,.55); }
+  .scroll { height: 100%; overflow-y: auto; padding: 56px 24px 40px; scrollbar-width: none; }
+  .scroll::-webkit-scrollbar { display: none; }
+  .notch { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 110px; height: 26px; border-radius: 99px; background: #000; z-index: 3; }
+  .brand { display: flex; align-items: center; justify-content: space-between; margin-bottom: 26px; }
+  .brand svg { height: 20px; width: auto; display: block; }
+  .brand .step { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  .you { font-size: 14px; line-height: 1.5; color: var(--muted); border-left: 2px solid var(--line); padding-left: 12px; margin: 0 0 22px; }
+  .you b { display: block; font-weight: 500; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; margin-bottom: 4px; color: var(--muted); }
+  .reply p { font-family: var(--serif); font-size: var(--reply-size); line-height: 1.52; margin: 0 0 14px; color: var(--text); letter-spacing: .005em; }
+  .reply em { font-style: italic; }
+  .reply strong { font-weight: 600; color: var(--strong); }
+  .src { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); margin: 2px 0 24px; }
+  .src i { width: 18px; height: 1px; background: var(--accent); display: inline-block; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 18px 16px; margin: 0 0 18px; }
+  .card .lab { font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; display: flex; justify-content: space-between; }
+  .bars .b { margin-bottom: 13px; }
+  .bars .b .t { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; color: var(--text); }
+  .bars .b .t span:last-child { font-variant-numeric: tabular-nums; color: var(--muted); }
+  .bars .b .t.hot span:last-child { color: var(--accent); font-weight: 600; }
+  .track { height: var(--bar-h); background: var(--track); border-radius: var(--bar-r); overflow: hidden; }
+  .fill { height: 100%; border-radius: var(--bar-r); background: var(--fill); transition: width .25s ease; }
+  .fill.hot { background: var(--accent); }
+  .slider { margin-top: 6px; }
+  .slider label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; color: var(--text); }
+  .slider label b { font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 600; }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 22px; background: transparent; margin: 0; cursor: pointer; }
+  input[type=range]::-webkit-slider-runnable-track { height: 3px; border-radius: 3px; background: linear-gradient(to right, var(--accent) var(--p), var(--track) var(--p)); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; margin-top: -9.5px;
+      background: var(--thumb); border: 2px solid var(--bg); box-shadow: 0 0 0 1px var(--accent), 0 4px 10px rgba(0,0,0,.4); }
+  .math { font-size: 12px; color: var(--muted); margin-top: 12px; line-height: 1.5; }
+  .math code { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: var(--text); font-size: 12px; }
+  .today { border-radius: var(--radius); padding: 16px 18px; margin: 0 0 18px; background: var(--today-bg); border: 1px solid var(--today-line); }
+  .today .lab { font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+  .today p { font-family: var(--serif); font-size: 16.5px; line-height: 1.5; margin: 0; color: var(--text); }
+  .taps { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .tap { font: inherit; font-size: 13.5px; color: var(--text); background: transparent; border: 1px solid var(--line); border-radius: 99px; padding: 9px 14px; cursor: pointer; transition: all .15s; }
+  .tap:hover { border-color: var(--accent); }
+  .tap.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .ans { font-family: var(--serif); font-size: 15.5px; line-height: 1.5; color: var(--text); border-left: 2px solid var(--accent); padding: 2px 0 2px 14px; margin: 4px 0 8px; display: none; }
+  .ans.show { display: block; animation: fade .25s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px);} to { opacity: 1; transform: none; } }
+  .foot { margin-top: 28px; font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+
+  /* Direction 1: Ink and brass */
+  .t1 { --bg:#0b0b0c; --card:transparent; --text:#ece8dd; --strong:#f5f1e6; --muted:#8c8a83; --line:#26262a; --accent:#c28a4a; --on-accent:#0b0b0c;
+        --track:#1b1b1e; --fill:#6b6a66; --thumb:#ece8dd; --radius:10px; --bar-h:5px; --bar-r:3px; --reply-size:18.5px; --today-bg:transparent; --today-line:#3a3228; }
+  /* Direction 2: Warm black and burgundy */
+  .t2 { --bg:#0e0b0b; --card:#161111; --text:#efe9e4; --strong:#fff6f0; --muted:#9a8e8a; --line:#2a1f20; --accent:#c4626f; --on-accent:#fff6f0;
+        --track:#241a1b; --fill:#8a7a76; --thumb:#fff6f0; --radius:18px; --bar-h:14px; --bar-r:99px; --reply-size:19px; --today-bg:#1c1213; --today-line:#4a2229; }
+  /* Direction 3: Graphite, no colour */
+  .t3 { --bg:#09090a; --card:linear-gradient(180deg,#131315,#0e0e10); --text:#f2f2f0; --strong:#ffffff; --muted:#86868b; --line:#222225; --accent:#f2f2f0; --on-accent:#09090a;
+        --track:#1a1a1d; --fill:#55555a; --thumb:#ffffff; --radius:22px; --bar-h:8px; --bar-r:99px; --reply-size:19.5px; --today-bg:#131315; --today-line:#26262a; }
+  .t3 .reply p { letter-spacing: .01em; }
+  .t3 .scroll { padding-top: 64px; }
+  .t3 .fill.hot { background: #fff; }
+  @media (max-width: 430px) { .col, .phone { width: 100%; } }
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">Mock for decision 5 · nothing here is connected to the app</span>
+  <h1>Three directions for the Learn screen</h1>
+  <p>Same screen, same words, three looks. All are dark and quiet, calm and editorial, phone first, in the Apple / Superhuman spirit you chose. They differ in accent colour, shape and how the picture feels.</p>
+  <p><b style="color:#d8d6d0">Try it:</b> drag the slider in each picture (the numbers are calculated from the founder's 40%), and tap the question pills. The example text is illustrative. The Chris Voss idea comes from a real passage in the library.</p>
+</header>
+
+<div class="row" id="row"></div>
+
+<template id="screen">
+  <div class="phone {{t}}">
+    <div class="notch"></div>
+    <div class="scroll">
+      <div class="brand">
+        <svg viewBox="123 0 360 130" xmlns="http://www.w3.org/2000/svg" aria-label="Axiom"><g fill="#EEECE6"><path d="M706 19C661 22 651 32 616 106L367 674H347L139 183C75 37 63 21 15 19V0H213V19C165 19 145 31 145 60C145 72 148 86 153 99L199 216H461L502 120C514 93 521 67 521 53C521 28 504 20 451 19V0H706ZM216 257 331 532 447 257Z" transform="translate(123.000 102) scale(0.11 -0.11)"/><path d="M278 0H479V15C448 15 428 31 397 75L269 271L352 391C371 418 400 433 433 435V450H275V435C305 433 315 427 315 413C315 401 303 379 278 348C273 342 261 324 248 304L240 316C225 339 216 352 214 356C195 387 188 403 188 413C188 428 201 434 231 435V450H24V435H33C63 435 79 422 110 375L204 231L90 66C60 25 50 18 17 15V0H162V15C133 15 122 20 122 33C122 40 128 53 142 74L221 197L312 57C316 51 318 46 318 39C318 21 311 17 278 15Z" transform="translate(198.570 102) scale(0.11 -0.11)"/><path d="M16 0H253V15C187 20 180 29 179 102V457L175 460L20 405V390L28 391C40 393 52 394 62 394C86 394 95 378 95 334V102C93 28 84 18 16 15ZM128 683C101 683 78 660 78 632C78 603 100 581 128 581C158 581 180 603 180 632C180 661 157 683 128 683Z" transform="translate(253.570 102) scale(0.11 -0.11)"/><path d="M250 460C119 460 29 364 29 226C29 90 122 -10 248 -10C374 -10 470 95 470 234C470 366 378 460 250 460ZM237 432C321 432 380 336 380 199C380 85 335 18 260 18C221 18 184 42 163 82C135 134 119 204 119 275C119 370 165 432 237 432Z" transform="translate(284.150 102) scale(0.11 -0.11)"/><path d="M16 0H238V15C187 16 171 27 170 67V349C170 351 178 361 185 368C210 391 253 408 288 408C332 408 354 373 354 303V86C352 29 342 18 286 15V0H510V15C454 15 440 31 438 95V347C468 390 500 408 547 408C604 408 622 381 622 298V87C620 28 614 21 556 15V0H775V15L749 17C717 22 706 37 706 76V282C706 400 667 460 590 460C532 460 481 434 427 376C409 433 375 460 321 460C276 460 249 447 166 383V458L159 460C106 441 72 430 19 415V398C31 401 40 402 51 402C77 402 86 386 86 338V85C84 29 71 15 16 15Z" transform="translate(339.150 102) scale(0.11 -0.11)"/></g></svg>
+        <span class="step">Learn</span>
+      </div>
+
+      <p class="you"><b>You said</b>My biggest customer is 40% of revenue and wants a 30% discount at renewal or they'll leave.</p>
+
+      <div class="reply">
+        <p>Your biggest customer is 40% of your revenue and wants 30% off at renewal. Run the number first: that discount takes <strong>12% of everything you earn</strong>.</p>
+        <p><strong>Chris Voss</strong>, in <em>Never Split the Difference</em>, says the strongest answer to a demand like this isn't a harder no. It's a question that asks for help. A "how" or "what" question gives the other side a sense of control, so they stop defending their number and start working on your problem. A flat no to a customer this big puts the whole renewal at risk.</p>
+      </div>
+      <div class="src"><i></i>Chris Voss · Never Split the Difference</div>
+
+      <div class="card bars">
+        <div class="lab"><span>From your numbers</span><span>Calculated</span></div>
+        <div class="b"><div class="t"><span>Everything you earn</span><span>100%</span></div><div class="track"><div class="fill" style="width:100%"></div></div></div>
+        <div class="b"><div class="t"><span>This customer</span><span>40%</span></div><div class="track"><div class="fill" style="width:40%"></div></div></div>
+        <div class="b"><div class="t hot"><span>What the discount costs you</span><span class="cost">12%</span></div><div class="track"><div class="fill hot cost-bar" style="width:12%"></div></div></div>
+        <div class="slider">
+          <label><span>If you agree to</span><b class="dv">30% off</b></label>
+          <input type="range" min="0" max="40" value="30" step="1" class="rng" style="--p:75%">
+          <div class="math"><code class="mm">40% × 30% = 12%</code> of your total revenue</div>
+        </div>
+      </div>
+
+      <div class="today"><div class="lab">Today</div>
+        <p>Write the one question you'll open the call with, for example "How am I supposed to make a 30% cut work for us?" (suggested wording), and read it out loud once.</p>
+      </div>
+
+      <div class="taps">
+        <button class="tap" data-a="Then it's information, not a verdict. Ask what changed on their side, and what a smaller cut would need to look like for them to stay. You're finding the real constraint.">What if they say no?</button>
+        <button class="tap" data-a="The other view in the book: some deals are worth walking away from. Decide your lowest acceptable number before the call, so a 'no' never costs you more than you chose to risk.">Show me the opposite view</button>
+        <button class="tap" data-a="Open with: 'I want to keep this working for both of us. Help me understand what changed that makes 30% necessary?'">Give me the exact words</button>
+      </div>
+      <div class="ans"></div>
+      <div class="foot">Mock text. Tapped answers shown here are samples.</div>
+    </div>
+  </div>
+</template>
+
+<script>
+  const dirs = [
+    { t: 't1', name: '1 · Ink and brass', why: 'The quietest. Hairline bars, thin lines, brass used once for the number that matters. The most "editorial".' },
+    { t: 't2', name: '2 · Warm black and burgundy', why: 'Softer and more present. Rounded cards, thick rounded bars, a muted rose-red from your logo\'s burgundy.' },
+    { t: 't3', name: '3 · Graphite, no colour', why: 'Pure Apple. No accent colour at all: emphasis comes from brightness and space. The most minimal.' }
+  ];
+  const row = document.getElementById('row');
+  const tpl = document.getElementById('screen').innerHTML;
+  dirs.forEach(d => {
+    const col = document.createElement('div'); col.className = 'col';
+    col.innerHTML = `<h2>${d.name}</h2><p class="why">${d.why}</p>` + tpl.replace('{{t}}', d.t);
+    row.appendChild(col);
+    const root = col, rng = root.querySelector('.rng');
+    const update = () => {
+      const v = +rng.value, cost = +(0.4 * v).toFixed(1);
+      rng.style.setProperty('--p', (v / 40 * 100) + '%');
+      root.querySelector('.dv').textContent = v + '% off';
+      root.querySelector('.cost').textContent = cost + '%';
+      root.querySelector('.cost-bar').style.width = cost + '%';
+      root.querySelector('.mm').textContent = '40% × ' + v + '% = ' + cost + '%';
+    };
+    rng.addEventListener('input', update);
+    const ans = root.querySelector('.ans');
+    root.querySelectorAll('.tap').forEach(b => b.addEventListener('click', () => {
+      const on = b.classList.contains('on');
+      root.querySelectorAll('.tap').forEach(x => x.classList.remove('on'));
+      if (on) { ans.classList.remove('show'); return; }
+      b.classList.add('on'); ans.textContent = b.dataset.a; ans.classList.remove('show'); void ans.offsetWidth; ans.classList.add('show');
+    }));
+  });
+</script>
+</body>
+</html>

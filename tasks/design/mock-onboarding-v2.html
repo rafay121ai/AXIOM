@@ -1,0 +1,905 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Axiom: sign in and sign-up questions</title>
+<style>
+  :root {
+    --ink-rgb: 234,236,238;                       /* Stone mixed with white */
+    --hl-rgb: 205,178,126; --hl2-rgb: 168,142,94; /* Gold, soft gradient (the first colour) */
+    --blur: 42px; --tint: .1; --edge: .2; --bg: #050505;
+    --serif: ui-serif, "New York", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --sans: -apple-system, "SF Pro Text", "Inter", system-ui, "Segoe UI", sans-serif;
+    --ink: rgb(var(--ink-rgb)); --hl: linear-gradient(90deg, rgb(var(--hl-rgb)), rgb(var(--hl2-rgb)));
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: #101011; color: #b9b8b3; font-family: var(--sans); padding: 28px 20px 28px; }
+  .wrap { max-width: 980px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 56px; justify-content: center; align-items: flex-start; }
+
+  /* panel (not part of the app) */
+  .side { width: 340px; font-size: 13.5px; line-height: 1.55; }
+  .side h1 { font-family: var(--serif); font-weight: 500; font-size: 24px; margin: 0 0 6px; color: #ecebe6; }
+  .side .tag { display: inline-block; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #8e8d88; margin-bottom: 12px; }
+  .side h3 { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #8e8d88; margin: 22px 0 10px; font-weight: 500; }
+  .jump { display: flex; flex-wrap: wrap; gap: 6px; }
+  .jump button, .btn2 { font: inherit; font-size: 12px; color: #cfcdc6; background: transparent; border: 1px solid #2c2c2e; border-radius: 99px; padding: 6px 11px; cursor: pointer; }
+  .jump button:hover, .btn2:hover { border-color: #8a8984; } .jump button.on { background: #242426; border-color: #8a8984; color: #f2f1ec; }
+  .why { border: 1px solid #2a2a2c; border-radius: 14px; padding: 13px 15px; background: #121213; }
+  .why b { color: #e4e1d8; font-weight: 500; } .why p { margin: 6px 0 0; color: #a9a8a2; } .why .sv { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; color: #cfcdc6; }
+  .why .num { font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: #8e8d88; }
+
+  /* phone */
+  .phone { width: 390px; height: 840px; order: -1; position: relative; border-radius: 52px; border: 1px solid #2a2a2c; overflow: hidden; background: var(--bg); color: var(--ink); flex: none; box-shadow: 0 40px 100px rgba(0,0,0,.55); }
+  .phone::before { content: ""; position: absolute; inset: 0; background: radial-gradient(120% 55% at 50% -10%, rgba(var(--ink-rgb), .07), transparent 60%); pointer-events: none; z-index: 0; }
+  .notch { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 112px; height: 28px; border-radius: 99px; background: #000; z-index: 30; }
+  .glass { background: rgba(var(--ink-rgb), var(--tint)); -webkit-backdrop-filter: blur(var(--blur)) saturate(140%); backdrop-filter: blur(var(--blur)) saturate(140%); border: 1px solid rgba(var(--ink-rgb), var(--edge)); }
+  .view { position: absolute; inset: 0; z-index: 1; display: none; flex-direction: column; }
+  .view { transition: opacity .28s ease, transform .28s ease; } .view.on { display: flex; animation: in .5s cubic-bezier(.2,.7,.2,1) both; } .view.out { opacity: 0; transform: translateY(-8px); }
+  #qbody { transition: opacity .24s ease, transform .24s ease; } #qbody.out { opacity: 0; transform: translateX(-16px); } #qbody.pre { opacity: 0; transform: translateX(18px); transition: none; }
+  .bar { transition: opacity .25s ease, transform .25s ease; } .bar.hide { opacity: 0; transform: translateY(14px); pointer-events: none; }
+  @keyframes in { from { opacity: 0; transform: translateY(8px);} to { opacity: 1; transform: none; } }
+  .logo { display: block; height: 17px; width: auto; }
+  .logo path, .logo g { fill: var(--ink); }
+
+  /* sign in */
+  .si { align-items: center; justify-content: space-between; padding: 150px 34px 52px; text-align: center; }
+  .si .mark .logo { height: 32px; margin: 0 auto; }
+  .si .tagline { font-family: var(--serif); font-size: 19px; line-height: 1.5; color: rgba(var(--ink-rgb), .96); margin: 30px auto 0; max-width: 280px; }
+  .si .bottom { width: 100%; }
+  .gbtn { width: 100%; font: inherit; font-size: 15.5px; color: var(--ink); border-radius: 16px; padding: 17px; cursor: pointer; }
+  .gbtn:hover { border-color: rgba(var(--ink-rgb), .3); }
+  .legal { font-size: 11.5px; line-height: 1.6; color: rgba(var(--ink-rgb), .42); margin: 18px 6px 0; }
+  .legal u { text-decoration: none; border-bottom: 1px solid rgba(var(--ink-rgb), .3); color: rgba(var(--ink-rgb), .62); }
+
+  /* questions */
+  .qhead { padding: 58px 26px 0; display: flex; align-items: center; justify-content: space-between; }
+  .back { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: rgba(var(--ink-rgb), .7); font-size: 18px; cursor: pointer; border: 1px solid transparent; }
+  .back:hover { border-color: rgba(var(--ink-rgb), .2); } .back.off { visibility: hidden; }
+  .count { display:none; font-size: 10.5px; letter-spacing: .2em; text-transform: uppercase; color: rgba(var(--ink-rgb), .42); font-variant-numeric: tabular-nums; }
+  .prog { height: 1px; background: rgba(var(--ink-rgb), .12); margin: 14px 26px 0; }
+  .prog i { display: block; height: 2px; margin-top: -.5px; background: var(--hl); transition: width .5s cubic-bezier(.2,.8,.2,1); }
+  .qbody { flex: 1; overflow-y: hidden; padding: 34px 26px 130px; scrollbar-width: none; }
+  .qbody::-webkit-scrollbar { display: none; }
+  .qt { font-family: var(--serif); font-weight: 400; font-size: 27px; line-height: 1.26; margin: 0 0 10px; color: var(--ink); letter-spacing: -.003em; }
+  .qs { font-size: 14px; line-height: 1.5; color: rgba(var(--ink-rgb), .5); margin: 0 0 28px; }
+  .lab { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: rgba(var(--ink-rgb), .42); margin: 28px 0 12px; }
+  .opts { border-top: 1px solid rgba(var(--ink-rgb), .12); }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 16px 2px; border-bottom: 1px solid rgba(var(--ink-rgb), .12); cursor: pointer; font-size: 16px; line-height: 1.35; color: rgba(var(--ink-rgb), .78); transition: color .2s; }
+  .row:hover { color: var(--ink); }
+  .ring { flex: none; width: 19px; height: 19px; border-radius: 50%; border: 1px solid rgba(var(--ink-rgb), .35); position: relative; transition: all .2s; }
+  .sq { border-radius: 6px; }
+  .row.on { color: #f1f2f3; }
+  .row.on .ring { border-color: transparent; background: var(--hl); }
+  .row.on .ring::after { content: ""; position: absolute; left: 6.5px; top: 3px; width: 4px; height: 8px; border: solid #0a0806; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); }
+  .chips { display: flex; flex-wrap: wrap; gap: 9px; }
+  .chip { font: inherit; font-size: 14.5px; color: rgba(var(--ink-rgb), .78); background: transparent; border: 1px solid rgba(var(--ink-rgb), .2); border-radius: 99px; padding: 10px 16px; cursor: pointer; transition: all .2s; }
+  .chip:hover { border-color: rgba(var(--ink-rgb), .45); color: var(--ink); }
+  .chip.on { color: #f1f2f3; border-color: transparent; background: linear-gradient(rgba(14,14,14,.96), rgba(14,14,14,.96)) padding-box, var(--hl) border-box; }
+  .field { width: 100%; background: transparent; border: 0; border-bottom: 1px solid rgba(var(--ink-rgb), .22); color: var(--ink); font: inherit; font-size: 17px; padding: 10px 0; outline: 0; }
+  .field:focus { border-bottom-color: rgba(var(--hl-rgb), .8); } .field::placeholder { color: rgba(var(--ink-rgb), .3); }
+  textarea.big { width: 100%; min-height: 210px; resize: none; background: transparent; border: 0; border-top: 1px solid rgba(var(--ink-rgb), .12); border-bottom: 1px solid rgba(var(--ink-rgb), .12); color: var(--ink); font-family: var(--serif); font-size: 19px; line-height: 1.55; padding: 18px 2px; outline: 0; }
+  textarea.big::placeholder { color: rgba(var(--ink-rgb), .28); }
+  .hint { font-size: 12px; color: rgba(var(--ink-rgb), .4); margin-top: 10px; display: flex; justify-content: space-between; }
+  .bar { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 26px 32px; z-index: 5; background: linear-gradient(to top, var(--bg) 62%, rgba(5,5,5,0)); }
+  .go { display: block; width: 100%; font: inherit; font-size: 15.5px; font-weight: 500; padding: 16px; border-radius: 14px; border: 1px solid transparent; background: var(--hl); color: #0a0806; cursor: pointer; letter-spacing: .01em; transition: all .25s; }
+  .go:disabled { background: transparent; border-color: rgba(var(--ink-rgb), .18); color: rgba(var(--ink-rgb), .3); cursor: default; }
+  .go:not(:disabled):active { transform: scale(.99); }
+  .skipnote { text-align: center; font-size: 12px; color: rgba(var(--ink-rgb), .38); margin-top: 12px; }
+
+  /* reading */
+  .rd { align-items: center; justify-content: center; text-align: center; padding: 0 40px; }
+  .rd p { transition: opacity .45s ease; min-height: 96px; font-family: var(--serif); font-size: 21px; line-height: 1.5; color: rgba(var(--ink-rgb), .85); margin: 0 0 14px; }
+
+  /* ambient light behind the glass, so the frosting has something to blur */
+  .glow { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+  .glow i { position: absolute; border-radius: 50%; filter: blur(34px); opacity: 1; }
+  .glow i:nth-child(1) { width: 260px; height: 260px; left: -50px; top: 330px; background: radial-gradient(circle, rgba(var(--hl-rgb), .8), transparent 70%); animation: d1 16s ease-in-out infinite alternate; }
+  .glow i:nth-child(2) { width: 300px; height: 300px; right: -90px; top: 520px; background: radial-gradient(circle, rgba(var(--hl2-rgb), .7), transparent 70%); animation: d2 20s ease-in-out infinite alternate; }
+  .glow i:nth-child(3) { width: 220px; height: 220px; left: 40px; bottom: -60px; background: radial-gradient(circle, rgba(var(--ink-rgb), .22), transparent 70%); animation: d1 24s ease-in-out infinite alternate-reverse; }
+  @keyframes d1 { to { transform: translate(60px, 70px); } } @keyframes d2 { to { transform: translate(-70px, -90px); } }
+  .opts { border-top: 0; }
+  .row { margin-bottom: 10px; padding: 16px 18px; border-radius: 16px; border: 1px solid rgba(var(--ink-rgb), var(--edge)); border-bottom: 1px solid rgba(var(--ink-rgb), var(--edge)); background: rgba(var(--ink-rgb), var(--tint)); -webkit-backdrop-filter: blur(var(--blur)) saturate(150%); backdrop-filter: blur(var(--blur)) saturate(150%); box-shadow: inset 0 1px 0 rgba(255,255,255,.07); }
+  .row.on { border-color: rgba(var(--hl-rgb), .65); background: rgba(var(--hl-rgb), .12); }
+  .chip { background: rgba(var(--ink-rgb), var(--tint)); -webkit-backdrop-filter: blur(var(--blur)) saturate(150%); backdrop-filter: blur(var(--blur)) saturate(150%); border-color: rgba(var(--ink-rgb), var(--edge)); box-shadow: inset 0 1px 0 rgba(255,255,255,.07); }
+  .chip.on { background: linear-gradient(rgba(40,34,22,.82), rgba(40,34,22,.82)) padding-box, var(--hl) border-box; }
+  .gbtn { box-shadow: inset 0 1px 0 rgba(255,255,255,.1), 0 10px 30px rgba(0,0,0,.35); }
+  .bar { background: linear-gradient(to top, rgba(5,5,5,.9) 55%, rgba(5,5,5,0)); }
+  .go { box-shadow: 0 8px 28px rgba(var(--hl-rgb), .25); } .go:disabled { box-shadow: none; }
+
+  /* floating: glass lifts off the page on hover */
+  .row, .chip, .gbtn { transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s ease, border-color .3s, background .3s, color .2s; will-change: transform; }
+  .row, .chip, .gbtn { box-shadow: inset 0 1px 0 rgba(255,255,255,.14), inset 0 -1px 0 rgba(255,255,255,.03), 0 6px 18px rgba(0,0,0,.35); }
+  .row:hover, .chip:hover, .gbtn:hover { transform: translateY(-4px) scale(1.012); border-color: rgba(var(--ink-rgb), .38);
+    background: rgba(var(--ink-rgb), .14);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.22), inset 0 -1px 0 rgba(255,255,255,.05), 0 18px 38px rgba(0,0,0,.55), 0 4px 12px rgba(var(--hl-rgb), .12); }
+  .chip:hover { transform: translateY(-3px) scale(1.03); }
+  .row:active, .chip:active, .gbtn:active { transform: translateY(-1px) scale(.995); transition-duration: .1s; }
+  .row.on:hover { background: rgba(var(--hl-rgb), .18); border-color: rgba(var(--hl-rgb), .85); }
+
+  /* depth: a lit top edge, a darker underside, and a soft cast shadow, so they read as raised pieces of glass */
+  .row, .chip, .gbtn { background-image: linear-gradient(180deg, rgba(255,255,255,.13) 0%, rgba(255,255,255,.03) 42%, rgba(0,0,0,.18) 100%);
+    box-shadow: inset 0 1.5px 0 rgba(255,255,255,.28), inset 0 -2px 3px rgba(0,0,0,.35), inset 1px 0 0 rgba(255,255,255,.06), inset -1px 0 0 rgba(255,255,255,.04), 0 2px 3px rgba(0,0,0,.5), 0 12px 24px -4px rgba(0,0,0,.6); }
+  .row:hover, .chip:hover, .gbtn:hover { background-image: linear-gradient(180deg, rgba(255,255,255,.2) 0%, rgba(255,255,255,.05) 42%, rgba(0,0,0,.2) 100%);
+    box-shadow: inset 0 1.5px 0 rgba(255,255,255,.4), inset 0 -2px 3px rgba(0,0,0,.35), 0 4px 6px rgba(0,0,0,.45), 0 26px 40px -6px rgba(0,0,0,.75), 0 8px 22px rgba(var(--hl-rgb), .16); }
+  .row:active, .chip:active, .gbtn:active { box-shadow: inset 0 3px 6px rgba(0,0,0,.5), inset 0 -1px 0 rgba(255,255,255,.08), 0 1px 2px rgba(0,0,0,.5); }
+  .row.on, .chip.on { background-image: linear-gradient(180deg, rgba(255,255,255,.14) 0%, rgba(var(--hl-rgb), .08) 50%, rgba(0,0,0,.2) 100%);
+    box-shadow: inset 0 1.5px 0 rgba(255,255,255,.32), inset 0 -2px 3px rgba(0,0,0,.3), 0 2px 3px rgba(0,0,0,.5), 0 12px 26px -4px rgba(var(--hl-rgb), .28); }
+  .go { background-image: linear-gradient(180deg, rgba(255,255,255,.38) 0%, rgba(255,255,255,0) 48%, rgba(60,40,10,.28) 100%), var(--hl);
+    box-shadow: inset 0 1.5px 0 rgba(255,255,255,.55), inset 0 -2px 3px rgba(70,45,10,.45), 0 2px 3px rgba(0,0,0,.5), 0 14px 30px -4px rgba(var(--hl-rgb), .4); transition: transform .3s cubic-bezier(.2,.8,.2,1), box-shadow .3s; }
+  .go:disabled { background-image: none; box-shadow: none; }
+  .go:not(:disabled):hover { transform: translateY(-3px); box-shadow: inset 0 1.5px 0 rgba(255,255,255,.6), inset 0 -2px 3px rgba(70,45,10,.45), 0 4px 6px rgba(0,0,0,.45), 0 22px 38px -4px rgba(var(--hl-rgb), .5); }
+  .go:not(:disabled):active { transform: translateY(0) scale(.99); box-shadow: inset 0 3px 6px rgba(70,45,10,.5), 0 2px 4px rgba(0,0,0,.5); }
+  .si .emblem { display: block; width: 84px; height: 84px; margin: 0 auto; filter: drop-shadow(0 6px 22px rgba(var(--hl-rgb), .28)); }
+  /* screen 3: the first reading */
+  .fr { padding: 66px 28px 0; }
+  .fr .emblem { width: 30px; height: 30px; margin: 0 0 22px; opacity: .9; }
+  .frtext { font-family: var(--serif); font-size: 19.5px; line-height: 1.46; color: rgba(var(--ink-rgb), .96); letter-spacing: -.002em; }
+  .frtext span.s { display: inline; opacity: 0; transition: opacity 1s ease, filter 1s ease; filter: blur(5px); } .frtext span.s.in { opacity: 1; filter: none; }
+  .frtext p { margin: 0 0 13px; }
+  .hl { color: inherit; background: var(--hl) no-repeat 0 100% / 100% 1px; padding-bottom: 3px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+  .frbar { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 26px 32px; opacity: 0; transform: translateY(12px); transition: opacity .6s ease, transform .6s ease; pointer-events: none; }
+  .frbar.in { opacity: 1; transform: none; pointer-events: auto; }
+  /* screen 4: the situation */
+  .sithead { padding: 62px 0 0; display: grid; place-items: center; } .sithead .emblem { width: 28px; height: 28px; opacity: .9; }
+  .sit .emblem { display: block; }
+  .chat { flex: 1; overflow-y: auto; padding: 26px 28px 200px; scrollbar-width: none; scroll-behavior: smooth; } .chat::-webkit-scrollbar { display: none; }
+  .ax { font-family: var(--serif); font-size: 19.5px; line-height: 1.5; margin: 0 0 18px; color: rgba(var(--ink-rgb), .96); }
+  .ax .s { display: inline; opacity: 0; filter: blur(5px); transition: opacity 1s ease, filter 1s ease; } .ax .s.in { opacity: 1; filter: none; }
+  .me { font-size: 14.5px; line-height: 1.5; color: rgba(var(--ink-rgb), .7); margin: 24px 0 24px 52px; text-align: right; animation: in .3s ease both; }
+  .sitbar { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 16px 30px; background: linear-gradient(to top, var(--bg) 60%, rgba(5,5,5,0)); opacity: 0; transform: translateY(14px); pointer-events: none; transition: opacity .6s ease, transform .6s ease; } .sitbar.on { opacity: 1; transform: none; pointer-events: auto; }
+  .composer { display: flex; align-items: flex-end; gap: 10px; border-radius: 22px; padding: 10px 10px 10px 18px; box-shadow: inset 0 1.5px 0 rgba(255,255,255,.2), inset 0 -2px 3px rgba(0,0,0,.35), 0 14px 30px -6px rgba(0,0,0,.6); }
+  .composer textarea { flex: 1; resize: none; background: transparent; border: 0; outline: 0; color: var(--ink); font: inherit; font-size: 15.5px; line-height: 1.45; padding: 7px 0; max-height: 150px; overflow-y: auto; scrollbar-width: none; } .composer textarea::-webkit-scrollbar { display: none; } .composer textarea::placeholder { color: rgba(var(--ink-rgb), .35); }
+  .sendb { flex: none; width: 36px; height: 36px; border-radius: 50%; border: 0; background-image: linear-gradient(180deg, rgba(255,255,255,.38), rgba(255,255,255,0) 50%), var(--hl); color: #0a0806; font-size: 17px; cursor: pointer; box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 6px 14px -2px rgba(var(--hl-rgb), .4); transition: transform .25s, opacity .25s; } .sendb:hover { transform: translateY(-2px); } .sendb:disabled { opacity: .3; background-image: none; background: rgba(var(--ink-rgb), .2); cursor: default; transform: none; box-shadow: none; }
+  .sug { display: block; width: 100%; text-align: left; font: inherit; color: var(--ink); border-radius: 18px; padding: 11px 16px 12px; margin-bottom: 10px; cursor: pointer; background-image: linear-gradient(180deg, rgba(255,255,255,.1), rgba(0,0,0,.14)); box-shadow: inset 0 1.5px 0 rgba(255,255,255,.2), inset 0 -2px 3px rgba(0,0,0,.3), 0 10px 24px -6px rgba(0,0,0,.6); transition: transform .3s cubic-bezier(.2,.8,.2,1), opacity .4s, max-height .4s, margin .4s, padding .4s; max-height: 120px; overflow: hidden; }
+  .sug:hover { transform: translateY(-3px); } .sug.gone { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; margin-bottom: 0; pointer-events: none; border-width: 0; }
+  .sug small { display: block; font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: rgba(var(--ink-rgb), .45); margin-bottom: 4px; } .sug span { font-size: 14.5px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .mocknote { font-size: 11.5px; letter-spacing: .02em; color: rgba(var(--ink-rgb), .38); text-align: center; border: 1px dashed rgba(var(--ink-rgb), .2); border-radius: 12px; padding: 12px 14px; margin-top: 30px; animation: in .5s ease both; }
+  /* screen 5: the Read */
+  .rvscroll { flex: 1; overflow-y: auto; padding: 66px 28px 260px; scrollbar-width: none; } .rvscroll::-webkit-scrollbar { display: none; }
+  .rv .emblem { display: block; width: 30px; height: 30px; margin: 0 0 22px; opacity: .9; }
+  .rvhead { font-family: var(--serif); font-weight: 500; font-size: 25px; line-height: 1.28; margin: 0 0 20px; color: #f4f4f2; letter-spacing: -.005em; }
+  #rvtext p { font-family: var(--serif); font-size: 18.5px; line-height: 1.48; color: rgba(var(--ink-rgb), .96); margin: 0 0 13px; }
+  #rvtext .s { opacity: 0; filter: blur(5px); transition: opacity 1s ease, filter 1s ease; } #rvtext .s.in { opacity: 1; filter: none; }
+  #rvtext p.rvnext { border-top: 1px solid rgba(var(--ink-rgb), .16); padding-top: 16px; margin-top: 22px; color: #f4f4f2; font-size: 19px; }
+  #rvtext p.me { font-family: var(--sans); font-size: 14.5px; color: rgba(var(--ink-rgb), .7); text-align: right; margin: 22px 0 14px 40px; }
+  .rvbar { position: absolute; left: 0; right: 0; bottom: 0; padding: 26px 22px 24px; background: linear-gradient(to top, var(--bg) 66%, rgba(5,5,5,0)); opacity: 0; transform: translateY(12px); pointer-events: none; transition: opacity .6s ease, transform .6s ease; } .rvbar.in { opacity: 1; transform: none; pointer-events: auto; }
+  .rvelse { display: block; margin: 12px auto 0; background: none; border: 0; color: rgba(var(--ink-rgb), .5); font: inherit; font-size: 13px; letter-spacing: .01em; cursor: pointer; padding: 4px 8px; border-bottom: 1px solid transparent; transition: color .2s, border-color .2s; } .rvelse:hover { color: var(--ink); border-color: rgba(var(--ink-rgb), .4); }
+  .rvlinks { display: flex; justify-content: center; align-items: center; gap: 6px; margin-top: 12px; color: rgba(var(--ink-rgb), .3); } .rvlinks .rvelse { margin: 0; }
+  #rvtext p.ax { font-size: 17px; margin: 8px 0 0; }
+  /* screen 6: Learn + the Move sheet */
+  .lhead { padding: 60px 26px 0; display: flex; align-items: center; justify-content: space-between; } .lhead .emblem { width: 26px; height: 26px; opacity: .9; }
+  .lhead span { font-size: 10.5px; letter-spacing: .22em; text-transform: uppercase; color: rgba(var(--ink-rgb), .45); }
+  .src { font-size: 12px; letter-spacing: .04em; color: rgba(var(--ink-rgb), .5); margin: -6px 0 18px; padding-left: 12px; border-left: 1px solid rgba(var(--ink-rgb), .3); }
+  .ax b { color: #f4f4f2; font-weight: 600; } .ax em { font-style: italic; }
+  .art { border-radius: 18px; padding: 16px 16px 14px; margin: 4px 0 20px; background-image: linear-gradient(180deg, rgba(255,255,255,.08), rgba(0,0,0,.12)); box-shadow: inset 0 1.5px 0 rgba(255,255,255,.18), 0 12px 26px -8px rgba(0,0,0,.6); }
+  .alab { display: flex; justify-content: space-between; gap: 10px; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: rgba(var(--ink-rgb), .5); margin-bottom: 8px; }
+  .arow { display: flex; align-items: center; gap: 12px; padding: 12px 2px; border-top: 1px solid rgba(var(--ink-rgb), .1); cursor: pointer; font-size: 15px; color: rgba(var(--ink-rgb), .8); } .arow:hover { color: var(--ink); }
+  .arow.on .ring { border-color: transparent; background: var(--hl); } .arow.on .ring::after { content: ""; position: absolute; left: 6.5px; top: 3px; width: 4px; height: 8px; border: solid #0a0806; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); }
+  .ameter { border-top: 1px solid rgba(var(--ink-rgb), .1); padding-top: 12px; } .atrack { height: 3px; background: rgba(var(--ink-rgb), .14); } .atrack i { display: block; height: 100%; width: 0; background: var(--hl); transition: width .5s cubic-bezier(.2,.8,.2,1); }
+  .aout { font-size: 13px; margin-top: 9px; color: rgba(var(--ink-rgb), .75); font-variant-numeric: tabular-nums; }
+  .lnotice { position: absolute; top: 58px; left: 14px; right: 14px; z-index: 20; border-radius: 22px; padding: 14px 16px; cursor: pointer; opacity: 0; transform: translateY(-16px) scale(.97); pointer-events: none; transition: opacity .5s ease, transform .5s cubic-bezier(.2,.8,.2,1); box-shadow: inset 0 1.5px 0 rgba(255,255,255,.2), 0 18px 40px -8px rgba(0,0,0,.7); background-color: rgba(30,30,30,.55); }
+  .lnotice.show { opacity: 1; transform: none; pointer-events: auto; } .nrow { display: flex; gap: 12px; align-items: center; } .nrow svg { width: 28px; height: 28px; flex: none; }
+  .nwho { display: flex; justify-content: space-between; font-size: 11px; letter-spacing: .08em; color: rgba(var(--ink-rgb), .5); margin-bottom: 3px; } .nmsg { font-size: 14.5px; color: var(--ink); }
+  .lsheet { position: absolute; inset: 40px 0 0 0; z-index: 25; background: #090909; border-radius: 30px 30px 0 0; border-top: 1px solid rgba(var(--ink-rgb), .2); transform: translateY(105%); transition: transform .6s cubic-bezier(.2,.8,.2,1); overflow-y: auto; scrollbar-width: none; }
+  .lsheet::-webkit-scrollbar { display: none; } .lsheet.open { transform: none; } .lclose { position: absolute; top: 14px; right: 18px; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: rgba(var(--ink-rgb), .6); font-size: 20px; cursor: pointer; border: 1px solid rgba(var(--ink-rgb), .2); }
+  .lin { padding: 36px 26px 40px; } .lin .kick { font-size: 10px; letter-spacing: .22em; text-transform: uppercase; color: rgba(var(--ink-rgb), .45); margin-bottom: 12px; }
+  .lin h3 { font-family: var(--serif); font-weight: 500; font-size: 24px; line-height: 1.28; margin: 0 0 22px; color: #f4f4f2; }
+  .lin .sec { margin-bottom: 20px; } .lin .lab { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: rgba(var(--ink-rgb), .45); margin-bottom: 8px; margin-top: 0; } .lin .sec p { margin: 0; font-size: 16px; line-height: 1.5; color: rgba(var(--ink-rgb), .9); }
+  .words { font-family: var(--serif); font-size: 17px; line-height: 1.5; color: #f1f1ef; padding: 14px 16px; border-left: 2px solid transparent; border-image: var(--hl) 1; background: rgba(var(--ink-rgb), .05); } .words small { display: block; margin-top: 8px; font-family: var(--sans); font-size: 11px; letter-spacing: .08em; color: rgba(var(--ink-rgb), .45); }
+  .check { list-style: none; margin: 0; padding: 0; } .check li { display: flex; gap: 12px; align-items: center; padding: 11px 0; border-top: 1px solid rgba(var(--ink-rgb), .1); font-size: 15px; color: rgba(var(--ink-rgb), .85); cursor: pointer; }
+  .check li i { width: 16px; height: 16px; border-radius: 5px; border: 1px solid rgba(var(--ink-rgb), .35); flex: none; position: relative; } .check li.done i { background: var(--hl); border-color: transparent; } .check li.done i::after { content: ""; position: absolute; left: 5px; top: 1.5px; width: 4px; height: 8px; border: solid #0a0806; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); } .check li.done span { opacity: .5; text-decoration: line-through; }
+  .predict { font-family: var(--serif); font-style: italic; font-size: 16px; line-height: 1.5; color: rgba(var(--ink-rgb), .8); margin: 24px 0; }
+  .done-msg { display: none; text-align: center; padding: 18px 0 4px; font-family: var(--serif); font-size: 16px; line-height: 1.55; color: rgba(var(--ink-rgb), .8); } .done-msg.show { display: block; animation: in .35s ease both; }
+  .quiet { display: block; margin: 16px auto 0; background: none; border: 0; color: rgba(var(--ink-rgb), .5); font: inherit; font-size: 13px; cursor: pointer; }
+  .swap { display: none; margin-top: 16px; } .swap.show { display: block; } .swap label, .swap small { display: block; font-size: 13px; line-height: 1.5; color: rgba(var(--ink-rgb), .6); margin-bottom: 10px; } .swap textarea { width: 100%; min-height: 80px; background: rgba(var(--ink-rgb), .06); border: 1px solid rgba(var(--ink-rgb), .2); border-radius: 12px; color: var(--ink); font: inherit; padding: 12px; outline: 0; resize: none; margin-bottom: 8px; } .swap .go { margin-top: 12px; }
+  .mcard { display: flex; align-items: center; gap: 14px; border-radius: 20px; padding: 15px 16px; margin: 6px 0 22px; cursor: pointer; background-image: linear-gradient(180deg, rgba(255,255,255,.12), rgba(0,0,0,.14)); box-shadow: inset 0 1.5px 0 rgba(255,255,255,.22), inset 0 -2px 3px rgba(0,0,0,.3), 0 14px 30px -6px rgba(0,0,0,.65), 0 6px 22px rgba(var(--hl-rgb), .14); animation: pop .7s cubic-bezier(.2,1.2,.3,1) both; transition: transform .3s cubic-bezier(.2,.8,.2,1), box-shadow .3s; }
+  .mcard:hover { transform: translateY(-3px) scale(1.01); } .mcard:active { transform: scale(.99); } .mcard svg { width: 30px; height: 30px; flex: none; }
+  .mcard .mk { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: rgba(var(--ink-rgb), .5); margin-bottom: 4px; } .mcard .mm { font-size: 15.5px; line-height: 1.35; color: #f4f4f2; } .mcard .mtx { flex: 1; } .mcard .chev { font-size: 26px; color: rgba(var(--ink-rgb), .5); line-height: 1; }
+  @keyframes pop { from { opacity: 0; transform: translateY(14px) scale(.94); } to { opacity: 1; transform: none; } }
+  /* screen 8: the Report (evening) + the push banner + the reminder ask */
+  .choices { display: flex; flex-wrap: wrap; gap: 10px; margin: 4px 0 22px; animation: in .5s ease both; }
+  .choices.big { gap: 12px; } .choices.big .chip { flex: 1; text-align: center; padding: 16px 10px; font-size: 16px; border-radius: 18px; }
+  .story { border-radius: 20px; padding: 16px 18px 18px; margin: 4px 0 22px; background-image: linear-gradient(180deg, rgba(255,255,255,.1), rgba(0,0,0,.12)); box-shadow: inset 0 1.5px 0 rgba(255,255,255,.2), 0 14px 30px -8px rgba(0,0,0,.65); animation: pop .7s cubic-bezier(.2,1.2,.3,1) both; }
+  .story .sk { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: rgba(var(--ink-rgb), .5); margin-bottom: 8px; display: flex; justify-content: space-between; } .story .sk b { font-weight: 500; color: rgba(var(--hl-rgb), .95); }
+  .story h4 { font-family: var(--serif); font-weight: 500; font-size: 18px; line-height: 1.3; margin: 0 0 8px; color: #f4f4f2; } .story p { margin: 0; font-size: 14.5px; line-height: 1.55; color: rgba(var(--ink-rgb), .88); }
+  #rchat .me { text-align: right; }
+  .pbanner { position: absolute; top: 56px; left: 12px; right: 12px; z-index: 40; display: flex; gap: 12px; align-items: center; border-radius: 22px; padding: 13px 15px; cursor: pointer; background-color: rgba(34,34,34,.6); opacity: 0; transform: translateY(-22px) scale(.97); pointer-events: none; transition: opacity .5s ease, transform .5s cubic-bezier(.2,.8,.2,1); box-shadow: inset 0 1.5px 0 rgba(255,255,255,.2), 0 18px 40px -8px rgba(0,0,0,.7); }
+  .pbanner.show { opacity: 1; transform: none; pointer-events: auto; } .pbanner svg { width: 30px; height: 30px; flex: none; }
+  .pw { display: flex; justify-content: space-between; font-size: 11px; letter-spacing: .06em; color: rgba(var(--ink-rgb), .55); margin-bottom: 3px; } .pm { font-size: 14.5px; color: var(--ink); }
+  .rem { display: none; margin-top: 22px; padding-top: 18px; border-top: 1px solid rgba(var(--ink-rgb), .12); text-align: center; } .rem.show { display: block; animation: in .4s ease both; }
+  .rem p { font-family: var(--serif); font-size: 17px; margin: 0 0 14px; color: var(--ink); } .rem .choices { justify-content: center; margin: 0; } .rem .chip { padding: 11px 22px; }
+  /* report: centred opening, smaller buttons, the intro rises when a button is pressed */
+  #rchat { transition: padding-top .9s cubic-bezier(.2,.8,.2,1); } #rchat.center { padding-top: 200px; }
+  .ax.rcenter { text-align: center; font-size: 21px; line-height: 1.45; margin-bottom: 26px; }
+  .choices.tap { justify-content: center; gap: 10px; margin: 0 0 24px; }
+  .choices.tap .chip { flex: none; min-width: 92px; padding: 10px 20px; font-size: 15px; border-radius: 14px; }
+  /* report buttons: flat, thin outline, like the rest of the chat screens (no glass, no bevel, no shadow) */
+  #rchat .choices .chip { background: transparent; background-image: none; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; border: 1px solid rgba(var(--ink-rgb), .3); border-radius: 99px; min-width: 0; padding: 9px 22px; font-size: 14.5px; color: rgba(var(--ink-rgb), .85); transition: border-color .25s, color .25s, opacity .3s, background .25s; }
+  #rchat .choices .chip:hover { transform: none; box-shadow: none; background: rgba(var(--ink-rgb), .06); border-color: rgba(var(--ink-rgb), .55); color: var(--ink); }
+  #rchat .choices .chip:active { transform: none; box-shadow: none; }
+  #rchat .choices .chip.on, #rchat .choices .chip.on:hover { color: #f4f4f2; background: linear-gradient(#0b0b0b, #0b0b0b) padding-box, var(--hl) border-box; border-color: transparent; box-shadow: none; }
+  /* report marks: small round marks with a label (option 4), flat and quiet */
+  .choices { gap: 22px; align-items: flex-start; }
+  .mk { background: none; border: 0; padding: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; font: inherit; color: rgba(var(--ink-rgb), .6); transition: color .3s, opacity .35s; }
+  .mk .c { width: 38px; height: 38px; border-radius: 50%; border: 1px solid rgba(var(--ink-rgb), .28); display: grid; place-items: center; transition: border-color .3s, background .3s; }
+  .mk svg { width: 16px; height: 16px; fill: none; stroke: rgba(var(--ink-rgb), .8); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; transition: stroke .3s; }
+  .mk .l { font-size: 12.5px; letter-spacing: .02em; }
+  .mk:hover { color: var(--ink); } .mk:hover .c { border-color: rgba(var(--ink-rgb), .6); }
+  .mk.on { color: var(--ink); } .mk.on .c { border-color: transparent; background: var(--hl); } .mk.on svg { stroke: #0b0907; } .mk.dim { opacity: .3; }
+  /* screen 9: returning-founder home */
+  .hmtop { padding: 54px 18px 0; } .menub { background: none; border: 0; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; transition: background .25s; } .menub:hover { background: rgba(var(--ink-rgb), .08); }
+  .menub svg { width: 22px; height: 22px; fill: none; stroke: rgba(var(--ink-rgb), .8); stroke-width: 1.6; stroke-linecap: round; }
+  .hmmenu { position: absolute; top: 100px; left: 16px; z-index: 30; border-radius: 18px; padding: 8px; min-width: 190px; opacity: 0; transform: translateY(-8px) scale(.97); transform-origin: top left; pointer-events: none; transition: opacity .3s ease, transform .3s cubic-bezier(.2,.8,.2,1); background-color: rgba(28,28,28,.7); box-shadow: 0 18px 40px -8px rgba(0,0,0,.7); }
+  .hmmenu.show { opacity: 1; transform: none; pointer-events: auto; } .hmmenu button { display: block; width: 100%; text-align: left; background: none; border: 0; color: rgba(var(--ink-rgb), .85); font: inherit; font-size: 15px; padding: 11px 12px; border-radius: 10px; cursor: pointer; } .hmmenu button:hover { background: rgba(var(--ink-rgb), .09); color: var(--ink); }
+  .hmbody { flex: 1; display: flex; align-items: center; justify-content: center; padding: 0 34px 150px; text-align: center; }
+  .hmgreet { font-family: var(--serif); font-size: 28px; line-height: 1.3; color: #f4f4f2; margin: 0; letter-spacing: -.005em; }
+  .hmgreet .s { opacity: 0; filter: blur(6px); transition: opacity 1.1s ease, filter 1.1s ease; } .hmgreet .s.in { opacity: 1; filter: none; }
+  .hmbottom { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 16px 30px; background: none; }
+  .hmchips { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0 8px 12px; min-height: 0; animation: in .6s ease both; } .hmchips.none { display: none; }
+  .hchip { background: none; border: 0; color: rgba(var(--ink-rgb), .82); font: inherit; font-size: 13.5px; display: flex; align-items: center; gap: 9px; cursor: pointer; padding: 5px 0; border-bottom: 1px solid transparent; transition: color .25s, border-color .25s; } .hchip:hover { color: var(--ink); border-color: rgba(var(--ink-rgb), .35); }
+  .hchip i { width: 6px; height: 6px; border-radius: 50%; background: rgb(var(--hl-rgb)); box-shadow: 0 0 0 4px rgba(var(--hl-rgb), .16); flex: none; }
+  /* home: items fade after a few seconds, everything stays in the menu */
+  .hmchips { transition: opacity 1.2s ease; } .hmchips.fade { opacity: 0; pointer-events: none; }
+  .hmopen { position: absolute; inset: 70px 0 0 0; z-index: 35; background: #090909; border-radius: 30px 30px 0 0; border-top: 1px solid rgba(var(--ink-rgb), .2); transform: translateY(105%); transition: transform .6s cubic-bezier(.2,.8,.2,1); overflow-y: auto; scrollbar-width: none; } .hmopen.open { transform: none; } .hmopen::-webkit-scrollbar { display: none; }
+  .hoclose { position: absolute; top: 14px; right: 18px; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: rgba(var(--ink-rgb), .6); font-size: 20px; cursor: pointer; border: 1px solid rgba(var(--ink-rgb), .2); }
+  .hoin { padding: 34px 26px 30px; } .hoin h3 { font-family: var(--serif); font-weight: 500; font-size: 24px; margin: 0 0 18px; color: #f4f4f2; }
+  .hosec { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: rgba(var(--ink-rgb), .45); margin: 22px 0 6px; }
+  .horow { display: flex; align-items: center; gap: 12px; padding: 14px 2px; border-top: 1px solid rgba(var(--ink-rgb), .12); cursor: pointer; color: rgba(var(--ink-rgb), .9); font-size: 15.5px; line-height: 1.35; transition: color .2s; } .horow:hover { color: #fff; }
+  .horow i { width: 6px; height: 6px; border-radius: 50%; background: rgb(var(--hl-rgb)); box-shadow: 0 0 0 4px rgba(var(--hl-rgb), .16); flex: none; } .horow small { display: block; font-size: 12px; color: rgba(var(--ink-rgb), .5); margin-top: 3px; } .horow .chev { margin-left: auto; color: rgba(var(--ink-rgb), .4); font-size: 20px; }
+  .honone { font-size: 14.5px; color: rgba(var(--ink-rgb), .55); padding: 14px 0; border-top: 1px solid rgba(var(--ink-rgb), .12); }
+  /* home: side drawer (menu) */
+  .hm { overflow: hidden; }
+  .hmmain { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--bg); transition: transform .5s cubic-bezier(.2,.8,.2,1), border-radius .5s; }
+  .hm.drawer .hmmain { transform: translateX(84%); border-radius: 28px; box-shadow: -20px 0 50px rgba(0,0,0,.6); }
+  .hmscrim { position: absolute; inset: 0; z-index: 50; opacity: 0; pointer-events: none; background: rgba(0,0,0,.35); transition: opacity .4s; } .hm.drawer .hmscrim { opacity: 1; pointer-events: auto; }
+  .hmdrawer { position: absolute; top: 0; bottom: 0; left: 0; width: 84%; display: flex; flex-direction: column; background: #070707; transform: translateX(-12%); opacity: 0; visibility: hidden; transition: transform .5s cubic-bezier(.2,.8,.2,1), opacity .4s, visibility 0s linear .5s; padding-top: 54px; }
+  .hm.drawer .hmdrawer { transform: none; opacity: 1; visibility: visible; transition-delay: 0s; }
+  .dtop { padding: 4px 22px 14px; } .dtop .emblem { width: 28px; height: 28px; opacity: .9; display: block; }
+  .dnew { display: flex; align-items: center; gap: 12px; margin: 0 14px 14px; padding: 12px 12px; background: none; border: 0; border-radius: 12px; color: var(--ink); font: inherit; font-size: 15.5px; cursor: pointer; transition: background .2s; } .dnew:hover { background: rgba(var(--ink-rgb), .07); }
+  .dnew span { width: 28px; height: 28px; border-radius: 50%; border: 1px solid rgba(var(--ink-rgb), .35); display: grid; place-items: center; font-size: 18px; line-height: 1; color: rgba(var(--ink-rgb), .85); }
+  .dscroll { flex: 1; overflow-y: auto; border-top: 1px solid rgba(var(--ink-rgb), .14); scrollbar-width: none; } .dscroll::-webkit-scrollbar { display: none; }
+  .dsec { padding: 16px 22px 8px; border-bottom: 1px solid rgba(var(--ink-rgb), .14); }
+  .dlab { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: rgba(var(--ink-rgb), .45); margin-bottom: 6px; }
+  .dsub { font-size: 11.5px; color: rgba(var(--ink-rgb), .4); margin: 12px 0 2px; }
+  .drow { display: flex; align-items: center; gap: 11px; padding: 9px 0; cursor: pointer; color: rgba(var(--ink-rgb), .85); font-size: 15px; line-height: 1.35; transition: color .2s; } .drow:hover { color: #fff; }
+  .drow i { width: 6px; height: 6px; border-radius: 50%; background: rgb(var(--hl-rgb)); box-shadow: 0 0 0 4px rgba(var(--hl-rgb), .16); flex: none; } .drow small { display: block; font-size: 12px; color: rgba(var(--ink-rgb), .45); margin-top: 2px; }
+  .dnone { font-size: 14px; color: rgba(var(--ink-rgb), .5); padding: 9px 0; }
+  .dfoot { display: flex; align-items: center; gap: 12px; padding: 14px 22px 26px; border-top: 1px solid rgba(var(--ink-rgb), .14); cursor: pointer; } .dfoot:hover .dn { color: #fff; }
+  .dfoot .av { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--hl); color: #0b0907; font-weight: 600; font-size: 14px; } .dfoot .dn { flex: 1; font-size: 15px; color: var(--ink); } .dfoot small { display: block; font-size: 12px; color: rgba(var(--ink-rgb), .5); margin-top: 2px; } .dfoot .chev { color: rgba(var(--ink-rgb), .4); font-size: 20px; }
+  /* home: a very faint, smooth gold wash behind the black (replaces the soft blobs on this screen) */
+  .hmwash { position: absolute; inset: 0; pointer-events: none; background:
+      radial-gradient(130% 58% at 50% 108%, rgba(205,178,126,.26), rgba(205,178,126,0) 66%),
+      radial-gradient(100% 40% at 50% -8%, rgba(205,178,126,.10), rgba(205,178,126,0) 72%),
+      linear-gradient(180deg, rgba(168,142,94,.05), rgba(0,0,0,0) 50%); }
+  .phone:has(#home.on) .glow { opacity: 0; transition: opacity .5s; }
+  .hmmain { background: transparent; }
+  .hmdrawer { background: radial-gradient(120% 45% at 0% 104%, rgba(205,178,126,.10), rgba(205,178,126,0) 62%), #070707; }
+  /* screen 10: care. Quiet: no glow, no wash, no motion beyond a slow fade. */
+  .phone:has(#care.on) .glow { opacity: 0; transition: opacity .6s; }
+  .cr { background: #050505; } .cr.on { animation: crin 1.6s ease both; } @keyframes crin { from { opacity: 0; } to { opacity: 1; } }
+  .crbody { flex: 1; overflow-y: auto; padding: 64px 30px 40px; scrollbar-width: none; } .crbody::-webkit-scrollbar { display: none; }
+  .cr .emblem { display: block; width: 26px; height: 26px; margin: 0 0 30px; opacity: .8; }
+  .crh { font-family: var(--serif); font-weight: 500; font-size: 25px; line-height: 1.3; margin: 0 0 18px; color: #f1f1ef; }
+  .crp { font-family: var(--serif); font-size: 17.5px; line-height: 1.55; margin: 0 0 16px; color: rgba(var(--ink-rgb), .9); }
+  .crhelp { margin: 22px 0 24px; border-top: 1px solid rgba(var(--ink-rgb), .16); } .crrow { padding: 14px 0; border-bottom: 1px solid rgba(var(--ink-rgb), .16); }
+  .crk { font-size: 12px; letter-spacing: .06em; color: rgba(var(--ink-rgb), .55); margin-bottom: 6px; } .crph { display: inline-block; font-size: 15.5px; color: rgba(var(--ink-rgb), .9); border: 1px dashed rgba(var(--ink-rgb), .35); border-radius: 8px; padding: 6px 10px; }
+  .crsmall { font-size: 13.5px; line-height: 1.5; color: rgba(var(--ink-rgb), .55); margin: 22px 0 18px; }
+  .crkeep { background: none; border: 0; color: rgba(var(--ink-rgb), .8); font: inherit; font-size: 15px; padding: 6px 0; border-bottom: 1px solid rgba(var(--ink-rgb), .4); cursor: pointer; } .crkeep:hover { color: #fff; border-color: rgba(var(--ink-rgb), .8); }
+  .hmgreet.soft { font-size: 22px; line-height: 1.4; }
+  /* screen 11: settings */
+  .sthead { position: relative; z-index: 2; background: linear-gradient(#050505 72%, rgba(5,5,5,0)); display: flex; align-items: center; justify-content: space-between; padding: 56px 18px 10px; } .sthead span { font-family: var(--serif); font-size: 20px; color: #f4f4f2; } .sthead i { width: 38px; }
+  .stback { background: none; border: 0; width: 38px; height: 38px; border-radius: 50%; color: rgba(var(--ink-rgb), .85); font-size: 28px; line-height: 1; cursor: pointer; padding-bottom: 4px; } .stback:hover { background: rgba(var(--ink-rgb), .08); }
+  .stbody { position: relative; z-index: 1; flex: 1; overflow-y: auto; padding: 0 0 40px; scrollbar-width: none; } .stbody::-webkit-scrollbar { display: none; }
+  .stsec { border-top: 1px solid rgba(var(--ink-rgb), .14); padding: 16px 24px 6px; } .stsec:last-child { border-bottom: 1px solid rgba(var(--ink-rgb), .14); }
+  .stlab { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: rgba(var(--ink-rgb), .45); margin-bottom: 4px; }
+  .strow { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 13px 0; font-size: 15.5px; color: rgba(var(--ink-rgb), .9); } .strow + .strow { border-top: 1px solid rgba(var(--ink-rgb), .08); }
+  .strow small { display: block; font-size: 12px; line-height: 1.4; color: rgba(var(--ink-rgb), .5); margin-top: 3px; font-weight: 400; } .strow .val { font-size: 14.5px; color: rgba(var(--ink-rgb), .6); text-align: right; } .strow.tap { cursor: pointer; } .strow.tap:hover { color: #fff; } .strow .chev { color: rgba(var(--ink-rgb), .4); font-size: 20px; margin-left: 6px; }
+  .sw { flex: none; width: 38px; height: 22px; border-radius: 99px; border: 1px solid rgba(var(--ink-rgb), .35); position: relative; cursor: pointer; transition: background .3s, border-color .3s; background: none; padding: 0; } .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: rgba(var(--ink-rgb), .7); transition: transform .3s cubic-bezier(.2,.8,.2,1), background .3s; }
+  .sw.on { background: var(--hl); border-color: transparent; } .sw.on::after { transform: translateX(16px); background: #0b0907; }
+  .words3 { display: flex; gap: 22px; padding: 4px 0 12px; } .words3 button { background: none; border: 0; border-bottom: 1.5px solid transparent; padding: 4px 1px 6px; color: rgba(var(--ink-rgb), .5); font: inherit; font-size: 15px; cursor: pointer; transition: color .25s, border-color .25s; } .words3 button:hover { color: var(--ink); } .words3 button.on { color: #f4f4f2; border-image: var(--hl) 1; border-bottom-width: 1.5px; border-bottom-style: solid; }
+  .stnote { font-size: 12.5px; line-height: 1.5; color: rgba(var(--ink-rgb), .5); padding: 0 0 12px; }
+  .withdraw { background: none; border: 0; color: rgba(var(--ink-rgb), .6); font: inherit; font-size: 13.5px; border-bottom: 1px solid rgba(var(--ink-rgb), .3); cursor: pointer; padding: 2px 0; } .withdraw:hover { color: #fff; }
+  .strow.danger { color: rgba(222,160,150,.95); } .strow.danger:hover { color: #f0b8ae; }
+  .stmodal { position: absolute; inset: 0; z-index: 60; display: grid; place-items: center; padding: 26px; background: rgba(0,0,0,.72); opacity: 0; pointer-events: none; transition: opacity .35s; } .stmodal.show { opacity: 1; pointer-events: auto; }
+  .stbox { background: #0b0b0b; border: 1px solid rgba(var(--ink-rgb), .2); border-radius: 22px; padding: 22px 20px 20px; width: 100%; } .stbox h4 { font-family: var(--serif); font-weight: 500; font-size: 19px; line-height: 1.3; margin: 0 0 10px; color: #f4f4f2; } .stbox p { font-size: 14px; line-height: 1.5; color: rgba(var(--ink-rgb), .7); margin: 0 0 18px; }
+  .stbtns { display: flex; flex-direction: column; gap: 10px; } .stbtns button { font: inherit; font-size: 15px; padding: 13px; border-radius: 14px; cursor: pointer; border: 1px solid rgba(var(--ink-rgb), .3); background: none; color: var(--ink); } .stbtns button:hover { border-color: rgba(var(--ink-rgb), .6); } .stbtns .danger { color: rgba(222,160,150,.95); border-color: rgba(222,160,150,.4); }
+  /* screens 12 and 13: history and a past situation */
+  .hssearch { position: relative; z-index: 2; margin: 2px 20px 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid rgba(var(--ink-rgb), .22); padding: 8px 2px; } .hssearch svg { width: 18px; height: 18px; fill: none; stroke: rgba(var(--ink-rgb), .55); stroke-width: 1.6; stroke-linecap: round; flex: none; }
+  .hssearch input { flex: 1; background: none; border: 0; outline: 0; color: var(--ink); font: inherit; font-size: 15.5px; } .hssearch input::placeholder { color: rgba(var(--ink-rgb), .35); } .hssearch:focus-within { border-color: rgba(var(--hl-rgb), .7); }
+  .hsg { padding: 14px 24px 2px; } .hsg .lab { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: rgba(var(--ink-rgb), .45); margin-bottom: 2px; }
+  .hsrow { display: flex; align-items: center; gap: 12px; padding: 13px 0; border-top: 1px solid rgba(var(--ink-rgb), .1); cursor: pointer; color: rgba(var(--ink-rgb), .92); font-size: 15.5px; line-height: 1.35; transition: color .2s; } .hsrow:hover { color: #fff; }
+  .hsrow .t { flex: 1; } .hsrow .tag { font-size: 12px; color: rgba(var(--ink-rgb), .5); white-space: nowrap; } .hsrow .tag.open { color: rgba(var(--ink-rgb), .9); display: flex; align-items: center; gap: 7px; } .hsrow .tag.open i { width: 6px; height: 6px; border-radius: 50%; background: rgb(var(--hl-rgb)); box-shadow: 0 0 0 4px rgba(var(--hl-rgb), .16); } .hsrow .chev { color: rgba(var(--ink-rgb), .35); font-size: 19px; }
+  .hsnone { padding: 30px 24px; font-size: 14.5px; color: rgba(var(--ink-rgb), .5); }
+  .hdh { font-family: var(--serif); font-weight: 500; font-size: 24px; line-height: 1.3; color: #f4f4f2; padding: 4px 24px 16px; }
+  .hdsec { border-top: 1px solid rgba(var(--ink-rgb), .14); padding: 15px 24px 14px; } .hdsec .lab { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: rgba(var(--ink-rgb), .45); margin-bottom: 7px; } .hdsec p { margin: 0; font-size: 15.5px; line-height: 1.5; color: rgba(var(--ink-rgb), .9); } .hdsec p small { display: block; font-size: 12.5px; color: rgba(var(--ink-rgb), .5); margin-top: 4px; } .hdsec p.serif { font-family: var(--serif); font-size: 17px; }
+  .hdact { padding: 18px 24px 8px; border-top: 1px solid rgba(var(--ink-rgb), .14); } .hdbtn { background: none; border: 0; color: var(--ink); font: inherit; font-size: 15.5px; padding: 4px 0; border-bottom: 1px solid rgba(var(--hl-rgb), .8); cursor: pointer; } .hdbtn:hover { color: #fff; }
+  /* history: each chat in its own box, with space around it (no day headings) */
+  #hslist { padding-top: 6px; }
+  .hscard { display: flex; align-items: center; gap: 12px; margin: 0 24px; padding: 18px 0; border: 0; border-top: 1px solid rgba(var(--ink-rgb), .14); background: none; cursor: pointer; color: rgba(var(--ink-rgb), .92); font-size: 15.5px; line-height: 1.35; transition: color .25s; } .hscard:last-child { border-bottom: 1px solid rgba(var(--ink-rgb), .14); }
+  .hscard:hover { color: #fff; }
+  .hscard .t { flex: 1; } .hscard .tag { font-size: 12px; color: rgba(var(--ink-rgb), .5); white-space: nowrap; } .hscard .tag.open { color: rgba(var(--ink-rgb), .9); display: flex; align-items: center; gap: 7px; } .hscard .tag.open i { width: 6px; height: 6px; border-radius: 50%; background: rgb(var(--hl-rgb)); box-shadow: 0 0 0 4px rgba(var(--hl-rgb), .16); } .hscard .chev { color: rgba(var(--ink-rgb), .35); font-size: 19px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="gl2" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#F0E8DA"/><stop offset=".25" stop-color="#F8F0E3"/><stop offset=".42" stop-color="#B98143"/><stop offset=".6" stop-color="#E9D8BF"/><stop offset=".8" stop-color="#642B35"/><stop offset="1" stop-color="#EDE4D6"/></linearGradient></defs></svg>
+<div class="wrap">
+
+  <div class="side">
+    <span class="tag">Mock v2 · screens 1 and 2 · not connected to the app</span>
+    <h1>Sign in and the 13 questions</h1>
+    <p>Click through it as a new founder would. Taps move you on by themselves where there is only one choice; the rest use Continue. Everything saves as you go, so someone interrupted can pick up where they stopped.</p>
+    <h3>Jump to</h3>
+    <div class="jump" id="jump"></div>
+    <div style="margin-top:10px"><button class="btn2" id="fill">Fill sample answers</button> <button class="btn2" id="restart">Start over</button></div>
+    <h3>This question</h3>
+    <div class="why" id="why"></div>
+    <h3>Colour</h3>
+    <p style="margin:0;color:#a9a8a2">Sign-up uses the first colour, Gold, in the soft gradient. The first situation after it takes Seafoam, then Periwinkle, then Rose.</p>
+  </div>
+
+  <div class="phone" id="phone">
+    <div class="glow"><i></i><i></i><i></i></div>
+    <div class="notch"></div>
+
+    <!-- 1 sign in -->
+    <div class="view si on" id="signin">
+      <div class="mark">
+        <svg class="emblem" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-label="Axiom"><defs><linearGradient id="gl" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#F0E8DA"/><stop offset=".25" stop-color="#F8F0E3"/><stop offset=".42" stop-color="#B98143"/><stop offset=".6" stop-color="#E9D8BF"/><stop offset=".8" stop-color="#642B35"/><stop offset="1" stop-color="#EDE4D6"/></linearGradient></defs><g fill="none" stroke="url(#gl)" stroke-width="3.5" stroke-linejoin="miter"><path d="M 8,84 H 28 C 28,55 35,36 50,26 C 55,23 54,18 50,11 C 45,22 40,27 31,33 C 18,43 13,60 13,84"/><path d="M 92,84 H 72 C 72,55 65,36 50,26 C 45,23 46,18 50,11 C 55,22 60,27 69,33 C 82,43 87,60 87,84"/></g></svg>
+        <p class="tagline">You already know you're built different. Prove it.</p>
+      </div>
+      <div class="bottom">
+        <button class="gbtn glass" id="google">Continue with Google</button>
+        <p class="legal">By continuing you agree to the <u>Terms</u> and the <u>Privacy Policy</u>. What you tell Axiom stays private. You choose later whether anything is ever shared.</p>
+      </div>
+    </div>
+
+    <!-- 2 questions -->
+    <div class="view" id="qview">
+      <div class="qhead"><div class="back" id="back">‹</div><div class="count" id="count"></div></div>
+      <div class="prog"><i id="progfill"></i></div>
+      <div class="qbody" id="qbody"></div>
+      <div class="bar hide" id="bar"><button class="go" id="next" disabled>Continue</button></div>
+    </div>
+
+    <!-- 3 waiting -->
+    <div class="view rd" id="reading">
+      <p id="rdline"></p>
+    </div>
+
+    <!-- 4 first reading -->
+    <div class="view fr" id="firstread">
+      <svg class="emblem" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gl2" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#F0E8DA"/><stop offset=".25" stop-color="#F8F0E3"/><stop offset=".42" stop-color="#B98143"/><stop offset=".6" stop-color="#E9D8BF"/><stop offset=".8" stop-color="#642B35"/><stop offset="1" stop-color="#EDE4D6"/></linearGradient></defs><g fill="none" stroke="url(#gl2)" stroke-width="3.5" stroke-linejoin="miter"><path d="M 8,84 H 28 C 28,55 35,36 50,26 C 55,23 54,18 50,11 C 45,22 40,27 31,33 C 18,43 13,60 13,84"/><path d="M 92,84 H 72 C 72,55 65,36 50,26 C 45,23 46,18 50,11 C 55,22 60,27 69,33 C 82,43 87,60 87,84"/></g></svg>
+      <div class="frtext" id="frtext"></div>
+      <div class="frbar" id="frbar"><button class="go" id="frgo">Continue</button></div>
+    </div>
+
+    <!-- 5 situation -->
+    <div class="view sit" id="situation">
+      <div class="sithead"><svg class="emblem" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="url(#gl2)" stroke-width="3.5"><path d="M 8,84 H 28 C 28,55 35,36 50,26 C 55,23 54,18 50,11 C 45,22 40,27 31,33 C 18,43 13,60 13,84"/><path d="M 92,84 H 72 C 72,55 65,36 50,26 C 45,23 46,18 50,11 C 55,22 60,27 69,33 C 82,43 87,60 87,84"/></g></svg></div>
+      <div class="chat" id="chat"></div>
+      <div class="sitbar" id="sitbar"><button class="sug glass" id="sitsug"><small>Use what you wrote earlier</small><span id="sugtxt"></span></button><div class="composer glass"><textarea id="sitta" rows="1" placeholder="What is going on?"></textarea><button class="sendb" id="sitsend" aria-label="Send">↑</button></div></div>
+    </div>
+
+    <!-- 6 the read -->
+    <div class="view rv" id="readv">
+      <div class="rvscroll" id="rvscroll">
+        <svg class="emblem" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="url(#gl2)" stroke-width="3.5"><path d="M 8,84 H 28 C 28,55 35,36 50,26 C 55,23 54,18 50,11 C 45,22 40,27 31,33 C 18,43 13,60 13,84"/><path d="M 92,84 H 72 C 72,55 65,36 50,26 C 55,23 54,18 50,11 C 55,22 60,27 69,33 C 82,43 87,60 87,84"/></g></svg>
+        <div id="rvtext"></div>
+      </div>
+      <div class="rvbar" id="rvbar">
+        <div class="composer glass"><textarea id="rvta" rows="1" placeholder="Your answer"></textarea><button class="sendb" id="rvsend" aria-label="Send" disabled>↑</button></div>
+        <div class="rvlinks"><button class="rvelse" id="rvskip">Skip this question</button><span>·</span><button class="rvelse" id="rvelse">Something else on my mind</button></div>
+      </div>
+    </div>
+
+    <!-- 7 learn + move -->
+    <div class="view ln" id="learn">
+      <div class="lhead"><svg class="emblem" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="url(#gl2)" stroke-width="3.5"><path d="M 8,84 H 28 C 28,55 35,36 50,26 C 55,23 54,18 50,11 C 45,22 40,27 31,33 C 18,43 13,60 13,84"/><path d="M 92,84 H 72 C 72,55 65,36 50,26 C 55,23 54,18 50,11 C 55,22 60,27 69,33 C 82,43 87,60 87,84"/></g></svg><span>Learn</span></div>
+      <div class="chat" id="lchat"></div>
+      <div class="sitbar" id="lbar"><div class="composer glass"><textarea id="lta" rows="1" placeholder="Reply"></textarea><button class="sendb" id="lsend" aria-label="Send" disabled>↑</button></div></div>
+      <div class="lsheet" id="lsheet">
+        <div class="lclose" id="lclose" aria-label="Back to chat">×</div>
+        <div class="lin">
+          <div class="kick">Your move</div>
+          <h3>Ask both clinics for one concrete next step.</h3>
+          <div class="sec"><div class="lab">The mission</div><p>Message both clinics today and ask for a 20-minute follow-up call in the next 3 days.</p></div>
+          <div class="sec"><div class="lab">It worked if</div><p>Both give you a day and time. Yes or no.</p></div>
+          <div class="sec"><div class="lab">The words to use</div><div class="words">"I'd like to show you what has changed since we last spoke. Can we book 20 minutes in the next 3 days?"<small>Suggested wording</small></div></div>
+          <div class="sec"><div class="lab">Before you send</div>
+            <ul class="check" id="check"><li><i></i><span>Open the last message from each clinic</span></li><li><i></i><span>Paste the wording and change one word to sound like you</span></li><li><i></i><span>Send it to both</span></li></ul></div>
+          <div class="predict">My read: at least one of them will not answer. That is also an answer. Tonight tells us.</div>
+          <button class="go" id="commit">Commit to this move</button>
+          <div class="done-msg" id="committed">Committed.</div>
+          <div class="rem" id="rem"><p>Want a reminder tonight?</p><div class="choices"><button class="chip" id="remyes">Yes</button><button class="chip" id="remno">No thanks</button></div></div>
+          <button class="quiet" id="change">Change this move</button>
+          <div class="swap" id="swap"><label>You can change it once. Tell me what makes this one wrong for you. A real reason works best, like "I only have their email".</label><textarea placeholder="What makes this the wrong move?"></textarea><small>"I'm busy" isn't a reason I can work with.</small><button class="go">Give me a different move</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 8 report (evening) -->
+    <div class="view rp" id="report">
+      <div class="lhead"><svg class="emblem" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="url(#gl2)" stroke-width="3.5"><path d="M 8,84 H 28 C 28,55 35,36 50,26 C 55,23 54,18 50,11 C 45,22 40,27 31,33 C 18,43 13,60 13,84"/><path d="M 92,84 H 72 C 72,55 65,36 50,26 C 55,23 54,18 50,11 C 55,22 60,27 69,33 C 82,43 87,60 87,84"/></g></svg><span>Report</span></div>
+      <div class="chat" id="rchat"></div>
+      <div class="sitbar" id="rbar"><div class="composer glass"><textarea id="rta" rows="1" placeholder="What happened?"></textarea><button class="sendb" id="rsend" aria-label="Send" disabled>↑</button></div></div>
+    </div>
+
+    <!-- 9 returning-founder home -->
+    <div class="view hm" id="home">
+      <div class="hmwash"></div>
+      <div class="hmdrawer" id="hmdrawer">
+        <div class="dtop"><svg class="emblem" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="url(#gl2)" stroke-width="3.5"><path d="M 8,84 H 28 C 28,55 35,36 50,26 C 55,23 54,18 50,11 C 45,22 40,27 31,33 C 18,43 13,60 13,84"/><path d="M 92,84 H 72 C 72,55 65,36 50,26 C 55,23 54,18 50,11 C 55,22 60,27 69,33 C 82,43 87,60 87,84"/></g></svg></div>
+        <button class="dnew" id="dnew"><span>+</span>Start something new</button>
+        <div class="dscroll" id="dscroll"></div>
+        <div class="dfoot"><div class="av">R</div><div class="dn">Rafay<small>Settings</small></div><span class="chev">›</span></div>
+      </div>
+      <div class="hmmain" id="hmmain">
+        <div class="hmtop"><button class="menub" id="menub" aria-label="Menu"><svg viewBox="0 0 24 24"><path d="M5 8h14M5 16h9"/></svg></button></div>
+        <div class="hmbody"><div><p class="hmgreet" id="hmgreet"></p><p class="mocknote" id="hmnote" style="display:none"></p></div></div>
+        <div class="hmbottom">
+          <div class="hmchips" id="hmchips"></div>
+          <div class="composer glass"><textarea id="hmta" rows="1" placeholder="What's going on?"></textarea><button class="sendb" id="hmsend" aria-label="Send" disabled>↑</button></div>
+        </div>
+        <div class="hmscrim" id="hmscrim"></div>
+      </div>
+    </div>
+
+    <!-- 10 care screen -->
+    <div class="view cr" id="care">
+      <div class="crbody" id="crbody">
+        <svg class="emblem" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="rgba(214,216,219,.7)" stroke-width="3.5"><path d="M 8,84 H 28 C 28,55 35,36 50,26 C 55,23 54,18 50,11 C 45,22 40,27 31,33 C 18,43 13,60 13,84"/><path d="M 92,84 H 72 C 72,55 65,36 50,26 C 45,23 46,18 50,11 C 55,22 60,27 69,33 C 82,43 87,60 87,84"/></g></svg>
+        <h2 class="crh">What you just wrote matters more than the business.</h2>
+        <p class="crp">I'm not going to give you a lesson or a move right now.</p>
+        <p class="crp">If you might hurt yourself, or you're in danger, please call your local emergency number now.</p>
+        <div class="crhelp">
+          <div class="crrow"><div class="crk">If you are in danger right now</div><div class="crph">Emergency number for your country</div></div>
+          <div class="crrow"><div class="crk">Talk to someone trained to listen</div><div class="crph">A helpline for your country</div></div>
+          <div class="crrow"><div class="crk">More help near you</div><div class="crph">findahelpline.com</div></div>
+        </div>
+        <p class="crp">If you can, tell someone near you how you're feeling. You don't have to be okay for me to be here.</p>
+        <p class="crsmall">I'm an assistant, not a counsellor. But I'm here if you want to keep talking.</p>
+        <button class="crkeep" id="crkeep">Keep talking</button>
+        <p class="mocknote" style="margin-top:22px">Mock only. The numbers are placeholders: a person must verify every number before launch. While this is up, every push is paused and nothing mentions moves or reports.</p>
+      </div>
+    </div>
+
+    <!-- 11 settings -->
+    <div class="view st" id="settings">
+      <div class="hmwash"></div>
+      <div class="sthead"><button class="stback" id="stback" aria-label="Back">‹</button><span>Settings</span><i></i></div>
+      <div class="stbody" id="stbody"></div>
+      <div class="stmodal" id="stmodal"><div class="stbox">
+        <h4>Delete everything Axiom knows about you?</h4>
+        <p>This removes your situations, check-ins, answers and anything you shared. It can't be undone.</p>
+        <div class="stbtns"><button id="stkeep">Keep my data</button><button id="stdel" class="danger">Delete everything</button></div>
+        <p class="mocknote" id="stdelnote" style="display:none;margin-top:14px"></p>
+      </div></div>
+    </div>
+
+    <!-- 12 history + 13 past situation -->
+    <div class="view hs" id="history">
+      <div class="hmwash"></div>
+      <div class="sthead"><button class="stback" id="hsback" aria-label="Back">‹</button><span>History</span><i></i></div>
+      <div class="hssearch"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input id="hsq" placeholder="Search your situations" autocomplete="off"></div>
+      <div class="stbody" id="hslist"></div>
+    </div>
+    <div class="view hs" id="hdetail">
+      <div class="hmwash"></div>
+      <div class="sthead"><button class="stback" id="hdback" aria-label="Back">‹</button><span>&nbsp;</span><i></i></div>
+      <div class="stbody" id="hdbody"></div>
+    </div>
+
+    <div class="pbanner glass" id="pbanner"><svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="url(#gl2)" stroke-width="8"><path d="M 8,92 H 26 C 26,62 33,42 50,31 C 56,27 55,20 50,12 C 45,25 39,30 29,37 C 16,48 12,66 12,92"/><path d="M 92,92 H 74 C 74,62 67,42 50,31 C 44,27 45,20 50,12 C 55,25 61,30 71,37 C 84,48 88,66 88,92"/></g></svg><div><div class="pw"><span>Axiom</span><span>8:00 pm</span></div><div class="pm">Rafay, how did the two clinics go?</div></div></div>
+  </div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const OTHERS = ['Other', 'Something else'];
+  const Q = [
+    { k: 'stage', type: 'single', title: 'Where are you with it right now?', sub: 'Pick what is true today, not where you hope to be.',
+      opts: ['Just an idea', "I'm talking to people about it", "I'm building it and nobody pays yet", 'Someone is paying me', "It's growing"],
+      why: 'Decides which lessons fit, and later which founders are one stage ahead. Cut from 7 options to 5; "paying" and "growing" are separated later by the revenue and goal answers.' },
+    { k: 'months_in', type: 'single', title: 'How long have you been on it?', sub: '',
+      opts: ['Under 3 months', '3 to 6 months', '6 to 12 months', '1 to 2 years', 'More than 2 years'],
+      why: 'Three weeks in and two years in need different readings. A long time with no revenue is itself a pattern Axiom can name.' },
+    { k: 'commitment', type: 'single', title: 'How much of your week goes into it?', sub: '',
+      opts: ['Full time', 'Part time, 15 hours or more', 'Evenings and weekends, under 15 hours', 'On and off'],
+      why: 'Real capacity. A move has to fit the hours they actually have. The hours are folded into the options so it stays one tap.' },
+    { k: 'business_model', type: 'single', title: 'Who pays you, or would?', sub: '',
+      opts: ['Businesses', 'Consumers', 'Both sides of a marketplace', 'Clients, for services', 'No one yet'],
+      why: 'How the business makes money changes almost all the advice.' },
+    { k: 'where', type: 'where', title: 'Where are you, and where are your customers?', sub: 'They are often not in the same place.',
+      why: 'The product is global. Pricing norms, how deals get done and regulation differ by market. Now two taps instead of typing, unless their country is not listed.' },
+    { k: 'team', type: 'single', title: 'Who is building it with you?', sub: '',
+      opts: ['Just me', 'A cofounder or two', 'A small team of 2 to 5', 'Six or more'],
+      why: 'Cofounder friction is one of the biggest things founders never say in a chat. It also decides whether they can hand anything off.' },
+    { k: 'goal', type: 'goal', title: 'What are you aiming for, and by when?', sub: '',
+      goals: ['My first customer', 'My first 10 customers', 'A revenue number', 'Raise money', 'Ship it'],
+      dates: ['This month', 'In 3 months', 'In 6 months', 'Pick a date'],
+      why: 'What they are racing toward. A date lets Axiom state the real cost of waiting in their own numbers. Moves on once both are picked.' },
+    { k: 'background', type: 'single', other: true, title: 'What did you do before this?', sub: '',
+      opts: ['I worked in tech', 'I worked in something else', "I'm a student", 'I ran a business before', 'Other'],
+      why: 'Background and skills. Axiom should not re-teach what they already know.' },
+    { k: 'why', type: 'single', title: 'Why are you doing this?', sub: 'Pick the one that is most true, even if it is not flattering.',
+      opts: ["To get out of a job I don't want", "I've lived this problem myself", 'I see a big opportunity', 'To prove something', 'Freedom, money, or something that matters'],
+      why: 'The real reason. The honest-wording line is there to pull out the true answer.' },
+    { k: 'strengths', type: 'two', title: 'Be honest about yourself.', sub: 'Pick as many as are true.',
+      a: { label: 'Better than most people at', opts: ['Building the product', 'Selling', 'Numbers and planning', 'Leading people', 'Not quitting'] },
+      b: { label: 'What I avoid most', opts: ['Talking to customers', 'Asking for money', 'Pricing', 'Hard talks with the team', 'Launching'] },
+      why: 'Now multi-select in both groups. What someone avoids is rarely said out loud, and it is where the best patterns hide.' },
+    { k: 'tried', type: 'multi', title: 'What have you already tried?', sub: 'Tick everything that applies.',
+      opts: ['Talked to customers', 'Built a prototype', 'Launched it', 'Tried to sell or raise', 'None of it yet'], exclusive: 'None of it yet',
+      why: 'Stops Axiom handing back advice they have already tried.' },
+    { k: 'building', type: 'text', min: 12, title: 'What are you building, and for whom?', sub: 'A sentence or two is enough.', ph: 'I am building…',
+      why: 'Their own words. Axiom quotes them back later, which is what makes a reading feel specific.' },
+    { k: 'stuck', type: 'text', min: 20, title: 'What are you most stuck on, or putting off? And what have you tried on it?', sub: 'Numbers help.', ph: 'The thing I keep avoiding is…',
+      why: 'Where the gap between what they say and what they do shows up. Also pre-fills the first Situation, so they never see a blank box.' }
+  ];
+  const A = {}; let i = -1, busy = false, adv = null;
+  const COUNTRIES = ['Pakistan', 'India', 'United States', 'United Kingdom', 'United Arab Emirates', 'Saudi Arabia', 'Canada', 'Nigeria', 'Kenya', 'Egypt', 'Bangladesh', 'Germany', 'Singapore', 'Australia', 'Brazil'];
+  const CUST = ['Mostly in my own country', 'Mostly abroad', 'Both'];
+  const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const isOther = q => q.other && A[q.k] && OTHERS.includes(A[q.k].v);
+
+  function done(q) { const a = A[q.k];
+    switch (q.type) {
+      case 'single': return !!a;
+      case 'where': return !!(a && (a.country || '').trim().length > 1 && a.cust);
+      case 'goal': return !!(a && a.goal && a.when && (a.when !== 'Pick a date' || a.date));
+      case 'two': return !!(a && a.a && a.a.length && a.b && a.b.length);
+      case 'multi': return !!(a && a.length);
+      case 'text': return !!(a && a.trim().length >= q.min); } return false; }
+  // A Continue button only exists where the founder has to type or tick several things.
+  function needsBar(q) {
+    if (q.type === 'text' || q.type === 'two' || q.type === 'multi') return true;
+    if (q.type === 'single') return isOther(q);
+    if (q.type === 'where') return true;
+    if (q.type === 'goal') return !!(A[q.k] && A[q.k].when === 'Pick a date');
+    return false; }
+  function maybeAdvance(force) { const q = Q[i]; clearTimeout(adv); if (q && done(q) && (!needsBar(q) || force)) adv = setTimeout(next, 380); }
+
+  function render() {
+    const q = Q[i]; $('progfill').style.width = ((i + 1) / 13 * 100) + '%';
+    let h = `<h2 class="qt">${esc(q.title)}</h2>${q.sub ? `<p class="qs">${esc(q.sub)}</p>` : '<div style="height:18px"></div>'}`;
+    const chips = (list, on, attr) => `<div class="chips">${list.map(o => `<button class="chip ${on(o) ? 'on' : ''}" ${attr}="${esc(o)}">${esc(o)}</button>`).join('')}</div>`;
+    if (q.type === 'single') {
+      h += `<div class="opts">${q.opts.map(o => `<div class="row ${A[q.k] && A[q.k].v === o ? 'on' : ''}" data-v="${esc(o)}"><span>${esc(o)}</span><i class="ring"></i></div>`).join('')}</div>`;
+      if (isOther(q)) h += `<div style="margin-top:22px"><input class="field" id="oth" placeholder="In a few words" value="${esc(A[q.k].o)}"></div>`;
+    } else if (q.type === 'where') {
+      const a = A[q.k] || {};
+      h += `<div class="lab" style="margin-top:6px">I'm based in</div><input class="field" id="country" list="cl" placeholder="Start typing a country" value="${esc(a.country)}"><datalist id="cl">${COUNTRIES.map(c => `<option>${c}</option>`).join('')}</datalist>
+            <div class="lab">My customers are</div>${chips(CUST, o => a.cust === o, 'data-u')}`;
+    } else if (q.type === 'goal') {
+      const a = A[q.k] || {};
+      h += `${chips(q.goals, o => a.goal === o, 'data-g')}<div class="lab">By when?</div>${chips(q.dates, o => a.when === o, 'data-d')}
+            ${a.when === 'Pick a date' ? `<div style="margin-top:16px"><input class="field" id="dt" type="date" value="${esc(a.date)}" style="color-scheme:dark"></div>` : ''}`;
+    } else if (q.type === 'two') {
+      const a = A[q.k] || { a: [], b: [] };
+      h += `<div class="lab" style="margin-top:2px">${q.a.label}</div>${chips(q.a.opts, o => a.a.includes(o), 'data-a')}<div class="lab">${q.b.label}</div>${chips(q.b.opts, o => a.b.includes(o), 'data-b')}`;
+    } else if (q.type === 'multi') {
+      const a = A[q.k] || [];
+      h += `<div class="opts">${q.opts.map(o => `<div class="row ${a.includes(o) ? 'on' : ''}" data-m="${esc(o)}"><span>${esc(o)}</span><i class="ring sq"></i></div>`).join('')}</div>`;
+    } else if (q.type === 'text') {
+      const v = A[q.k] || '';
+      h += `<textarea class="big" id="txt" placeholder="${esc(q.ph)}">${esc(v)}</textarea><div class="hint"><span>${v.trim().length >= q.min ? '' : 'A little more, so Axiom has something real to work with.'}</span></div>`;
+    }
+    $('qbody').innerHTML = h; bind(q); refresh(); panel();
+  }
+  // Re-render in place after a tap (no slide), keeping scroll position.
+  function again() { const y = $('qbody').scrollTop; render(); $('qbody').scrollTop = y; maybeAdvance(); }
+  function refresh() { const q = Q[i]; document.querySelectorAll('#jump button').forEach(b => b.classList.toggle('on', +b.dataset.i === i)); if (!q) return;
+    $('next').disabled = !done(q); $('next').textContent = i === 12 ? 'Done' : 'Continue'; $('bar').classList.toggle('hide', !needsBar(q)); }
+  function toggle(arr, v) { return arr.includes(v) ? arr.filter(x => x !== v) : [...arr, v]; }
+  function bind(q) {
+    const on = (sel, f) => document.querySelectorAll(sel).forEach(el => el.addEventListener('click', () => f(el)));
+    const o = $('oth'); if (o && q.type !== 'where') o.addEventListener('input', () => { (A[q.k] = A[q.k] || {}).o = o.value; refresh(); });
+    if (q.type === 'single') on('.row', r => { A[q.k] = { v: r.dataset.v, o: (A[q.k] || {}).o }; again(); });
+    else if (q.type === 'where') { A[q.k] = A[q.k] || {}; const c = $('country'); c.addEventListener('input', () => { A[q.k].country = c.value; refresh(); }); c.addEventListener('keydown', e => { if (e.key === 'Enter') c.blur(); });
+      on('[data-u]', b => { A[q.k].cust = b.dataset.u; const y = $('qbody').scrollTop; render(); $('qbody').scrollTop = y; maybeAdvance(true); }); }
+    else if (q.type === 'goal') { A[q.k] = A[q.k] || {}; on('[data-g]', b => { A[q.k].goal = b.dataset.g; again(); }); on('[data-d]', b => { A[q.k].when = b.dataset.d; again(); });
+      const dt = $('dt'); if (dt) dt.addEventListener('input', e => { A[q.k].date = e.target.value; refresh(); }); }
+    else if (q.type === 'two') { A[q.k] = A[q.k] || { a: [], b: [] }; on('[data-a]', b => { A[q.k].a = toggle(A[q.k].a, b.dataset.a); again(); }); on('[data-b]', b => { A[q.k].b = toggle(A[q.k].b, b.dataset.b); again(); }); }
+    else if (q.type === 'multi') { A[q.k] = A[q.k] || []; on('[data-m]', r => { const v = r.dataset.m; let a = A[q.k];
+        A[q.k] = v === q.exclusive ? (a.includes(v) ? [] : [v]) : toggle(a.filter(x => x !== q.exclusive), v); again(); }); }
+    else if (q.type === 'text') { const t = $('txt'); t.addEventListener('input', () => { A[q.k] = t.value; const h = document.querySelector('.hint span'); if (h) h.textContent = t.value.trim().length >= q.min ? '' : 'A little more, so Axiom has something real to work with.'; refresh(); }); }
+  }
+  function panel() { const q = Q[i]; $('why').innerHTML = `<div class="num">Question ${i + 1} of 13 (not shown to the founder)</div><p><b>${esc(q.title)}</b></p><p>${esc(q.why)}</p><p>Saves as: <span class="sv">${q.k}</span></p>`; }
+
+  // Screen changes: the old content fades and slides out, the new one slides in.
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  async function swapQuestion(n) { const b = $('qbody'); b.classList.add('out'); await wait(240); i = n; b.scrollTop = 0; render();
+    b.classList.remove('out'); b.classList.add('pre'); void b.offsetWidth; b.classList.remove('pre'); }
+  async function show(id) { const cur = document.querySelector('.view.on'); if (cur && cur.id !== id) { cur.classList.add('out'); await wait(280); cur.classList.remove('out'); }
+    document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === id)); }
+  async function go(n) { if (busy) return; busy = true; clearTimeout(adv);
+    try {
+      if (n < 0) { i = -1; await show('signin'); refresh(); $('why').innerHTML = '<div class="num">Screen 1</div><p><b>Sign in</b></p><p>Google sign-in only, as today. One quiet line covers terms and privacy.</p><p>The tagline is the one from your brand document. Still wanted here?</p>'; }
+      else if (n > 12) { await finish(); }
+      else if (i < 0 || !$('qview').classList.contains('on')) { i = n; render(); await show('qview'); }
+      else await swapQuestion(n);
+    } finally { busy = false; } }
+  function next() { go(i + 1); } function back() { go(i - 1); }
+
+  // The waiting screen: lines written for founders, no spinner, no countdown.
+  let rdTimer;
+  async function finish() { await show('reading'); const b = clip(A.building || '', 60);
+    const lines = [ b ? `Reading what you wrote about\n“${b}”` : 'Reading what you wrote.',
+      'Every founder has one thing they keep circling. Finding yours.',
+      'Looking for the gap between what you said and what you did.',
+      'Checking what you have already tried, so I do not hand it back to you.' ];
+    const p = $('rdline'); let n = 0; clearInterval(rdTimer);
+    const set = t => { p.style.opacity = 0; setTimeout(() => { p.innerHTML = esc(t).replace('\n', '<br>'); p.style.opacity = 1; }, 450); };
+    p.innerHTML = esc(lines[0]).replace('\n', '<br>'); p.style.opacity = 1;
+    rdTimer = setInterval(() => { n++; if (n < lines.length) set(lines[n]); else { clearInterval(rdTimer); rdTimer = setTimeout(showRead, 3200); } }, 3000);
+    $('why').innerHTML = '<div class="num">Between screens</div><p><b>The wait</b></p><p>No "this takes a few seconds" and no loading dots. Four lines about founders, the first quoting their own words. Copy is a draft for you to rewrite. The next screen to design is the first reading.</p>'; }
+  // Screen 3: the first reading. Hand-composed here from the sample answers; the real one is written by the model,
+  // and every quote is checked in code against the founder's own words before it is shown.
+  let frT;
+  const MONTHS = { 'Under 3 months': 'less than 3 months', '3 to 6 months': '3 to 6 months', '6 to 12 months': '6 to 12 months', '1 to 2 years': '1 to 2 years', 'More than 2 years': 'more than 2 years' };
+  const HOURS = { 'Full time': 'full time', 'Part time, 15 hours or more': 'part time', 'Evenings and weekends, under 15 hours': 'evenings and weekends', 'On and off': 'on and off' };
+  const STAGE = { 'Just an idea': 'It is still an idea.', "I'm talking to people about it": 'So far it is conversations only.', "I'm building it and nobody pays yet": 'Nobody pays yet.', 'Someone is paying me': 'Someone pays you, which is real.', "It's growing": 'It is growing.' };
+  const clip = (t, n) => { t = (t || '').trim().replace(/\s+/g, ' '); const f = (t.match(/^.*?[.!?](\s|$)/) || [t])[0].trim().replace(/[.!?]+$/, ''); if (f.length <= n) return f; const c = f.lastIndexOf(',', n); return c > 20 ? f.slice(0, c) : f.slice(0, n).replace(/\s+\S*$/, ''); };
+  const hl = t => `<span class="hl">${esc(t)}</span>`, lc = t => (t || '').charAt(0).toLowerCase() + (t || '').slice(1);
+  function composeRead() { const g = (k, d) => A[k] || d;
+    const b = clip(g('building', 'what you are building'), 70), st = clip(g('stuck', 'the thing you are putting off'), 95);
+    const av = ((A.strengths || {}).b || [])[0] || 'the hard part', goal = A.goal || { goal: 'your next goal', when: 'soon' };
+    const stage = (A.stage || {}).v, mo = (A.months_in || {}).v, hr = (A.commitment || {}).v;
+    return [
+      `You have spent ${MONTHS[mo] || 'a while'} on “${esc(b)}”, ${HOURS[hr] || 'in your own time'}. ${STAGE[stage] || 'It has not been tested yet.'}`,
+      `You wrote ${hl('“' + st + '”')}, and the thing you said you avoid most is ${hl(lc(av))}.`,
+      `That is one problem told twice: you keep doing the work nobody can say no to.`,
+      `You want ${lc(goal.goal).replace(/^my /, 'your ')} ${lc(goal.when === 'Pick a date' ? 'by ' + (goal.date || 'your date') : goal.when)}.`,
+      `We begin with the last time you put it in front of someone.` ]; }
+  async function showRead() { await show('firstread'); const box = $('frtext'); box.innerHTML = composeRead().map(t => `<p><span class="s">${t}</span></p>`).join(''); $('frbar').classList.remove('in');
+    const sp = [...box.querySelectorAll('.s')]; clearTimeout(frT); sp.forEach((e, n) => setTimeout(() => e.classList.add('in'), 500 + n * 1500));
+    frT = setTimeout(() => $('frbar').classList.add('in'), 500 + sp.length * 1500 + 300);
+    $('why').innerHTML = '<div class="num">Screen 3</div><p><b>The first reading</b></p><p>Five short sentences. Decided earlier: no rating buttons, it names where it comes from ("you wrote", "you said"), and it ends by pointing at the next step. Sentences appear one by one so it reads like someone speaking. Only the one or two phrases that carry the point get a thin gold underline (the pattern: what they are stuck on and what they avoid), never everything they said.</p><p>This text is composed from the sample answers for the mock. The real one is written by the model, and a check in code makes sure every quote is really the founder\'s words.</p><p>Continue goes to screen 4: the situation, pre-filled with what they said they were stuck on.</p>'; }
+  // Screen 5: the Read. Hand-composed from the sample answers for the mock; the real one is model-written and checked in code
+  // (every quote must be the founder's own words, at most 2 underlined phrases, no invented numbers).
+  const HEADS = { 'Talking to customers': 'Nobody has actually said yes or no to this yet.', 'Asking for money': 'You have not asked anyone to pay yet.',
+    'Pricing': 'You have not put a price in front of anyone yet.', 'Hard talks with the team': 'There is one conversation you keep putting off.', 'Launching': 'It has not been shown to the people it is for yet.' };
+  const u = t => esc(t);
+  function composeRead2() { const av = ((A.strengths || {}).b || [])[0]; const goal = A.goal || { goal: 'your next goal', when: 'soon' };
+    const g = lc(goal.goal).replace(/^my /, 'your '), when = lc(goal.when === 'Pick a date' ? 'by ' + (goal.date || 'your date') : goal.when);
+    const think = /think about it/i.test(A.stuck || '');
+    const body = think
+      ? ["Two clinics saw it and said they'd think about it. That is not an answer. It is a way of not answering.",
+         "Since then you have added features instead of going back to ask. The more you add, the longer you can avoid hearing the real answer.",
+         `You want ${g} ${when}. Right now you do not know if either clinic would ever pay.`]
+      : [`You wrote “${esc(clip(A.stuck || 'the thing you are putting off', 100))}”. That is what is actually in the way, more than the things around it.`,
+         `You want ${g} ${when}. Every week this stays as it is, that date gets closer and nothing in front of it changes.`];
+    return { head: HEADS[av] || "There is one thing you have not tested yet.", body, next: think ? 'Have you gone back to either of those clinics since?' : 'Who have you shown this to so far?' }; }
+  let rvT = [];
+  async function showReadScreen() { rvT.forEach(clearTimeout); rvT = []; S.rvBusy = false; await show('readv'); const R = composeRead2(), box = $('rvtext');
+    box.innerHTML = `<h2 class="rvhead"><span class="s">${esc(R.head)}</span></h2>` + R.body.map(t => `<p><span class="s">${t}</span></p>`).join('') + `<p class="rvnext"><span class="s">${esc(R.next)}</span></p>`;
+    $('rvbar').classList.remove('in'); $('rvscroll').scrollTop = 0; [...document.querySelectorAll('#rvscroll .me, #rvscroll .mocknote')].forEach(e => e.remove());
+    const sp = [...box.querySelectorAll('.s')]; sp.forEach((e, n) => rvT.push(setTimeout(() => e.classList.add('in'), 500 + n * (n === 0 ? 1 : 1500))));
+    rvT.push(setTimeout(() => $('rvbar').classList.add('in'), 500 + sp.length * 1500 + 300));
+    $('why').innerHTML = '<div class="num">Screen 5</div><p><b>The Read</b></p><p>Decision 6. A plain headline that states the finding, a few short sentences in everyday words, no underlines, it ends with one real question they can answer in the reply box. No pictures, no rating buttons.</p><p>No Continue button. Answering the question in the box is what moves them on to Learn (screen 6, already designed). A quiet "Skip this question" is there for anyone who does not want to answer, and "Something else on my mind" opens a new situation. A one-word reply like "ok" does not count as an answer.</p><p>Text here is hand-composed from the sample answers. The real one is model-written and checked in code.</p>'; }
+  async function rvNext() { $('rvbar').classList.remove('in'); await wait(1100); openLearn();
+    $('why').innerHTML = '<div class="num">Next</div><p><b>Screen 6: Learn</b></p><p>Already designed in mock-minimal-v5.html. Answering the question (or skipping it) is what moves them forward. There is no Continue button.</p>'; }
+  async function rvSend() { const t = $('rvta').value.trim(); if (!t || S.rvBusy) return; S.rvBusy = true; $('rvta').value = ''; $('rvsend').disabled = true; const p = document.createElement('p'); p.className = 'me'; p.textContent = t; $('rvtext').appendChild(p); $('rvscroll').scrollTop = 1e5;
+    await wait(500); if (!isReal(t)) { const a = document.createElement('p'); a.className = 'ax'; a.innerHTML = '<span class="s in">Say a bit more.</span>'; $('rvtext').appendChild(a); $('rvscroll').scrollTop = 1e5; S.rvBusy = false; return; }
+    S.reply = t; await rvNext(); }
+  $('rvta').addEventListener('input', () => { $('rvsend').disabled = !$('rvta').value.trim(); }); $('rvta').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); rvSend(); } }); $('rvsend').addEventListener('click', rvSend);
+  $('rvelse').addEventListener('click', () => openSituation(true)); $('rvskip').addEventListener('click', () => { if (!S.rvBusy) { S.rvBusy = true; S.reply = null; rvNext(); } });
+  // Screen 6: Learn (with the Move sheet). Lesson text is a SAMPLE for the mock: in the real app the author, book and any quote
+  // come from the verified library and are checked in code. The founder's answer from the Read is used in the first paragraph.
+  const L = { real: 0, fillers: 0, notices: 0, opened: false, busy: false, moveOffered: false, later: 0 }; let lT = [];
+  const lAdd = n => { $('lchat').appendChild(n); $('lchat').scrollTop = 1e5; };
+  const lEl = h => { const d = document.createElement('div'); d.innerHTML = h.trim(); return d.firstChild; };
+  async function lAx(h, d = 700) { await wait(d); const p = lEl(`<p class="ax"><span class="s">${h}</span></p>`); lAdd(p); await wait(60); p.firstChild.classList.add('in'); }
+  function lessonIntro() { const r = (S.reply || '').trim(); const tm = r.match(/\b(\d+|one|two|three|four|five|six|a few|several)\s+(day|week|month)s?\b/i);
+    if (tm) return `It has been ${tm[0].toLowerCase()} since either clinic heard from you. That is the problem: two clinics saw it, and you have asked nothing of them since.`;
+    if (r) return `You have not gone back to either clinic. That is the problem: two clinics saw it, and you have asked nothing of them since.`;
+    return `Both clinics said they would think about it, and then you went back to building. Nothing has been asked of them since.`; }
+  async function openLearn() { lT.forEach(clearTimeout); L.real = 0; L.fillers = 0; L.moveOffered = false; L.later = 0; L.notices = 0; L.opened = false; L.busy = false;
+    await show('learn'); $('lchat').innerHTML = ''; $('lsheet').classList.remove('open'); $('lta').value = ''; $('lsend').disabled = true; $('lbar').classList.remove('on');
+    $('committed').classList.remove('show'); $('rem').classList.remove('show'); $('commit').style.display = ''; $('swap').classList.remove('show'); document.querySelectorAll('#check li').forEach(li => li.classList.remove('done'));
+    $('why').innerHTML = '<div class="num">Screen 6</div><p><b>Learn</b></p><p>Already approved earlier (chat, a lesson that names its author and book, a picture, one question at the end). The Move is not offered right away: it appears after two real replies from the founder, once Axiom has refined it with them, or at once if they ask what to do next. The move pops up as a card inside the chat (no buttons, tap the card), at most twice. The second card is more urgent, using only real facts from the founder. Now joined to this flow. The first paragraph builds on what the founder just answered on the Read (here: how long since they last contacted the clinics), without repeating their words back. The mock only understands a time like three weeks; the real one is written by the model from whatever they said.</p><p>All lesson text here is a <b>sample</b>. Real lessons come from the verified library, with author and book checked in code, and a quote shown only if it is word for word in the source.</p><p>Still Gold for now. Decision 5 says the first situation takes Seafoam. Say if you want that from screen 4 on.</p>';
+    await lAx(lessonIntro(), 600);
+    await lAx(`<b>Rob Fitzpatrick</b>, in <em>The Mom Test</em>, makes this point: when someone says they will think about it, you have learned nothing. It only counts when they give up something real, such as their time, an introduction to someone else, or money.`, 900);
+    lAdd(lEl(`<div class="src">Rob Fitzpatrick · The Mom Test</div>`));
+    const art = lEl(`<div class="art glass"><div class="alab"><span>What have the clinics actually given you?</span><span>Tap what is true</span></div>
+      <div class="arow" data-i="0"><i class="ring sq"></i><span>A booked next meeting</span></div><div class="arow" data-i="1"><i class="ring sq"></i><span>An introduction to someone else</span></div><div class="arow" data-i="2"><i class="ring sq"></i><span>Money, or a firm promise of it</span></div>
+      <div class="ameter"><div class="atrack"><i id="afill"></i></div><div class="aout" id="aout">0 of 3. Nothing real yet.</div></div></div>`);
+    lAdd(art); art.querySelectorAll('.arow').forEach(r => r.addEventListener('click', () => { r.classList.toggle('on'); const n = art.querySelectorAll('.arow.on').length;
+      $('afill').style.width = (n / 3 * 100) + '%'; $('aout').textContent = n + ' of 3. ' + ['Nothing real yet.', 'One real step.', 'Two real steps. Close.', 'That is a customer.'][n]; }));
+    await lAx('What would a real yes from one of those clinics be?', 1400); $('lbar').classList.add('on'); $('lta').focus({ preventScroll: true }); }
+  // Second showing: real urgency only, built from facts the founder gave. Never an invented deadline.
+  function lGap() { const m = (S.reply || '').match(/\b(\d+|one|two|three|four|five|six|a few|several)\s+(day|week|month)s?\b/i); return m ? m[0].toLowerCase() : null; }
+  function lUrgent() { const g = lGap(); return g ? `It takes 10 minutes, Rafay. The two clinics have heard nothing from you for ${g}.` : 'It takes 10 minutes, Rafay. The two clinics have heard nothing from you since the demo.'; }
+  function lNotice() { if (L.notices >= 2 || L.opened) return; L.notices++;
+    const c = lEl(`<div class="mcard glass" role="button" tabindex="0"><svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="url(#gl2)" stroke-width="8"><path d="M 8,92 H 26 C 26,62 33,42 50,31 C 56,27 55,20 50,12 C 45,25 39,30 29,37 C 16,48 12,66 12,92"/><path d="M 92,92 H 74 C 74,62 67,42 50,31 C 44,27 45,20 50,12 C 55,25 61,30 71,37 C 84,48 88,66 88,92"/></g></svg><div class="mtx"><div class="mk">${L.notices === 1 ? 'Your move' : 'Still waiting'}</div><div class="mm">${L.notices === 1 ? 'Your move for the two clinics is ready.' : lUrgent()}</div></div><span class="chev">›</span></div>`);
+    c.addEventListener('click', () => { L.opened = true; $('lsheet').classList.add('open'); }); lT.push(setTimeout(() => lAdd(c), 450)); }
+  const LFOLLOW = ['Put it simply: what would you need one of them to say or do for it to count as a yes?', 'For example, a call booked, an order, or something else?', 'No rush. Tell me what is on your mind about those two clinics.'];
+  // The founder asking for the next step in any wording ("what should I do next", "what now", "give me the move").
+  // The real app lets the model judge this; the mock uses plain patterns.
+  const asksNext = t => /\b(what|where)\b.{0,20}\b(do|start|go|move)\b.{0,12}\b(next|now|first)\b|\bwhat now\b|\bwhat'?s next\b|\bwhat is next\b|\bnext step\b|\bwhat (do|should|can|would) (i|you)\b.{0,25}\b(do|suggest|recommend)\b|\b(give|show) me (the|my|a) (move|task|step|plan)\b|\btell me what to do\b|\bwhere (do i|should i|to) (start|begin)\b|\b(don'?t|do not) know (what|where|how) to (do|start|begin)\b|\bnot sure what to do\b|\bwhat to do\b|\bwhat('?s| is) my move\b/i.test(t);
+  async function lOffer(line) { L.moveOffered = true; await lAx(line, 600); lNotice(); }
+  async function lSubmit() { const t = $('lta').value.trim(); if (!t || L.busy) return; L.busy = true; $('lta').value = ''; $('lsend').disabled = true; 
+    const m = lEl(`<p class="me"></p>`); m.textContent = t; lAdd(m);
+    if (asksNext(t)) { if (!L.moveOffered) await lOffer('Here is your move.'); else await lAx(L.later++ === 0 ? 'Your move takes about 10 minutes. The longer you wait, the less they remember your demo.' : 'Your move is waiting for you on the home screen.', 600); if (L.moveOffered && L.later === 1) lNotice(); }
+    else if (!isReal(t)) await lAx(LFOLLOW[Math.min(L.fillers++, LFOLLOW.length - 1)], 600);
+    else { L.real++;
+      if (!L.moveOffered) {
+        if (L.real === 1) await lAx('A booked call is something each clinic can say yes or no to. Was the person you showed it to the one who decides about buying?', 600);
+        else await lOffer('Then ask them directly for that call, within the next 3 days. I have worked out your move.'); }
+      else { L.later++; if (L.later === 1) { await lAx('Your move takes about 10 minutes. The longer you wait, the less they remember your demo.', 600); lNotice(); } else await lAx('Your move is waiting for you on the home screen.', 500); } }
+    L.busy = false; }
+  $('lta').addEventListener('input', () => { $('lsend').disabled = !$('lta').value.trim(); }); $('lta').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); lSubmit(); } }); $('lsend').addEventListener('click', lSubmit);
+  $('lclose').addEventListener('click', () => $('lsheet').classList.remove('open'));
+  $('change').addEventListener('click', () => $('swap').classList.toggle('show'));
+  $('commit').addEventListener('click', e => { e.target.style.display = 'none'; $('committed').classList.add('show'); $('rem').classList.add('show'); $('rem').querySelector('p').textContent = 'Want a reminder tonight?'; $('rem').querySelector('.choices').style.display = ''; });
+  $('remyes').addEventListener('click', () => { $('rem').querySelector('.choices').style.display = 'none'; $('rem').querySelector('p').textContent = 'I will remind you at 8 pm.'; setTimeout(() => { $('lsheet').classList.remove('open'); setTimeout(() => openHome(null, 'morning'), 500); }, 1400); });
+  $('remno').addEventListener('click', () => { $('rem').querySelector('.choices').style.display = 'none'; $('rem').querySelector('p').textContent = 'No problem.'; setTimeout(() => { $('lsheet').classList.remove('open'); setTimeout(() => openHome(null, 'morning'), 500); }, 1200); });
+  document.querySelectorAll('#check li').forEach(li => li.addEventListener('click', () => li.classList.toggle('done')));
+  // Screen 8: the Report (evening). Sample text for the mock. Real replies are written from the founder's own answer;
+  // the founder story must be a real, consented, human-approved outcome. This one is a labelled SAMPLE.
+  const R = { tap: null, busy: false, stage: 0 }; let rT = [];
+  async function rAx(h, d = 700, cls = '') { await wait(d); const p = lEl(`<p class="ax ${cls}"><span class="s">${h}</span></p>`); $('rchat').appendChild(p); $('rchat').scrollTop = 1e5; await wait(60); p.firstChild.classList.add('in'); await wait(800); }
+  function rAdd(n) { $('rchat').appendChild(n); $('rchat').scrollTop = 1e5; }
+  const MARKS = { tick: '<path d="M5.5 12.5l4 4 9-9.5"/>', pause: '<path d="M9.5 7.5v9M14.5 7.5v9"/>', dash: '<path d="M7.5 12h9"/>', lock: '<rect x="7" y="11" width="10" height="7.5" rx="2"/><path d="M9.5 11V9a2.5 2.5 0 0 1 5 0v2"/>' };
+  const MARKOF = { 'Done': 'tick', "Couldn't": 'pause', "Didn't": 'dash', 'Yes, show me': 'tick', 'Not now': 'pause', 'Share': 'tick', 'Keep private': 'lock' };
+  function rChoices(items, cls, onPick) { const box = lEl(`<div class="choices ${cls || ''}"></div>`); items.forEach(label => { const b = lEl(`<button class="mk"><span class="c"><svg viewBox="0 0 24 24">${MARKS[MARKOF[label]]}</svg></span><span class="l">${esc(label)}</span></button>`);
+    b.addEventListener('click', () => { if (box.dataset.done) return; box.dataset.done = 1; box.querySelectorAll('.mk').forEach(x => { if (x !== b) x.classList.add('dim'); x.style.pointerEvents = 'none'; }); b.classList.add('on'); setTimeout(() => onPick(label), 450); }); box.appendChild(b); }); rAdd(box); }
+  function rMe(t) { const p = lEl('<p class="me"></p>'); p.textContent = t; rAdd(p); }
+  const RQ = { Done: 'What did they say?', "Couldn't": 'What got in the way?', "Didn't": 'What stopped you?' };
+  const RREPLY = {
+    Done: 'That is a real answer. One clinic gave you a time, and one did not reply. I said at least one would not answer. I was right, which helps nobody. You sent it anyway, and that is the part that counts. Your next move: send the clinic that replied a message confirming the time.',
+    "Couldn't": 'That is fine, things changed. Here is a smaller version: message only the clinic that is easiest to reach, and ask for a 10-minute call.',
+    "Didn't": 'That happens. What stopped you matters more than the message. Was it not knowing what to write, or not wanting to send it?' };
+  async function openReport() { rT.forEach(clearTimeout); R.tap = null; R.busy = false; R.stage = 0; await show('report'); $('rchat').innerHTML = ''; $('rbar').classList.remove('on'); $('rta').value = ''; $('rsend').disabled = true; $('pbanner').classList.remove('show');
+    $('why').innerHTML = '<div class="num">Screen 8</div><p><b>The Report (evening)</b></p><p>Decision 7. Axiom names the move and its own prediction in the middle of the screen, with three small round marks under it (tick, pause, dash). Pressing one just shows it pressed (nothing is sent as a message), the question moves up, and the next question follows. Then a reply, a founder story offered <b>before</b> anything is asked of them, and only then the sharing question.</p><p>The story is a <b>sample</b>, labelled. Real ones must be real founders who consented and were approved by a person. Sharing opens more stories later; the first one comes with reporting.</p><p>Try "Didn\'t" and "Couldn\'t" too. Replies here are sample text; the real ones are written from what the founder says.</p>';
+    $('rchat').classList.add('center'); await rAx('Your move was to ask both clinics for a call within the next 3 days. I said at least one would not answer. What happened?', 700, 'rcenter');
+    rChoices(['Done', "Couldn't", "Didn't"], 'tap', async t => { R.tap = t; R.stage = 1; $('rchat').classList.remove('center'); await wait(850); await rAx(RQ[t], 200); $('rbar').classList.add('on'); $('rta').focus({ preventScroll: true }); }); }
+  async function rSend() { const t = $('rta').value.trim(); if (!t || R.busy || R.stage !== 1) return; R.busy = true; $('rta').value = ''; $('rsend').disabled = true; rMe(t);
+    if (!isReal(t)) { await rAx('Say a bit more.', 600); R.busy = false; return; }
+    R.stage = 2; $('rbar').classList.remove('on'); await rAx(RREPLY[R.tap], 700);
+    await rAx('A founder who was in your spot shared what went wrong and what worked. Want to see it?', 900);
+    rChoices(['Yes, show me', 'Not now'], '', async c => {
+      if (c === 'Not now') { if (ST.share) return rEndNote(); await rAx('No problem. One last thing: can I share what happened, with no name, to help founders behind you?', 600); return rShare(); }
+      await wait(500); rAdd(lEl(`<div class="story"><div class="sk"><span>A founder before you</span><b>Sample</b></div><h4>A founder sold scheduling software to clinics</h4><p>Their first two demos ended with "we'll think about it". They spent the next month adding features. They got their first customer when they asked each clinic to book a call. Looking back, they say the features never mattered; the first real ask did.</p></div>`));
+      if (ST.share) return rEndNote(); await rAx('They shared theirs so it could help you. Would you share yours the same way, with no name?', 1200); rShare(); }); R.busy = false; }
+  async function rEndNote() { await wait(2600); openHome(null, 'after report'); }
+  function rShare() { rChoices(['Share', 'Keep private'], '', async c => { await rAx(c === 'Share' ? 'Thank you. That opens more founder stories for you.' : 'Kept private. You can change this any time in settings.', 600);
+    await wait(3200); openHome(null, 'after report'); }); }
+  $('rta').addEventListener('input', () => { $('rsend').disabled = !$('rta').value.trim(); }); $('rta').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); rSend(); } }); $('rsend').addEventListener('click', rSend);
+  $('pbanner').addEventListener('click', openReport);
+  function showPush() { $('pbanner').classList.add('show'); $('why').innerHTML = '<div class="num">Evening push</div><p><b>The reminder</b></p><p>At the founder\'s chosen time (8 pm by default). It names the move, so it is specific: "Rafay, how did the two clinics go?" (name inside the push, as decided). Tap it to open the Report. One reminder if they do not report; after that the situation closes quietly, no strikes.</p><p>How much a push shows on the lock screen will be the founder\'s choice (parked notes).</p>'; }
+  // Screen 9: the returning-founder home. Greeting by time of day (draft wording), a chat bar, and at most 2 small chips for what they left off.
+  const NAME = 'Rafay';
+  const GREET = { early: `6 am, ${NAME}. Most people aren't up. Their loss. What's the plan?`, goal: `78 days to your first customer, ${NAME}. No pressure. Some pressure. What's the move?`, midday: `Midday, ${NAME}. Coffee doesn't count as progress. What have you moved?`,
+    evening: `Day's nearly done, ${NAME}. What got done besides email?`, late: `Still up, ${NAME}? Make it count, or go to sleep.`, weekend: `Saturday, ${NAME}. Nobody's watching. What are you building?` };
+  function greetKind() { const d = new Date(), h = d.getHours(); if (d.getDay() === 6 || d.getDay() === 0) return 'weekend'; if (h >= 4 && h < 7) return 'early'; if (h < 12) return 'goal'; if (h < 17) return 'midday'; if (h < 22) return 'evening'; return 'late'; }
+  // What is pending, by state. Labels say what to DO. Items show for a few seconds when the founder arrives, then fade; the menu keeps the full list.
+  const MOVE_ITEM = { label: 'Today: ask the clinics for a call', open: async () => { await show('learn'); $('lsheet').classList.add('open'); }, detail: 'Your move for today' };
+  const MOVE_LATE = { label: 'Still to do: ask the clinics for a call', open: MOVE_ITEM.open, detail: 'Your move, still open' };
+  const REPORT_NOW = { label: 'Tell me how it went', open: () => openReport(), detail: 'Check in on your move' };
+  const REPORT_EVE = { label: 'Tonight: tell me how it went', open: () => openReport(), detail: 'Evening check-in' };
+  const NEXT_ITEM = { label: 'Next: confirm the time with the clinic that replied', open: () => openSituation(true), detail: 'From your last check-in' };
+  const HSTATE = { morning: [MOVE_ITEM], 'move done': [REPORT_NOW], evening: [MOVE_LATE, REPORT_EVE], 'after report': [NEXT_ITEM], nothing: [] };
+  const PAUSED = [{ label: 'Hiring plan', detail: 'Paused after 14 quiet days. Say the word and it comes back.' }];
+  let hmTimer = null, hmItems = [], hmState = 'morning';
+  function hmFadeIn() { clearTimeout(hmTimer); const c = $('hmchips'); c.classList.remove('fade'); c.classList.remove('none'); if (typeof ST !== 'undefined' && ST.keep) return; hmTimer = setTimeout(() => { c.classList.add('fade'); setTimeout(() => { if (c.classList.contains('fade')) c.classList.add('none'); }, 1300); }, 8000); }
+  function hmRender(state) { hmItems = HSTATE[state] || []; const c = $('hmchips'); c.innerHTML = ''; hmItems.forEach(it => { const b = document.createElement('button'); b.className = 'hchip'; b.innerHTML = '<i></i>'; b.appendChild(document.createTextNode(it.label)); b.addEventListener('click', it.open); c.appendChild(b); });
+    c.classList.toggle('none', !hmItems.length); if (hmItems.length) hmFadeIn(); }
+  async function openHome(kind, state = 'morning') { kind = kind || greetKind(); await show('home'); drawerClose(); $('hmnote').style.display = 'none'; $('hmta').value = ''; $('hmsend').disabled = true;
+    hmState = state; hmRender(state); const g = $('hmgreet'); g.classList.remove('soft'); g.innerHTML = `<span class="s">${esc(GREET[kind])}</span>`; await wait(80); g.firstChild.classList.add('in');
+    $('why').innerHTML = '<div class="num">Screen 9</div><p><b>Returning-founder home</b></p><p>Decision 8. A welcome and a chat bar, like Claude or ChatGPT: it does not push them back into what they left off. What is still left to do shows as small items above the bar for about 8 seconds when they arrive, then fades. Hovering keeps them. Nothing is lost: the menu is a side drawer, like Claude or ChatGPT on a phone, that slides in with <b>What\'s open</b>, <b>History</b>, <b>Paused</b> and <b>Settings</b>, each divided by thin lines.</p><p>Items follow the state: only the move in the morning; once the move is done, "tell me how it went"; both in the evening if the move is still open; after the check-in, only a next step if Axiom named one; otherwise nothing. Typing a new message clears them at once.</p><p>Use the "Home: ..." buttons to see each state.</p><p><b>Care test:</b> type in the chat bar. "i wanna dieee" gets a soft reply from context ("Home: nothing open" has no context, so it asks plainly). A clear message such as "i am thinking about suicide" opens the care screen.</p>'; }
+  $('hmchips').addEventListener('mouseenter', () => { clearTimeout(hmTimer); $('hmchips').classList.remove('fade'); }); $('hmchips').addEventListener('mouseleave', () => { if (hmItems.length) hmFadeIn(); });
+  const HISTORY = [['Today', ['Asking the two clinics for a call']], ['Yesterday', ['Whether to charge for the pilot']], ['Earlier this week', ['Which feature to cut first', 'Why nobody replies to my emails']]];
+  function drawerBuild() { const L = $('dscroll'); L.innerHTML = ''; const sec = (label, inner) => { const d = document.createElement('div'); d.className = 'dsec'; d.innerHTML = `<div class="dlab">${label}</div>`; inner(d); L.appendChild(d); };
+    sec("What's open", d => { const cur = HSTATE[hmState] || []; if (!cur.length) { d.insertAdjacentHTML('beforeend', '<div class="dnone">Nothing to do right now.</div>'); return; }
+      cur.forEach(it => { const r = document.createElement('div'); r.className = 'drow'; r.innerHTML = `<i></i><div>${esc(it.label)}<small>${esc(it.detail)}</small></div>`; r.addEventListener('click', () => { drawerClose(); setTimeout(it.open, 350); }); d.appendChild(r); }); });
+    sec('History', d => { HISTORY.forEach(([g, rows]) => { rows.forEach(t => { const r = document.createElement('div'); r.className = 'drow'; r.innerHTML = `<div>${esc(t)}</div>`; r.addEventListener('click', () => { const i = HIST.findIndex(h => h.t === t); drawerClose(); setTimeout(() => (i >= 0 ? openPast(i) : openHistory()), 350); }); d.appendChild(r); }); }); const all = document.createElement('div'); all.className = 'drow'; all.innerHTML = '<div style="color:rgba(214,216,219,.6)">See all history ›</div>'; all.addEventListener('click', () => { drawerClose(); setTimeout(openHistory, 350); }); d.appendChild(all); });
+    sec('Paused', d => { PAUSED.forEach(p => { const r = document.createElement('div'); r.className = 'drow'; r.innerHTML = `<div>${esc(p.label)}<small>${esc(p.detail)}</small></div>`; d.appendChild(r); }); }); }
+  function drawerOpen() { drawerBuild(); $('home').classList.add('drawer'); } function drawerClose() { $('home').classList.remove('drawer'); }
+  $('hmscrim').addEventListener('click', drawerClose); $('dnew').addEventListener('click', () => { drawerClose(); setTimeout(() => $('hmta').focus({ preventScroll: true }), 400); });
+  document.querySelector('.dfoot').addEventListener('click', () => { drawerClose(); setTimeout(openSettings, 300); });
+  // Care: three outcomes. clear = care screen. unclear = reply from context, or ask softly. none = carry on.
+  // The real app uses a model plus rules, tuned to catch rather than miss; the mock uses simple patterns so you can try it.
+  const CLEAR = /\b(suicid\w*|kill my ?self|end my life|take my own life|end it all|hurt my ?self|self[- ]?harm|cut my ?self|don'?t want to (live|be alive)|do not want to (live|be alive)|better off (dead|without me))\b/i;
+  const UNCLEAR = /\b(i\s*wanna\s*die+|want to die|wanna die+|going to die|dead inside|kill me now|shoot me|can'?t do this anymore|i('?m| am) done with everything|give up on everything|what'?s the point)\b/i;
+  function classifyMsg(t) { if (CLEAR.test(t)) return 'clear'; if (UNCLEAR.test(t)) return 'unclear'; return 'none'; }
+  function softReply(hasContext) { return hasContext ? 'That sounded heavy. Is it the clinics getting to you, or is it more than that?' : 'That sounded heavy. What is going on?'; }
+  async function showCare() { clearTimeout(hmTimer); await show('care'); $('crbody').scrollTop = 0;
+    $('why').innerHTML = '<div class="num">Screen 10</div><p><b>Care</b></p><p>Decision 9. Shown only for clear signs of distress or explicit words like suicide. Calm: no glow, no gradient, no buttons that push them anywhere, a slow fade in. One human message, real help for their country, an honest line that Axiom is an assistant, and a quiet way to keep talking.</p><p>The numbers are placeholders: a person verifies every number before launch. While this is up all pushes are paused and nothing mentions moves or reports.</p>'; }
+  $('crkeep').addEventListener('click', () => openHome('late', 'nothing'));
+  // Screen 11: Settings. Plain labels, thin lines between groups. All values are samples.
+  const ST = { share: false, time: 2, times: ['7:00 pm', '8:00 pm', '9:00 pm'], morning: true, evening: true, lock: 'Short', style: 'Direct', keep: false };
+  function stBuild() { const B = $('stbody'); B.innerHTML = '';
+    const sec = (label, fn) => { const d = document.createElement('div'); d.className = 'stsec'; d.innerHTML = `<div class="stlab">${label}</div>`; fn(d); B.appendChild(d); };
+    const row = (d, html, cls = '', onclick) => { const r = document.createElement('div'); r.className = 'strow ' + cls; r.innerHTML = html; if (onclick) { r.classList.add('tap'); r.addEventListener('click', onclick); } d.appendChild(r); return r; };
+    const sw = (d, label, sub, key) => { const r = row(d, `<div>${label}${sub ? `<small>${sub}</small>` : ''}</div><button class="sw ${ST[key] ? 'on' : ''}" aria-label="${label}"></button>`); r.querySelector('.sw').addEventListener('click', e => { ST[key] = !ST[key]; e.target.classList.toggle('on', ST[key]); }); };
+    const words = (d, key, opts, note) => { const w = document.createElement('div'); w.className = 'words3'; opts.forEach(o => { const b = document.createElement('button'); b.textContent = o; if (ST[key] === o) b.classList.add('on'); b.addEventListener('click', () => { ST[key] = o; w.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); }); w.appendChild(b); }); d.appendChild(w); if (note) d.insertAdjacentHTML('beforeend', `<div class="stnote">${note}</div>`); };
+    sec('You', d => { row(d, '<div>Name</div><span class="val">Rafay</span>'); row(d, '<div>Email</div><span class="val">from your Google account</span>'); row(d, '<div>Country</div><span class="val">Pakistan</span><span class="chev">›</span>', '', () => {}); row(d, '<div>What Axiom knows about you<small>Your sign-up answers. Change them any time.</small></div><span class="chev">›</span>', '', () => {}); });
+    sec('Reminders', d => { row(d, `<div>Check-in time<small>When I ask how your move went.</small></div><span class="val" id="stTime">${ST.times[ST.time]}</span><span class="chev">›</span>`, '', () => { ST.time = (ST.time + 1) % ST.times.length; $('stTime').textContent = ST.times[ST.time]; });
+      sw(d, 'Morning reminder', 'Your move for the day.', 'morning'); sw(d, 'Evening check-in', 'How the move went.', 'evening');
+      row(d, '<div>On the lock screen, show</div>'); words(d, 'lock', ['Full', 'Short', 'Nothing'], 'Short: "Axiom: tonight\'s check-in". Full: names your move. Nothing: just "Axiom".');});
+    sec('How Axiom talks', d => { words(d, 'style', ['Calm', 'Direct', 'Hard'], 'Direct is the default. Hard is blunter and pushes harder. You can change it any time.'); });
+    sec('On screen', d => { sw(d, 'Keep my open items on screen', 'Stops the small items on the home screen from fading after a few seconds.', 'keep'); });
+    sec('Privacy', d => { const SUB_ON = 'On. What happens in your check-ins is shared with other founders, with no name, without asking each time. Turn it off any time.'; const SUB_OFF = 'Off. After each check-in I ask if you want to share what happened, with no name. Nothing is shared unless you say yes.';
+      const wr = row(d, `<div>Share with other founders<small>${ST.share ? SUB_ON : SUB_OFF}</small></div><button class="sw ${ST.share ? 'on' : ''}" aria-label="Share with other founders"></button>`); wr.querySelector('.sw').addEventListener('click', e => { ST.share = !ST.share; e.target.classList.toggle('on', ST.share); wr.querySelector('small').textContent = ST.share ? SUB_ON : SUB_OFF; }); row(d, '<div>Privacy</div><span class="chev">›</span>', '', () => {}); row(d, '<div>Terms</div><span class="chev">›</span>', '', () => {}); });
+    sec('Account', d => { row(d, '<div>Sign out</div>', '', () => {}); row(d, '<div>Delete everything Axiom knows about me</div>', 'danger', () => { $('stdelnote').style.display = 'none'; $('stmodal').classList.add('show'); }); }); }
+  async function openSettings() { stBuild(); await show('settings'); $('stbody').scrollTop = 0; $('stmodal').classList.remove('show'); $('hmdrawer') && drawerClose();
+    $('why').innerHTML = '<div class="num">Screen 11</div><p><b>Settings</b></p><p>Decision 10. Groups divided by thin lines with plain labels: You, Reminders, How Axiom talks, On screen, Privacy, Account.</p><p>It collects the decisions already made: check-in time, at most 2 reminders a day, what shows on the lock screen, mentor style, keeping items on screen, and deleting your data.</p><p>Not here on purpose: connected accounts (parked), payments, streaks or scores.</p><p>Delete everything needs its own plan before it is built (stored user data is flag-first).</p>'; }
+  $('stback').addEventListener('click', () => openHome(null, 'nothing'));
+  $('stkeep').addEventListener('click', () => $('stmodal').classList.remove('show'));
+  $('stdel').addEventListener('click', () => { const n = $('stdelnote'); n.textContent = 'Mock only: nothing is deleted. The real version needs a deletion plan first, and a clear confirm step.'; n.style.display = 'block'; });
+  // Screens 12 and 13: History and a past situation. Sample data.
+  const HIST = [
+    { g: 'Today', t: 'Asking the two clinics for a call', s: 'Open', read: 'Nobody has actually said yes or no to this yet.', learn: 'Rob Fitzpatrick · The Mom Test', move: 'Message both clinics today and ask for a 20-minute call in the next 3 days.', how: 'Not reported yet. I will ask tonight.', shared: null },
+    { g: 'Yesterday', t: 'Whether to charge for the pilot', s: 'Done', read: 'You are afraid a price will end the conversation.', learn: 'Alex Hormozi · $100M Offers', move: 'Quote a paid pilot to one clinic before the call ends.', how: 'Done. The clinic asked for a day to think, then said yes to a smaller pilot.', shared: 'Shared without your name' },
+    { g: 'Earlier this week', t: 'Which feature to cut first', s: "Couldn't", read: 'You keep every feature because cutting one feels like admitting it was wrong.', learn: 'Eric Ries · The Lean Startup', move: 'List every feature and mark the one nobody asked for.', how: 'Could not: the clinic closed for the holiday. A smaller version was offered.', shared: 'Kept private' },
+    { g: 'Earlier this week', t: 'Why nobody replies to my emails', s: "Didn't", read: 'Your emails ask for a lot before they give anything.', learn: 'Chris Voss · Never Split the Difference', move: 'Rewrite the first email so it asks one small question.', how: 'Did not do it. You said you did not know what to write.', shared: 'Kept private' },
+    { g: 'Paused', t: 'Hiring plan', s: 'Paused', read: 'You are planning a hire before you have a customer.', learn: 'Not reached yet', move: 'No move yet.', how: 'Paused after 14 quiet days. Say the word and it comes back.', shared: null } ];
+  const SAMPLE_NOTE = 'Sample data. Authors and books here are placeholders; real ones come from the verified library.';
+  function hsRender(q = '') { const L = $('hslist'); L.innerHTML = ''; q = q.trim().toLowerCase(); let n = 0;
+    HIST.forEach((h, i) => { if (q && !(h.t + ' ' + h.read + ' ' + h.learn).toLowerCase().includes(q)) return; n++;
+      const r = document.createElement('div'); r.className = 'hscard'; r.innerHTML = `<span class="t">${esc(h.t)}</span><span class="tag ${h.s === 'Open' ? 'open' : ''}">${h.s === 'Open' ? '<i></i>' : ''}${esc(h.s)}</span><span class="chev">›</span>`; r.addEventListener('click', () => openPast(i)); L.appendChild(r); });
+    if (!n) L.innerHTML = '<div class="hsnone">Nothing matches that.</div>'; }
+  async function openHistory() { drawerClose(); $('hsq').value = ''; hsRender(); await show('history'); $('hslist').scrollTop = 0;
+    $('why').innerHTML = '<div class="num">Screen 12</div><p><b>History</b></p><p>Decision 11. Plain list of past situations with a search box, newest first, separated by thin lines and with no day headings. Each box has a plain title and one quiet status in words: Open, Done, Couldn\'t, Didn\'t, Paused. No scores, streaks or missed-day counts.</p><p>Try the search ("clinics", "price", "email"). Tap a row to open it.</p><p>' + SAMPLE_NOTE + '</p>'; }
+  async function openPast(i) { const h = HIST[i]; const B = $('hdbody'); const sec = (lab, html) => `<div class="hdsec"><div class="lab">${lab}</div>${html}</div>`;
+    B.innerHTML = `<div class="hdh">${esc(h.t)}</div>` + sec('What I read', `<p class="serif">${esc(h.read)}</p>`) + sec('What you learned', `<p>${esc(h.learn)}</p>`) + sec('Your move', `<p>${esc(h.move)}</p>`) + sec('How it went', `<p>${esc(h.how)}${h.shared ? `<small>${esc(h.shared)}</small>` : ''}</p>`)
+      + `<div class="hdact"><button class="hdbtn" id="hdgo">${h.s === 'Open' ? 'Pick it up' : h.s === 'Paused' ? 'Bring it back' : 'Talk about this again'}</button></div>`;
+    $('hdgo').addEventListener('click', () => { if (h.s === 'Open') { show('learn').then(() => $('lsheet').classList.add('open')); } else { const n = document.createElement('p'); n.className = 'mocknote'; n.style.margin = '16px 24px'; n.textContent = 'Mock only: this reopens the situation as a chat, with Axiom starting from what it already knows about it.'; B.appendChild(n); } });
+    await show('hdetail'); B.scrollTop = 0;
+    $('why').innerHTML = '<div class="num">Screen 13</div><p><b>A past situation</b></p><p>Read-only, divided by thin lines: What I read, What you learned (author and book), Your move, How it went, and whether it was shared. One quiet action: Talk about this again (Pick it up if it is still open, Bring it back if paused).</p><p>No delete here. Stored situations are the product\'s memory; deleting everything is only in Settings.</p>'; }
+  $('hsback').addEventListener('click', () => openHome(null, 'nothing')); $('hdback').addEventListener('click', openHistory); $('hsq').addEventListener('input', e => hsRender(e.target.value));
+  $('menub').addEventListener('click', drawerOpen);
+  $('hmta').addEventListener('input', () => { $('hmsend').disabled = !$('hmta').value.trim(); });
+  async function hmSend() { const t = $('hmta').value.trim(); if (!t) return; $('hmta').value = ''; $('hmsend').disabled = true; clearTimeout(hmTimer); $('hmchips').classList.add('fade'); const n = $('hmnote'); n.style.display = 'none';
+    const c = classifyMsg(t);
+    if (c === 'clear') { await wait(500); return showCare(); }
+    if (c === 'unclear') { const g = $('hmgreet'); g.classList.add('soft'); g.innerHTML = `<span class="s">${esc(softReply(hmState !== 'nothing'))}</span>`; await wait(80); g.firstChild.classList.add('in'); n.textContent = 'Mock only: not a crisis screen. Axiom answers from the conversation (or asks softly if there is none), with no lesson or move this turn. A worrying answer, or repeated signals, would escalate to the care screen.'; n.style.display = 'block'; return; }
+    n.textContent = 'Mock only: this starts a new situation (the Situation flow, screen 4) with what they typed. The items above the bar clear right away; they return on the home screen only if still pending.'; n.style.display = 'block'; }
+  $('hmta').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); hmSend(); } }); $('hmsend').addEventListener('click', hmSend);
+  $('frgo').addEventListener('click', () => openSituation());
+  // Screen 4: the situation. Pre-filled from the stuck answer, at most 2 related follow-ups (counted by the server in the real app).
+  const FILLER = new Set('ok okay k yes yeah yep yup no nope sure fine hmm hm mm um uh thanks thank you thx cool got it i see makes sense right true alright maybe idk good nice lol so well kinda'.split(' '));
+  const isReal = t => t.toLowerCase().replace(/[^a-z0-9%$\s']/g, ' ').split(/\s+/).filter(Boolean).filter(w => !FILLER.has(w)).length >= 3;
+  const S = { asked: 0, parts: [], busy: false, over: false };
+  const FOLLOW = ['When was the last time you showed it to someone, and what did they say?', 'And what did you do after that?'];
+  async function axSay(t) { const p = document.createElement('p'); p.className = 'ax'; p.innerHTML = '<span class="s">' + t + '</span>'; $('chat').appendChild(p); await wait(60); p.firstChild.classList.add('in'); $('chat').scrollTop = 1e5; await wait(900); }
+  function meSay(t) { const p = document.createElement('p'); p.className = 'me'; p.textContent = t; $('chat').appendChild(p); $('chat').scrollTop = 1e5; }
+  function sitPanel(extra) { $('why').innerHTML = `<div class="num">Screen 4</div><p><b>The situation</b></p><p>Axiom speaks first with one plain question: start with what you said you are stuck on, or something else? It does not repeat their answer. Their answer sits above the box as one tap to send. The box itself stays empty, so they can type something different at any time. Never a dead end.</p><p>Follow-ups asked: <span class="sv">${S.asked} of 2</span> (the server counts this, not the AI). Each question has to be about what they just wrote and only ask for a missing piece. Axiom stops once it has a named situation plus one concrete detail.</p>${extra || ''}<p>Try it: tap the suggestion (nothing more is asked), or type something short like "my hiring is going badly" to see it ask.</p>`; }
+  async function openSituation(fresh) { clearTimeout(frT); S.asked = 0; S.parts = []; S.over = false; S.busy = false; await show('situation'); $('chat').innerHTML = ''; const st = clip(A.stuck || 'the thing you are putting off', 110);
+    $('sitta').value = ''; autosize(); $('sitbar').classList.remove('on'); $('sitsug').classList.remove('gone'); $('sugtxt').textContent = '“' + clip(A.stuck || '', 120) + '”'; document.querySelector('#sitsug small').textContent = fresh ? 'Still open' : 'Use what you wrote earlier'; sitPanel();
+    await wait(500); await axSay(fresh ? 'What is on your mind?' : 'Do you want to start with what you said you are stuck on, or is something else on your mind?'); $('sitbar').classList.add('on'); }
+  function autosize() { const t = $('sitta'); t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 150) + 'px'; $('sitsend').disabled = !t.value.trim(); }
+  async function sitSend() { const t = $('sitta').value.trim(); if (!t || S.busy || S.over) return; S.busy = true; $('sitta').value = ''; autosize(); $('sitsug').classList.add('gone'); meSay(t);
+    if (isReal(t)) S.parts.push(t); const all = S.parts.join(' '); const named = isReal(all) && all.split(/\s+/).length >= 8, concrete = /\d|\b(one|two|three|four|five|six|seven|eight|nine|ten|twice|once|yesterday|monday|tuesday|wednesday|thursday|friday)\b/i.test(all);
+    await wait(500);
+    if (!isReal(t)) { await axSay('Say a bit more. What is the situation, in your words?'); }
+    else if ((named && concrete) || S.asked >= 2) { S.over = true; sitPanel('<p><b>Enough.</b> No closing line at all: Axiom never repeats what the founder just said. The screen moves straight to the Read (screen 5).</p>'); $('sitbar').classList.remove('on'); await wait(1200); showReadScreen(); }
+    else { await axSay(FOLLOW[S.asked]); S.asked++; sitPanel(); }
+    S.busy = false; }
+  $('sitta').addEventListener('input', autosize); $('sitta').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sitSend(); } }); $('sitsend').addEventListener('click', sitSend); $('sitsug').addEventListener('click', () => { $('sitta').value = (A.stuck || '').trim(); sitSend(); });
+  $('google').addEventListener('click', () => go(0)); $('next').addEventListener('click', next); $('back').addEventListener('click', back);
+  $('restart').addEventListener('click', () => { clearInterval(rdTimer); clearTimeout(rdTimer); clearTimeout(frT); for (const k in A) delete A[k]; go(-1); });
+  const SAMPLE = { stage: { v: "I'm building it and nobody pays yet" }, months_in: { v: '6 to 12 months' }, commitment: { v: 'Evenings and weekends, under 15 hours' }, business_model: { v: 'Businesses' },
+    where: { country: 'Pakistan', cust: 'Mostly abroad' }, team: { v: 'Just me' }, goal: { goal: 'My first customer', when: 'In 3 months' }, background: { v: 'I worked in tech' },
+    why: { v: "I've lived this problem myself" }, strengths: { a: ['Building the product', 'Not quitting'], b: ['Talking to customers', 'Asking for money'] }, tried: ['Built a prototype', 'Talked to customers'],
+    building: 'A scheduling tool for dental clinics, so front desks stop losing bookings to phone tag.', stuck: 'I keep adding features instead of showing it to clinics. I have shown it to two and both said they would think about it.' };
+  $('fill').addEventListener('click', () => { Object.assign(A, JSON.parse(JSON.stringify(SAMPLE))); if (!$('qview').classList.contains('on')) { i = 12; render(); show('qview'); } else swapQuestion(12); });
+  const J = $('jump'); [['Sign in', -1], ...Q.map((q, n) => [String(n + 1), n])].forEach(([l, n]) => { const b = document.createElement('button'); b.textContent = l; b.dataset.i = n; b.addEventListener('click', () => go(n)); J.appendChild(b); });
+  { const b = document.createElement('button'); b.textContent = 'First reading'; b.addEventListener('click', () => { if (!A.building) Object.assign(A, JSON.parse(JSON.stringify(SAMPLE))); showRead(); }); J.appendChild(b); }
+  { const b = document.createElement('button'); b.textContent = 'Situation'; b.addEventListener('click', () => { if (!A.building) Object.assign(A, JSON.parse(JSON.stringify(SAMPLE))); openSituation(); }); J.appendChild(b); }
+  // Shrink the phone to fit short windows (never grows it past full size).
+  function fit() { const h = window.innerHeight; $('phone').style.zoom = h > 300 && h < 900 ? Math.max(.55, (h - 20) / 896) : 1; }
+  fit(); window.addEventListener('resize', fit);
+  { const b = document.createElement('button'); b.textContent = 'Read'; b.addEventListener('click', () => { if (!A.building) Object.assign(A, JSON.parse(JSON.stringify(SAMPLE))); showReadScreen(); }); J.appendChild(b); }
+  { const b = document.createElement('button'); b.textContent = 'Learn'; b.addEventListener('click', () => { if (!A.building) Object.assign(A, JSON.parse(JSON.stringify(SAMPLE))); S.reply = "No, I haven't gone back to either since the demo three weeks ago"; openLearn(); }); J.appendChild(b); }
+  { const b = document.createElement('button'); b.textContent = 'Evening push'; b.addEventListener('click', showPush); J.appendChild(b); const c = document.createElement('button'); c.textContent = 'Report'; c.addEventListener('click', () => { if (!A.building) Object.assign(A, JSON.parse(JSON.stringify(SAMPLE))); openReport(); }); J.appendChild(c); }
+  [['Home', null, 'morning'], ['Home: 6 am', 'early', 'morning'], ['Home: midday', 'midday', 'morning'], ['Home: evening greeting', 'evening', 'evening'], ['Home: late', 'late', 'morning'], ['Home: weekend', 'weekend', 'morning'], ['Home: move done', null, 'move done'], ['Home: after check-in', null, 'after report'], ['Home: nothing open', null, 'nothing']].forEach(([l, k, st]) => { const b = document.createElement('button'); b.textContent = l; b.addEventListener('click', () => { if (!A.building) Object.assign(A, JSON.parse(JSON.stringify(SAMPLE))); openHome(k, st); }); J.appendChild(b); });
+  { const b = document.createElement('button'); b.textContent = 'Care screen'; b.addEventListener('click', showCare); J.appendChild(b); }
+  { const b = document.createElement('button'); b.textContent = 'Settings'; b.addEventListener('click', openSettings); J.appendChild(b); }
+  { const b = document.createElement('button'); b.textContent = 'History'; b.addEventListener('click', openHistory); J.appendChild(b); }
+  go(-1);
+</script>
+</body>
+</html>

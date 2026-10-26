@@ -1,3 +1,105 @@
+# Plan: update the four documents to match every decision (from tasks/decisions.md)
+
+Source of truth for what was decided: tasks/decisions.md, tasks/voice.md, tasks/walkthrough.md, tasks/design/*.html.
+Old versions stay in git history. Nothing is deleted without being rewritten. Where a decision conflicts with a hard rule, it is flagged in the doc and listed at the end of tasks/decisions.md.
+
+- [x] 1. PRODUCT.md: onboarding (13 questions, no personality tests, taps with max 5 options), first reading (no rating), Situation, Read, Learn (conversation first, move after two real replies), Move, Report (push, taps, story before sharing), home (greeting, drawer, fading items), care (two outcomes), settings, history, push rules (max 2 a day), voice summary, measures (remove Read accuracy), removed list.
+- [x] 2. ARCHITECTURE.md: native app (Expo) instead of web only, push notifications and scheduling, the new endpoints (no feedback endpoint), citation checking and loading quotes from verified library, care classifier, daily caps, states (queueing offline), data model additions, privacy (sharing, no user_id on peer outcomes), the parked proactive layer noted as future.
+- [x] 3. DESIGN.md: replace with the new visual language (black base with faint gold wash, bright stone writing, serif for Axiom, glass on floating things only, thin lines, small marks, drawer, loading hint, motion).
+- [x] 4. BRAND.md: update voice (link to tasks/voice.md content), logo (emblem allowed in-app), remove the "Axiom will remove you" and warning language, tagline parked.
+- [x] 5. Check: read each doc back, search for leftover old-product terms, list every conflict with CLAUDE.md for Rafay.
+
+## Result (October 2026)
+All four documents rewritten or updated. Old versions are in git history (PRODUCT.md, ARCHITECTURE.md, DESIGN.md and BRAND.md were tracked).
+BRAND.md: kept the name, the person, distribution, the pillar posts and the writing test; rewrote tagline (parked), what Axiom is, the one-liner, voice, tone, logo, imagery, app icon, positioning edits, launch, pricing (free), growth; retired campaigns 2 and 4 and the removal and Axiom Circle sections. Marketing typography still open.
+Not touched on purpose: CLAUDE.md (instructions file). It now disagrees with the documents in the places listed below and Rafay must decide.
+
+## CLAUDE.md vs the new documents (settled by Rafay and CLAUDE.md updated, see decisions.md)
+1. Stack: CLAUDE.md says web first (Vite + React on Vercel), native later. Documents now say the app is native (Expo) with push.
+2. "Returning founders land on their last open loop, never a blank prompt": the home is now a greeting plus chat bar, with the left-off items fading after about 8 seconds.
+3. "Every Learn screen ends in a Move": Learn now leads into the move (after two real replies or when asked) and ends in a conversation first.
+4. "Author lessons always name the author and book": the loading hint shows the book name only (lessons still name both).
+5. "Consent to share is asked at every report. Default is not shared": a Settings switch "share automatically" (off by default) now exists.
+6. "Peer outcome rows never store a user_id": kept; open whether a separate server-only link may exist for taking down past shares (ARCHITECTURE.md).
+7. Onboarding: CLAUDE.md and old PRODUCT.md imply 7 + 3; now 13 questions.
+8. Deprecated list: "artifact rendering system" is deprecated but a new, smaller, checked picture library is planned.
+
+---
+
+# Build plan v1 (setup approved by Rafay; the build starts when he says go)
+
+Spec: PRODUCT.md, ARCHITECTURE.md, DESIGN.md, tasks/voice.md, tasks/decisions.md and the approved mocks in tasks/design/.
+Nothing below has started. No live system, no push, no merge to main.
+
+## What already exists (found in the repo, not assumed)
+- `main` already has the old-product cleanup. `feature/knowledge-rechunk-pilot` (this branch) is main + 38 commits: the lesson library work and the new documents.
+- **`feature/backend-hardening`** (worktree `/Users/rafayessani/AXIOM-wt/backend`, 39 commits ahead of main, not merged, includes `feature/cost-tracking`): server hardening (rate limits, auth, input caps, CORS, errors), all browser writes moved behind the API, a daily cost cap per founder, model usage logging, product events, request and write validation, a `founder_profiles` migration and endpoints, and node tests. This is most of "M0: server foundation". Migrations there (including a pending "revoke browser writes") are written, **not known to be applied live (VERIFY)**.
+- The two branches have diverged (39 vs 38 commits).
+
+## Proposed base
+New branch `feature/journey-v1` in a new worktree `/Users/rafayessani/AXIOM-wt/journey`, created from `feature/backend-hardening`, then bring in the documents and the library scripts from the pilot branch (merge locally; report any conflicts, never force). Main is not touched. The new Expo app lives in a new `app/` folder of the same repo.
+
+## Milestones (each ends with tests passing and a short report in tasks/build_log.md)
+B0 Setup: create the branch and worktree, bring in the pilot work, run install, build and the existing tests, record the baseline. Read the existing server code before changing anything and list what to reuse (daily cap, usage logging, validation, founder_profiles).
+B1 Server foundation: an app factory so the API can be tested without starting it, config for model IDs per step, one structured-call helper (JSON schema, retry once, usage row), fakes for the model, push and clock, test harness. Fix the usage price table (needs Rafay's prices).
+B2 Care: three-outcome check in front of every route that takes founder text, with a test set (including "kill the feature", "burn rate", "i wanna dieee", explicit words), a flag that pauses pushes, a verified-help table with placeholders only (no real numbers until a person verifies).
+B3 Sign-up: 13 answers saved as they go and resumable, reconciled with the existing `founder_profiles` migration; first reading call; checker that every quote and underlined phrase is the founder's own words; no feedback endpoint.
+B4 Situation and Read: persisted follow-up count (CHECK 2), filler filter, idempotent turns, the Read (headline, short body, max 2 or 0 underlines, one closing question), the answer or skip.
+B5 Learn: retrieval with the existing search, citation validator (author and book from the database row, quotes as exact substrings), reply length cap, no-source behaviour (say nothing), the five picture types with server-checked numbers, "move offered" rule (two real replies or the what-do-I-do-next intent, max 2), tappable follow-ups, loading-hint endpoint. Book-level attribution only until the lesson tables exist.
+B6 Move: existing validator, commit, one swap with a real reason, max 2 active.
+B7 Report: Done, Couldn't, Didn't, prediction check, story offer (none until approved outcomes exist), consent every time plus the share-automatically setting, unlock.
+B8 Push and scheduler: tokens, the 2-a-day cap from a log, quiet hours, lock-screen modes, 14-day pause, check-in time. Tested with a fake push service. No real device is pinged.
+B9 Home, History, Settings, account endpoints (delete is a stub until its plan exists).
+B10 Migrations: one consolidated, ordered set written and statically checked, **not applied**. Includes the private author-link table for shared outcomes.
+B11 Expo app: scaffold, then the screens in the approved order, each compared to its mock: sign-in, 13 questions, wait, first reading, situation, Read, Learn with the move card and Move sheet, Report, home, drawer, History, Settings, care, loading hint and in-between states. The app talks only to the API (a test fails the build if it calls Supabase tables). Offline queue and retries. Runs against fake API data first. Checked in the iOS Simulator with screenshots.
+B12 Review: security and quality review of the whole branch, a clean run of every test, a walkthrough 0 to 1, and a list of everything left for Rafay.
+
+## Limits for the long run (proposed)
+Spending: real model calls only for testing, **$6 in total**, in at most 3 runs approved one by one (the first at most $2). Everything else uses fakes. Cost per run is logged. Hard stop at $6.
+May do alone: create the new branch and worktree, edit and add code and tests in it, run installs, builds, tests and the simulator, write migration files (not apply them), update the documents, lessons, decisions and build log, commit locally to the new branch, use at most 2 helpers at a time.
+Never without asking: touch or merge to main, push, apply a migration or run SQL on any live database (main or knowledge), upload lessons, deploy, send a real push, change the AI model or provider, spend beyond the cap, delete anything in `knowledge_pilot/_archive` or the backups, kill processes I didn't start, print any key.
+Checkpoints (I stop, report in plain words and wait): after B1, after B9 (server done), after B10 (migrations ready, needs the live schema dump first), after the first three app screens, before the first real-model run, and at the end.
+Stop at once if: the same test fails twice for the same reason, code and documents disagree (CLAUDE.md rule), a step needs a secret or a live system, or a hard rule would be broken.
+
+## Answers from Rafay
+1. Base: build on `feature/backend-hardening`. YES.
+2. The Expo app lives in `app/` of this repo. YES.
+3. Read-only look at the live main project (the URL Rafay gave matches `VITE_SUPABASE_URL`): **the backend-hardening migrations are NOT live.** Asking for zero rows showed `founder_profiles` and `product_events` do not exist; the old tables (`sessions`, `messages`, `experiments`, `model_usage_logs`, ...) exist and are publicly readable under RLS. So the migrations are written as one clean set (B10) and applied only with a specific yes (gate G1). No data was read; no key was printed.
+
+## Standing rules for the run (from Rafay)
+- Fix every problem from the ROOT. No patches. Delete dead code in the same change. (CLAUDE.md, Bug fixing.)
+- A learning-loop agent runs after every milestone and after any correction, failed test or review finding: root cause, a lesson in `tasks/lessons.md`, a regression test or check where possible.
+- When every screen exists, write the plain-English report `tasks/build_report.md` (what was built, what each screen does, what was checked and how, cost, what is left, what needs Rafay).
+- Keep `tasks/build_status.json` current with `python3 tasks/status.py`; the "Axiom build" panel (mod `axiom-build-monitor`, command `/axiom-build`) shows it live. Copy of the mod: `tasks/tools/axiom-build-monitor/`.
+- If a usage limit stops the work: wait for the reset and resume by myself from `tasks/build_status.json` and this file. (Mechanism proposed below, needs Rafay's yes.)
+
+## Who does what (I am the conductor, final decision maker, creative app developer and software engineer)
+Every helper returns the same report (STATUS, what changed, test evidence, root cause of anything found, dead code removed, what it is unsure about). Helpers never commit to the build branch, never merge, push or touch live systems. I read the diff, run the tests myself, and accept or send it back.
+| Agent | Job | When |
+|---|---|---|
+| builder (existing) | writes server code and tests for one scoped task | B1 to B10 |
+| app-builder (new) | builds one Expo screen from its approved mock, in `app/` only | B11 |
+| care-tester (new) | writes and runs the distress test set, including false alarms | B2 and whenever the care rules change |
+| voice-checker (new) | checks all founder-facing text against `tasks/voice.md` and the banned list | after B3, B5, B7, B8, B11 |
+| test-runner (existing) | install, build and all tests, reports only failures | after every change |
+| backend-auditor (existing) | security, correctness and cost review of the server | after B9 and in B12 |
+| migration-checker (existing) | checks every migration for safety | B10 |
+| dead-code-hunter (existing) | finds unused code | each milestone and B12 |
+| axiom-reviewer (existing) | reviews the branch diff against CLAUDE.md, PRODUCT.md, ARCHITECTURE.md | before any checkpoint report and in B12 |
+| learning-loop (new) | root causes, lessons, regression tests, repeat-mistake check | after every milestone and correction |
+Not used in this build: chunker, chunk-auditor, enrichment-checker, source-triage (library pipeline; they come back for the lesson upload).
+Parallel runs: at most 3 helpers at once, on files that do not overlap (for example care-tester next to a builder on a different folder, or two app-builders on different screens). Anything that edits the same files runs one at a time. The iOS Simulator checks and screenshots are done by me.
+
+## Sessions (proposed)
+One conductor session (this cockpit: decisions, status, reviews, merges into the build branch) plus two worker sessions, each in its own worktree and branch so they cannot step on each other: **Server track** (B1 to B10) and **App track** (B11, built against fake API data from the endpoint contract in ARCHITECTURE.md). I write the contract and fixtures first (end of B1) so both can run in parallel. The conductor merges the tracks into `feature/journey-v1`. This keeps each session's memory small and lets a limit or crash hit only one track.
+
+## Rate-limit resume (proposed, needs Rafay's yes before it is created)
+A scheduled task every 20 minutes starts a fresh session with a self-contained prompt: read `tasks/build_status.json`; act only if `mode` is `running` and `updated` is more than 25 minutes old; then resume from the first unfinished step in this file, set `rate` back to ok, and keep going. Caveats: it runs only while the Claude app is open (otherwise on next launch) and the machine is awake; the status file is the lock, so the watcher never starts a second builder while the first is alive. A deliberate pause is `mode paused`.
+
+---
+
+# Earlier plans (history, kept unchanged)
+
 # Migration baseline and security fix
 
 - [x] Confirm the checked-in live dump is internally complete and identify statements that must be excluded from the baseline.
@@ -93,7 +195,7 @@ Branch: `cleanup/remove-old-product`
 - [x] Payment, pricing and premium: searched prompts, UI copy, `index.html` and server; no payment claims, pricing copy or premium gates exist in the app (matches audit H-13). Nothing to remove.
 - [x] Prompt size: static 50,959 (from 73,025 before cleanup); assembled plain 24,354 (24,877), experiment report 23,698 (24,018), structured request 24,875 (25,492), artifact turn 24,489 (30,500), ghosted history 23,800 (25,186).
 - [x] Verify: build passed (93 modules); backend/frontend start and probes pass (one run showed "build was canceled" in the Vite log because the probe stopped Vite while it re-optimized deps after the Recharts removal; rerun clean); router test returns the same modes/pillars as Stage 3; tag-stripping test 6/6. LOC 14,590.
-  - Kept on purpose: "Not as a warning." in the cost-of-inaction voice rule (voice guidance, not the warning system); `EXPLICIT_STRUCTURE_RE` in `sessionTurnContext.js` (follow-up cache detection); learning-map prompt text (protected).
+  - Kept on purpose: "Not as a warning." in the cost-of-inaction voice rule (voice guidance, not the warning system); `EXPLICIT_STRUCTURE_RE` in `sessionTurnContext.js` (follow-up cache detection); learning-map prompt text (protected); jailbreak termination flow (security, not the removal system).
 - [x] Commit Stage 4 only.
 
 ## Stage 5: Tests and repository cleanup
@@ -109,28 +211,109 @@ Branch: `cleanup/remove-old-product`
 - [x] Write `audit/CLEANUP_REPORT.md`.
 - [x] Commit Stage 5 only; do not merge.
 
-- [x] Jailbreak termination flow removed (owner decision 2026-10-13); sessions.jailbreak_attempts column kept, unused.
-- [x] Daily $1 per founder cost cap per UTC day, server-enforced before every OpenAI call; client aborts charged a conservative estimate; usage rows paged; client shows reset time in local time.
-- [x] npm audit fix applied (no --force). Remaining: vite major, react-router-dom major, qs via express.
+# Cost logging and product event tracking
 
-### Open items
+Branch: `feature/cost-and-tracking`
 
-- [ ] Cap fail-open on lookup failure awaiting owner confirmation.
-- [ ] Concurrency overshoot of the daily cap accepted (bounded).
-- [ ] Crisis handling blocks Read Back and Seek build.
-- [ ] Two-move race deferred to the Act and Report rebuild.
+- [x] Inventory the model usage logger, every call site, current model IDs, emitted call types, and the live-dump constraints.
+- [x] Centralize per-model input/output pricing as explicit TODO values; make unknown or unpriced models warn and persist a null estimated cost.
+- [x] Add focused unit tests for known-model calculation, unknown-model warning/null behavior, and zero-token usage.
+- [x] Add post-`20260930000000` migrations for nullable model cost, the current call-type constraint, and server-only `product_events` with indexes and RLS but no browser policies.
+- [x] Add a best-effort server `trackEvent` helper and unit test that database failures are logged and swallowed.
+- [x] Wire authenticated event tracking for onboarding completion, chat start, message send, experiment creation/commit/report, and thread resume wherever those moments exist today, without browser database writes.
+- [x] Run focused unit tests, `npm run build`, static checks, and start the backend with dummy loopback environment values; do not run `scripts/smoke.test.js` or any Supabase/database command.
+- [x] Review the diff, mark completed items, and summarize files, migrations, current call types, models needing prices, wired events, and future events.
 
-## Pending migrations (feature/cost-tracking + feature/backend-hardening)
+# Knowledge rechunk pilot
 
-Push order. None have been pushed. Live-dump diff DONE (2026-10-13) for all five, except 20261013000001 section B4 (see item 3). Push gates: 1 and 2 before the cost server; 3 any time; 4 before the hardening server; 20261013000004 (pending) only after the hardening server and frontend.
+Branch: `feature/knowledge-rechunk-pilot`
 
-1. `20260930000001_fix_model_usage_logging.sql`: unknown tokens and cost on model_usage_logs become null instead of 0. Live-dump diff: DONE (2026-10-13). Deploy: push BEFORE or WITH the cost-tracking server deploy (the new server writes null tokens/cost, which the old NOT NULL columns reject; the old server's zero values still work after the migration).
-2. `20260930000002_create_product_events.sql`: creates product_events (internal analytics, RLS on, no policies, service_role only). Live-dump diff: DONE (2026-10-13). Deploy: BEFORE or WITH the server that emits product events.
-3. `20261013000001_security_view_and_default_privileges.sql`: user_conversations view security, default privileges revoked, model_usage_logs write policy swap, and B4: revokes TRUNCATE/REFERENCES/TRIGGER on all public tables and removes anon access and browser writes on personal_memories, wiki_chunks, wiki_sources. Live-dump diff: DONE for sections A-B3 (2026-10-13); B4 live re-check: NOT DONE (checked against baseline only; re-check against a fresh live dump before push). Deploy: any time; first confirm the live model_usage_logs policy name and the user_conversations grants; verify pg_default_acl after.
-4. `20261013000004_revoke_browser_writes.sql` (now in `supabase/pending/`): revokes browser (anon/authenticated) writes on app tables. Live-dump diff: DONE (2026-10-13). Deploy: only after the Railway server and then the Vercel frontend from feature/backend-hardening are deployed; then move it into `supabase/migrations/` and push.
-5. `20261013000003_create_founder_profiles.sql` (push only after 20261013000001): creates founder_profiles (one row per user, own-row SELECT for the browser, bounded columns and open_answers <= 3). Live-dump diff: DONE (2026-10-13). Deploy: BEFORE or WITH the hardening server. Live dump showed no drifted founder_profiles table.
+Rules for this branch:
 
-### Open questions
+- No database writes. No Supabase commands. Do not modify ingestion code or the existing knowledge tables.
+- Do not touch the cost and tracking work; it lives on `feature/cost-tracking`.
+- All generated outputs go in `/knowledge_pilot/`, which is already gitignored.
+- One commit per stage. Update this checklist after each stage.
 
-- Customer market region list is undefined in PRODUCT.md ("a list of regions plus Global"). The API accepts any short label, lowercased and deduped, until it is defined.
-- supabase_admin default privileges may be skipped under the postgres migration role. After pushing 20261013000001, verify `pg_default_acl` for both roles.
+## Stage 1: environment
+
+- [x] Removed the yanked `supabase==2.22.0` from `scripts/knowledge_pilot_requirements.txt`; the pilot does not need the Python Supabase client for local extraction/chunking, and Supabase commands are forbidden.
+- [x] Retried `docling-slim==2.131.0` and `docling-parse==7.22.1` install once in `knowledge_pilot/.venv`; sandboxed install failed due network resolution, escalated retry succeeded.
+- [x] Docling packages installed, but Stage 2 required PyMuPDF because importing `DocumentConverter` failed on missing `scipy`; no further Docling repair attempted.
+
+## Stage 2: extract and chunk one book, then stop
+
+- [x] Started with The Everything Store.
+- [x] Used PyMuPDF fallback for extraction after Docling installed but `DocumentConverter` import failed on missing `scipy`; did not spend more time on Docling dependency repair.
+- [x] Extracted PDF pages 6-298 with chapter headings represented in metadata; excluded front/back matter, photos, notes, newsletter, copyright pages, page numbers, and full part-title divider pages. Section-break ornaments are not headings; `section` is null throughout this book.
+- [x] Replaced lexical/word-limit splitting with a `gpt-4.1-mini` boundary pass over all ordered paragraphs in each of the 12 chapter/prologue units. Cached responses, validated coverage and dependent openings, and refined oversized ranges using complete narrower episodes/ideas rather than sentence cuts.
+- [x] Strip superscript numeric note references using PDF span metadata, preserving prices, dates and decimals; `Rambler.12` now reads `Rambler.`. Recognize curly closing quotes when reconstructing paragraphs across pages.
+- [x] Rename folder provenance to `book_pillar`; add `pillars: []` pending Stage 4 enrichment. Every chunk also records book, author, chapter, real section or null, and PDF page range.
+- [x] Wrote chunks to `/knowledge_pilot/everything_store/chunks.jsonl`.
+- [x] Revised The Everything Store only: 310 chunks; words min 45, p25 243, median 357, p75 476, max 699, mean 367.3. 49 below 200 words, 196 at 200-500, 65 at 501-700, zero above 700. Keep short complete ideas rather than padding them with unrelated topics.
+- [x] Usage-based cost estimate: $0.216465 for responses used by the final boundary workflow; $0.652997 total for this book including discarded attempts. Rates: $0.40 input / $0.10 cached input / $1.60 output per million tokens, verified at https://developers.openai.com/api/docs/models/gpt-4.1-mini. No enrichment or embeddings run.
+- [x] Recorded failures for the later report: model ranges sometimes skipped paragraphs or grouped broad initiatives; an additional semantic reviewer incorrectly rejected independent named topics and was discarded. Derive range ends from selected starts to guarantee coverage. Direct source review and model validation were needed for ten scopes, saved in `/knowledge_pilot/everything_store/boundary_review.json`; retain this ignored file when reproducing the final output.
+- [x] Verification: 7 focused unit tests pass; all 1,214 source paragraphs / 113,875 words appear exactly once in order; complete sentence endings; valid metadata; zero joined note references and zero detected dangling pronoun/demonstrative starts; zero chunks over 700 words. Book-level semantic quality still requires the user's review.
+- [x] Saved the two requested passages and three seeded random passages in full to `/knowledge_pilot/everything_store/sample_chunks.jsonl` and readable `/knowledge_pilot/everything_store/review_samples.md`. Final applied ranges are in `final_boundaries.jsonl`; usage/model decisions are in `boundary_audit.json`; stats in `summary.json`; checks in `quality_checks.json`.
+- [x] Stopped after this revision; awaiting approval before doing the other 9 books. No database writes, Supabase commands, ingestion changes, or cost/tracking changes.
+
+## Stage 3: all 10 books
+
+- [x] Extracted the remaining nine books locally with PyMuPDF and completed cached `gpt-4.1-mini` chapter boundary passes. All ten have draft `chunks.jsonl` exports; no database/Supabase/ingestion/cost-tracking operations.
+- [x] Added `scripts/knowledge_pilot_stage3.py`; capped each API attempt at 40 seconds without retries, preserved caches, backtracked omitted review IDs to individual requests, and discarded invalid boundary IDs without losing source paragraphs.
+- [x] Corrected observed extraction failures: mixed-font emphasis misclassified as headings, chapter-title substring deletion, drop-cap placement, table/choice labels, footnote markers, and negative scientific exponents. Source limitations remain documented in ignored QA files and `knowledge_pilot/ROOT_ISSUES.md`.
+- [x] Applied content-reviewed short-chunk merges to Everything Store, 7 Powers, Lean Startup, Never Split, Thinking in Bets, and selected observed failures in other books. Everything Store is now 309 chunks / 12 under 120 words. Manual decisions and pre-merge backups remain under `knowledge_pilot/` for reproduction.
+- [x] Wrote per-book counts, word distributions, suspected size-only boundaries, under-120 counts, oversized ranges and incomplete audits in `knowledge_pilot/STAGE3.md`. Requested full samples are in `stage3_review_samples.md` and `.jsonl`; these are explicitly draft, not approved final chunks.
+- [x] API credits exhausted during independent audits. Replayed completed chapter requests locally; conservatively merged short passages with uncached reviews and explicitly marked uncached boundary audits pending. Returned-usage Stage 3 cost estimate: $4.104255, including discarded attempts; not a provider invoice. No further API calls, enrichment or embeddings.
+- [x] Checkpoint verification: 8 Stage 3 tests plus 7 Stage 2 tests pass; local structural checks pass for all ten books. Draft total: 4,027 chunks, 1,680 pending boundary audits, 77 oversized chunks. These counts are diagnostic, not a Stage 3 approval.
+- [ ] Finish Stage 3 semantic validation: pending boundary audits, model false positives for self-contained short chunks, and chunks over 700 words remain unresolved. Passing structural coverage/metadata checks is not a semantic-quality pass. Root causes and follow-up are documented; do not start Stage 4.
+
+## Stage 4: enrich
+
+- [ ] For each chunk, add `context_line`, `chunk_type`, `idea`, `applies_when`, `lesson_strength`, and `pillars` using `gpt-4.1-mini`.
+- [ ] Set `lesson_strength` to `strong`, `weak`, or `none`; a story without a transferable lesson is `none`.
+- [ ] Fill `pillars` with zero or more of the six pillar IDs (`how_companies_win`, `human_mind`, `money_game`, `move_people`, `think_sharper`, `whats_coming`); allow multiple pillars per chunk and retain `book_pillar` as fixed folder provenance.
+- [ ] Estimate the cost for all chunks before running and wait for approval if it is over $5.
+
+## Stage 5: embed
+
+- [ ] Embed `context_line` plus chunk text with `text-embedding-3-small`.
+
+## Stage 6: evaluate
+
+- [ ] Write 20 realistic founder situations in `/knowledge_pilot/eval_queries.md` across all six pillars and different stages.
+- [ ] Compare top 5 read-only results from existing `wiki_chunks` limited to the same 10 books against top 5 from new chunks.
+- [ ] Score each result as relevant, partly relevant, or irrelevant; flag starts/ends mid-sentence.
+- [ ] Write `/knowledge_pilot/eval.md` with side-by-side results.
+
+## Stage 7: report
+
+- [ ] Write `/knowledge_pilot/REPORT.md` covering what changed, old vs new scores, failures, total cost, and a recommendation on rechunking the full 127-source library.
+
+# Knowledge library: lesson-based rebuild (2026-10-14)
+
+Replaces the chunk design. Unit = lesson grounded in paragraph ids. Test set: Rich Dad Poor Dad, Crossing the Chasm (argument heavy book), plain-english-ai-economics (transcript; no article/paper sources exist in sources/).
+
+- [ ] Agent definitions updated (chunker, enrichment-checker)
+- [ ] 1. Paragraph detection (general rule, stable ids, strip back matter) + tests; run on 3 test sources, report paragraph counts
+- [ ] 2. Reading windows (~2000 words, 2 paragraphs context)
+- [ ] 3. Lesson extraction (one call per window, structured output, model param)
+- [ ] 4. Deterministic validation + dropped.jsonl
+- [ ] 5. Dedupe (>0.92 embedding similarity)
+- [ ] 6. Embed (512 dims) + lessons.jsonl with evidence text
+- [ ] 7. A/B gpt-4.1-mini vs gpt-4.1 on the 3 test sources, cost per source each
+- [ ] Checks: enrichment-checker 20 lessons/source/model (blind), chunk-auditor recall on 2 Rich Dad chapters
+- [ ] STOP and report; no batch until approved
+
+# Knowledge library v3 (2026-10-14): verified extraction, golden set, judge-tuned lessons
+Spend baseline $1.8994; hard cap $6.90 (ask before exceeding). Judge = gpt-4.1, extraction = gpt-4.1-mini.
+
+- [ ] P1.1 extract.py on every non-duplicate source (general paragraph rule, dictionary hyphen rule, exclude non-author forewords, note them), no API
+- [ ] P1.2 visual check: 4 random pages x 8 sources + worst source, chunk-auditor vs page images; <1 error/page; max 3 rounds of general-rule fixes
+- [ ] P1.3 freeze extraction_version, EXTRACTION_REPORT.md
+- [ ] P2.1 golden set (~12 windows, ~25k words, 5 source types), reference lessons core/minor
+- [ ] P2.2 judge.py (gpt-4.1): grounded, specific, one idea, attributed, findable; core recall by paragraph overlap
+- [ ] P3 lesson prompt v3 (principle field, verbatim evidence/caveat, 1-3 paragraphs, 3 good/3 bad examples) + validation + dedupe; tune on golden set (<=6 rounds, <20c each, target judge >=90% and core recall >=70%)
+- [ ] P4 full Rich Dad, Chasm, transcript; judge 30/source; enrichment-checker 20 blind sign off
+- [ ] P5 Batch API bulk setup (not run), core-library-first order, LIBRARY_REPORT.md, full cost estimate
+- [ ] STOP and report (7 items)

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Report choices: six looks</title>
+<style>
+  :root { --ink-rgb: 214,216,219; --hl-rgb: 205,178,126; --hl2-rgb: 168,142,94; --hl: linear-gradient(90deg, rgb(var(--hl-rgb)), rgb(var(--hl2-rgb)));
+    --serif: ui-serif, "New York", "Iowan Old Style", "Palatino Linotype", Georgia, serif; --sans: -apple-system, "SF Pro Text", "Inter", system-ui, sans-serif; --ink: rgb(var(--ink-rgb)); }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: #101011; color: #b9b8b3; font-family: var(--sans); padding: 36px 20px 70px; }
+  h1 { font-family: var(--serif); font-weight: 500; font-size: 26px; color: #ecebe6; text-align: center; margin: 0 0 6px; }
+  .sub { text-align: center; color: #8e8d88; font-size: 14px; margin: 0 0 34px; }
+  .grid { max-width: 1060px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 22px; }
+  .opt { border: 1px solid #2a2a2c; border-radius: 22px; background: #050505; position: relative; overflow: hidden; display: flex; flex-direction: column; }
+  .opt::before { content: ""; position: absolute; inset: 0; background: radial-gradient(90% 60% at 50% 100%, rgba(var(--hl-rgb), .12), transparent 70%); pointer-events: none; }
+  .stage { position: relative; padding: 46px 26px 44px; text-align: center; min-height: 250px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+  .q { font-family: var(--serif); font-size: 19px; line-height: 1.45; color: rgba(var(--ink-rgb), .95); margin: 0 0 26px; max-width: 250px; }
+  .cap { position: relative; border-top: 1px solid #1d1d1f; padding: 14px 18px 16px; font-size: 13px; line-height: 1.5; color: #a3a29c; } .cap b { color: #e6e4dc; font-weight: 500; display: block; margin-bottom: 3px; letter-spacing: .02em; }
+
+  /* A: words with a gliding line */
+  .A { position: relative; display: flex; gap: 28px; padding-bottom: 12px; } .A button { background: none; border: 0; color: rgba(var(--ink-rgb), .55); font: inherit; font-size: 16px; padding: 4px 2px; cursor: pointer; transition: color .3s; } .A button:hover, .A button.on { color: var(--ink); }
+  .A i { position: absolute; bottom: 0; height: 1.5px; background: var(--hl); width: 0; left: 0; transition: left .45s cubic-bezier(.2,.8,.2,1), width .45s cubic-bezier(.2,.8,.2,1); }
+
+  /* B: one pill with a sliding thumb */
+  .B { position: relative; display: inline-flex; padding: 4px; border: 1px solid rgba(var(--ink-rgb), .22); border-radius: 99px; } .B button { position: relative; z-index: 1; background: none; border: 0; color: rgba(var(--ink-rgb), .6); font: inherit; font-size: 14.5px; padding: 9px 18px; cursor: pointer; transition: color .3s; border-radius: 99px; } .B button.on { color: #0b0907; font-weight: 500; }
+  .B i { position: absolute; top: 4px; bottom: 4px; border-radius: 99px; background: var(--hl); width: 0; left: 0; transition: left .45s cubic-bezier(.2,.8,.2,1), width .45s cubic-bezier(.2,.8,.2,1); }
+
+  /* C: big serif lines */
+  .C { display: flex; flex-direction: column; gap: 2px; } .C button { background: none; border: 0; font-family: var(--serif); font-size: 28px; line-height: 1.3; color: rgba(var(--ink-rgb), .5); cursor: pointer; padding: 4px 10px; transition: color .35s, opacity .35s, letter-spacing .35s; position: relative; } .C button:hover { color: var(--ink); }
+  .C.picked button:not(.on) { opacity: .25; } .C button.on { color: #f4f4f2; } .C button.on::after { content: ""; position: absolute; left: 22%; right: 22%; bottom: 2px; height: 1px; background: var(--hl); }
+
+  /* D: round marks with labels */
+  .D { display: flex; gap: 26px; } .D div { display: flex; flex-direction: column; align-items: center; gap: 9px; cursor: pointer; color: rgba(var(--ink-rgb), .6); font-size: 13.5px; transition: color .3s; }
+  .D .c { width: 54px; height: 54px; border-radius: 50%; border: 1px solid rgba(var(--ink-rgb), .28); display: grid; place-items: center; transition: all .35s; } .D svg { width: 22px; height: 22px; stroke: rgba(var(--ink-rgb), .8); fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  .D div:hover { color: var(--ink); } .D div:hover .c { border-color: rgba(var(--ink-rgb), .6); } .D div.on { color: var(--ink); } .D div.on .c { border-color: transparent; background: var(--hl); } .D div.on svg { stroke: #0b0907; } .D.picked div:not(.on) { opacity: .35; }
+
+  /* E: a rail with three stops and a handle */
+  .E { position: relative; width: 250px; height: 70px; } .E .rail { position: absolute; left: 14px; right: 14px; top: 16px; height: 1px; background: rgba(var(--ink-rgb), .25); } .E .fillr { position: absolute; left: 14px; top: 15.5px; height: 2px; width: 0; background: var(--hl); transition: width .5s cubic-bezier(.2,.8,.2,1); }
+  .E .stop { position: absolute; top: 0; width: 60px; margin-left: -30px; text-align: center; cursor: pointer; font-size: 13.5px; color: rgba(var(--ink-rgb), .55); transition: color .3s; } .E .stop:hover, .E .stop.on { color: var(--ink); } .E .dot { width: 9px; height: 9px; border-radius: 50%; background: #050505; border: 1px solid rgba(var(--ink-rgb), .45); margin: 12px auto 14px; transition: all .35s; }
+  .E .stop.on .dot { background: rgb(var(--hl-rgb)); border-color: transparent; box-shadow: 0 0 0 5px rgba(var(--hl-rgb), .16); }
+
+  /* F: inline in a sentence */
+  .F { font-family: var(--serif); font-size: 22px; line-height: 1.7; color: rgba(var(--ink-rgb), .9); max-width: 280px; } .F button { background: none; border: 0; font: inherit; font-style: italic; color: rgba(var(--ink-rgb), .55); cursor: pointer; padding: 0 2px; border-bottom: 1px dashed rgba(var(--ink-rgb), .35); transition: color .3s, border-color .3s; margin: 0 2px; } .F button:hover { color: var(--ink); border-color: rgba(var(--ink-rgb), .7); }
+  .F.picked button:not(.on) { opacity: .25; } .F button.on { color: #f4f4f2; border-bottom: 1px solid transparent; border-image: var(--hl) 1; }
+  .res { margin-top: 18px; height: 18px; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: rgba(var(--ink-rgb), .45); }
+</style>
+</head>
+<body>
+<h1>Report choices: six looks</h1>
+<p class="sub">Same question, same three answers. Click each one to feel how it behaves, then tell me a number, or mix: "the look of 3 with the marks of 4".</p>
+<div class="grid" id="grid"></div>
+<script>
+  const Q = 'Your move was to ask both clinics for a call within the next 3 days. I said at least one would not answer. What happened?';
+  const L = ['Done', "Couldn't", "Didn't"];
+  const ICON = ['<path d="M5 12.5l4.5 4.5L19 7.5"/>', '<path d="M5 12h14M13 6l6 6-6 6" transform="translate(-1 0)"/>', '<path d="M6 12h12"/>'];
+  const OPTS = [
+    { n: '1. Words with a gliding line', d: 'No shapes at all. A thin gold line glides under the one you press. The quietest option.', html: () => `<div class="A" data-k="A">${L.map(l => `<button>${l}</button>`).join('')}<i></i></div>` },
+    { n: '2. One pill, sliding gold thumb', d: 'The three answers share one thin pill. A gold marker slides to your choice, like a tiny switch.', html: () => `<div class="B" data-k="B"><i></i>${L.map(l => `<button>${l}</button>`).join('')}</div>` },
+    { n: '3. Large serif lines', d: 'Axiom\'s own typeface, big, stacked like lines in a book. The others fade away when you choose. Editorial.', html: () => `<div class="C" data-k="C">${L.map(l => `<button>${l}</button>`).join('')}</div>` },
+    { n: '4. Round marks with labels', d: 'Three small circles with a simple mark (tick, arrow, dash). The chosen one fills gold. Feels like an app, not a form.', html: () => `<div class="D" data-k="D">${L.map((l, i) => `<div><span class="c"><svg viewBox="0 0 24 24">${ICON[i]}</svg></span>${l}</div>`).join('')}</div>` },
+    { n: '5. A rail with three stops', d: 'A thin line with three points. A gold line grows to the one you pick. Calm, a bit like a progress track.', html: () => `<div class="E" data-k="E"><div class="rail"></div><div class="fillr"></div>${L.map((l, i) => `<div class="stop" style="left:${14 + i * 111}px"><div class="dot"></div>${l}</div>`).join('')}</div>` },
+    { n: '6. Inside the sentence', d: 'The answer is part of what Axiom says: "I did it / I couldn\'t / I didn\'t", tap the words. Most conversational, no button at all.', html: () => `<div class="F" data-k="F">Tonight, <button>I did it</button> <button>I couldn't</button> <button>I didn't</button></div>`, q: false }
+  ];
+  const g = document.getElementById('grid');
+  OPTS.forEach(o => { const d = document.createElement('div'); d.className = 'opt';
+    d.innerHTML = `<div class="stage">${o.q === false ? '' : `<p class="q">${Q}</p>`}${o.html()}<div class="res"></div></div><div class="cap"><b>${o.n}</b>${o.d}</div>`; g.appendChild(d); });
+  document.querySelectorAll('[data-k]').forEach(box => { const k = box.dataset.k, items = [...box.querySelectorAll(k === 'D' ? ':scope > div' : k === 'E' ? '.stop' : 'button')];
+    const res = box.parentElement.querySelector('.res');
+    items.forEach((it, i) => it.addEventListener('click', () => { items.forEach(x => x.classList.remove('on')); it.classList.add('on'); box.classList.add('picked'); res.textContent = L[i] + ' pressed. Nothing is sent as a message.';
+      if (k === 'A' || k === 'B') { const bar = box.querySelector('i'); bar.style.left = it.offsetLeft + 'px'; bar.style.width = it.offsetWidth + 'px'; }
+      if (k === 'E') { box.querySelector('.fillr').style.width = (i * 111) + 'px'; } })); });
+</script>
+</body>
+</html>

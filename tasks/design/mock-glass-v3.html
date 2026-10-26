@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Axiom: ivory and black glass, the Learn chat</title>
+<style>
+  .chip { display:flex; align-items:center; gap:8px; font:inherit; font-size:12.5px; color:#e4e1d8; background:#171718; border:1px solid #333; border-radius:99px; padding:6px 12px 6px 7px; cursor:pointer; }
+  .chip i { width:18px; height:18px; border-radius:50%; display:block; border:1px solid rgba(255,255,255,.2); }
+  .chip.on { border-color:#d8d6d0; background:#222224; }
+  :root { --ink-rgb:196,200,206; --ivory:rgb(var(--ink-rgb)); --strong:#DADDE1; --black:#080807; --hl-a-rgb:230,196,142; --hl-b-rgb:185,129,67; --hl-c-rgb:154,67,88; --hl: linear-gradient(90deg, rgb(var(--hl-a-rgb)), rgb(var(--hl-b-rgb)) 55%, rgb(var(--hl-c-rgb)));
+          --serif: ui-serif, "New York", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+          --sans: -apple-system, "SF Pro Text", "SF Pro Display", "Inter", system-ui, "Segoe UI", sans-serif; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: #0f0f10; color: #d8d6d0; font-family: var(--sans); padding: 36px 20px 80px; }
+  .wrap { max-width: 980px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 48px; justify-content: center; align-items: flex-start; }
+  .side { width: 360px; }
+  .side .tag { display: inline-block; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; border: 1px solid #333; border-radius: 99px; padding: 4px 10px; color: #a9a7a1; margin-bottom: 14px; }
+  .side h1 { font-family: var(--serif); font-weight: 500; font-size: 26px; line-height: 1.2; margin: 0 0 12px; color: #f1eee6; }
+  .side p, .side li { font-size: 14px; line-height: 1.55; color: #a9a7a1; }
+  .side ul { padding-left: 18px; margin: 8px 0 16px; }
+  .side b { color: #e4e1d8; font-weight: 600; }
+  .side .box { border: 1px solid #2a2a2c; border-radius: 14px; padding: 14px 16px; margin: 14px 0; background: #121213; }
+  .counter { font-variant-numeric: tabular-nums; font-size: 13px; color: #e4e1d8; }
+  .counter span { color: var(--ivory); font-weight: 600; }
+  .ghost { font: inherit; font-size: 13px; color: #e4e1d8; background: transparent; border: 1px solid #3a3a3c; border-radius: 99px; padding: 8px 14px; cursor: pointer; margin: 4px 6px 0 0; }
+  .ghost:hover { border-color: var(--ivory); }
+
+  /* phone */
+  .phone { width: 390px; height: 840px; border-radius: 50px; border: 1px solid #333; overflow: hidden; position: relative; background: var(--black); color: var(--ivory); box-shadow: 0 40px 90px rgba(0,0,0,.6); flex: none; }
+  .ambient { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
+  .ambient i { position: absolute; border-radius: 50%; filter: blur(60px); background: radial-gradient(circle, rgba(var(--ink-rgb),.12), rgba(var(--ink-rgb),0) 70%); animation: drift 22s ease-in-out infinite alternate; }
+  .ambient i:nth-child(1) { width: 340px; height: 340px; left: -90px; top: 120px; }
+  .ambient i:nth-child(2) { width: 300px; height: 300px; right: -100px; top: 460px; animation-duration: 28s; animation-delay: -8s; background: radial-gradient(circle, rgba(var(--ink-rgb),.09), rgba(var(--ink-rgb),0) 70%); }
+  .ambient i:nth-child(3) { width: 220px; height: 220px; left: 90px; bottom: -60px; animation-duration: 34s; animation-delay: -15s; background: radial-gradient(circle, rgba(var(--hl-b-rgb),.16), rgba(var(--hl-b-rgb),0) 70%); }
+  @keyframes drift { from { transform: translate(0,0) scale(1);} to { transform: translate(40px,-50px) scale(1.18);} }
+  @media (prefers-reduced-motion: reduce) { .ambient i { animation: none; } }
+  .notch { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 112px; height: 28px; border-radius: 99px; background: #000; z-index: 30; }
+
+  .glass { position: relative; background: linear-gradient(135deg, rgba(var(--ink-rgb),.11), rgba(var(--ink-rgb),.035)); -webkit-backdrop-filter: blur(26px) saturate(170%); backdrop-filter: blur(26px) saturate(170%);
+           border: 1px solid rgba(var(--ink-rgb),.13); box-shadow: 0 10px 34px rgba(0,0,0,.5), inset 0 1px 0 rgba(var(--ink-rgb),.24), inset 0 -1px 0 rgba(var(--ink-rgb),.04); }
+  .glass::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: linear-gradient(180deg, rgba(var(--ink-rgb),.13), rgba(var(--ink-rgb),0) 38%); }
+
+  .screen { position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; }
+  .top { padding: 54px 22px 10px; display: flex; align-items: center; justify-content: space-between; }
+  .top svg { height: 21px; width: auto; display: block; }
+  .top .step { font-size: 11px; letter-spacing: .15em; text-transform: uppercase; color: rgba(var(--ink-rgb),.5); }
+  .chat { flex: 1; overflow-y: auto; padding: 8px 20px 18px; scrollbar-width: none; scroll-behavior: smooth; }
+  .chat::-webkit-scrollbar { display: none; }
+  .me { align-self: flex-end; margin: 14px 0 18px 46px; border-radius: 22px 22px 6px 22px; padding: 12px 16px; font-size: 15px; line-height: 1.45; width: fit-content; max-width: 100%; margin-left: auto; }
+  .ax { font-family: var(--serif); font-size: 18px; line-height: 1.53; margin: 0 0 14px; color: var(--ivory); animation: rise .35s ease; }
+  .ax strong { font-weight: 600; color: var(--strong); }
+  .ax em { font-style: italic; }
+  .ax.q { font-size: 18px; margin-top: 4px; }
+  .src { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: rgba(var(--ink-rgb),.55); margin: -4px 0 18px; }
+  .src i { width: 22px; height: 2px; border-radius: 2px; background: var(--hl); display: inline-block; }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px);} to { opacity: 1; transform: none; } }
+  .card { border-radius: 20px; padding: 16px 16px 14px; margin: 0 0 18px; animation: rise .35s ease; }
+  .card .lab { font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: rgba(var(--ink-rgb),.55); margin-bottom: 14px; display: flex; justify-content: space-between; position: relative; }
+  .b { margin-bottom: 12px; position: relative; }
+  .b .t { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; }
+  .b .t span:last-child { font-variant-numeric: tabular-nums; color: rgba(var(--ink-rgb),.6); }
+  .b .t.hot span:last-child { background: var(--hl); -webkit-background-clip: text; background-clip: text; color: transparent; font-weight: 700; font-size: 15px; }
+  .track { height: 6px; border-radius: 99px; background: rgba(var(--ink-rgb),.09); overflow: hidden; }
+  .fill { height: 100%; border-radius: 99px; background: rgba(var(--ink-rgb),.38); transition: width .25s ease; }
+  .fill.hot { background: var(--hl); box-shadow: 0 0 16px rgba(var(--hl-b-rgb),.5); }
+  .slider { position: relative; margin-top: 4px; }
+  .slider label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; }
+  .slider label b { font-variant-numeric: tabular-nums; background: var(--hl); -webkit-background-clip: text; background-clip: text; color: transparent; font-weight: 700; }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 24px; background: transparent; margin: 0; cursor: pointer; }
+  input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 4px; background: linear-gradient(to right, rgb(var(--hl-a-rgb)), rgb(var(--hl-b-rgb)) calc(var(--p) * .55), rgb(var(--hl-c-rgb)) var(--p), rgba(var(--ink-rgb),.13) var(--p)); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 24px; height: 24px; border-radius: 50%; margin-top: -10px; background: linear-gradient(180deg, var(--strong), #b3ab98); box-shadow: 0 0 0 2px rgba(var(--hl-b-rgb),.85), 0 3px 12px rgba(0,0,0,.5), inset 0 1px 0 var(--strong); border: 0; }
+  .math { font-size: 12px; color: rgba(var(--ink-rgb),.55); margin-top: 8px; position: relative; }
+  .math code { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: var(--ivory); font-size: 12px; }
+
+  .composer { padding: 10px 14px 28px; }
+  .composer .pill { display: flex; align-items: center; gap: 8px; border-radius: 99px; padding: 6px 6px 6px 18px; }
+  .composer input { flex: 1; background: transparent; border: 0; outline: 0; color: var(--ivory); font: inherit; font-size: 15.5px; min-width: 0; position: relative; }
+  .composer input::placeholder { color: rgba(var(--ink-rgb),.4); }
+  .send { flex: none; width: 38px; height: 38px; border-radius: 50%; border: 0; background: var(--ivory); color: var(--black); font-size: 17px; cursor: pointer; position: relative; display: grid; place-items: center; }
+  .send:disabled { opacity: .35; cursor: default; }
+
+  /* notification: no buttons, tap to open */
+  .notice { position: absolute; left: 12px; right: 12px; top: -140px; z-index: 40; border-radius: 24px; padding: 14px 16px; cursor: pointer; transition: top .5s cubic-bezier(.2,.9,.25,1.05); }
+  .notice.show { top: 48px; }
+  .notice .row { display: flex; gap: 12px; align-items: center; position: relative; }
+  .notice .ico { flex: none; width: 38px; height: 38px; border-radius: 10px; background: var(--hl); box-shadow: 0 0 18px rgba(var(--hl-b-rgb),.45); display: grid; place-items: center; }
+  .notice .ico svg { width: 22px; height: auto; }
+  .notice .txt { flex: 1; min-width: 0; }
+  .notice .who { display: flex; justify-content: space-between; font-size: 12px; color: rgba(var(--ink-rgb),.6); margin-bottom: 2px; }
+  .notice .msg { font-size: 14.5px; line-height: 1.35; color: var(--strong); }
+
+  /* Move: its own screen, rises when the notice is tapped */
+  .sheet { position: absolute; inset: 0; z-index: 50; transform: translateY(102%); transition: transform .55s cubic-bezier(.2,.85,.2,1); background: rgba(7,7,7,.72); -webkit-backdrop-filter: blur(30px) saturate(150%); backdrop-filter: blur(30px) saturate(150%); }
+  .sheet.open { transform: none; }
+  .sheet .in { height: 100%; overflow-y: auto; padding: 58px 22px 34px; scrollbar-width: none; }
+  .sheet .in::-webkit-scrollbar { display: none; }
+  .close { position: absolute; top: 52px; right: 20px; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: var(--ivory); font-size: 18px; cursor: pointer; z-index: 2; }
+  .sheet .rule { height: 2px; width: 52px; border-radius: 2px; background: var(--hl); margin: 6px 0 22px; }
+  .sheet .kick { font-size: 11px; letter-spacing: .15em; text-transform: uppercase; color: rgba(var(--ink-rgb),.55); margin-bottom: 12px; }
+  .sheet h3 { font-family: var(--serif); font-weight: 500; font-size: 26px; line-height: 1.25; margin: 0 0 24px; color: var(--strong); }
+  .sec { margin-bottom: 20px; }
+  .sec .lab { font-size: 10.5px; letter-spacing: .15em; text-transform: uppercase; color: rgba(var(--ink-rgb),.5); margin-bottom: 7px; }
+  .sec p { font-family: var(--serif); font-size: 17px; line-height: 1.5; margin: 0; }
+  .words { border-radius: 18px; padding: 14px 16px; font-family: var(--serif); font-size: 17px; line-height: 1.5; }
+  .words small { display: block; font-family: var(--sans); font-size: 11.5px; color: rgba(var(--ink-rgb),.5); margin-top: 8px; position: relative; }
+  .words span { position: relative; }
+  .check { list-style: none; padding: 0; margin: 0; }
+  .check li { display: flex; gap: 12px; align-items: flex-start; font-size: 15px; line-height: 1.4; padding: 8px 0; cursor: pointer; }
+  .check li i { flex: none; width: 19px; height: 19px; margin-top: 0; border: 1px solid rgba(var(--ink-rgb),.5); border-radius: 6px; position: relative; }
+  .check li.done i { background: var(--hl); border-color: transparent; }
+  .check li.done i::after { content: ""; position: absolute; left: 6px; top: 2px; width: 4px; height: 9px; border: solid var(--black); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+  .check li.done span { color: rgba(var(--ink-rgb),.45); }
+  .predict { font-size: 14px; line-height: 1.5; color: rgba(var(--ink-rgb),.65); border-left: 2px solid rgb(var(--hl-b-rgb)); padding-left: 14px; margin: 22px 0; }
+  .btn { display: block; width: 100%; font: inherit; font-size: 16px; font-weight: 600; padding: 16px; border-radius: 16px; border: 0; background: var(--hl); color: #14100b; cursor: pointer; box-shadow: 0 8px 28px rgba(var(--hl-b-rgb),.35), inset 0 1px 0 rgba(255,255,255,.35); }
+  .btn:active { transform: scale(.985); }
+  .quiet { display: block; width: 100%; text-align: center; font: inherit; font-size: 14px; color: rgba(var(--ink-rgb),.6); margin-top: 14px; background: none; border: 0; cursor: pointer; }
+  .quiet:hover { color: var(--strong); }
+  .swap { display: none; margin-top: 14px; border-radius: 18px; padding: 14px; }
+  .swap.show { display: block; animation: rise .3s ease; }
+  .swap label, .swap .small { position: relative; display: block; font-size: 12.5px; line-height: 1.45; color: rgba(var(--ink-rgb),.6); }
+  .swap textarea { position: relative; width: 100%; min-height: 70px; resize: none; background: rgba(0,0,0,.35); border: 1px solid rgba(var(--ink-rgb),.14); border-radius: 12px; color: var(--ivory); font: inherit; font-size: 14px; padding: 10px; margin: 8px 0; }
+  .done-msg { display: none; text-align: center; padding: 18px 0; font-family: var(--serif); font-size: 17px; line-height: 1.5; }
+  .done-msg.show { display: block; animation: rise .35s ease; }
+  .card::after, .notice::after { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; background: var(--hl); pointer-events: none;
+     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; opacity: .6; }
+  .notice::after { opacity: .9; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="side">
+    <span class="tag">Mock for decision 5 · not connected to the app</span>
+    <h1>Ivory and black, with glass</h1>
+    <p>The Learn chat as you described it. Everything here is interactive.</p>
+    <div class="box">
+      <b>Highlight colour</b>
+      <p style="margin:6px 0 10px">Writing stays Stone (<code>#C4C8CE</code>) on black. This second colour is only for the picture and the important moments: the key bar and number, the slider, the notification, the Commit button, the tick marks. Pick one, or build your own gradient.</p>
+      <div id="chips" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:12px;font-size:12.5px;color:#a9a7a1">Start <input type="color" id="c1" value="#e6c48e" style="width:40px;height:32px;border:1px solid #3a3a3c;background:transparent;border-radius:8px;padding:2px;cursor:pointer"> End <input type="color" id="c3" value="#9a4358" style="width:40px;height:32px;border:1px solid #3a3a3c;background:transparent;border-radius:8px;padding:2px;cursor:pointer"></div>
+      <div id="pname" style="font-size:13px;color:#e4e1d8;margin-top:10px"></div>
+    </div>
+    <div class="box">
+      <b>Try this:</b>
+      <ul>
+        <li>Move the slider in the chat.</li>
+        <li>Answer Axiom's question. Try <b>a filler reply</b> (ok, makes sense): Axiom asks a follow-up and no notification comes.</li>
+        <li>Then give <b>a real answer</b> (use the button, or type your own). Axiom works with what you said, and a <b>notification</b> drops from the top. It has no buttons.</li>
+        <li>Ignore it and send another real answer. It shows <b>once more</b>, then never again.</li>
+        <li>Tap the notification to open the Move. Tick the prep items. Tap <b>Change this move</b>.</li>
+      </ul>
+      <div class="counter">Notices shown: <span id="cnt">0</span> of 2</div>
+      <button class="ghost" id="ex">Use a real answer</button>
+      <button class="ghost" id="ex2">Use a filler reply</button>
+      <button class="ghost" id="reset">Start over</button>
+    </div>
+    <p><b>Colours:</b> black base, Stone for all writing. The highlight gradient is the only other colour, and it marks what matters. The first option is built from your logo's brass and burgundy.</p>
+    <p><b>Glass:</b> frosted, translucent panels with a soft edge light, over a very faint moving glow so the blur has something to catch. It's the effect Apple uses in its own apps.</p>
+    <p><b>Still open:</b> if both notices are ignored, where does the move live? My proposal: on the home screen as "your move is ready".</p>
+  </div>
+
+  <div class="phone" id="phone">
+    <div class="ambient"><i></i><i></i><i></i></div>
+    <div class="notch"></div>
+
+    <div class="screen">
+      <div class="top">
+        <svg viewBox="123 0 360 130" xmlns="http://www.w3.org/2000/svg" aria-label="Axiom"><g style="fill:var(--ivory)"><path d="M706 19C661 22 651 32 616 106L367 674H347L139 183C75 37 63 21 15 19V0H213V19C165 19 145 31 145 60C145 72 148 86 153 99L199 216H461L502 120C514 93 521 67 521 53C521 28 504 20 451 19V0H706ZM216 257 331 532 447 257Z" transform="translate(123.000 102) scale(0.11 -0.11)"/><path d="M278 0H479V15C448 15 428 31 397 75L269 271L352 391C371 418 400 433 433 435V450H275V435C305 433 315 427 315 413C315 401 303 379 278 348C273 342 261 324 248 304L240 316C225 339 216 352 214 356C195 387 188 403 188 413C188 428 201 434 231 435V450H24V435H33C63 435 79 422 110 375L204 231L90 66C60 25 50 18 17 15V0H162V15C133 15 122 20 122 33C122 40 128 53 142 74L221 197L312 57C316 51 318 46 318 39C318 21 311 17 278 15Z" transform="translate(198.570 102) scale(0.11 -0.11)"/><path d="M16 0H253V15C187 20 180 29 179 102V457L175 460L20 405V390L28 391C40 393 52 394 62 394C86 394 95 378 95 334V102C93 28 84 18 16 15ZM128 683C101 683 78 660 78 632C78 603 100 581 128 581C158 581 180 603 180 632C180 661 157 683 128 683Z" transform="translate(253.570 102) scale(0.11 -0.11)"/><path d="M250 460C119 460 29 364 29 226C29 90 122 -10 248 -10C374 -10 470 95 470 234C470 366 378 460 250 460ZM237 432C321 432 380 336 380 199C380 85 335 18 260 18C221 18 184 42 163 82C135 134 119 204 119 275C119 370 165 432 237 432Z" transform="translate(284.150 102) scale(0.11 -0.11)"/><path d="M16 0H238V15C187 16 171 27 170 67V349C170 351 178 361 185 368C210 391 253 408 288 408C332 408 354 373 354 303V86C352 29 342 18 286 15V0H510V15C454 15 440 31 438 95V347C468 390 500 408 547 408C604 408 622 381 622 298V87C620 28 614 21 556 15V0H775V15L749 17C717 22 706 37 706 76V282C706 400 667 460 590 460C532 460 481 434 427 376C409 433 375 460 321 460C276 460 249 447 166 383V458L159 460C106 441 72 430 19 415V398C31 401 40 402 51 402C77 402 86 386 86 338V85C84 29 71 15 16 15Z" transform="translate(339.150 102) scale(0.11 -0.11)"/></g></svg>
+        <span class="step">Learn</span>
+      </div>
+
+      <div class="chat" id="chat"></div>
+
+      <div class="composer">
+        <div class="pill glass">
+          <input id="inp" type="text" placeholder="Reply to Axiom" autocomplete="off">
+          <button class="send" id="send" aria-label="Send">↑</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="notice glass" id="notice">
+      <div class="row">
+        <div class="ico"><svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="#070707" stroke-width="9" stroke-linejoin="miter"><path d="M 8,92 H 26 C 26,62 33,42 50,31 C 56,27 55,20 50,12 C 45,25 39,30 29,37 C 16,48 12,66 12,92"/><path d="M 92,92 H 74 C 74,62 67,42 50,31 C 44,27 45,20 50,12 C 55,25 61,30 71,37 C 84,48 88,66 88,92"/></g></svg></div>
+        <div class="txt"><div class="who"><span>Axiom</span><span>now</span></div><div class="msg">Your move for the 30% renewal ask is ready: one question to ask before either of you says a number.</div></div>
+      </div>
+    </div>
+
+    <div class="sheet" id="sheet">
+      <div class="close glass" id="close" aria-label="Back to chat">×</div>
+      <div class="in">
+        <div class="kick">Your move</div>
+        <div class="rule"></div>
+        <h3>Ask one question before you say any number.</h3>
+        <div class="sec"><div class="lab">The mission</div><p>On the renewal call, open with one question that puts the problem back on them, before either of you says another number.</p></div>
+        <div class="sec"><div class="lab">It worked if</div><p>They give the real reason behind the 30% ask, in their own words. Yes or no.</p></div>
+        <div class="sec"><div class="lab">The words to use</div><div class="words glass"><span>"How am I supposed to make a 30% cut work for us?"</span><small>Suggested wording</small></div></div>
+        <div class="sec"><div class="lab">Before the call</div>
+          <ul class="check" id="check">
+            <li><i></i><span>Write your lowest acceptable number</span></li>
+            <li><i></i><span>Say the question out loud once</span></li>
+            <li><i></i><span>Pick the one thing you will not trade away</span></li>
+          </ul>
+        </div>
+        <div class="predict">My read: there's a reason behind the number, and it isn't your price. The call will tell us.</div>
+        <button class="btn" id="commit">Commit to this move</button>
+        <div class="done-msg" id="committed">Committed. I'll check in this evening to see what happened.</div>
+        <button class="quiet" id="change">Change this move</button>
+        <div class="swap glass" id="swap">
+          <label>You can change it once. Tell me what makes this one wrong for you. A real reason works best, like "the call is by email".</label>
+          <textarea placeholder="What makes this the wrong move?"></textarea>
+          <span class="small">"I'm busy" isn't a reason I can work with.</span>
+          <button class="btn" style="margin-top:10px">Give me a different move</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const chat = document.getElementById('chat'), inp = document.getElementById('inp'), send = document.getElementById('send');
+  const notice = document.getElementById('notice'), sheet = document.getElementById('sheet'), cnt = document.getElementById('cnt');
+  let state;
+  const el = (html) => { const d = document.createElement('div'); d.innerHTML = html.trim(); return d.firstChild; };
+  const add = (node) => { chat.appendChild(node); chat.scrollTop = chat.scrollHeight; };
+  const axSay = (html, delay = 650) => new Promise(r => setTimeout(() => { add(el(`<p class="ax">${html}</p>`)); r(); }, delay));
+
+  function start() {
+    state = { real: 0, fillers: 0, notices: 0, opened: false, busy: false };
+    chat.innerHTML = ''; cnt.textContent = '0'; notice.classList.remove('show'); sheet.classList.remove('open'); inp.value = '';
+    document.getElementById('committed').classList.remove('show'); document.getElementById('commit').style.display = '';
+    document.getElementById('swap').classList.remove('show');
+    document.querySelectorAll('#check li').forEach(li => li.classList.remove('done'));
+    add(el(`<div class="me glass"><span style="position:relative">My biggest customer is 40% of revenue and wants a 30% discount at renewal or they'll leave.</span></div>`));
+    setTimeout(() => {
+      add(el(`<p class="ax">Your biggest customer is 40% of your revenue and wants 30% off at renewal. Run the number first: that discount takes <strong>12% of everything you earn</strong>.</p>`));
+      add(el(`<p class="ax"><strong>Chris Voss</strong>, in <em>Never Split the Difference</em>, says the strongest answer to a demand like this isn't a harder no. It's a question that puts the problem back on them: <em>"How am I supposed to make that work?"</em> A "how" or "what" question keeps you steering the conversation while they do the explaining, so they have to justify the number, not you.</p>`));
+      add(el(`<div class="src"><i></i>Chris Voss · Never Split the Difference</div>`));
+      const card = el(`<div class="card glass"><div class="lab"><span>From your numbers</span><span>Calculated</span></div>
+        <div class="b"><div class="t"><span>Everything you earn</span><span>100%</span></div><div class="track"><div class="fill" style="width:100%"></div></div></div>
+        <div class="b"><div class="t"><span>This customer</span><span>40%</span></div><div class="track"><div class="fill" style="width:40%"></div></div></div>
+        <div class="b"><div class="t hot"><span>What the discount costs you</span><span class="cost">12%</span></div><div class="track"><div class="fill hot cb" style="width:12%"></div></div></div>
+        <div class="slider"><label><span>If you agree to</span><b class="dv">30% off</b></label><input type="range" min="0" max="40" value="30" step="1" style="--p:75%"><div class="math"><code class="mm">40% × 30% = 12%</code> of your total revenue</div></div></div>`);
+      const rng = card.querySelector('input');
+      rng.addEventListener('input', () => { const v = +rng.value, c = +(0.4 * v).toFixed(1);
+        rng.style.setProperty('--p', (v / 40 * 100) + '%'); card.querySelector('.dv').textContent = v + '% off';
+        card.querySelector('.cost').textContent = c + '%'; card.querySelector('.cb').style.width = c + '%';
+        card.querySelector('.mm').textContent = '40% × ' + v + '% = ' + c + '%'; });
+      add(card);
+      setTimeout(() => add(el(`<p class="ax q">What are you actually trying to get out of this renewal: keep them at today's price, or are you open to giving something?</p>`)), 700);
+    }, 500);
+  }
+
+  function showNotice() {
+    if (state.notices >= 2 || state.opened) return;
+    state.notices++; cnt.textContent = state.notices;
+    setTimeout(() => notice.classList.add('show'), 500);
+    setTimeout(() => { if (!state.opened) notice.classList.remove('show'); }, 6500);
+  }
+  const FILLER = new Set('ok okay k yes yeah yep yup no nope sure fine hmm hm mm um uh thanks thank you thx cool got it i see makes sense right true alright maybe idk good nice lol so well kinda'.split(' '));
+  const clean = t => t.toLowerCase().replace(/[^a-z0-9%$\s']/g, ' ').split(/\s+/).filter(Boolean);
+  const isSubstantive = t => clean(t).filter(w => !FILLER.has(w)).length >= 3;
+  const snippet = t => { const w = t.trim().split(/\s+/); return w.slice(0, 16).join(' ') + (w.length > 16 ? '…' : ''); };
+  const fillerFollowups = [
+    `Let me put it more simply. If this renewal goes the way you want, what does it look like?`,
+    `What's the one thing you can't give up in this deal?`,
+    `No rush. Tell me what's on your mind about this call.`
+  ];
+  async function submit(text) {
+    text = (text || inp.value).trim(); if (!text || state.busy) return;
+    state.busy = true; inp.value = ''; notice.classList.remove('show');
+    add(el(`<div class="me glass"><span style="position:relative">${text.replace(/</g, '&lt;')}</span></div>`));
+    if (!isSubstantive(text)) {
+      const f = fillerFollowups[Math.min(state.fillers, fillerFollowups.length - 1)]; state.fillers++;
+      await axSay(f);
+    } else {
+      state.real++;
+      if (state.real === 1) { await axSay(`You said: "${snippet(text).replace(/</g, '&lt;')}". That's the position to protect, and the question I'm giving you should serve it: it gets them explaining why 30%, not you defending your price.`); showNotice(); }
+      else if (state.real === 2) { await axSay(`Keep hold of that. The first thing they say after your question will tell you more than the number itself.`); showNotice(); }
+      else { await axSay(`Go on.`); }
+    }
+    state.busy = false;
+  }
+  send.addEventListener('click', () => submit());
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+  document.getElementById('ex').addEventListener('click', () => submit("I'd rather keep them at today's price, but I could live with 10% if they sign a two-year deal. They're 40% of my revenue so I can't afford to lose them."));
+  document.getElementById('ex2').addEventListener('click', () => submit('ok that makes sense'));
+  document.getElementById('reset').addEventListener('click', start);
+  notice.addEventListener('click', () => { state.opened = true; notice.classList.remove('show'); sheet.classList.add('open'); });
+  document.getElementById('close').addEventListener('click', () => sheet.classList.remove('open'));
+  document.getElementById('change').addEventListener('click', () => document.getElementById('swap').classList.toggle('show'));
+  document.getElementById('commit').addEventListener('click', e => { e.target.style.display = 'none'; document.getElementById('committed').classList.add('show'); });
+  document.querySelectorAll('#check li').forEach(li => li.addEventListener('click', () => li.classList.toggle('done')));
+  const HL = [
+    { n: 'Logo: brass to burgundy', a: '#E6C48E', b: '#B98143', c: '#9A4358' },
+    { n: 'Ember', a: '#F5C86A', b: '#EE8A3B', c: '#D8452F' },
+    { n: 'Aurora', a: '#9BF0C8', b: '#3FC9A6', c: '#2A8FB8' },
+    { n: 'Ice', a: '#BFE3FF', b: '#7FB2FF', c: '#6D7BFF' },
+    { n: 'Orchid', a: '#F6B5E3', b: '#C98BFF', c: '#7C6BFF' }
+  ];
+  const hex2rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const rgb2hex = r => '#' + r.map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
+  const midHex = (h1, h2) => rgb2hex(hex2rgb(h1).map((v, i) => (v + hex2rgb(h2)[i]) / 2));
+  function setHL(a, b, c, name, key) {
+    const r = document.documentElement.style;
+    r.setProperty('--hl-a-rgb', hex2rgb(a).join(',')); r.setProperty('--hl-b-rgb', hex2rgb(b).join(',')); r.setProperty('--hl-c-rgb', hex2rgb(c).join(','));
+    document.getElementById('pname').textContent = (name || 'Custom') + ':  ' + a.toUpperCase() + ' → ' + b.toUpperCase() + ' → ' + c.toUpperCase();
+    document.getElementById('c1').value = a.toLowerCase(); document.getElementById('c3').value = c.toLowerCase();
+    document.querySelectorAll('.chip').forEach(x => x.classList.toggle('on', x.dataset.key === key));
+  }
+  const chips = document.getElementById('chips');
+  HL.forEach((p, i) => { const btn = document.createElement('button'); btn.className = 'chip'; btn.dataset.key = 'p' + i;
+    btn.innerHTML = `<i style="background:linear-gradient(135deg,${p.a},${p.b},${p.c})"></i>${p.n}`; btn.addEventListener('click', () => setHL(p.a, p.b, p.c, p.n, 'p' + i)); chips.appendChild(btn); });
+  const custom = () => { const a = document.getElementById('c1').value, c = document.getElementById('c3').value; setHL(a, midHex(a, c), c, 'Custom', 'custom'); };
+  document.getElementById('c1').addEventListener('input', custom); document.getElementById('c3').addEventListener('input', custom);
+  setHL(HL[0].a, HL[0].b, HL[0].c, HL[0].n, 'p0');
+  start();
+</script>
+</body>
+</html>

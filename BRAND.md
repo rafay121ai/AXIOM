@@ -1,8 +1,15 @@
 # Axiom — Brand Document
 
+> Updated October 2026 to match PRODUCT.md, DESIGN.md and `tasks/voice.md`.
+> The removal system, warnings, the Founder Brain and paid plans are gone.
+> Sections marked "(Retired)" must not be reused. The tagline, the one-line and
+> marketing typography are still open.
+
 ## Brand Foundation
 
+
 ### The Name
+
 Axiom. An axiom is a truth so fundamental it requires
 no proof. Everything else is built on top of it.
 That is what this product is — the foundational layer
@@ -11,29 +18,28 @@ The name does not explain the product. It is the product's
 philosophy in one word.
 
 ### The Tagline
-"You already know you're built different. Prove it."
 
-Not a promise of success. A challenge. Axiom doesn't
-tell you that you're special — it assumes you already
-believe that and asks you to back it up. The product
-is the arena. The experiments are the proof.
+The tagline is **not decided**. The previous line ("You already know you're
+built different. Prove it.") is a placeholder and is being replaced. Rafay will
+provide the new line. Its job: sell the value of a year with Axiom (growth,
+becoming, learning from other founders and from existing knowledge), short and
+punchy, in the spirit of "strangers at 4, friends at 5".
 
 ### What Axiom Is
-Axiom is built around the six pillars every successful
-founder's life actually revolves around — money,
-psychology, business strategy, the future, sharp
-thinking, and influence. It teaches what no school
-teaches and what most people around you don't know.
-It learns how you specifically operate across all six,
-identifies your blind spots, and turns every session
-into something you can act on today. It doesn't give
-you information — it turns your own life into the
-curriculum. The longer you're in it, the more it knows
-you, the closer you get to the version of yourself
-that's actually ready, and the harder it becomes
-to replace.
+
+Axiom is an operating system for founders. A founder brings a real situation.
+Axiom reads what is actually going on, teaches the few things they need to know
+(from authors and from founders one stage ahead), gives them one move to make
+today, and checks in with them that evening to find out what happened.
+
+It is built around the six pillars every founder's life revolves around:
+money, psychology, business strategy, the future, sharp thinking and
+influence. It does not just give information. It turns the founder's own life
+into the curriculum. The longer they are in it, the more it knows them, and the
+harder it becomes to replace.
 
 ### What Axiom Is Not
+
 - Not a productivity app
 - Not a journaling app
 - Not a course or curriculum
@@ -46,16 +52,15 @@ to replace.
 It is the positioning.
 
 ### The One Thing
-If Axiom could only say one thing about itself:
 
-"Most apps want you to keep using them.
-Axiom will remove you if you don't follow through."
+The line "Axiom will remove you if you don't follow through" is **dropped**.
+There is no removal system, no warnings and no strikes anywhere in the product.
 
-That line communicates standards, accountability,
-seriousness, and product confidence simultaneously.
-Lead with it everywhere.
+A new one-line is not decided. Draft for Rafay to react to, not final:
+"Most apps want you to keep using them. Axiom wants you to have moved."
 
 ### The Person Axiom Is For
+
 Not a demographic. A specific type of person.
 
 They're building something or about to.
@@ -77,10 +82,12 @@ because they were serious enough to show up.
 
 ## Brand Voice
 
+
 ### The Character
+
 Axiom speaks like the most capable person in the room
 who has no interest in performing that fact. Direct.
-Considered. Never motivational. Never corporate.
+Considered. Never a cheerleader. Never corporate.
 Never chatbot-friendly.
 
 If Axiom were a person it would be the mentor who
@@ -92,33 +99,39 @@ waste words.
 
 ### Voice Principles
 
-**Direct over diplomatic.**
-Axiom says the thing. No softening. No hedging.
-No "it might be worth considering." The thing.
+The full guide is `tasks/voice.md`. In short:
 
-**Specific over general.**
-"You avoid confrontation" beats "you have communication
-challenges." Axiom names the exact thing every time.
-Vague language is a sign of not knowing. Axiom knows.
+**Plain.** Everyday words and short sentences. No metaphors, no clever
+contrasts, no hypotheticals. If a founder has to decode a line, it failed.
 
-**Challenging over encouraging.**
-Axiom does not celebrate effort. It recognizes results.
-It does not say "great work." It says "now do this."
-Encouragement without accountability is noise.
+**Specific.** Every line holds something only this founder said: their words,
+a number, a date. Never invented. "You avoid confrontation" beats "you have
+communication challenges." If there is nothing real to say, say nothing.
 
-**Urgent over patient.**
-Every Axiom message carries a cost of inaction.
-Not stated abstractly — stated specifically.
-"Every day you don't do this, the gap widens."
-Not "take your time."
+**Direct and urgent, never harsh.** Hard on the situation, never on the
+person. The cost of waiting is stated with the founder's own facts, never with
+fear or made-up deadlines.
 
-**Earned over given.**
-Axiom never flatters. It never tells you you're doing
-well unless you are. Praise from Axiom means something
-because it is rare. The user earns every positive
-signal. Nothing is handed.
+**Always the next step.** Every message asks one clear question or says what
+to do next.
+
+**Quiet.** No filler, no echoing the founder's words back as a hand-off, no
+flattery, no chatbot language. Praise is rare and earned.
+
+**Dry humour, very subtle, only in greetings and when a move goes well.**
+Never when something went wrong, never in care. No swearing, ever.
+
+**The name** goes inside the sentence, in most pushes and greetings, never
+first and not in every message.
+
+**Mentor energy.** In the spirit of a discipline coach: gets you up, checks on
+you, asks where you are. It uses the energy and not anyone's words or life
+story. The founder can choose Calm, Direct or Hard in Settings.
+
+Never assume anyone's gender.
 
 ### Forbidden In Axiom's Voice
+
 These phrases never appear anywhere in the product,
 marketing, or communications. Ever.
 
@@ -134,6 +147,8 @@ In product copy:
 - "You've got this"
 - "Keep it up"
 - Any emoji
+- Swearing, of any kind
+- Any "that's right / not quite" prompt
 
 In marketing copy:
 - "Unlock your potential"
@@ -149,39 +164,37 @@ In marketing copy:
 
 ### Tone By Context
 
-Product — Axiom's voice in sessions:
-  Adaptive. Mirrors the user's energy.
-  Direct when they're direct.
-  Slower when they're processing something hard.
-  Never softens the truth. Adjusts how it lands.
+Product, in conversation:
+  Plain and specific. Mirrors the founder's energy. Slower when they are
+  processing something hard. Never softens the truth, adjusts how it lands.
 
-Product — Axiom's voice in warnings:
-  Sharp. Unambiguous. Personal.
-  References the specific thing they ghosted.
-  No customer service tone. No apology.
-  Reads like a door closing, not a notification.
+Product, greetings and pushes:
+  Short. Name inside the sentence. Subtle dry humour. Names something real.
+  At most 2 pushes a day.
 
-Marketing — social posts:
-  Provocative. One idea per post.
-  Says something true that most people
-  haven't heard said that clearly before.
-  Never performs wisdom. States it.
+Product, when a move goes well:
+  One short line of credit with a dry touch of humour, only when true.
 
-Marketing — app store / landing page:
-  Same as product voice. Cold. Precise.
-  No hype. No lifestyle imagery described.
-  The copy itself should feel like Axiom.
+Product, when something went wrong (Couldn't, Didn't, errors):
+  Plain and kind. No humour. No "sorry", no judgement, no strikes.
 
-Press / pitches:
-  Confident without being arrogant.
-  States what the product does and why
+Product, care:
+  Soft and human. No mentor tone, no lessons, no moves. Real help.
+
+Marketing, social posts:
+  Provocative. One idea per post. Says something true that most people have
+  not heard said that clearly. Never performs wisdom. States it.
+
+Marketing, app store and landing page:
+  Same as the product voice. Precise. No hype.
+
+Press and pitches:
+  Confident without being arrogant. States what the product does and why
   nothing else does it the same way.
-  Never apologizes for the removal system.
-  Never explains it defensively.
-  States it as fact.
 
 ### Writing Test
-Before publishing any copy — ask three questions:
+
+Before publishing any copy, ask four questions:
 
 1. Could this appear on any other app in this category?
    If yes: rewrite.
@@ -192,129 +205,83 @@ Before publishing any copy — ask three questions:
 3. Would Axiom say this to a user in a session?
    If no: it has no place in the brand voice.
 
----
+4. Does a founder have to stop and decode it?
+   If yes: rewrite it in plain words.
 
 ## Visual Identity
 
+
 ### Design Philosophy In One Line
-Dark, grainy, and alive — like something that exists
-in physical space rather than on a screen.
+
+Quiet, minimal and premium: near black, bright stone writing, a faint gold
+wash, thin lines. The full system is in DESIGN.md.
 
 ### Logo
-Wordmark only. No icon. No symbol.
-"Axiom" set in Canela 300 — the same typeface as
-Axiom's voice inside the product. The logo and the
-product speak in the same voice.
 
-Capitalization: sentence case — "Axiom" not "AXIOM"
-All caps reads as shouting. Axiom never shouts.
+The Brand Kit (`Brand Kit/`) is the source of every logo file.
 
-Color:
-- On dark backgrounds: --text-primary (#EDEDEC)
-- On light backgrounds (rare): #080808
-- Gold version (--gold-gradient) for premium contexts
-  only — launch assets, shareable brain snapshots,
-  pitch decks. Never in product UI.
+- **Emblem:** the two-arc mark. Used alone on the sign-in screen, small at the
+  top of screens, and as the app icon and favicon. In product it may be drawn
+  in the gold glass gradient or a single stone colour.
+- **Wordmark:** "Axiom" in the Roman serif, sentence case. Used in marketing,
+  press and the store listing.
+- Capitalization: sentence case, "Axiom" not "AXIOM". All caps reads as
+  shouting. Axiom never shouts.
+
+Colour:
+- On dark backgrounds: ivory or the glass version from the Brand Kit.
+- On light backgrounds (rare): black version.
 
 Logo don'ts:
-- Never add a tagline below the wordmark in the logo
-- Never add a border or container around it
-- Never use on a white background in marketing
-- Never stretch, rotate, or add effects
-- Never use a heavier weight than 300
-- Never add a symbol or icon next to it
+- Never add a tagline below the logo as part of the logo.
+- Never add a border or container around it.
+- Never stretch, rotate, or add effects other than the drawing animation.
+- Never use it on a white background in marketing.
 
-Minimum size: 80px width on screen, 25mm in print.
-
-### The Sphere As Visual Identity
-The Founder Brain sphere is Axiom's most recognizable
-visual asset. More than the wordmark.
-
-Used in:
-- All social media posts where a visual is needed
-- App store screenshots
-- Press kit imagery
-- Shareable brain snapshots
-- Pitch decks
-
-Rules:
-- Always rendered from inside the sphere —
-  the viewer is inside, not looking at it from outside
-- Always dark background — #080808 with grain
-- Never on white or light backgrounds
-- Never with text overlaid directly on nodes
-- Never with pillar colors changed for aesthetic reasons
-- The sphere is always shown in motion or implying motion —
-  never a static flat render
+Minimum size: wordmark 80px wide on screen, 25mm in print.
 
 ### Color In Marketing
-Same token system as the product.
-Dark surfaces only. Gold used sparingly.
-Red used only in contexts referencing
-the removal system or warnings.
 
-The grain texture appears on all static marketing
-assets — social posts, pitch decks, app store images.
-It is the connective tissue between the product
-and everything the brand puts into the world.
+Same system as the product (see DESIGN.md). Dark surfaces only. Gold used
+sparingly. No red, except where a marketing asset talks about deleting data.
 
 Never use:
 - White backgrounds
 - Light mode versions of anything
-- Gradient backgrounds other than the radial vignette
-- Colors outside the token system
 - Stock photography of any kind
 - Illustrations of people
-- Abstract geometric shapes unrelated to the sphere
+- Abstract geometric shapes unrelated to the emblem
 
 ### Typography In Marketing
-Same two typefaces as the product.
 
-Headlines and provocations: Canela 300 or 400
-  Large. Lots of breathing room. One idea.
-  The grain behind it. Nothing else.
-
-Supporting copy and labels: Neue Montreal 400 or 500
-  Small. Precise. Muted color.
-  Never competes with the Canela headline.
-
-Marketing hierarchy:
-  One Canela headline — the provocation
-  One Neue Montreal subline — the specific claim
-  One call to action — plain text, no button styling
-  in static assets
+The product uses a serif for Axiom's words and the system sans for everything
+else (DESIGN.md). Marketing type is **not decided**. Until a font is chosen,
+use the same two: a serif headline with generous space, and a small, muted
+sans for supporting text. One headline, one subline, one plain-text call to
+action. The previous typefaces (Canela and Neue Montreal) are not in use.
 
 ### Photography & Imagery
-Axiom does not use photography of people.
-Axiom does not use lifestyle imagery.
-Axiom does not use stock anything.
+
+Axiom does not use photography of people, lifestyle imagery or stock anything.
 
 The only imagery Axiom uses:
-- The sphere — rendered from inside
-- Real session artifacts — actual Axiom insights
-  set in Canela on dark grain backgrounds
-- The Founder Brain snapshot — real user graphs
-  shared with permission
-- Product screenshots — actual UI, never mockups
+- The emblem, drawing itself
+- Real Axiom insights (a real Read or lesson line) set in the serif on black
+- Product screenshots: actual UI, never mockups
 
-Real over polished. Always.
-A real Axiom insight that stopped someone cold
-is worth more than any designed visual asset.
+Real over polished. Always. A real Axiom line that stopped someone cold is
+worth more than any designed visual asset.
 
 ### App Icon
-Dark background: #080808
-Center: Axiom wordmark in Canela 300, off-white
-  scaled to fill 60% of icon width
-Subtle grain texture on background
-No border radius beyond what the OS applies
-No symbol. No sphere in the icon.
-The name is enough.
 
----
+The emblem, on near black, as in the Brand Kit favicon and apple-touch icon.
+No border radius beyond what the OS applies. No wordmark in the icon.
 
 ## Positioning & Marketing Strategy
 
+
 ### Market Position
+
 Axiom does not compete with productivity apps,
 journaling apps, or AI chatbots. It competes with
 the idea that you can figure it out alone.
@@ -328,9 +295,10 @@ The closest things to Axiom in the market:
 Axiom is none of these. It is the first product that
 combines the personalization of a mentor, the depth
 of a real curriculum, and the accountability of
-something that will remove you if you stop showing up.
+a mentor who checks in with you every evening.
 
 ### The Positioning Statement
+
 For ambitious founders and builders who are figuring
 out the rules of the world alone — Axiom is the mentor
 they never had access to. Unlike every other AI product,
@@ -340,6 +308,7 @@ the curriculum. The longer you're in it, the more
 irreplaceable it becomes.
 
 ### Competitive Moat
+
 The moat is not the AI. The moat is not the pillars.
 The moat is the accumulated understanding of a specific
 person that compounds over time.
@@ -356,30 +325,18 @@ That is the lock-in. Not dark patterns. Not habit loops.
 Genuine value that compounds. The ethical moat.
 
 ### Why The Removal System Is A Marketing Asset
-Most companies hide their churn policies.
-Axiom leads with its removal system because it signals
-three things simultaneously:
 
-1. Standards — Axiom has them. Most products don't.
-2. Confidence — the product is good enough that
-   it can afford to fire users who don't use it.
-3. Exclusivity — being an Axiom user means something
-   because not everyone gets to stay.
-
-The removal system is not a risk to market.
-It is the market differentiator.
-Lead with it. Never apologize for it.
+(Retired.) There is no removal system. Accountability comes from the evening
+check-in and from Axiom naming the pattern, never from threats. Do not market
+anything as removal, warnings or strikes.
 
 ### Axiom Circle As Future Positioning
-When Axiom Circle launches at 10,000 users, the
-positioning shifts from "personal mentor" to
-"the only product that knows you well enough
-to know who complements you."
 
-That positioning is worth significantly more
-than the base product alone. It turns Axiom
-from a solo tool into a network — and networks
-compound faster than tools.
+(Replaced.) The paid Axiom Circle is gone. The network idea lives on as the
+**peer map**: founder stories from real, consented, human-reviewed outcomes, and
+rare double opt in introductions. Later positioning: "the only product that
+shows you what founders one stage ahead actually did." Nothing is claimed before
+real stories exist.
 
 ### Distribution Strategy
 
@@ -388,10 +345,8 @@ Your ICP lives on X. They share things that make
 them look like they know something others don't.
 
 What travels on X from Axiom:
-- Real session insights set in Canela on dark grain
-- Founder Brain snapshots — real user graphs at
-  different maturity stages
-- The removal system — stated plainly, no defense
+- Real session insights set in the serif on black
+- Real founder stories, once approved
 - Sharp one-line provocations from the brand account
   that sound like Axiom itself
 
@@ -418,9 +373,7 @@ the right people than any paid campaign.
 #### Tertiary Channel — Word Of Mouth
 The organic loop is built into the product:
 
-- Shareable brain snapshots — users share their
-  Founder Brain at significant milestones
-- Removal — users who get removed talk about it
+- Founder stories — shared with consent once approved
 - Axiom insights — when Axiom says something that
   stops someone cold, they screenshot it
 
@@ -465,29 +418,25 @@ Say it plainly and it resonates globally.
 
 ## Launch Strategy
 
+
 ### Philosophy
-Axiom does not launch with a splash page and a waitlist.
-Axiom launches when it is ready to remove someone.
 
-That means: the removal system is active, the product
-works as designed, and the first user who doesn't
-follow through actually gets removed. That moment —
-the first real removal — is when Axiom has proven
-it is what it says it is.
-
-Everything before that is pre-launch.
-Everything after that is launch.
+Axiom does not launch with a splash page and a waitlist. It launches when the
+whole loop works end to end for a real founder: Situation, Read, Learn, Move,
+and the evening Report. Everything before that is pre-launch. Everything after
+it is launch.
 
 ### Pre-Launch Phase (Testing)
+
 Duration: until product is stable and Rafay has
 personally used it for 30 days minimum.
 
 Goal: prove the core loop works.
-- Onboarding to first experiment: does it feel right?
-- Experiment quality: are they specific and urgent?
+- Sign-up to first move: does it feel right?
+- Move quality: are they specific, plain and startable in 10 minutes?
 - Returning user flow: does Axiom speak first?
 - Memory: does session 10 feel different from session 1?
-- The negotiation: does Axiom hold firm?
+- The evening check-in: does it get reported, and does Axiom check its own prediction?
 
 No users during this phase except Rafay.
 X account starts posting 30 days before launch.
@@ -496,22 +445,22 @@ Just Axiom's voice — building the character
 before the product is live.
 
 ### Soft Launch
+
 First 50 users. Invite only.
 Selected personally — people who are genuinely
 the ICP. Not friends. Not family. Not people
 who will be nice about it.
 
-No payment during soft launch.
-Goal: find every broken thing before real users
-pay real money.
+Goal: find every broken thing with real founders
+before more people arrive.
 
 Success criteria for soft launch:
-- Average session depth: 8+ messages
-- Return rate after first session: 70%+
-- Experiment completion rate: 50%+
-- At least 1 user who pushes back on an experiment
-  and gets held by Axiom
-- At least 1 user who receives Warning 1
+- Report rate: 50%+ of moves get an evening report
+- Return rate after first situation: 70%+
+- Founders who bring a second situation within a week
+- At least 1 founder who answers the Read's question and sees it
+  change the lesson
+- Zero unverified quotes shown
 
 If these numbers aren't hit: do not proceed
 to public launch. Fix what's broken first.
@@ -537,83 +486,57 @@ Day 1 — Brand account reposts with one line:
   "Built for the ones figuring it out alone."
 Day 2 — First real Axiom insight posted on brand
   account. Real. From a session. No context given.
-Day 3 — The removal system post — stated quietly,
-  not aggressively. One observation, not a threat.
-Day 7 — First Founder Brain snapshot shared
-  (Rafay's own)
-  Caption: "30 days in. This is what it looks like."
+Day 3 — A real Axiom insight, from a session. Real.
+Day 7 — A real, consented founder story
+  (only once approved stories exist).
 
 No ads during launch week. No paid promotion.
 
 ### Trial & Pricing
-3 day trial. No credit card required.
-Free access to the full product for 3 days.
-After day 3: $39/month to continue.
-No card prompt until the trial ends.
 
-The trial delivers one complete loop:
-- Onboarding
-- First session
-- First experiment assigned
-- First follow-up from Axiom
+Axiom is **free**. No trial, no card, no paywall, no payment code.
 
-If someone doesn't feel the value in 3 days
-they were never going to pay anyway.
-The product is the sales pitch.
-The 3 days is just enough time to prove it.
+Paid plans start only when 50 founders each report at least one move a week,
+four weeks in a row (see PRODUCT.md, Pricing). A founding member discount may
+come later for the first 100 founders.
 
-After trial ends:
-- User is prompted to subscribe to continue
-- No removal system active during trial
-- Warning system not active during trial
-- Full product unlocked — no feature gates
-- On subscription: 15 day refund window begins
-- On subscription: removal system activates
+The previous plan (a 3 day trial and $39 a month, with a removal system and a
+refund window) is retired.
 
 ### Post-Launch Growth
 
 #### The Flywheel
-User joins →
-Axiom builds theory of them over sessions →
-Founder Brain grows, shareable →
-User shares snapshot on X →
-New user sees it, recognizes themselves in it →
-New user joins →
+Founder joins, brings a situation, gets a move, reports that evening →
+Axiom learns the pattern →
+With consent the outcome becomes a story that helps the founders behind them →
+Those stories make the next founder's lessons better →
+Founders tell other founders →
 Repeat
 
 #### Milestones And What Changes At Each
 
-100 users:
-  First revenue. First real removal.
-  First reapplication. Document everything.
-  Focus: learn what sessions look like at depth.
+50 active founders:
+  Rafay still reviews every shared outcome. Check the pricing condition
+  (50 founders reporting weekly for four weeks).
 
-500 users:
-  First iteration on experiment quality.
-  Review every ghosted experiment.
-  First look at pillar distribution.
+100 founders:
+  Review every situation that never got a report. Look at where people
+  drop off. Decide on the founding member offer.
 
-1,000 users:
-  Lemon Squeezy fully active.
-  Premium features locked for new users.
-  Axiom Circle planning begins.
-  First press outreach — founder publications.
+1,000 founders:
+  First press outreach to founder publications. Decide on the proactive,
+  connected accounts layer (parked in tasks/decisions.md).
 
-5,000 users:
-  Axiom Circle waitlist opens.
-  Native app development begins.
-  First hire — someone who is the ICP.
-
-10,000 users:
-  Axiom Circle launches.
-  Positioning shifts to network product.
-  The moat is real by this point.
+Later:
+  Regional pricing if paid plans start. The peer map at scale.
 
 ---
 
 ## Campaigns
 
+
 ### Campaign Philosophy
+
 Axiom does not sell itself. It states itself.
 Every campaign says something true and lets
 the right person draw their own conclusions.
@@ -627,6 +550,7 @@ A campaign succeeds if it brings in users who
 are serious. Volume is not the metric. Quality is.
 
 ### Campaign 1 — The Introduction Campaign
+
 Runs on X for the first 30 days of launch.
 Introduces Axiom without announcing it.
 
@@ -675,54 +599,12 @@ No images. No product screenshots yet.
 Just the voice. Build the character first.
 
 ### Campaign 2 — The Standard Campaign
-Runs in month 2. Introduces the removal system
-without leading with it.
 
-Core idea:
-Axiom has a standard. It's not for everyone.
-Said quietly. Never aggressively.
-
-Post 1:
-"Axiom gives you an experiment at the end
-of every session. Something specific.
-Something you can do in the next 48 hours.
-What happens after that is up to you.
-Axiom notices either way."
-
-Post 2:
-"Some people use Axiom for months.
-Some people don't make it past the first few weeks.
-The difference isn't intelligence.
-It's whether they do the thing
-or just think about doing the thing."
-
-Post 3:
-"Axiom doesn't chase you.
-If you disappear, it notices.
-If you keep disappearing, it says something.
-If nothing changes after that —
-Axiom lets you go.
-Not every relationship is meant to last."
-
-Post 4:
-"The 3 day trial exists because
-we're confident in what happens
-when someone actually uses it.
-No card required.
-Just show up."
-
-Post 5 — when first real removal happens:
-"Someone left Axiom today.
-Not by choice — they stopped showing up
-and Axiom noticed.
-They have their money back.
-The door opens again in 3 months
-if they decide they're ready.
-No hard feelings.
-Not every tool is for every person
-at every point in their life."
+(Retired.) This campaign was built on the removal system, which no longer
+exists. A replacement is not written. Do not reuse the old posts.
 
 ### Campaign 3 — The Pillar Campaign
+
 Runs at 500 users. One post per pillar.
 6 posts over 6 days.
 
@@ -790,36 +672,12 @@ through your actual life.
 axiom.app"
 
 ### Campaign 4 — The Founder Brain Campaign
-Runs at 500-1000 users.
-Goal: organic sharing of Founder Brain snapshots.
 
-Core idea:
-Show what real growth looks like.
-Not a certificate. A living graph.
-
-In-app prompt:
-"Your Founder Brain at [X] days.
-Share it if you think it's worth sharing."
-No pressure. No incentive. Just the option.
-
-Brand account posts — real snapshots
-from users who consented:
-
-"30 days.
-[X] sessions. [X] experiments completed.
-[X] nodes. [X] connections across pillars.
-This is what the work looks like."
-
-"90 days in Axiom.
-The graph looked almost empty at day 1.
-It doesn't anymore.
-Neither does the thinking."
-
-No names. No testimonials. No quotes.
-Just the graph and the numbers.
-The visual speaks for itself.
+(Retired.) The Founder Brain and its shareable snapshots are gone. A
+replacement could be real, consented founder stories. Not written yet.
 
 ### Campaign 5 — The Honest Campaign
+
 Runs whenever it feels right.
 Rafay's personal post. Not a brand post.
 
@@ -841,9 +699,9 @@ The six things every founder's life
 actually revolves around —
 taught through your life, not someone else's.
 
-3 days free. No card.
-If it doesn't change something in how you think
-by day 3 — it's not for you.
+It's free. Bring one real situation.
+If it doesn't change what you do tomorrow —
+it's not for you.
 If it does — you'll know."
 
 This post is not targeted at Pakistan only.
@@ -852,6 +710,7 @@ will feel it. The geography is Karachi.
 The feeling is universal.
 
 ### Campaign Rules
+
 These never break across any campaign:
 
 - No discounts. No promo codes. Ever.
@@ -876,8 +735,5 @@ These never break across any campaign:
   The product generates its own best content
   if it's doing its job.
 
-- The removal system is referenced —
-  never led with.
-  It appears as context, not as threat.
-  The person who needs to be threatened
-  into accountability is not the ICP.
+- Never threaten. There is no removal system.
+  Accountability is a check-in, not a punishment.
