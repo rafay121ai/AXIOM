@@ -244,7 +244,7 @@ test('first reading: two failures give the plain fallback, with no quote and no 
     assert.equal(openai.calls.length, 2)
     assert.deepEqual(res.body.underlines, [])
     assert.ok(!res.body.body.includes('"'))
-    assert.match(res.body.body, /nobody pays yet/)
+    assert.match(res.body.headline, /nobody pays yet/)
     assert.equal(supabase.rows('model_usage_logs').length, 2)
   } finally { await close() }
 })

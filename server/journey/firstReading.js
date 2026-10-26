@@ -25,12 +25,13 @@ export function buildEvidence(answers) {
   }
 }
 
+// Only what the founder picked. Never infer anything they did not say.
 const STAGE_FACT = {
-  'Just an idea': ['You have an idea and no customer yet.', 'You are still at an idea'],
-  "I'm talking to people about it": ['You are talking to people, and nobody has bought yet.', 'You are talking to people about it'],
-  "I'm building it and nobody pays yet": ['You are building it, and nobody pays yet.', 'You are building it and nobody pays yet'],
-  'Someone is paying me': ['Someone is already paying you.', 'Someone is paying you'],
-  "It's growing": ['It is growing.', 'It is growing'],
+  'Just an idea': 'You have an idea.',
+  "I'm talking to people about it": 'You are talking to people about it.',
+  "I'm building it and nobody pays yet": 'You are building it, and nobody pays yet.',
+  'Someone is paying me': 'Someone is paying you.',
+  "It's growing": 'It is growing.',
 }
 const TIME_FACT = {
   'Under 3 months': 'for under 3 months', '3 to 6 months': 'for 3 to 6 months', '6 to 12 months': 'for 6 to 12 months',
@@ -45,8 +46,11 @@ const TRIED_FACT = {
   'Launched it': 'launched it', 'Tried to sell or raise': 'tried to sell or raise',
 }
 const AIM_FACT = {
-  'My first customer': 'your first customer', 'My first 10 customers': 'your first 10 customers',
-  'A revenue number': 'a revenue number', 'Raise money': 'to raise money', 'Ship it': 'to ship it',
+  'My first customer': 'You are aiming for your first customer',
+  'My first 10 customers': 'You are aiming for your first 10 customers',
+  'A revenue number': 'You are aiming for a revenue number',
+  'Raise money': 'You are aiming to raise money',
+  'Ship it': 'You are aiming to ship it',
 }
 
 const joinList = (items) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`)
@@ -54,7 +58,8 @@ const joinList = (items) => (items.length < 2 ? items.join('') : `${items.slice(
 // Safe reading from the answers alone. Contains no quote and no underline,
 // and only numbers that are already in the option labels the founder picked.
 export function fallbackReading(answers) {
-  const [headline, stageClause] = STAGE_FACT[answers.stage?.value] ?? ['Here is where you stand today.', 'You are working on it']
+  const headline = STAGE_FACT[answers.stage?.value]
+  if (!headline) throw new Error('fallbackReading: stage answer missing or unknown')
   const time = TIME_FACT[answers.months_in?.value]
   const week = WEEK_FACT[answers.commitment?.value]
   const tried = (answers.tried ?? []).filter((t) => TRIED_FACT[t]).map((t) => TRIED_FACT[t])
@@ -62,13 +67,12 @@ export function fallbackReading(answers) {
   const whenPhrase = answers.goal?.date ? 'by the date you picked' : answers.goal?.when?.toLowerCase()
 
   const sentences = [
-    `${stageClause}${time ? `, ${time}` : ''}${week ? `, ${week}` : ''}.`,
+    time || week ? `You have been on it${time ? ` ${time}` : ''}${week ? `, ${week}` : ''}.` : null,
     tried.length
       ? `So far you have ${joinList(tried)}.`
       : 'So far you have not talked to customers, built a prototype, launched, or tried to sell.',
-    aim && whenPhrase ? `You are aiming for ${aim}, ${whenPhrase}.` : null,
-    'You also told me what you are most stuck on.',
-    'That is where we start, with one small step on it today.',
+    aim && whenPhrase ? `${aim}, ${whenPhrase}.` : null,
+    'Next we work on the thing you said you are most stuck on.',
   ].filter(Boolean)
   return { headline, body: sentences.join(' '), underlines: [] }
 }
@@ -98,6 +102,6 @@ export async function createFirstReading({ answers, deps }) {
       problems = null
     }
   }
-  deps.log?.('first reading fell back', { problems })
+  deps.log?.('first reading fell back', { problems, stage: answers.stage?.value ?? null })
   return { reading: fallbackReading(answers), source: 'fallback' }
 }

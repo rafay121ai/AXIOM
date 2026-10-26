@@ -17,12 +17,13 @@ export const CARE_COPY = Object.freeze({
 
   // Unclear: one soft question. No lesson, no move, no model-written text.
   unclearReply:
-    'That sounded heavier than a work problem. How are you doing right now?',
+    'That sounded heavy. What is going on?',
 
   // Help block. Used when no verified line exists for the founder's country.
   fallbackLine:
-    'To find a helpline in your country, use a worldwide directory such as findahelpline.com.',
+    'More help near you: findahelpline.com',
 
+  // NOT in the approved mocks. Needs Rafay's approval before it is shown.
   // Opening line on the next visit after a care event.
   returnCheckIn: 'How are you doing today?',
 })

@@ -30,3 +30,9 @@ test('copy has no banned phrases', () => {
   const banned = /great question|certainly|i understand|that'?s interesting|absolutely|of course|i'?d be happy to|\bgreat\b/i
   for (const v of Object.values(CARE_COPY)) assert.doesNotMatch(v, banned)
 })
+
+test('care copy matches the mocks', async () => {
+  const { CARE_COPY: C } = await import('./copy.js')
+  assert.equal(C.unclearReply, 'That sounded heavy. What is going on?')
+  assert.equal(C.fallbackLine, 'More help near you: findahelpline.com')
+})

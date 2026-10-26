@@ -91,3 +91,24 @@ test('the fallback reading passes the checker for every stage and has no quote o
     }
   }
 })
+
+test('fallback states only what was picked, never infers, and reads naturally for every goal', async () => {
+  const { QUESTIONS } = await import('./questions.js')
+  const { FIRST_READING_PROMPT } = await import('./prompts/firstReading.js')
+  const goals = QUESTIONS.find((q) => q.key === 'goal').goals
+  for (const goal of goals) {
+    const r = fallbackReading({ ...FULL_ANSWERS, goal: { goal, when: 'This month' } })
+    assert.match(r.body, /You are aiming (for|to) [a-z0-9 ]+, this month\./, r.body)
+    assert.ok(!/most stuck on\.$/.test(r.body) || /Next we work on/.test(r.body))
+    assert.ok(!/also told me/.test(r.body))
+  }
+  const idea = fallbackReading({ ...FULL_ANSWERS, stage: { value: 'Just an idea' } })
+  assert.equal(idea.headline, 'You have an idea.')
+  const talking = fallbackReading({ ...FULL_ANSWERS, stage: { value: "I'm talking to people about it" } })
+  assert.equal(talking.headline, 'You are talking to people about it.')
+  assert.ok(!/no customer|nobody has bought/i.test(`${idea.headline} ${idea.body} ${talking.headline} ${talking.body}`))
+  assert.throws(() => fallbackReading({ ...FULL_ANSWERS, stage: undefined }), /stage/)
+  for (const need of [/End the body on one plain question/, /No exclamation marks, no emoji, no jokes/, /I have what I need/]) {
+    assert.match(FIRST_READING_PROMPT, need)
+  }
+})
