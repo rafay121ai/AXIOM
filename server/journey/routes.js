@@ -6,6 +6,8 @@ import { createFirstReading } from './firstReading.js'
 import { mountSituationRoutes } from './situationRoutes.js'
 import { mountLearnRoutes } from './learn/learnRoutes.js'
 import { mountMoveRoutes } from './move/moveRoutes.js'
+import { mountReportRoutes } from './report/reportRoutes.js'
+import { mountSharingRoutes } from './report/sharingRoutes.js'
 
 export function mountJourneyRoutes(app, { supabase, knowledgeSupabase = null, embed = null, care, callStructured, clock }) {
   const limiter = (max) => rateLimit({
@@ -21,6 +23,8 @@ export function mountJourneyRoutes(app, { supabase, knowledgeSupabase = null, em
   mountSituationRoutes(app, { supabase, care, callStructured, clock })
   mountLearnRoutes(app, { supabase, knowledgeSupabase, embed, care, callStructured, clock })
   mountMoveRoutes(app, { supabase, care, callStructured, clock })
+  mountReportRoutes(app, { supabase, care, callStructured, clock })
+  mountSharingRoutes(app, { supabase, clock })
 
   app.get('/api/signup', limiter(60), signup.get)
   app.put('/api/signup/answers/:key', limiter(60), care.careGate(signupFreeText), signup.put)

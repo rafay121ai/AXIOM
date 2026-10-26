@@ -271,6 +271,8 @@ export function createApp({
   app.use('/api/situations', requireAuth)
   app.use('/api/learn', requireAuth)
   app.use('/api/moves', requireAuth)
+  app.use('/api/reports', requireAuth)
+  app.use('/api/settings', requireAuth)
   app.use('/api/loading-hint', requireAuth)
 
   // ─── Routes ───────────────────────────────────────────────────────────────────

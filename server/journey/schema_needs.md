@@ -176,3 +176,98 @@ values, and the old web app still reads it. To be confirmed by Rafay.
 - `founder_profiles.report_time_local` and `founder_profiles.timezone` (from
   migration 20261013000003): the founder's check-in time and zone. When the
   zone is empty, the phone's zone sent with the commit is used, then UTC.
+
+# Schema needs for the Report and sharing (B7)
+
+New tables. Same rules as above: RLS on, server-only (service role) access,
+no client policies; all writes go through Express. ARCHITECTURE.md names
+`move_reports` and `consents`; the code uses `reports` and `consent_log`
+(an append-only log of every ask and decision, not one row per report). To be
+confirmed by Rafay. Nothing here deletes a report; there is no strike,
+warning or removal column anywhere.
+
+## reports
+- `id uuid pk default gen_random_uuid()`, `user_id uuid not null references auth.users`
+- `move_id uuid not null references moves`, **unique `(move_id)`**. NEEDED: one
+  report per move; a repeated or concurrent report hits 23505 and the code
+  returns the stored one.
+- `situation_id uuid not null references situations on delete cascade`
+- `outcome text not null check (outcome in ('done','couldnt','didnt'))`
+- `note text null` (the founder's answer; it passed the care gate)
+- `client_turn_id uuid not null`
+- `prediction text not null` (the move's prediction when it was reported)
+- `prediction_check text not null check (prediction_check in ('right','wrong','unclear','not_tested'))`
+- `reply text not null` (Axiom's reply, checked, or the fixed line)
+- `share_state text null check (share_state in ('asked','shared','private','withdrawn','not_offered'))`
+  (null only between the insert and the sharing decision a moment later;
+  'not_offered' when the care check touched the situation)
+- `share_automatic boolean not null default false`, `share_decided_at timestamptz null`
+- `consent_wording_version text null` (the question that was asked)
+- `created_at timestamptz not null`, `updated_at timestamptz not null`
+- index `(user_id, created_at desc)`
+- **Must never hold a peer outcome id.** Founders may later SELECT their own
+  reports; that must not reveal which peer outcome is theirs.
+
+## Moves (existing table from B6, no new column)
+- The report sets `status = 'reported'` and `active_slot = null` (the slot is
+  free for a new commit). A `closed_no_report` move can still be reported.
+
+## consent_log (server only, append only)
+- `id uuid pk`, `user_id uuid not null references auth.users`
+- `report_id uuid null references reports` (null for the settings switch)
+- `action text not null check (action in ('asked','share','auto_share','keep_private','withdraw','auto_share_on','auto_share_off'))`
+- `wording_version text not null` (for example `share-alone-v1`,
+  `share-after-story-v1`, `settings-share-auto-v1`, `withdraw-v1`; the words are
+  in `server/journey/report/wording.js`)
+- `decided_at timestamptz not null`
+- index `(user_id, decided_at)`, `(report_id)`
+
+## user_settings (only the column this step needs)
+- `user_id uuid pk references auth.users`
+- `share_auto boolean not null default false` ("Share with other founders",
+  meaning share automatically; off means Axiom asks after every check-in)
+- `updated_at timestamptz not null`
+
+## peer_outcomes (server only; founders see approved stories only through the API)
+- `id uuid pk default gen_random_uuid()`
+- **No `user_id`, no `report_id`, no `move_id`, no `situation_id`**, nothing
+  that points back to the founder.
+- `status text not null check (status in ('pending_review','approved','rejected','withdrawn'))`
+- `stage text null`, `customer_market text null`, `business_model text null` (matching tags)
+- `outcome text not null check (outcome in ('done','couldnt','didnt'))`
+- `draft jsonb null`: raw material for the reviewer (`{ move: {title, mission,
+  success}, prediction, prediction_check, note }`), never shown as it is.
+  Not yet anonymised: anonymising and human review are a later step.
+- `story text null`, `lesson text null` (the reviewed, anonymised text; the
+  only fields a founder ever sees, and only when `status = 'approved'`)
+- `reviewed_by text null`, `reviewed_at timestamptz null`
+- `withdrawn_at timestamptz null` (withdrawing sets status 'withdrawn' and
+  clears draft, story and lesson)
+- `created_at timestamptz not null`
+- index `(status, stage)`
+
+## outcome_author_links (PRIVATE, server only, never exposed)
+- `peer_outcome_id uuid pk references peer_outcomes on delete cascade`
+- `user_id uuid not null references auth.users`
+- `report_id uuid not null references reports`
+- `created_at timestamptz not null`, `withdrawn_at timestamptz null`
+- index `(report_id)`, `(user_id)`
+- RLS on with **no policies at all** (not even owner SELECT). Read only by the
+  server to take a share down, to keep a founder's own outcome out of their
+  stories, and later for double opt-in introductions.
+
+## peer_unlocks (give to get)
+- `id uuid pk`, `user_id uuid not null references auth.users`
+- `granted_by_report_id uuid not null references reports`
+- `kind text not null check (kind in ('report','share'))`, unique `(granted_by_report_id, kind)`
+- `used_on_situation_id uuid null references situations`
+- `created_at timestamptz not null`
+- A report grants one ('report'); the first share of a report grants one
+  more ('share'). Never taken away. Nothing reads them yet: founder cases
+  come once approved outcomes exist.
+
+## care_events (existing, read only here)
+- Read: `level, scope_id, created_at, resolved_at`. A clear event still open,
+  an event scoped to the situation, or any event since the situation started
+  stops sharing and stories for that report. `GET /api/reports/due` returns
+  nothing while a clear event is open.
