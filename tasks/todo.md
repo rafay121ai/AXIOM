@@ -26,6 +26,48 @@ Not touched on purpose: CLAUDE.md (instructions file). It now disagrees with the
 
 ---
 
+# Build plan v1 (DRAFT, waiting for Rafay's approval)
+
+Spec: PRODUCT.md, ARCHITECTURE.md, DESIGN.md, tasks/voice.md, tasks/decisions.md and the approved mocks in tasks/design/.
+Nothing below has started. No live system, no push, no merge to main.
+
+## What already exists (found in the repo, not assumed)
+- `main` already has the old-product cleanup. `feature/knowledge-rechunk-pilot` (this branch) is main + 38 commits: the lesson library work and the new documents.
+- **`feature/backend-hardening`** (worktree `/Users/rafayessani/AXIOM-wt/backend`, 39 commits ahead of main, not merged, includes `feature/cost-tracking`): server hardening (rate limits, auth, input caps, CORS, errors), all browser writes moved behind the API, a daily cost cap per founder, model usage logging, product events, request and write validation, a `founder_profiles` migration and endpoints, and node tests. This is most of "M0: server foundation". Migrations there (including a pending "revoke browser writes") are written, **not known to be applied live (VERIFY)**.
+- The two branches have diverged (39 vs 38 commits).
+
+## Proposed base
+New branch `feature/journey-v1` in a new worktree `/Users/rafayessani/AXIOM-wt/journey`, created from `feature/backend-hardening`, then bring in the documents and the library scripts from the pilot branch (merge locally; report any conflicts, never force). Main is not touched. The new Expo app lives in a new `app/` folder of the same repo.
+
+## Milestones (each ends with tests passing and a short report in tasks/build_log.md)
+B0 Setup: create the branch and worktree, bring in the pilot work, run install, build and the existing tests, record the baseline. Read the existing server code before changing anything and list what to reuse (daily cap, usage logging, validation, founder_profiles).
+B1 Server foundation: an app factory so the API can be tested without starting it, config for model IDs per step, one structured-call helper (JSON schema, retry once, usage row), fakes for the model, push and clock, test harness. Fix the usage price table (needs Rafay's prices).
+B2 Care: three-outcome check in front of every route that takes founder text, with a test set (including "kill the feature", "burn rate", "i wanna dieee", explicit words), a flag that pauses pushes, a verified-help table with placeholders only (no real numbers until a person verifies).
+B3 Sign-up: 13 answers saved as they go and resumable, reconciled with the existing `founder_profiles` migration; first reading call; checker that every quote and underlined phrase is the founder's own words; no feedback endpoint.
+B4 Situation and Read: persisted follow-up count (CHECK 2), filler filter, idempotent turns, the Read (headline, short body, max 2 or 0 underlines, one closing question), the answer or skip.
+B5 Learn: retrieval with the existing search, citation validator (author and book from the database row, quotes as exact substrings), reply length cap, no-source behaviour (say nothing), the five picture types with server-checked numbers, "move offered" rule (two real replies or the what-do-I-do-next intent, max 2), tappable follow-ups, loading-hint endpoint. Book-level attribution only until the lesson tables exist.
+B6 Move: existing validator, commit, one swap with a real reason, max 2 active.
+B7 Report: Done, Couldn't, Didn't, prediction check, story offer (none until approved outcomes exist), consent every time plus the share-automatically setting, unlock.
+B8 Push and scheduler: tokens, the 2-a-day cap from a log, quiet hours, lock-screen modes, 14-day pause, check-in time. Tested with a fake push service. No real device is pinged.
+B9 Home, History, Settings, account endpoints (delete is a stub until its plan exists).
+B10 Migrations: one consolidated, ordered set written and statically checked, **not applied**. Includes the private author-link table for shared outcomes.
+B11 Expo app: scaffold, then the screens in the approved order, each compared to its mock: sign-in, 13 questions, wait, first reading, situation, Read, Learn with the move card and Move sheet, Report, home, drawer, History, Settings, care, loading hint and in-between states. The app talks only to the API (a test fails the build if it calls Supabase tables). Offline queue and retries. Runs against fake API data first. Checked in the iOS Simulator with screenshots.
+B12 Review: security and quality review of the whole branch, a clean run of every test, a walkthrough 0 to 1, and a list of everything left for Rafay.
+
+## Limits for the long run (proposed)
+Spending: real model calls only for testing, **$6 in total**, in at most 3 runs approved one by one (the first at most $2). Everything else uses fakes. Cost per run is logged. Hard stop at $6.
+May do alone: create the new branch and worktree, edit and add code and tests in it, run installs, builds, tests and the simulator, write migration files (not apply them), update the documents, lessons, decisions and build log, commit locally to the new branch, use at most 2 helpers at a time.
+Never without asking: touch or merge to main, push, apply a migration or run SQL on any live database (main or knowledge), upload lessons, deploy, send a real push, change the AI model or provider, spend beyond the cap, delete anything in `knowledge_pilot/_archive` or the backups, kill processes I didn't start, print any key.
+Checkpoints (I stop, report in plain words and wait): after B1, after B9 (server done), after B10 (migrations ready, needs the live schema dump first), after the first three app screens, before the first real-model run, and at the end.
+Stop at once if: the same test fails twice for the same reason, code and documents disagree (CLAUDE.md rule), a step needs a secret or a live system, or a hard rule would be broken.
+
+## Open questions for Rafay
+1. Build on `feature/backend-hardening` (recommended) or start from main and re-do that work?
+2. Expo app in an `app/` folder of this repo (recommended) or a separate repo?
+3. Are the `backend-hardening` migrations already applied to the live main project? (I cannot see this without a read-only look, which needs your approval.)
+
+---
+
 # Earlier plans (history, kept unchanged)
 
 # Migration baseline and security fix

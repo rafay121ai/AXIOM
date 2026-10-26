@@ -623,3 +623,8 @@ Groups, each divided by thin lines, plain labels:
 - CLAUDE.md edits are shown to Rafay before saving.
 
 ## CLAUDE.md updated (Rafay said "ok" to the edits shown): native app first, home screen for returning founders, Learn leads to a Move, loading hint book-only exception, share automatically, private link table, new picture library allowed, voice line, verify checklist, file structure. Two small consequential edits not on the shown list: "browser" became "app (and any browser)" in the writes rule, and "No browser side writes" became "No client side writes". Distress rule unchanged.
+
+## Build plan drafted (tasks/todo.md, "Build plan v1"), waiting for Rafay
+- Real-model testing cap: $6 in total (Rafay agreed), at most 3 approved runs. Brand Kit stays uncommitted for now (Rafay: "lets plan it").
+- Found: feature/backend-hardening (39 commits, unmerged, includes cost-tracking) already has server hardening, writes behind the API, a daily cost cap, usage logging, founder_profiles migration and endpoints, and tests. Plan builds on it.
+- Open questions for Rafay: base branch, where the Expo app lives, whether backend-hardening migrations are live.
