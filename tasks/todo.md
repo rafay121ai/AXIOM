@@ -26,7 +26,7 @@ Not touched on purpose: CLAUDE.md (instructions file). It now disagrees with the
 
 ---
 
-# Build plan v1 (DRAFT, waiting for Rafay's approval)
+# Build plan v1 (setup approved by Rafay; the build starts when he says go)
 
 Spec: PRODUCT.md, ARCHITECTURE.md, DESIGN.md, tasks/voice.md, tasks/decisions.md and the approved mocks in tasks/design/.
 Nothing below has started. No live system, no push, no merge to main.
@@ -61,10 +61,40 @@ Never without asking: touch or merge to main, push, apply a migration or run SQL
 Checkpoints (I stop, report in plain words and wait): after B1, after B9 (server done), after B10 (migrations ready, needs the live schema dump first), after the first three app screens, before the first real-model run, and at the end.
 Stop at once if: the same test fails twice for the same reason, code and documents disagree (CLAUDE.md rule), a step needs a secret or a live system, or a hard rule would be broken.
 
-## Open questions for Rafay
-1. Build on `feature/backend-hardening` (recommended) or start from main and re-do that work?
-2. Expo app in an `app/` folder of this repo (recommended) or a separate repo?
-3. Are the `backend-hardening` migrations already applied to the live main project? (I cannot see this without a read-only look, which needs your approval.)
+## Answers from Rafay
+1. Base: build on `feature/backend-hardening`. YES.
+2. The Expo app lives in `app/` of this repo. YES.
+3. Read-only look at the live main project (the URL Rafay gave matches `VITE_SUPABASE_URL`): **the backend-hardening migrations are NOT live.** Asking for zero rows showed `founder_profiles` and `product_events` do not exist; the old tables (`sessions`, `messages`, `experiments`, `model_usage_logs`, ...) exist and are publicly readable under RLS. So the migrations are written as one clean set (B10) and applied only with a specific yes (gate G1). No data was read; no key was printed.
+
+## Standing rules for the run (from Rafay)
+- Fix every problem from the ROOT. No patches. Delete dead code in the same change. (CLAUDE.md, Bug fixing.)
+- A learning-loop agent runs after every milestone and after any correction, failed test or review finding: root cause, a lesson in `tasks/lessons.md`, a regression test or check where possible.
+- When every screen exists, write the plain-English report `tasks/build_report.md` (what was built, what each screen does, what was checked and how, cost, what is left, what needs Rafay).
+- Keep `tasks/build_status.json` current with `python3 tasks/status.py`; the "Axiom build" panel (mod `axiom-build-monitor`, command `/axiom-build`) shows it live. Copy of the mod: `tasks/tools/axiom-build-monitor/`.
+- If a usage limit stops the work: wait for the reset and resume by myself from `tasks/build_status.json` and this file. (Mechanism proposed below, needs Rafay's yes.)
+
+## Who does what (I am the conductor, final decision maker, creative app developer and software engineer)
+Every helper returns the same report (STATUS, what changed, test evidence, root cause of anything found, dead code removed, what it is unsure about). Helpers never commit to the build branch, never merge, push or touch live systems. I read the diff, run the tests myself, and accept or send it back.
+| Agent | Job | When |
+|---|---|---|
+| builder (existing) | writes server code and tests for one scoped task | B1 to B10 |
+| app-builder (new) | builds one Expo screen from its approved mock, in `app/` only | B11 |
+| care-tester (new) | writes and runs the distress test set, including false alarms | B2 and whenever the care rules change |
+| voice-checker (new) | checks all founder-facing text against `tasks/voice.md` and the banned list | after B3, B5, B7, B8, B11 |
+| test-runner (existing) | install, build and all tests, reports only failures | after every change |
+| backend-auditor (existing) | security, correctness and cost review of the server | after B9 and in B12 |
+| migration-checker (existing) | checks every migration for safety | B10 |
+| dead-code-hunter (existing) | finds unused code | each milestone and B12 |
+| axiom-reviewer (existing) | reviews the branch diff against CLAUDE.md, PRODUCT.md, ARCHITECTURE.md | before any checkpoint report and in B12 |
+| learning-loop (new) | root causes, lessons, regression tests, repeat-mistake check | after every milestone and correction |
+Not used in this build: chunker, chunk-auditor, enrichment-checker, source-triage (library pipeline; they come back for the lesson upload).
+Parallel runs: at most 3 helpers at once, on files that do not overlap (for example care-tester next to a builder on a different folder, or two app-builders on different screens). Anything that edits the same files runs one at a time. The iOS Simulator checks and screenshots are done by me.
+
+## Sessions (proposed)
+One conductor session (this cockpit: decisions, status, reviews, merges into the build branch) plus two worker sessions, each in its own worktree and branch so they cannot step on each other: **Server track** (B1 to B10) and **App track** (B11, built against fake API data from the endpoint contract in ARCHITECTURE.md). I write the contract and fixtures first (end of B1) so both can run in parallel. The conductor merges the tracks into `feature/journey-v1`. This keeps each session's memory small and lets a limit or crash hit only one track.
+
+## Rate-limit resume (proposed, needs Rafay's yes before it is created)
+A scheduled task every 20 minutes starts a fresh session with a self-contained prompt: read `tasks/build_status.json`; act only if `mode` is `running` and `updated` is more than 25 minutes old; then resume from the first unfinished step in this file, set `rate` back to ok, and keep going. Caveats: it runs only while the Claude app is open (otherwise on next launch) and the machine is awake; the status file is the lock, so the watcher never starts a second builder while the first is alive. A deliberate pause is `mode paused`.
 
 ---
 

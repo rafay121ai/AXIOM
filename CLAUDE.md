@@ -139,6 +139,25 @@ relevant area, check:
 
 ### 6. Bug fixing
 - Given a bug, find the root cause and fix it. No temporary patches.
+- Always fix from the root. Never patch around a problem or work around a
+  failing test.
+- Delete dead code you find or create (unused files, functions, flags,
+  comments about removed behaviour) in the same change.
+
+### 7. Learning loop
+- After every milestone, and after any correction or failed test, run the
+  `learning-loop` agent. It finds the root cause, adds a lesson to
+  `tasks/lessons.md`, and where possible a regression test or check.
+- Keep `tasks/build_status.json` current with `python3 tasks/status.py`
+  after every step. The "Axiom build" panel reads it.
+
+### 8. Reports and usage limits
+- When every screen of the app exists, write a plain-English report for
+  Rafay (`tasks/build_report.md`): what was built, what each screen does,
+  what was checked and how, what it cost, what is left, and anything that
+  needs his decision.
+- If a usage limit stops the work, wait for it to reset and resume from
+  `tasks/build_status.json` and `tasks/todo.md` without being told.
 
 ## Core Principles
 - **Simplicity first.** Smallest change that solves the problem.

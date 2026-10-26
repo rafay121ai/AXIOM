@@ -1,0 +1,6 @@
+{
+  "name": "axiom-build-monitor",
+  "version": "0.1.0",
+  "description": "A live panel that shows what the Axiom build is doing, which helpers are working, what it costs, and what needs the founder.",
+  "types": "./types/index.d.ts"
+}

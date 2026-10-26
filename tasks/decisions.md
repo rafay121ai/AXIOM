@@ -628,3 +628,9 @@ Groups, each divided by thin lines, plain labels:
 - Real-model testing cap: $6 in total (Rafay agreed), at most 3 approved runs. Brand Kit stays uncommitted for now (Rafay: "lets plan it").
 - Found: feature/backend-hardening (39 commits, unmerged, includes cost-tracking) already has server hardening, writes behind the API, a daily cost cap, usage logging, founder_profiles migration and endpoints, and tests. Plan builds on it.
 - Open questions for Rafay: base branch, where the Expo app lives, whether backend-hardening migrations are live.
+
+## Setup for the long run approved (Rafay)
+- Build on feature/backend-hardening; Expo app in app/. Read-only live check done: the backend-hardening migrations are NOT live (founder_profiles and product_events do not exist). Real-model testing cap $6, at most 3 approved runs.
+- Standing rules: fix from the root, delete dead code, a learning-loop agent after every milestone, a plain-English report when all screens exist, resume by itself after a usage limit (mechanism awaiting a yes).
+- New agents (in ~/.claude/agents): learning-loop, voice-checker, care-tester, app-builder. Conductor = me. Max 3 helpers at once. Proposed: a conductor session plus a Server session and an App session.
+- New: tasks/status.py and tasks/build_status.json, and the "axiom-build-monitor" panel (command /axiom-build). The panel loads only after Rafay answers "Turn them on" to the engine's question.
