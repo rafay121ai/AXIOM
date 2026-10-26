@@ -8,6 +8,7 @@ import { summarizeUsage } from './usageSummary.js'
 import { resolveDailyCap, sumChargesPaged, keysetOrFilter, STREAM_INTERRUPTED_MARKER, CLIENT_ABORTED_MARKER, CHAT_MAX_COMPLETION_TOKENS } from './dailyCap.js'
 import { ALLOWED_CLIENT_MODELS, MODELS } from './config.js'
 import { callStructured } from './llm.js'
+import { mountJourneyRoutes } from './journey/routes.js'
 import { createCare, bodyFields, lastUserMessage, founderMessageContent, onboardingAnswers, profileFreeText } from './care/middleware.js'
 import { capExperimentMetadata } from './writeValidation.js'
 import {
@@ -67,9 +68,10 @@ export function createApp({
   const hasAppServiceRoleKey = getJwtRole(env.SUPABASE_SERVICE_ROLE_KEY) === 'service_role'
   const trackEvent = createEventTracker({ supabase: supabaseAdmin })
   const { logModelUsage } = createUsageLogger({ supabase: supabaseAdmin })
+  const callStructuredForApp = (args) => callStructured({ openai, logModelUsage, clock, ...args })
   const care = createCare({
     supabase: supabaseAdmin,
-    callStructured: (args) => callStructured({ openai, logModelUsage, clock, ...args }),
+    callStructured: callStructuredForApp,
     clock,
   })
   // Read by the push scheduler: no pushes while a care event is open.
@@ -263,6 +265,8 @@ export function createApp({
   app.use('/api/threads', requireAuth)
   app.use('/api/messages', requireAuth)
   app.use('/api/founder-profile', requireAuth)
+  app.use('/api/signup', requireAuth)
+  app.use('/api/first-reading', requireAuth)
 
   // ─── Routes ───────────────────────────────────────────────────────────────────
 
@@ -1322,6 +1326,8 @@ export function createApp({
       return res.status(500).json({ error: 'Failed to save profile' })
     }
   })
+
+  mountJourneyRoutes(app, { supabase: supabaseAdmin, care, callStructured: callStructuredForApp, clock })
 
   app.post('/api/app-sessions', sessionWriteRateLimit, async (req, res) => {
     if (!supabaseAdmin) return res.status(503).json({ error: 'Service not configured' })
