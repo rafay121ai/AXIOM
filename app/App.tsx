@@ -4,7 +4,7 @@ import { Animated, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { api } from './src/api';
-import type { Answer, FirstReading, HelpLine, Question, Screened } from './src/api/types';
+import type { Answer, DueReport, FirstReading, HelpLine, Question, Screened } from './src/api/types';
 import { routeScreened } from './src/care/route';
 import { copy } from './src/copy';
 import { newLearnChat, type LearnChat } from './src/learn/chat';
@@ -16,6 +16,7 @@ import { LINE_EVERY, waitLines, waitMinMs } from './src/onboarding/waitLines';
 import { CareScreen } from './src/screens/CareScreen';
 import { LearnScreen } from './src/screens/LearnScreen';
 import { MoveScreen } from './src/screens/MoveScreen';
+import { ReportScreen } from './src/screens/ReportScreen';
 import { QuestionsScreen } from './src/screens/QuestionsScreen';
 import { ReadingScreen } from './src/screens/ReadingScreen';
 import { ReadScreen } from './src/screens/ReadScreen';
@@ -33,6 +34,7 @@ type Stage =
   | { name: 'read'; situationId: string }
   | { name: 'learn'; situationId: string; chat: LearnChat }
   | { name: 'move'; learnId: string; back: Stage }
+  | { name: 'report'; report: DueReport; next: DueReport[] }
   | { name: 'care'; message: string; help: HelpLine[]; back: Stage };
 
 const run = (anim: Animated.CompositeAnimation) => new Promise<void>((resolve) => anim.start(() => resolve()));
@@ -87,10 +89,19 @@ export default function App() {
     goTo({ name: 'situation', chat: newChat(), opening: suggestion ? copy.situation.opening : copy.situation.openingFresh, suggestion });
   }, [goTo]);
 
+  // Opening the app on a due check-in (the evening reminder's target) lands on the Report, the one due first.
+  const openReports = useCallback((due: DueReport[]) => {
+    const [report, ...next] = due;
+    if (report) goTo({ name: 'report', report, next });
+    else beginSituation(true);
+  }, [goTo, beginSituation]);
+
   const signIn = useCallback(async () => {
     await api.signInWithGoogle();
-    goTo({ name: 'questions', questions: await api.getQuestions() });
-  }, [goTo]);
+    const due = (await api.getDueReports()).filter((r) => r.due);
+    if (due.length > 0) openReports(due);
+    else goTo({ name: 'questions', questions: await api.getQuestions() });
+  }, [goTo, openReports]);
 
   const finish = useCallback((answers: Record<string, Answer>) => {
     stuck.current = typeof answers.stuck === 'string' ? answers.stuck.trim() || undefined : undefined;
@@ -154,6 +165,17 @@ export default function App() {
                 swap={(id, reason) => api.swapMove(id, reason)}
                 loadHint={(seed) => api.getLoadingHint(seed)}
                 onClose={() => goTo(stage.back)}
+                onCare={showCare}
+              />
+            )}
+            {stage.name === 'report' && (
+              <ReportScreen
+                key={stage.report.move_id}
+                report={stage.report}
+                send={(outcome, note, turnId) => api.sendReport(stage.report.move_id, outcome, note, turnId)}
+                story={(id) => api.getStory(id)}
+                consent={(id, share, version) => api.setConsent(id, share, version)}
+                onFinish={() => openReports(stage.next)}
                 onCare={showCare}
               />
             )}

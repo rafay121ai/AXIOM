@@ -1,6 +1,6 @@
 import type { Auth } from './auth';
 import { createSaveQueue, HttpError } from './queue';
-import type { AxiomApi, Commitment, FirstReading, LearnReply, LoadingQuote, MoveView, Question, Read, ReadAnswerResult, Screened, SituationReply, SwapResult } from './types';
+import type { AxiomApi, Commitment, ConsentResult, DueReport, FirstReading, LearnReply, LoadingQuote, MoveView, Question, Read, ReadAnswerResult, ReportResult, Screened, SituationReply, Story, SwapResult } from './types';
 
 type Options = { baseUrl: string; auth: Auth; fetch?: typeof fetch };
 
@@ -61,5 +61,15 @@ export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch
         return null;
       }
     },
+    async getDueReports() {
+      return (await request<{ reports: DueReport[] }>('GET', '/api/reports/due')).reports;
+    },
+    sendReport: (moveId, outcome, note, turnId) =>
+      request<Screened<ReportResult>>('POST', `/api/moves/${moveId}/report`, { outcome, note, client_turn_id: turnId }),
+    async getStory(reportId) {
+      return (await request<{ story: Story | null }>('GET', `/api/reports/${reportId}/story`)).story;
+    },
+    setConsent: (reportId, share, wordingVersion) =>
+      request<ConsentResult>('POST', `/api/reports/${reportId}/consent`, { share, wording_version: wordingVersion }),
   };
 }

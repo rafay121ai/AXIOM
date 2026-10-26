@@ -1,6 +1,6 @@
 import { isDailyLimit, isMoveCap, isSwapUsed } from './api/queue';
 
-// The words the app itself says in the Situation, Read, Learn and Move screens. Everything else Axiom says comes
+// The words the app itself says in the Situation, Read, Learn, Move and Report screens. Everything else Axiom says comes
 // from the server. Source for each line: tasks/design/mock-onboarding-v2.html, mock-states-v1.html,
 // or (marked NEEDS APPROVAL) a line no mock has yet.
 
@@ -48,6 +48,22 @@ export const copy = {
     noRoom: 'You have 2 moves open. Tell me how one of them went first, then I will give you the next.',
     // NEEDS APPROVAL: the server's own line when the one change is used up (moveService.js), shown as it is.
     swapUsed: 'You have changed this move once already.',
+  },
+  // mock-onboarding-v2.html, the Report (screen 8), word for word. Axiom's own lines come from the server.
+  report: {
+    // The small label top right, as the mock has it.
+    title: 'Report',
+    placeholder: 'What happened?',
+    outcome: { done: 'Done', couldnt: "Couldn't", didnt: "Didn't" },
+    seeStory: 'Yes, show me',
+    notNow: 'Not now',
+    storyLabel: 'A founder before you',
+    share: 'Share',
+    keepPrivate: 'Keep private',
+    // mock-states-v1.html, the evening Report with no signal. The mock adds "You can close the app."; it is left out
+    // because the app does not yet keep an unsent check-in once it is closed.
+    saved: 'Your check-in is saved.',
+    willSend: "I'll send it as soon as you're back online.",
   },
   send: 'Send',
   tryAgain: 'Try again',

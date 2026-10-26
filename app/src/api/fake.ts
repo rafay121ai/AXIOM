@@ -1,5 +1,5 @@
 import { HttpError } from './queue';
-import type { AxiomApi, Commitment, FirstReading, LearnReply, LearnTurn, MoveView, Question, Read, ReadAnswerResult, Screened, SituationReply, SwapResult } from './types';
+import type { AxiomApi, Commitment, ConsentResult, DueReport, FirstReading, LearnReply, LearnTurn, MoveView, Outcome, Question, Read, ReadAnswerResult, ReportResult, Screened, SituationReply, Story, SwapResult } from './types';
 
 // Fixture questions, word for word from tasks/design/mock-onboarding-v2.html.
 const QUESTIONS: Question[] = [
@@ -136,6 +136,34 @@ const FAKE_SWAPPED: MoveView = {
 const FAKE_REPORT_TIME = '20:00';
 const NEED_REASON = '"I\'m busy" isn\'t a reason I can work with. What makes this the wrong move?';
 
+// The Report, word for word from the mock (sample founder). The server's own wording lives in server/journey/report/wording.js.
+const FAKE_DUE: DueReport = {
+  move_id: FAKE_MOVE.id,
+  title: 'Ask both clinics for a call within the next 3 days',
+  due: true,
+  report_due_at: '2026-10-26T20:00:00.000Z',
+  opening: 'Your move was to ask both clinics for a call within the next 3 days. I said at least one would not answer. What happened?',
+  prediction: 'at least one would not answer',
+  outcomes: ['done', 'couldnt', 'didnt'],
+  questions: { done: 'What did they say?', couldnt: 'What got in the way?', didnt: 'What stopped you?' },
+};
+const REPORT_REPLIES: Record<Outcome, string> = {
+  done: 'That is a real answer. One clinic gave you a time, and one did not reply. I said at least one would not answer. I was right, which helps nobody. You sent it anyway, and that is the part that counts. Your next move: send the clinic that replied a message confirming the time.',
+  couldnt: 'That is fine, things changed. Here is a smaller version: message only the clinic that is easiest to reach, and ask for a 10-minute call.',
+  didnt: 'That happens. What stopped you matters more than the message. Was it not knowing what to write, or not wanting to send it?',
+};
+const STORY_OFFER = 'A founder who was in your spot shared what went wrong and what worked. Want to see it?';
+const FAKE_STORY: Story = {
+  story: 'Their first two demos ended with "we\'ll think about it". They spent the next month adding features. They got their first customer when they asked each clinic to book a call. Looking back, they say the features never mattered; the first real ask did.',
+  lesson: null,
+  outcome: 'done',
+  stage: null,
+};
+const ASK_ALONE = { text: 'One last thing: can I share what happened, with no name, to help founders behind you?', wording_version: 'share-alone-v1' };
+const ASK_AFTER_STORY = { text: 'They shared theirs so it could help you. Would you share yours the same way, with no name?', wording_version: 'share-after-story-v1' };
+const SHARED_LINE = 'Thank you. That opens more founder stories for you.';
+const KEPT_PRIVATE_LINE = 'Kept private. You can change this any time in settings.';
+
 // The mock's rule for "ok": fewer than 3 words that say something is not an answer.
 const FILLER = new Set('ok okay k yes yeah yep yup no nope sure fine hmm hm mm um uh thanks thank you thx cool got it i see makes sense right true alright maybe idk good nice lol so well kinda'.split(' '));
 const isReal = (t: string) => t.toLowerCase().replace(/[^a-z0-9%$\s']/g, ' ').split(/\s+/).filter((w) => w && !FILLER.has(w)).length >= 3;
@@ -143,7 +171,8 @@ const isReal = (t: string) => t.toLowerCase().replace(/[^a-z0-9%$\s']/g, ' ').sp
 const isEnough = (t: string) => t.split(/\s+/).length >= 8 && /\d|\b(one|two|three|four|five|six|seven|eight|nine|ten|twice|once|yesterday)\b/i.test(t);
 
 // `latencyMs` makes the Learn calls take a while, so the loading hint can be seen.
-export function createFakeApi(sim: CareSim = 'none', latencyMs = 0): AxiomApi {
+// `reportDue` puts the mock's check-in waiting, as it is on the evening of a committed move.
+export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = false): AxiomApi {
   const wait = () => (latencyMs > 0 ? new Promise<void>((r) => setTimeout(r, latencyMs)) : undefined);
   const screen = async (): Promise<Screened> => (sim === 'clear' ? CLEAR : sim === 'unclear' ? UNCLEAR : {});
 
@@ -189,6 +218,9 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0): AxiomApi {
   // The move, kept in memory: asking again returns the same one, a commit twice is one commit, a swap twice is one swap.
   let move = FAKE_MOVE;
   let swapped: SwapResult | null = null;
+
+  // The report, kept in memory: a move is reported once, and sending it again returns the stored answer.
+  let reported: Extract<ReportResult, { status: 'reported' }> | null = null;
 
   return {
     async signInWithGoogle() {},
@@ -262,6 +294,34 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0): AxiomApi {
     },
     async getLoadingHint() {
       return FAKE_HINT;
+    },
+    async getDueReports() {
+      return reportDue && !reported ? [FAKE_DUE] : [];
+    },
+    async sendReport(moveId, outcome, note): Promise<Screened<ReportResult>> {
+      if (moveId !== FAKE_DUE.move_id) throw new HttpError(404, 'Not found');
+      if (reported) return reported;
+      const flagged = await screen();
+      if (flagged.care) return flagged;
+      if (!isReal(note)) return { status: 'need_more', reply: SAY_MORE };
+      reported = {
+        status: 'reported',
+        report: { id: 'fake-report-1', outcome },
+        reply: REPORT_REPLIES[outcome],
+        story_offer: { text: STORY_OFFER },
+        consent: { ask: true, state: 'asked', question: ASK_ALONE, question_after_story: ASK_AFTER_STORY, choices: ['share', 'keep_private'] },
+        unlock: { granted: true },
+      };
+      return reported;
+    },
+    async getStory() {
+      return FAKE_STORY;
+    },
+    async setConsent(_reportId, share): Promise<ConsentResult> {
+      return {
+        consent: { ask: false, state: share ? 'shared' : 'private', automatic: false },
+        reply: share ? SHARED_LINE : KEPT_PRIVATE_LINE,
+      };
     },
   };
 }

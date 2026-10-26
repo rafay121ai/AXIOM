@@ -194,6 +194,49 @@ export type SwapResult = { status: 'swapped'; replaced_id: string; move: MoveVie
 /** One verified quote for the loading hint, with the book name only. */
 export type LoadingQuote = { book: string; quote: string };
 
+/** The three ways a check-in can go. Nothing else can be reported, and none of them costs the founder anything. */
+export type Outcome = 'done' | 'couldnt' | 'didnt';
+
+/** A move waiting for its check-in. `opening` is Axiom's first line, `questions` the plain question after each tap. */
+export type DueReport = {
+  move_id: string;
+  title: string;
+  /** False while the move is still open and its evening has not come. */
+  due: boolean;
+  report_due_at: string | null;
+  opening: string;
+  prediction: string;
+  outcomes: Outcome[];
+  questions: Record<Outcome, string>;
+};
+
+/** One sharing question. The wording version is sent back with the answer, so the log holds the words the founder saw. */
+export type ConsentQuestion = { text: string; wording_version: string };
+
+/** Asked at every check-in unless the founder turned on sharing automatically. Nothing is pre-selected. */
+export type ConsentState =
+  | { ask: true; state: 'asked'; question: ConsentQuestion; question_after_story: ConsentQuestion | null; choices: ['share', 'keep_private'] }
+  | { ask: false; state: string; automatic: boolean };
+
+/** `need_more`: the note was too thin to count, `reply` is Axiom's line. `reported`: stored once; sending it again returns the same. */
+export type ReportResult =
+  | { status: 'need_more'; reply: string }
+  | {
+      status: 'reported';
+      report: { id: string; outcome: Outcome };
+      reply: string;
+      /** Set only when an approved founder story fits. */
+      story_offer: { text: string } | null;
+      consent: ConsentState;
+      unlock: { granted: boolean };
+    };
+
+/** A founder story that was shared with consent and approved by a person. */
+export type Story = { story: string; lesson: string | null; outcome: string; stage: string | null };
+
+/** After the founder shares or keeps private: the server's own confirmation line. */
+export type ConsentResult = { consent: ConsentState; reply: string };
+
 export interface AxiomApi {
   /** Starts Google sign-in. Resolves when the founder is signed in. */
   signInWithGoogle(): Promise<void>;
@@ -228,4 +271,15 @@ export interface AxiomApi {
   swapMove(moveId: string, reason: string): Promise<Screened<SwapResult>>;
   /** One verified quote and its book while an answer is on its way, or null when nothing fits. Never throws for the screen. */
   getLoadingHint(seed: string): Promise<LoadingQuote | null>;
+  /** Moves waiting for a check-in, the one due first. Empty while the care screen is open. */
+  getDueReports(): Promise<DueReport[]>;
+  /**
+   * The founder's check-in on a move: which outcome, and what happened in their words. `turnId` is a uuid made once per send;
+   * sending it again is safe, and a move is reported once. Screened first.
+   */
+  sendReport(moveId: string, outcome: Outcome, note: string, turnId: string): Promise<Screened<ReportResult>>;
+  /** The founder story offered after a report, or null when none fits. */
+  getStory(reportId: string): Promise<Story | null>;
+  /** Share or keep private, with the wording version of the question the founder saw. Sending the same answer again is safe. */
+  setConsent(reportId: string, share: boolean, wordingVersion: string): Promise<ConsentResult>;
 }
