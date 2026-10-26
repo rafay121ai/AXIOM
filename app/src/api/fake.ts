@@ -46,6 +46,8 @@ const CLEAR: Screened = {
     'What you just wrote matters more than the business.',
     "I'm not going to give you a lesson or a move right now.",
     "If you might hurt yourself, or you're in danger, please call your local emergency number now.",
+    'Placeholder: a line inviting the founder to tell someone near them.',
+    'Placeholder: a line saying Axiom is an assistant, and is here if they want to keep talking.',
   ].join('\n\n'),
   help: [
     { label: 'If you are in danger right now', value: 'Emergency number for your country' },

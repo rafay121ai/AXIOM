@@ -12,3 +12,9 @@ it('the care screen holds no phone numbers, no glow and no animation', () => {
 it('the serif is loaded, not left to the platform', () => {
   expect(read('src/theme.ts')).not.toMatch(/Georgia|ui-serif/);
 });
+
+it('the app source holds no care sentences; the server sends them', () => {
+  const t = read('src/screens/CareScreen.tsx');
+  expect(t).not.toMatch(/tell someone|not a counsellor|have to be okay|keep talking if/i);
+  expect(t).not.toMatch(/[.!?]['"`<]/);
+});
