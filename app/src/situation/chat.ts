@@ -1,0 +1,29 @@
+import type { Screened, SituationReply } from '../api/types';
+
+// The conversation on the Situation screen. It lives outside the screen so it survives a trip to
+// the care screen and back, and so the rules of a turn can be tested without drawing anything.
+
+export type ChatItem =
+  | { id: number; who: 'ax'; text: string }
+  | { id: number; who: 'me'; text: string; turnId: string; state: 'sent' | 'waiting' | 'failed' };
+
+export type Chat = { situationId: string | null; items: ChatItem[]; nextId: number };
+
+export const newChat = (): Chat => ({ situationId: null, items: [], nextId: 1 });
+
+/** Sends one founder text: the first starts a situation, later ones continue it. */
+export type SendTurn = (situationId: string | null, text: string, turnId: string) => Promise<Screened<SituationReply>>;
+
+/** A pause after "ready" so the screen does not jump; Axiom says nothing in between. */
+export const HAND_OFF_MS = 1200;
+
+/**
+ * Applies Axiom's reply to the chat and returns the new items, with the founder's text now marked sent.
+ * A new topic starts a fresh conversation holding only that text.
+ */
+export function applyReply(chat: Chat, reply: SituationReply, sent: ChatItem): ChatItem[] {
+  chat.situationId = reply.situation_id;
+  const base = reply.started_new ? [sent] : chat.items.map((i) => (i.id === sent.id ? sent : i));
+  if (reply.reply === null) return base;
+  return [...base, { id: chat.nextId++, who: 'ax', text: reply.reply }];
+}

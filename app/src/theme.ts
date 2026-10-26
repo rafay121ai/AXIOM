@@ -50,6 +50,10 @@ export const type = {
   care: { fontFamily: fonts.serif, fontSize: 17.5, lineHeight: 27, color: colors.body },
   readingHead: { fontFamily: fonts.serifMedium, fontSize: 25, lineHeight: 32.5, color: colors.inkBright },
   reading: { fontFamily: fonts.serif, fontSize: 19.5, lineHeight: 28.5, letterSpacing: -0.04, color: ink(0.96) },
+  readBody: { fontFamily: fonts.serif, fontSize: 18.5, lineHeight: 27.5, color: ink(0.96) },
+  readNext: { fontFamily: fonts.serif, fontSize: 19, lineHeight: 28, color: '#f4f4f2' },
+  readSay: { fontFamily: fonts.serif, fontSize: 17, lineHeight: 25, color: ink(0.96) },
+  founder: { fontFamily: fonts.sans, fontSize: 14.5, lineHeight: 21.75, color: ink(0.7) },
   waitLine: { fontFamily: fonts.serif, fontSize: 21, lineHeight: 31.5, color: ink(0.85), textAlign: 'center' as const },
 };
 

@@ -17,6 +17,23 @@ type Props = {
   contentStyle?: StyleProp<ViewStyle>;
 };
 
+/** The layers of frosted glass: blur, a faint tint, a soft sheen and a bright top edge. Fills its parent. */
+export function GlassFill({ tint = ink(glass.tint) }: { tint?: string }) {
+  return (
+    <>
+      <BlurView intensity={glass.blurIntensity} tint="dark" style={StyleSheet.absoluteFill} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: tint }]} />
+      <LinearGradient
+        pointerEvents="none"
+        colors={['rgba(255,255,255,0.13)', 'rgba(255,255,255,0.03)', 'rgba(0,0,0,0.18)']}
+        locations={[0, 0.42, 1]}
+        style={StyleSheet.absoluteFill}
+      />
+      <View pointerEvents="none" style={styles.topEdge} />
+    </>
+  );
+}
+
 // Frosted glass with depth: a lit top edge, a darker underside, a soft shadow.
 // It lifts when pressed (and on hover with a mouse).
 export function Glass({
@@ -34,15 +51,7 @@ export function Glass({
         {...lift.handlers}
       >
         <View style={{ borderRadius: radius, borderWidth: 1, borderColor: edge, overflow: 'hidden' }}>
-          <BlurView intensity={glass.blurIntensity} tint="dark" style={StyleSheet.absoluteFill} />
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: selected ? gold(0.12) : ink(glass.tint) }]} />
-          <LinearGradient
-            pointerEvents="none"
-            colors={['rgba(255,255,255,0.13)', 'rgba(255,255,255,0.03)', 'rgba(0,0,0,0.18)']}
-            locations={[0, 0.42, 1]}
-            style={StyleSheet.absoluteFill}
-          />
-          <View pointerEvents="none" style={[styles.topEdge, { backgroundColor: 'rgba(255,255,255,0.28)' }]} />
+          <GlassFill tint={selected ? gold(0.12) : ink(glass.tint)} />
           <View style={contentStyle}>{children}</View>
         </View>
       </Pressable>
@@ -55,5 +64,5 @@ const styles = StyleSheet.create({
     android: { elevation: 8 },
     default: { shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.6, shadowRadius: 16 },
   }) as ViewStyle,
-  topEdge: { position: 'absolute', top: 0, left: 8, right: 8, height: 1.5 },
+  topEdge: { position: 'absolute', top: 0, left: 8, right: 8, height: 1.5, backgroundColor: 'rgba(255,255,255,0.28)' },
 });

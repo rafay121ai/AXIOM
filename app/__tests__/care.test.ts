@@ -4,12 +4,12 @@ import { careParagraphs, routeScreened } from '../src/care/route';
 describe('screening routes', () => {
   it('carries on when nothing is flagged', async () => {
     const api = createFakeApi('none');
-    expect(routeScreened(await api.sendMessage('how do I price this'))).toEqual({ kind: 'carry' });
+    expect(routeScreened(await api.startSituation('how do I price this', 'turn-1'))).toEqual({ kind: 'carry' });
     expect(routeScreened(await api.saveAnswer('building', 'a thing'))).toEqual({ kind: 'carry' });
   });
 
   it('sends clear distress to the care screen with its help lines', async () => {
-    const r = routeScreened(await createFakeApi('clear').sendMessage('x'));
+    const r = routeScreened(await createFakeApi('clear').startSituation('x', 'turn-2'));
     expect(r.kind).toBe('care');
     if (r.kind === 'care') {
       expect(r.help.length).toBeGreaterThan(0);

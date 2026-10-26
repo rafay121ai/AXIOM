@@ -94,6 +94,30 @@ export type Screened<T = object> = (T & { care?: undefined }) | CareClear | Care
 /** The first reading, written from the sign-up answers. At most 2 underlines, each a phrase that is in the body. */
 export type FirstReading = { headline: string; body: string; underlines: string[] };
 
+/** Where a situation turn stands. `ready` means Axiom has enough and the Read comes next. */
+export type SituationStatus = 'follow_up' | 'ready' | 'say_more';
+
+/** Axiom's reply to one situation turn. `situation_id` is null while the first text was too thin to start one. */
+export type SituationReply = {
+  situation_id: string | null;
+  status: SituationStatus;
+  /** The follow-up question or "Say a bit more."; null when status is `ready`. */
+  reply: string | null;
+  follow_up_count: number;
+  follow_ups_left: number;
+  /** The text started a new situation, because it was about something else. */
+  started_new?: boolean;
+};
+
+/** The Read: a headline, a short body (paragraphs split by blank lines) and one closing question. No underlines. */
+export type Read = { headline: string; body: string; closing_question: string; answered: boolean; skipped: boolean };
+
+/** What the founder does with the closing question: answers in words, or skips. */
+export type ReadAnswer = { text: string } | { skip: true };
+
+/** `say_more`: the reply was too thin to count. `stored`: it counted, and Learn is next. */
+export type ReadAnswerResult = { status: 'say_more'; reply: string } | { status: 'stored'; skipped: boolean; next: 'learn' };
+
 export interface AxiomApi {
   /** Starts Google sign-in. Resolves when the founder is signed in. */
   signInWithGoogle(): Promise<void>;
@@ -103,6 +127,15 @@ export interface AxiomApi {
   saveAnswer(key: string, answer: Answer): Promise<Screened>;
   /** The first reading. Resolves once every saved answer has reached the server and the reading is written. */
   getFirstReading(): Promise<FirstReading>;
-  /** Sends something the founder typed. Screened before anything else happens. */
-  sendMessage(text: string): Promise<Screened>;
+  /**
+   * Starts a situation from the founder's text. `turnId` is a uuid made once per send; sending it again is safe.
+   * Screened before anything else happens.
+   */
+  startSituation(text: string, turnId: string): Promise<Screened<SituationReply>>;
+  /** The next text in a situation. Same turn id rules as startSituation. A new topic comes back with `started_new`. */
+  sendTurn(situationId: string, text: string, turnId: string): Promise<Screened<SituationReply>>;
+  /** The Read for a situation. The same Read comes back every time it is asked for. */
+  getRead(situationId: string): Promise<Read>;
+  /** The founder's reply to the Read's closing question, or a skip. Typed replies are screened. */
+  answerRead(situationId: string, answer: ReadAnswer): Promise<Screened<ReadAnswerResult>>;
 }

@@ -1,6 +1,6 @@
 import type { Auth } from './auth';
 import { createSaveQueue, HttpError } from './queue';
-import type { AxiomApi, FirstReading, Question, Screened } from './types';
+import type { AxiomApi, FirstReading, Question, Read, ReadAnswerResult, Screened, SituationReply } from './types';
 
 type Options = { baseUrl: string; auth: Auth; fetch?: typeof fetch };
 
@@ -14,7 +14,10 @@ export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch
     }).catch(() => {
       throw new HttpError();
     });
-    if (!res.ok) throw new HttpError(res.status);
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: unknown };
+      throw new HttpError(res.status, typeof body?.error === 'string' ? body.error : undefined);
+    }
     return res.json() as Promise<T>;
   }
 
@@ -35,8 +38,11 @@ export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch
       await queue.drain();
       return request<FirstReading>('POST', '/api/first-reading');
     },
-    async sendMessage() {
-      throw new Error('The server has no route for free messages yet');
-    },
+    startSituation: (text, turnId) => request<Screened<SituationReply>>('POST', '/api/situations', { text, client_turn_id: turnId }),
+    sendTurn: (situationId, text, turnId) =>
+      request<Screened<SituationReply>>('POST', `/api/situations/${situationId}/turn`, { text, client_turn_id: turnId }),
+    getRead: (situationId) => request<Read>('POST', `/api/situations/${situationId}/read`),
+    answerRead: (situationId, answer) =>
+      request<Screened<ReadAnswerResult>>('POST', `/api/situations/${situationId}/read/answer`, answer),
   };
 }

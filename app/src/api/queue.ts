@@ -1,16 +1,19 @@
 import type { Answer, Screened } from './types';
 
-/** A failed request. `status` is missing when the network itself failed. */
+/** A failed request. `status` is missing when the network itself failed; `code` is the server's short error name. */
 export class HttpError extends Error {
-  constructor(readonly status?: number, message = `Request failed${status ? ` (${status})` : ''}`) {
+  constructor(readonly status?: number, readonly code?: string, message = `Request failed${status ? ` (${status})` : ''}`) {
     super(message);
   }
 }
 
+/** The server says today's limit is used up. Trying again changes nothing. */
+export const isDailyLimit = (e: unknown): boolean => e instanceof HttpError && e.status === 429 && e.code === 'daily_limit';
+
 /** Worth trying again: no network, a server fault, a rate limit, or a sign-in that has just lapsed. */
 export const isRetryable = (e: unknown): boolean => {
   const status = e instanceof HttpError ? e.status : undefined;
-  return status === undefined || status >= 500 || status === 429 || status === 401;
+  return !isDailyLimit(e) && (status === undefined || status >= 500 || status === 429 || status === 401);
 };
 
 type Entry = { answer: Answer; waiters: { resolve: (r: Screened) => void; reject: (e: unknown) => void }[] };

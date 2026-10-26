@@ -6,6 +6,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { api } from './src/api';
 import type { Answer, FirstReading, HelpLine, Question, Screened } from './src/api/types';
 import { routeScreened } from './src/care/route';
+import { copy } from './src/copy';
+import { newChat, type Chat } from './src/situation/chat';
 import { AxiomMessage } from './src/components/AxiomMessage';
 import { Glow } from './src/components/Glow';
 import { loadReading } from './src/onboarding/reading';
@@ -13,7 +15,9 @@ import { LINE_EVERY, waitLines, waitMinMs } from './src/onboarding/waitLines';
 import { CareScreen } from './src/screens/CareScreen';
 import { QuestionsScreen } from './src/screens/QuestionsScreen';
 import { ReadingScreen } from './src/screens/ReadingScreen';
+import { ReadScreen } from './src/screens/ReadScreen';
 import { SignInScreen } from './src/screens/SignInScreen';
+import { SituationScreen } from './src/screens/SituationScreen';
 import { WaitScreen } from './src/screens/WaitScreen';
 import { colors, motion, serifFiles, space } from './src/theme';
 
@@ -22,7 +26,9 @@ type Stage =
   | { name: 'questions'; questions: Question[] }
   | { name: 'wait'; lines: string[] }
   | { name: 'reading'; reading: FirstReading }
-  | { name: 'situation' }
+  | { name: 'situation'; chat: Chat; opening: string; suggestion?: string }
+  | { name: 'read'; situationId: string }
+  | { name: 'learn'; situationId: string }
   | { name: 'care'; message: string; help: HelpLine[]; back: Stage };
 
 const run = (anim: Animated.CompositeAnimation) => new Promise<void>((resolve) => anim.start(() => resolve()));
@@ -31,6 +37,7 @@ export default function App() {
   const [fontsReady] = useFonts(serifFiles);
   const [stage, setStage] = useState<Stage>({ name: 'signin' });
   const [soft, setSoft] = useState<string | null>(null);
+  const stuck = useRef<string | undefined>(undefined);
   const stageRef = useRef(stage);
   stageRef.current = stage;
   const fade = useRef(new Animated.Value(1)).current;
@@ -66,12 +73,23 @@ export default function App() {
     if (r.kind === 'care') goTo({ name: 'care', message: r.message, help: r.help, back: stageRef.current }, true);
   }, [goTo]);
 
+  const showCare = useCallback((message: string, help: HelpLine[]) => {
+    goTo({ name: 'care', message, help, back: stageRef.current }, true);
+  }, [goTo]);
+
+  // The first situation offers what the founder said they were stuck on; a later one starts from a blank question.
+  const beginSituation = useCallback((fresh: boolean) => {
+    const suggestion = fresh ? undefined : stuck.current;
+    goTo({ name: 'situation', chat: newChat(), opening: suggestion ? copy.situation.opening : copy.situation.openingFresh, suggestion });
+  }, [goTo]);
+
   const signIn = useCallback(async () => {
     await api.signInWithGoogle();
     goTo({ name: 'questions', questions: await api.getQuestions() });
   }, [goTo]);
 
   const finish = useCallback((answers: Record<string, Answer>) => {
+    stuck.current = typeof answers.stuck === 'string' ? answers.stuck.trim() || undefined : undefined;
     const lines = waitLines((answers.building as string | undefined) ?? '');
     goTo({ name: 'wait', lines });
     loadReading(() => api.getFirstReading(), { minMs: waitMinMs(lines), retryMs: LINE_EVERY })
@@ -95,7 +113,26 @@ export default function App() {
             )}
             {soft && stage.name !== 'care' && <View style={styles.soft}><AxiomMessage text={soft} /></View>}
             {stage.name === 'wait' && <WaitScreen lines={stage.lines} />}
-            {stage.name === 'reading' && <ReadingScreen reading={stage.reading} onContinue={() => goTo({ name: 'situation' })} />}
+            {stage.name === 'situation' && (
+              <SituationScreen
+                chat={stage.chat}
+                opening={stage.opening}
+                suggestion={stage.suggestion}
+                send={(id, text, turnId) => (id ? api.sendTurn(id, text, turnId) : api.startSituation(text, turnId))}
+                onReady={(situationId) => goTo({ name: 'read', situationId })}
+                onCare={showCare}
+              />
+            )}
+            {stage.name === 'read' && (
+              <ReadScreen
+                loadRead={() => api.getRead(stage.situationId)}
+                answer={(a) => api.answerRead(stage.situationId, a)}
+                onAnswered={() => goTo({ name: 'learn', situationId: stage.situationId })}
+                onSomethingElse={() => beginSituation(true)}
+                onCare={showCare}
+              />
+            )}
+            {stage.name === 'reading' && <ReadingScreen reading={stage.reading} onContinue={() => beginSituation(false)} />}
           </Animated.View>
         </View>
       </View>

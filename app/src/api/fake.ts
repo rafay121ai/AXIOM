@@ -1,4 +1,4 @@
-import type { AxiomApi, FirstReading, Question, Screened } from './types';
+import type { AxiomApi, FirstReading, Question, Read, ReadAnswerResult, Screened, SituationReply } from './types';
 
 // Fixture questions, word for word from tasks/design/mock-onboarding-v2.html.
 const QUESTIONS: Question[] = [
@@ -70,8 +70,58 @@ const CLEAR: Screened = {
 };
 const UNCLEAR: Screened = { care: 'unclear', reply: 'That sounded heavy. What is going on?' };
 
+// The follow-up questions and the Read, word for word from the mock (sample founder).
+const FOLLOW_UPS = ['When was the last time you showed it to someone, and what did they say?', 'And what did you do after that?'];
+const MAX_FOLLOW_UPS = 2;
+const SAY_MORE = 'Say a bit more.';
+const FAKE_READ: Read = {
+  headline: 'Nobody has actually said yes or no to this yet.',
+  body: [
+    "Two clinics saw it and said they'd think about it. That is not an answer. It is a way of not answering.",
+    'Since then you have added features instead of going back to ask. The more you add, the longer you can avoid hearing the real answer.',
+  ].join('\n\n'),
+  closing_question: 'Have you gone back to either of those clinics since?',
+  answered: false,
+  skipped: false,
+};
+
+// The mock's rule for "ok": fewer than 3 words that say something is not an answer.
+const FILLER = new Set('ok okay k yes yeah yep yup no nope sure fine hmm hm mm um uh thanks thank you thx cool got it i see makes sense right true alright maybe idk good nice lol so well kinda'.split(' '));
+const isReal = (t: string) => t.toLowerCase().replace(/[^a-z0-9%$\s']/g, ' ').split(/\s+/).filter((w) => w && !FILLER.has(w)).length >= 3;
+// The mock's "enough": a described situation with one concrete detail.
+const isEnough = (t: string) => t.split(/\s+/).length >= 8 && /\d|\b(one|two|three|four|five|six|seven|eight|nine|ten|twice|once|yesterday)\b/i.test(t);
+
 export function createFakeApi(sim: CareSim = 'none'): AxiomApi {
   const screen = async (): Promise<Screened> => (sim === 'clear' ? CLEAR : sim === 'unclear' ? UNCLEAR : {});
+
+  // Situations kept in memory, so a turn id sent twice gets the same answer, like the server.
+  let nextId = 1;
+  const situations = new Map<string, { asked: number; said: string[] }>();
+  const replies = new Map<string, SituationReply>();
+  const turn = async (situationId: string | null, text: string, turnId: string): Promise<Screened<SituationReply>> => {
+    const flagged = await screen();
+    if (flagged.care) return flagged;
+    const seen = replies.get(turnId);
+    if (seen) return seen;
+    const state = situationId ? situations.get(situationId) : undefined;
+    const asked = state?.asked ?? 0;
+    const counts = (n: number) => ({ follow_up_count: n, follow_ups_left: MAX_FOLLOW_UPS - n });
+    let reply: SituationReply;
+    if (!isReal(text)) {
+      reply = { situation_id: situationId, status: 'say_more', reply: SAY_MORE, ...counts(asked) };
+    } else {
+      const id = situationId ?? `fake-situation-${nextId++}`;
+      const said = [...(state?.said ?? []), text];
+      const done = asked >= MAX_FOLLOW_UPS || isEnough(said.join(' '));
+      situations.set(id, { asked: done ? asked : asked + 1, said });
+      reply = done
+        ? { situation_id: id, status: 'ready', reply: null, ...counts(asked) }
+        : { situation_id: id, status: 'follow_up', reply: FOLLOW_UPS[asked], ...counts(asked + 1) };
+    }
+    replies.set(turnId, reply);
+    return reply;
+  };
+
   return {
     async signInWithGoogle() {},
     async getQuestions() {
@@ -81,6 +131,16 @@ export function createFakeApi(sim: CareSim = 'none'): AxiomApi {
     async getFirstReading() {
       return READING;
     },
-    sendMessage: screen,
+    startSituation: (text, turnId) => turn(null, text, turnId),
+    sendTurn: (situationId, text, turnId) => turn(situationId, text, turnId),
+    async getRead() {
+      return FAKE_READ;
+    },
+    async answerRead(_situationId, answer): Promise<Screened<ReadAnswerResult>> {
+      if ('skip' in answer) return { status: 'stored', skipped: true, next: 'learn' };
+      const flagged = await screen();
+      if (flagged.care) return flagged;
+      return isReal(answer.text) ? { status: 'stored', skipped: false, next: 'learn' } : { status: 'say_more', reply: SAY_MORE };
+    },
   };
 }
