@@ -1,0 +1,63 @@
+import { Platform } from 'react-native';
+
+// Every colour, type size and spacing value lives here.
+// Source: DESIGN.md and tasks/design/mock-onboarding-v2.html.
+
+export const ink = (alpha: number) => `rgba(234,236,238,${alpha})`;
+export const gold = (alpha: number) => `rgba(205,178,126,${alpha})`;
+
+export const colors = {
+  base: '#050505',
+  ink: 'rgb(234,236,238)',
+  inkBright: '#f1f2f3',
+  goldFrom: 'rgb(205,178,126)',
+  goldTo: 'rgb(168,142,94)',
+  onGold: '#0a0806',
+  // Writing levels from DESIGN.md: 0.9 body, 0.7 secondary, 0.5 labels, 0.35 hints
+  body: ink(0.9),
+  secondary: ink(0.7),
+  label: ink(0.5),
+  hint: ink(0.35),
+  line: ink(0.12),
+} as const;
+
+export const goldGradient = [colors.goldFrom, colors.goldTo] as const;
+
+export const fonts = {
+  serif: Platform.select({
+    ios: 'Georgia',
+    android: 'serif',
+    default: 'ui-serif, "New York", "Iowan Old Style", "Palatino Linotype", Georgia, serif',
+  }) as string,
+  sans: Platform.select({
+    web: '-apple-system, "SF Pro Text", "Inter", system-ui, "Segoe UI", sans-serif',
+    default: undefined,
+  }) as string | undefined,
+};
+
+export const type = {
+  question: { fontFamily: fonts.serif, fontSize: 27, lineHeight: 34, color: colors.ink, letterSpacing: -0.1 },
+  sub: { fontFamily: fonts.sans, fontSize: 14, lineHeight: 21, color: colors.label },
+  option: { fontFamily: fonts.sans, fontSize: 16, lineHeight: 22 },
+  chip: { fontFamily: fonts.sans, fontSize: 14.5 },
+  label: { fontFamily: fonts.sans, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' as const, color: ink(0.42) },
+  field: { fontFamily: fonts.sans, fontSize: 17, color: colors.ink },
+  big: { fontFamily: fonts.serif, fontSize: 19, lineHeight: 29, color: colors.ink },
+  button: { fontFamily: fonts.sans, fontSize: 15.5 },
+  legal: { fontFamily: fonts.sans, fontSize: 11.5, lineHeight: 18, color: ink(0.42) },
+  waitLine: { fontFamily: fonts.serif, fontSize: 21, lineHeight: 31.5, color: ink(0.85), textAlign: 'center' as const },
+};
+
+export const space = { screenX: 26, qTop: 34, bar: 14 };
+
+// Glass: frosted, a bright top edge, a faint tint (mock: --blur 42, --tint .1, --edge .2)
+export const glass = { blurIntensity: 60, tint: 0.1, edge: 0.2 };
+
+export const motion = {
+  swapOut: 240,
+  screenOut: 280,
+  screenIn: 500,
+  progress: 500,
+  autoAdvance: 380,
+  drawCycle: 3600,
+};
