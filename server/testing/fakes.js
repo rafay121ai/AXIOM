@@ -43,13 +43,15 @@ export function createFakeClock(startMs = Date.parse('2026-10-26T09:00:00.000Z')
   }
 }
 
-export function createFakePushSender() {
+// Never reaches Expo. respond(message) => result (or throws); default ok.
+// `sent` records every message the sender was asked to send.
+export function createFakePushSender({ respond = () => ({ ok: true }) } = {}) {
   const sent = []
   return {
     sent,
     async send(message) {
       sent.push(message)
-      return { ok: true }
+      return respond(message)
     },
   }
 }

@@ -16,8 +16,8 @@ const NAME_MAX = 30
 // logo and the faint lines.
 export const createMemoryHintProvider = (lessons = []) => ({ lessons: () => lessons })
 
-// The first name from the Google account, for the second move card.
-function firstNameOf(user) {
+// The first name from the Google account, for the second move card and pushes.
+export function firstNameOf(user) {
   const meta = user?.user_metadata ?? {}
   const name = String(meta.given_name || meta.full_name || meta.name || '').trim().split(/\s+/)[0] ?? ''
   return /^[\p{L}][\p{L}'’-]*$/u.test(name) && name.length <= NAME_MAX ? name : null

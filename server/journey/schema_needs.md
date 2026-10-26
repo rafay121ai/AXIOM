@@ -271,3 +271,61 @@ warning or removal column anywhere.
   an event scoped to the situation, or any event since the situation started
   stops sharing and stories for that report. `GET /api/reports/due` returns
   nothing while a clear event is open.
+
+# Schema needs for pushes and reminders (B8)
+
+None of these exist in `supabase/migrations/` yet. Same rules as above: RLS
+on, server-only (service role) access, no client policies. The scheduler runs
+only when `EXPO_PUSH=on` (index.js).
+
+## push_tokens
+- `id uuid pk default gen_random_uuid()`, `user_id uuid not null references auth.users on delete cascade`
+- `token text not null unique` (Expo token, `ExponentPushToken[...]`, checked
+  by the API). NEEDED unique: one row per device; registering it from another
+  account moves the row to that account
+- `platform text not null check (platform in ('ios','android'))`
+- `timezone text null check (timezone is null or char_length(timezone) <= 64)`
+  (the phone's zone; used when `founder_profiles.timezone` is empty)
+- `created_at timestamptz not null`, `updated_at timestamptz not null`
+- index `(user_id, updated_at desc)`
+- ARCHITECTURE.md lists `permission_granted`: not needed, a token is only sent
+  after the phone grants permission, and a refused phone sends none.
+- Rows are deleted on sign-out (`DELETE /api/push/token`) and when Expo says
+  the device is gone (DeviceNotRegistered).
+
+## notification_log (the 2 a day cap)
+- `id uuid pk default gen_random_uuid()`, `user_id uuid not null references auth.users on delete cascade`
+- `kind text not null check (kind in ('morning','quiet_check','evening','reminder'))`
+- `dedupe_key text not null` (`morning:<local day>`, `evening:<move id>`,
+  `reminder:<move id>`, `quiet:<situation id>:<last activity>`),
+  **unique `(user_id, dedupe_key)`. NEEDED:** the row is inserted before the
+  push is sent; a second tick or process that hits this sends nothing
+- `local_day date not null` (the founder's local date at send; the cap counts
+  rows of today with status sending or sent)
+- `status text not null check (status in ('sending','sent','failed'))`
+- `attempts smallint not null default 1 check (attempts between 1 and 3)`
+- `error text null` (an Expo error code only, never push text)
+- `move_id uuid null references moves on delete set null`,
+  `situation_id uuid null references situations on delete set null`
+- `created_at timestamptz not null`, `sent_at timestamptz null`, `updated_at timestamptz not null`
+- index `(user_id, created_at desc)`
+- The push text is not stored.
+
+## user_settings (columns for Settings > Reminders, added to the table above)
+- `morning_on boolean not null default true`, `evening_on boolean not null default true`
+- `lock_screen text not null default 'short' check (lock_screen in ('full','short','hidden'))`
+  (ARCHITECTURE.md says `nothing`; decisions and Settings say Hidden. To confirm.)
+- `quiet_start time not null default '22:00'`, `quiet_end time not null default '06:00'`
+  (ARCHITECTURE.md has one `quiet_hours` field; two columns are simpler to check)
+- Defaults are needed: the sharing setting inserts a row with only `share_auto`.
+
+## Existing columns used
+- `founder_profiles.report_time_local` is the check-in time. `PUT
+  /api/settings/reminders` writes it there (not a new `checkin_time_local`
+  column) because the Move already reads it when a move is committed.
+- `founder_profiles.timezone`, then the newest device's zone, then the move's
+  zone, then UTC: the zone for quiet hours, the local day and the 8 am push.
+- Read by the scheduler: `moves (status, title, committed_at, report_due_at,
+  closes_at, learn_id, time_zone)`, `learn_conversations.move_subject`,
+  `situations (status, title, last_activity_at)`, `care_events` (through
+  `isCareOpen`). The scheduler writes nothing to moves or situations.

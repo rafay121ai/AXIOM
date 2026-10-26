@@ -18,8 +18,8 @@ export function validTimeZone(zone) {
   }
 }
 
-// The wall-clock fields of `ms` in `zone`.
-function localParts(ms, zone) {
+// The wall-clock fields of `ms` in `zone`. Also used by the push scheduler.
+export function localParts(ms, zone) {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: zone, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric',
   }).formatToParts(new Date(ms))
@@ -35,7 +35,7 @@ function offsetMs(zone, ms) {
 
 // The UTC instant of a local wall-clock time. Checked twice so a daylight
 // saving change between the guess and the answer is taken into account.
-function localToUtc({ y, m, d, h, mi }, zone) {
+export function localToUtc({ y, m, d, h, mi }, zone) {
   const wall = Date.UTC(y, m - 1, d, h, mi)
   let utc = wall - offsetMs(zone, wall)
   const second = offsetMs(zone, utc)

@@ -3,7 +3,9 @@ import { fileURLToPath } from 'url'
 import { dirname, resolve } from 'path'
 import OpenAI from 'openai'
 import { createClient } from '@supabase/supabase-js'
-import { createApp } from './app.js'
+import { createApp, systemClock } from './app.js'
+import { createExpoSender } from './push/expoSender.js'
+import { createNameLookup, startPushScheduler } from './push/scheduler.js'
 
 dotenv.config({ path: resolve(dirname(fileURLToPath(import.meta.url)), '../.env') })
 
@@ -34,6 +36,20 @@ if (!knowledgeUrl || !knowledgeKey) {
 const knowledgeSupabase = knowledgeUrl && knowledgeKey ? createClient(knowledgeUrl, knowledgeKey) : null
 
 const app = createApp({ supabase, knowledgeSupabase, openai, env })
+
+// Real pushes only when EXPO_PUSH=on and the database is configured.
+if (env.EXPO_PUSH === 'on' && supabase) {
+  startPushScheduler({
+    supabase,
+    sender: createExpoSender({ accessToken: env.EXPO_ACCESS_TOKEN || null }),
+    clock: systemClock,
+    isCareOpen: app.locals.isCareOpen,
+    nameOf: createNameLookup(supabase),
+  })
+  console.log('[Axiom API] Push scheduler started')
+} else {
+  console.log('[Axiom API] Push scheduler off (EXPO_PUSH is not on)')
+}
 
 process.on('unhandledRejection', (reason) => {
   console.error('[Server] Unhandled rejection:', reason)

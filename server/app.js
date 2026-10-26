@@ -9,6 +9,7 @@ import { resolveDailyCap, sumChargesPaged, keysetOrFilter, STREAM_INTERRUPTED_MA
 import { ALLOWED_CLIENT_MODELS, MODELS } from './config.js'
 import { callStructured } from './llm.js'
 import { mountJourneyRoutes } from './journey/routes.js'
+import { mountPushRoutes } from './push/routes.js'
 import { createEmbedder } from './journey/learn/retrieve.js'
 import { createCare, bodyFields, lastUserMessage, founderMessageContent, onboardingAnswers, profileFreeText } from './care/middleware.js'
 import { capExperimentMetadata } from './writeValidation.js'
@@ -273,6 +274,7 @@ export function createApp({
   app.use('/api/moves', requireAuth)
   app.use('/api/reports', requireAuth)
   app.use('/api/settings', requireAuth)
+  app.use('/api/push', requireAuth)
   app.use('/api/loading-hint', requireAuth)
 
   // ─── Routes ───────────────────────────────────────────────────────────────────
@@ -1342,6 +1344,7 @@ export function createApp({
     callStructured: callStructuredForApp,
     clock,
   })
+  mountPushRoutes(app, { supabase: supabaseAdmin, clock })
 
   app.post('/api/app-sessions', sessionWriteRateLimit, async (req, res) => {
     if (!supabaseAdmin) return res.status(503).json({ error: 'Service not configured' })
