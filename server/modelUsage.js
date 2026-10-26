@@ -22,6 +22,12 @@ export const USAGE_CALL_TYPES = Object.freeze([
   'embedding',
 ])
 
+// Unpriced models are never costed at another model's rate: the cost is null
+// and the row is counted as unpriced by usageSummary and dailyCap.
+export function isModelPriced(model, pricingMap = MODEL_PRICING_PER_MILLION) {
+  return Object.hasOwn(pricingMap, model)
+}
+
 export function estimateModelCost(model, usage = {}, options = {}) {
   const pricingMap = options.pricingMap || MODEL_PRICING_PER_MILLION
   const warn = options.warn || console.warn
@@ -89,4 +95,88 @@ export function buildUsageRow({
     error,
     error_details: errorDetails ? String(errorDetails).slice(0, 1000) : null,
   }
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// Writes model_usage_logs rows through the given service-role client.
+export function createUsageLogger({ supabase, log = console }) {
+  // Browser-supplied ids are untrusted: keep only those that belong to the
+  // caller, drop the rest. Runs at log time, so it never delays the AI call.
+  async function resolveUsageIds(userId, context = {}) {
+    const none = { session_id: null, thread_id: null, message_id: null }
+    const isId = (v) => typeof v === 'string' && UUID_PATTERN.test(v)
+    if (!supabase || !isId(context.session_id)) return none
+    const sessionId = context.session_id
+    try {
+      const { data: session, error } = await supabase
+        .from('sessions')
+        .select('user_id')
+        .eq('id', sessionId)
+        .maybeSingle()
+      if (error) {
+        log.error('[Usage Log] session lookup failed', { session_id: sessionId, message: error.message })
+        return none
+      }
+      if (session?.user_id !== userId) return none
+
+      const lookup = async (table, id) => {
+        if (!isId(id)) return null
+        const { data, error: lookupError } = await supabase
+          .from(table)
+          .select('id')
+          .eq('id', id)
+          .eq('session_id', sessionId)
+          .maybeSingle()
+        if (lookupError) {
+          log.error('[Usage Log] id lookup failed', { table, id, session_id: sessionId, message: lookupError.message })
+          return null
+        }
+        return data ? id : null
+      }
+      const [threadId, messageId] = await Promise.all([
+        lookup('conversation_threads', context.thread_id),
+        lookup('messages', context.message_id),
+      ])
+      return { session_id: sessionId, thread_id: threadId, message_id: messageId }
+    } catch (err) {
+      log.error('[Usage Log] id validation failed', err?.message || err)
+      return none
+    }
+  }
+
+  async function logModelUsage({
+    userId,
+    usageContext = {},
+    model,
+    usage = null,
+    latencyMs = null,
+    error = false,
+    errorDetails = null,
+  }) {
+    if (!supabase || !userId || !model) return
+
+    const ids = await resolveUsageIds(userId, usageContext)
+    const row = buildUsageRow({ userId, usageContext, ids, model, usage, latencyMs, error, errorDetails })
+    const insertRow = (values) => supabase
+      .from('model_usage_logs')
+      .insert(values)
+      .select('id, user_id, session_id, thread_id, message_id, model, total_tokens, estimated_cost_usd, call_type, error, created_at')
+      .single()
+
+    let { data, error: insertError } = await insertRow(row)
+    if (insertError?.code === '23503') {
+      // A foreign key failed (id raced or vanished): keep the cost row without ids.
+      ;({ data, error: insertError } = await insertRow({ ...row, session_id: null, thread_id: null, message_id: null }))
+    }
+
+    if (insertError) {
+      log.log('[Usage Log] insert error:', insertError)
+      return
+    }
+
+    log.log('[Usage Log] inserted row:', data)
+  }
+
+  return { logModelUsage }
 }
