@@ -78,3 +78,58 @@ ARCHITECTURE.md; the code only needs the columns below. RLS on, server-only
 - The daily new-situation limit counts `situations.created_at` for today (UTC),
   so it needs no `usage_daily` row. Limit: 5 (`MAX_NEW_SITUATIONS_PER_DAY`),
   number still to be set by Rafay.
+
+# Schema needs for Learn (B5b)
+
+None of these tables exist in `supabase/migrations/` yet. Same rules as above:
+RLS on, server-only (service role) access, no client policies. Evidence and
+validation flags are server-only and are never returned by the API.
+
+## learn_conversations
+- `id uuid pk`, `situation_id uuid not null unique references situations on delete cascade`
+  (one Learn conversation per situation; a second start hits this and the
+  code returns the stored lesson)
+- `user_id uuid not null references auth.users` (ownership check)
+- `offers int[] not null default '{}'`: the real-reply count at each move
+  offer; `check (cardinality(offers) <= 2)` is the database backstop for the
+  cap of 2 move cards
+- `move_subject text null`, `move_fact text null`: the newest checked subject
+  and fact from the founder's own words, used by the move cards
+- `after_cap_said boolean not null default false`
+- `lock_token uuid null`, `locked_at timestamptz null`: one turn at a time
+  (taken by a conditional update `where lock_token is null`; a lock older than
+  2 minutes is taken over)
+- `created_at timestamptz not null`, `updated_at timestamptz not null`
+
+## learn_turns
+- `id uuid pk`, `seq bigint generated always as identity`
+- `conversation_id uuid not null references learn_conversations on delete cascade`
+- `role text not null check (role in ('founder','axiom'))`
+- `kind text null check (kind in ('lesson','reply','followup'))` (null for founder turns)
+- `text text not null`, `filler boolean not null default false`
+- `client_turn_id uuid null`, unique `(conversation_id, client_turn_id)` where
+  not null: a repeated founder turn returns the stored `result`
+- `result jsonb null`: the response sent for a founder turn
+- `evidence jsonb null` (server only): the evidence pack the reply was given,
+  `[{handle, chunk_id, author, source_title, pillar, text, similarity}]`;
+  a tapped follow-up reuses it
+- `sources jsonb not null default '[]'`: verified sources `[{handle, author, book, quote?}]`
+- `picture jsonb null`, `follow_ups jsonb not null default '[]'`
+- `validation jsonb not null default '[]'` (server only): citation check flags
+- `move_offer text not null default 'none' check (move_offer in ('none','first','second'))`,
+  `move_notice jsonb null`
+- `parent_turn_id uuid null references learn_turns`, `followup_index int null`,
+  unique `(parent_turn_id, followup_index)` where not null: a tap is answered once
+- `created_at timestamptz not null`
+
+## lesson_citations
+- `id uuid pk`, `learn_turn_id uuid not null references learn_turns on delete cascade`
+- `chunk_ids uuid[] not null` (Knowledge project `wiki_chunks.id`; no foreign key across projects)
+- `author text not null`, `book_title text not null` (from the chunk row)
+- `quote text null` (only when verified word for word)
+- `created_at timestamptz not null`
+
+## Knowledge project (read only, no change)
+- `match_wiki_chunks(query_embedding vector, match_count int, filter_pillar text)`
+  as recorded in `supabase/migrations_archive/20261019000000_knowledge_halfvec_shrink.sql`.
+  Learn uses `id, author, title, key_frameworks (the passage text), similarity`.

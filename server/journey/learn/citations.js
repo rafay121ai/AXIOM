@@ -87,12 +87,23 @@ export function validateCitations({ answer, evidence }) {
     sources.push(source)
   }
 
-  // Prose: only the cited authors and books may be named; unknown handles
-  // and any other named author or book remove the sentence.
+  const prose = cleanProse({ text: answer?.text, sources, handles: rows })
+  flags.push(...prose.flags)
+  if (sources.length === 0 || !prose.text) return { status: 'no_source', text: '', sources: [], flags }
+  return { status: 'ok', text: prose.text, sources, flags }
+}
+
+// Prose: only the given sources' authors and books may be named; unknown
+// handles and any other named author or book remove the sentence. With no
+// sources, every sentence that names an author or book goes (the no-source
+// reply says nothing about books). handles: the evidence handles that exist.
+// Returns { text, flags }.
+export function cleanProse({ text, sources = [], handles = new Map() }) {
+  const flags = []
   const kept = []
-  for (const sentence of sentencesOf(answer?.text)) {
-    const handles = sentence.match(HANDLE) ?? []
-    const unknown = handles.map((h) => h.replace(/[[\]]/g, '')).filter((h) => !rows.has(h))
+  for (const sentence of sentencesOf(text)) {
+    const found = sentence.match(HANDLE) ?? []
+    const unknown = found.map((h) => h.replace(/[[\]]/g, '')).filter((h) => !handles.has(h))
     if (unknown.length) { flags.push({ type: 'unknown_handle', detail: unknown.join(',') }); continue }
 
     const { authors, books } = claimsIn(sentence)
@@ -104,8 +115,5 @@ export function validateCitations({ answer, evidence }) {
     const clean = sentence.replace(HANDLE, '').replace(/\s{2,}/g, ' ').replace(/\s+([.,;:!?])/g, '$1').trim()
     if (clean) kept.push(clean)
   }
-
-  const text = kept.join(' ')
-  if (sources.length === 0 || !text) return { status: 'no_source', text: '', sources: [], flags }
-  return { status: 'ok', text, sources, flags }
+  return { text: kept.join(' '), flags }
 }

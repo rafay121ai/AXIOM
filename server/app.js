@@ -9,6 +9,7 @@ import { resolveDailyCap, sumChargesPaged, keysetOrFilter, STREAM_INTERRUPTED_MA
 import { ALLOWED_CLIENT_MODELS, MODELS } from './config.js'
 import { callStructured } from './llm.js'
 import { mountJourneyRoutes } from './journey/routes.js'
+import { createEmbedder } from './journey/learn/retrieve.js'
 import { createCare, bodyFields, lastUserMessage, founderMessageContent, onboardingAnswers, profileFreeText } from './care/middleware.js'
 import { capExperimentMetadata } from './writeValidation.js'
 import {
@@ -268,6 +269,8 @@ export function createApp({
   app.use('/api/signup', requireAuth)
   app.use('/api/first-reading', requireAuth)
   app.use('/api/situations', requireAuth)
+  app.use('/api/learn', requireAuth)
+  app.use('/api/loading-hint', requireAuth)
 
   // ─── Routes ───────────────────────────────────────────────────────────────────
 
@@ -1328,7 +1331,14 @@ export function createApp({
     }
   })
 
-  mountJourneyRoutes(app, { supabase: supabaseAdmin, care, callStructured: callStructuredForApp, clock })
+  mountJourneyRoutes(app, {
+    supabase: supabaseAdmin,
+    knowledgeSupabase: knowledgeSupabaseAdmin,
+    embed: createEmbedder({ openai, logModelUsage, clock }),
+    care,
+    callStructured: callStructuredForApp,
+    clock,
+  })
 
   app.post('/api/app-sessions', sessionWriteRateLimit, async (req, res) => {
     if (!supabaseAdmin) return res.status(503).json({ error: 'Service not configured' })

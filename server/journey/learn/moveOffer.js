@@ -65,9 +65,12 @@ export const MOVE_NOTICE = Object.freeze({
   }),
 })
 
-// Axiom's line in the chat beside each notice (decisions.md, "Learn fix: always say what to do next").
+// Axiom's fixed lines in the chat, from the approved Learn mock. The move
+// itself is a card inside the chat (decisions.md, "the move is a card in the
+// chat"), so no line points at a note at the top.
+//   intent: the founder asked what to do next; the card follows.
+//   after_cap: both cards have shown; the move waits on the home screen.
 export const AXIOM_LINES = Object.freeze({
-  first: 'Your move is ready. Tap the note at the top to open it.',
-  second: 'Your move is still ready. Tap the note at the top when you want it.',
+  intent: 'Here is your move.',
   after_cap: 'Your move is waiting for you on the home screen.',
 })
