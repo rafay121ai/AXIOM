@@ -1,6 +1,6 @@
 import type { Auth } from './auth';
 import { createSaveQueue, HttpError } from './queue';
-import type { AxiomApi, FirstReading, Question, Read, ReadAnswerResult, Screened, SituationReply } from './types';
+import type { AxiomApi, FirstReading, LearnReply, LoadingQuote, Question, Read, ReadAnswerResult, Screened, SituationReply } from './types';
 
 type Options = { baseUrl: string; auth: Auth; fetch?: typeof fetch };
 
@@ -44,5 +44,17 @@ export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch
     getRead: (situationId) => request<Read>('POST', `/api/situations/${situationId}/read`),
     answerRead: (situationId, answer) =>
       request<Screened<ReadAnswerResult>>('POST', `/api/situations/${situationId}/read/answer`, answer),
+    startLearn: (situationId) => request<LearnReply>('POST', `/api/situations/${situationId}/learn`),
+    sendLearnTurn: (learnId, text, turnId) =>
+      request<Screened<LearnReply>>('POST', `/api/learn/${learnId}/turn`, { text, client_turn_id: turnId }),
+    tapFollowUp: (learnId, turnId, index) => request<LearnReply>('POST', `/api/learn/${learnId}/followup/${index}`, { turn_id: turnId }),
+    // The hint is only a nicety: any failure means no quote.
+    async getLoadingHint(seed) {
+      try {
+        return (await request<{ hint: LoadingQuote | null }>('GET', `/api/loading-hint?seed=${encodeURIComponent(seed)}`)).hint;
+      } catch {
+        return null;
+      }
+    },
   };
 }

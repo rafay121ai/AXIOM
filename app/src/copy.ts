@@ -1,6 +1,6 @@
 import { isDailyLimit } from './api/queue';
 
-// The words the app itself says in the Situation and Read screens. Everything else Axiom says comes
+// The words the app itself says in the Situation, Read and Learn screens. Everything else Axiom says comes
 // from the server. Source for each line: tasks/design/mock-onboarding-v2.html, mock-states-v1.html,
 // or (marked NEEDS APPROVAL) a line no mock has yet.
 
@@ -15,6 +15,16 @@ export const copy = {
     placeholder: 'Your answer',
     skip: 'Skip this question',
     somethingElse: 'Something else on my mind',
+  },
+  learn: {
+    // mock-minimal-v5.html, the Learn composer
+    placeholder: 'Reply',
+    // mock-minimal-v5.html, the label over a picture built from the founder's own numbers
+    pictureLabel: 'From your numbers',
+    calculated: 'Calculated',
+    // NEEDS APPROVAL: row labels in the before/after bars picture; no mock shows them.
+    before: 'Before',
+    after: 'After',
   },
   send: 'Send',
   tryAgain: 'Try again',

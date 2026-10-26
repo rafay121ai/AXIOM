@@ -1,4 +1,4 @@
-import type { AxiomApi, FirstReading, Question, Read, ReadAnswerResult, Screened, SituationReply } from './types';
+import type { AxiomApi, FirstReading, LearnReply, LearnTurn, Question, Read, ReadAnswerResult, Screened, SituationReply } from './types';
 
 // Fixture questions, word for word from tasks/design/mock-onboarding-v2.html.
 const QUESTIONS: Question[] = [
@@ -85,6 +85,33 @@ const FAKE_READ: Read = {
   skipped: false,
 };
 
+// The Learn lesson and replies, from the Learn mock (sample founder: a customer asking for a discount).
+// The move notice words are the server's own, as a placeholder.
+const VOSS = { author: 'Chris Voss', book: 'Never Split the Difference' };
+const LESSON: LearnTurn = {
+  id: 'fake-learn-turn-1',
+  kind: 'lesson',
+  text: [
+    'Your biggest customer is 40% of your revenue and wants 30% off at renewal. That discount takes 12% of everything you earn.',
+    'Chris Voss, in Never Split the Difference, says the strongest answer to a demand like this is not a harder no. It is a question that puts the problem back on them: “How am I supposed to make that work?” A “how” or “what” question keeps you steering while they do the explaining.',
+    "What are you actually trying to get out of this renewal: keep them at today's price, or are you open to giving something?",
+  ].join('\n\n'),
+  sources: [VOSS],
+  picture: {
+    type: 'split_bar',
+    data: { title: 'From your numbers', unit: '%', parts: [{ label: 'What the discount costs you', value: 12 }, { label: 'The rest of what you earn', value: 88 }] },
+    derived: [{ rule: 'percent_of', inputs: [12, 100], value: 12 }],
+    interactive: false,
+  },
+  follow_ups: ['What if they say no?', 'Give me the exact words to use'],
+};
+const FOLLOW_UP_ANSWERS = [
+  'If they say no, you have lost nothing you had this morning. Ask the same question again, slower, and wait for them to fill the silence.',
+  'Say: “How am I supposed to make that work?” Then stop talking until they answer.',
+];
+const FAKE_LEARN_ID = 'fake-learn-1';
+const FAKE_HINT = { book: 'Never Split the Difference', quote: '“No” feels like salvation, like an oasis.' };
+
 // The mock's rule for "ok": fewer than 3 words that say something is not an answer.
 const FILLER = new Set('ok okay k yes yeah yep yup no nope sure fine hmm hm mm um uh thanks thank you thx cool got it i see makes sense right true alright maybe idk good nice lol so well kinda'.split(' '));
 const isReal = (t: string) => t.toLowerCase().replace(/[^a-z0-9%$\s']/g, ' ').split(/\s+/).filter((w) => w && !FILLER.has(w)).length >= 3;
@@ -122,6 +149,17 @@ export function createFakeApi(sim: CareSim = 'none'): AxiomApi {
     return reply;
   };
 
+  // Learn, kept in memory so a turn id sent twice gets the same answer, like the server.
+  const learnReplies = new Map<string, Screened<LearnReply>>();
+  let realReplies = 0;
+  let nextLearnTurn = 2;
+  const learnReply = (extra: Partial<LearnReply>): LearnReply => ({
+    learn_id: FAKE_LEARN_ID, situation_id: 'fake-situation-1', status: 'reply', turn: null, move_offer: 'none', move_notice: null, ...extra,
+  });
+  const learnTurn = (kind: LearnTurn['kind'], text: string, extra: Partial<LearnTurn> = {}): LearnTurn => ({
+    id: `fake-learn-turn-${nextLearnTurn++}`, kind, text, sources: [], picture: null, follow_ups: [], ...extra,
+  });
+
   return {
     async signInWithGoogle() {},
     async getQuestions() {
@@ -141,6 +179,34 @@ export function createFakeApi(sim: CareSim = 'none'): AxiomApi {
       const flagged = await screen();
       if (flagged.care) return flagged;
       return isReal(answer.text) ? { status: 'stored', skipped: false, next: 'learn' } : { status: 'say_more', reply: SAY_MORE };
+    },
+    async startLearn() {
+      return learnReply({ turn: LESSON });
+    },
+    async sendLearnTurn(_learnId, text, turnId) {
+      const flagged = await screen();
+      if (flagged.care) return flagged;
+      const seen = learnReplies.get(turnId);
+      if (seen) return seen;
+      let res: LearnReply;
+      if (!isReal(text)) {
+        res = learnReply({ status: 'say_more', reply: SAY_MORE });
+      } else {
+        realReplies += 1;
+        const offered = realReplies === 2;
+        res = learnReply({
+          turn: learnTurn('reply', offered ? 'Keep hold of that. The first thing they say after your question will tell you more than the number itself.' : 'That is the position to protect, and the question should serve it: it gets them explaining why 30%, not you defending your price.'),
+          ...(offered ? { move_offer: 'first' as const, move_notice: { kind: 'first' as const, kicker: 'Your move', text: 'Your move is ready.' } } : {}),
+        });
+      }
+      learnReplies.set(turnId, res);
+      return res;
+    },
+    async tapFollowUp(_learnId, turnId, index) {
+      return learnReply({ turn: learnTurn('followup', FOLLOW_UP_ANSWERS[index] ?? FOLLOW_UP_ANSWERS[0], { for_turn_id: turnId, followup_index: index }) });
+    },
+    async getLoadingHint() {
+      return FAKE_HINT;
     },
   };
 }

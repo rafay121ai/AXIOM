@@ -7,12 +7,14 @@ import { api } from './src/api';
 import type { Answer, FirstReading, HelpLine, Question, Screened } from './src/api/types';
 import { routeScreened } from './src/care/route';
 import { copy } from './src/copy';
+import { newLearnChat, type LearnChat } from './src/learn/chat';
 import { newChat, type Chat } from './src/situation/chat';
 import { AxiomMessage } from './src/components/AxiomMessage';
 import { Glow } from './src/components/Glow';
 import { loadReading } from './src/onboarding/reading';
 import { LINE_EVERY, waitLines, waitMinMs } from './src/onboarding/waitLines';
 import { CareScreen } from './src/screens/CareScreen';
+import { LearnScreen } from './src/screens/LearnScreen';
 import { QuestionsScreen } from './src/screens/QuestionsScreen';
 import { ReadingScreen } from './src/screens/ReadingScreen';
 import { ReadScreen } from './src/screens/ReadScreen';
@@ -28,7 +30,7 @@ type Stage =
   | { name: 'reading'; reading: FirstReading }
   | { name: 'situation'; chat: Chat; opening: string; suggestion?: string }
   | { name: 'read'; situationId: string }
-  | { name: 'learn'; situationId: string }
+  | { name: 'learn'; situationId: string; chat: LearnChat }
   | { name: 'care'; message: string; help: HelpLine[]; back: Stage };
 
 const run = (anim: Animated.CompositeAnimation) => new Promise<void>((resolve) => anim.start(() => resolve()));
@@ -127,8 +129,19 @@ export default function App() {
               <ReadScreen
                 loadRead={() => api.getRead(stage.situationId)}
                 answer={(a) => api.answerRead(stage.situationId, a)}
-                onAnswered={() => goTo({ name: 'learn', situationId: stage.situationId })}
+                onAnswered={() => goTo({ name: 'learn', situationId: stage.situationId, chat: newLearnChat() })}
                 onSomethingElse={() => beginSituation(true)}
+                onCare={showCare}
+              />
+            )}
+            {stage.name === 'learn' && (
+              <LearnScreen
+                chat={stage.chat}
+                start={() => api.startLearn(stage.situationId)}
+                send={(id, text, turnId) => api.sendLearnTurn(id, text, turnId)}
+                tap={(id, turnId, index) => api.tapFollowUp(id, turnId, index)}
+                loadHint={(seed) => api.getLoadingHint(seed)}
+                onOpenMove={() => {}}
                 onCare={showCare}
               />
             )}

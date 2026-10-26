@@ -118,6 +118,51 @@ export type ReadAnswer = { text: string } | { skip: true };
 /** `say_more`: the reply was too thin to count. `stored`: it counted, and Learn is next. */
 export type ReadAnswerResult = { status: 'say_more'; reply: string } | { status: 'stored'; skipped: boolean; next: 'learn' };
 
+/** A source named under a lesson: always author and book. A quote is there only when the server checked it word for word. */
+export type LearnSource = { author: string; book: string; quote?: string };
+
+/** The fixed picture library. The server fills and checks every number; the app only draws what it is given. */
+export type Picture = { derived: { rule: string; inputs: number[]; value: number }[]; interactive: boolean } & (
+  | { type: 'split_bar'; data: { title?: string; unit?: string; parts: { label: string; value: number }[] } }
+  | { type: 'before_after_bars'; data: { title?: string; unit?: string; items: { label: string; before: number; after: number }[] } }
+  | { type: 'side_by_side_table'; data: { title?: string; columns: string[]; rows: { label: string; cells: string[] }[] } }
+  | { type: 'timeline'; data: { title?: string; events: { when: string; label: string }[] } }
+  | { type: 'two_by_two'; data: { title?: string; x: { low: string; high: string }; y: { low: string; high: string }; quadrants: { label: string }[] } }
+);
+
+/** One Axiom turn in the Learn conversation. A tapped follow-up's answer says which turn and which suggestion it answers. */
+export type LearnTurn = {
+  id: string;
+  kind: 'lesson' | 'reply' | 'followup';
+  text: string;
+  sources: LearnSource[];
+  picture: Picture | null;
+  /** Suggestions to tap. Tapping one never posts a founder message. */
+  follow_ups: string[];
+  for_turn_id?: string;
+  followup_index?: number;
+};
+
+/** The card in the chat that says the move is ready. The whole card is tappable; there are no buttons. */
+export type MoveNotice = { kind: 'first' | 'second'; kicker: string; text: string };
+
+/**
+ * Axiom's answer in the Learn conversation. `say_more` means the reply was too thin to count (`turn` is null and
+ * `reply` is the line to show). `move_notice` is set only when the server offers the move on this answer.
+ */
+export type LearnReply = {
+  learn_id: string;
+  situation_id: string;
+  status: 'reply' | 'say_more';
+  turn: LearnTurn | null;
+  reply?: string;
+  move_offer: 'none' | 'first' | 'second';
+  move_notice: MoveNotice | null;
+};
+
+/** One verified quote for the loading hint, with the book name only. */
+export type LoadingQuote = { book: string; quote: string };
+
 export interface AxiomApi {
   /** Starts Google sign-in. Resolves when the founder is signed in. */
   signInWithGoogle(): Promise<void>;
@@ -138,4 +183,12 @@ export interface AxiomApi {
   getRead(situationId: string): Promise<Read>;
   /** The founder's reply to the Read's closing question, or a skip. Typed replies are screened. */
   answerRead(situationId: string, answer: ReadAnswer): Promise<Screened<ReadAnswerResult>>;
+  /** The lesson for a situation whose Read has been answered or skipped. Asking again returns the same lesson. */
+  startLearn(situationId: string): Promise<LearnReply>;
+  /** The founder's reply in Learn. `turnId` is a uuid made once per send; sending it again is safe. Screened first. */
+  sendLearnTurn(learnId: string, text: string, turnId: string): Promise<Screened<LearnReply>>;
+  /** The founder tapped suggestion `index` under Axiom's turn `turnId`. Axiom's own text: not screened, no founder message. */
+  tapFollowUp(learnId: string, turnId: string, index: number): Promise<LearnReply>;
+  /** One verified quote and its book while an answer is on its way, or null when nothing fits. Never throws for the screen. */
+  getLoadingHint(seed: string): Promise<LoadingQuote | null>;
 }
