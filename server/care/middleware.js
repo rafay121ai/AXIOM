@@ -1,0 +1,140 @@
+// Care gate: runs after auth on every route that takes founder text. A clear
+// signal ends the step with the care screen payload; an unclear one ends it
+// with one fixed soft question; otherwise the route carries on. Nothing the
+// founder wrote is stored: a care event holds only who, how serious, when.
+import { classifyCare } from './classify.js'
+import { escalateCare } from './escalation.js'
+import { helpFor } from './help.js'
+import { CARE_COPY } from './copy.js'
+import { hasExperimentBlock, isUuid } from '../writeValidation.js'
+
+const SCOPE_KEYS = ['thread_id', 'situation_id', 'session_id']
+
+// ── Text extractors: (req) => string | string[] | null ───────────────────────
+
+export const bodyFields = (...names) => (req) => names.map((n) => req.body?.[n])
+
+// The last user message of a chat payload (string or text parts).
+export const lastUserMessage = (req) => {
+  const msgs = Array.isArray(req.body?.messages) ? req.body.messages : []
+  const last = [...msgs].reverse().find((m) => m?.role === 'user')
+  if (!last) return null
+  if (typeof last.content === 'string') return last.content
+  return Array.isArray(last.content) ? last.content.map((p) => p?.text) : null
+}
+
+// A message body written by the founder. Assistant edits carry the
+// <experiment> block, which is Axiom's text, not the founder's.
+export const founderMessageContent = (req) => {
+  const c = req.body?.content
+  if (typeof c !== 'string' || hasExperimentBlock(c)) return null
+  return req.body?.role === 'assistant' ? null : c
+}
+
+export const onboardingAnswers = (req) =>
+  (Array.isArray(req.body?.answers) ? req.body.answers : []).map((a) => a?.answer)
+
+export const profileFreeText = (req) => [
+  req.body?.goal,
+  ...(Array.isArray(req.body?.open_answers) ? req.body.open_answers.map((a) => a?.answer) : []),
+]
+
+const flatText = (value) => [].concat(value ?? []).filter((v) => typeof v === 'string' && v.trim()).join('\n')
+
+export function createCare({ supabase, callStructured, clock = { now: () => Date.now() } } = {}) {
+  const log = (what, err) => console.error(`[Care] ${what}`, err?.message || '')
+
+  async function priorUnclear(userId) {
+    if (!supabase) return []
+    const { data, error } = await supabase
+      .from('care_events')
+      .select('level, scope_id, created_at')
+      .eq('user_id', userId)
+      .eq('level', 'unclear')
+    if (error) throw error
+    return data || []
+  }
+
+  async function record(userId, level, scopeId) {
+    if (!supabase) return
+    const { error } = await supabase.from('care_events').insert({
+      user_id: userId,
+      level,
+      scope_id: scopeId,
+      created_at: new Date(clock.now()).toISOString(),
+      resolved_at: null,
+    })
+    if (error) throw error
+  }
+
+  async function countryOf(userId) {
+    if (!supabase) return null
+    const { data } = await supabase.from('founder_profiles').select('country').eq('user_id', userId).maybeSingle()
+    return data?.country ?? null
+  }
+
+  // True while a clear care event is unresolved. Pushes for this founder stay
+  // paused. If the lookup fails we answer true: pausing is the safe side.
+  async function isCareOpen(userId) {
+    if (!supabase) return false
+    try {
+      const { data, error } = await supabase
+        .from('care_events').select('id').eq('user_id', userId).eq('level', 'clear').is('resolved_at', null).limit(1)
+      if (error) throw error
+      return (data || []).length > 0
+    } catch (err) {
+      log('open check failed', err)
+      return true
+    }
+  }
+
+  // Closes open events once the founder has been checked in on.
+  async function resolveCare(userId) {
+    if (!supabase) return
+    await supabase
+      .from('care_events')
+      .update({ resolved_at: new Date(clock.now()).toISOString() })
+      .eq('user_id', userId)
+      .is('resolved_at', null)
+  }
+
+  // extract: (req) => string | string[] | null. Add context(req) => string[]
+  // later when a route has the conversation to hand.
+  function careGate(extract) {
+    return async function careGateMiddleware(req, res, next) {
+      const text = flatText(extract(req))
+      if (!text) return next()
+      const userId = req.user?.id
+
+      const verdict = await classifyCare({
+        text,
+        deps: { callStructured, userId },
+      })
+      if (verdict.level === 'none') return next()
+
+      const scopeId = SCOPE_KEYS.map((k) => req.body?.[k]).find(isUuid) ?? null
+      let level = verdict.level
+      try {
+        level = escalateCare({
+          level, scopeId, priorEvents: await priorUnclear(userId), now: clock.now(),
+        }).level
+      } catch (err) {
+        log('history read failed', err)
+      }
+      try {
+        await record(userId, level, scopeId)
+      } catch (err) {
+        log('record failed', err)
+      }
+
+      if (level === 'clear') {
+        let country = null
+        try { country = await countryOf(userId) } catch (err) { log('country read failed', err) }
+        return res.json({ care: 'clear', message: CARE_COPY.clearMessage, help: helpFor(country) })
+      }
+      return res.json({ care: 'unclear', reply: CARE_COPY.unclearReply })
+    }
+  }
+
+  return { careGate, isCareOpen, resolveCare }
+}

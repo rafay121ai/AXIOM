@@ -7,6 +7,8 @@ import { createEventTracker, PRODUCT_EVENTS, toReportedOutcome, shouldEmitExperi
 import { summarizeUsage } from './usageSummary.js'
 import { resolveDailyCap, sumChargesPaged, keysetOrFilter, STREAM_INTERRUPTED_MARKER, CLIENT_ABORTED_MARKER, CHAT_MAX_COMPLETION_TOKENS } from './dailyCap.js'
 import { ALLOWED_CLIENT_MODELS, MODELS } from './config.js'
+import { callStructured } from './llm.js'
+import { createCare, bodyFields, lastUserMessage, founderMessageContent, onboardingAnswers, profileFreeText } from './care/middleware.js'
 import { capExperimentMetadata } from './writeValidation.js'
 import {
   cleanAppSessionStart,
@@ -65,6 +67,13 @@ export function createApp({
   const hasAppServiceRoleKey = getJwtRole(env.SUPABASE_SERVICE_ROLE_KEY) === 'service_role'
   const trackEvent = createEventTracker({ supabase: supabaseAdmin })
   const { logModelUsage } = createUsageLogger({ supabase: supabaseAdmin })
+  const care = createCare({
+    supabase: supabaseAdmin,
+    callStructured: (args) => callStructured({ openai, logModelUsage, clock, ...args }),
+    clock,
+  })
+  // Read by the push scheduler: no pushes while a care event is open.
+  app.locals.isCareOpen = care.isCareOpen
 
 
   const allowedOrigins = new Set([
@@ -1074,7 +1083,7 @@ export function createApp({
     }
   })
 
-  app.post('/api/openai/chat', chatRateLimit, async (req, res) => {
+  app.post('/api/openai/chat', chatRateLimit, care.careGate(lastUserMessage), async (req, res) => {
     const {
       messages,
       stream,
@@ -1218,7 +1227,7 @@ export function createApp({
 
   // ─── Browser writes moved behind the API ─────────────────────────────────────
 
-  app.post('/api/onboarding/complete', onboardingRateLimit, async (req, res) => {
+  app.post('/api/onboarding/complete', onboardingRateLimit, care.careGate(onboardingAnswers), async (req, res) => {
     if (!supabaseAdmin) return res.status(503).json({ error: 'Service not configured' })
 
     const payload = cleanOnboardingPayload(req.body)
@@ -1292,7 +1301,7 @@ export function createApp({
     }
   })
 
-  app.put('/api/founder-profile', founderProfileRateLimit, async (req, res) => {
+  app.put('/api/founder-profile', founderProfileRateLimit, care.careGate(profileFreeText), async (req, res) => {
     if (!supabaseAdmin) return res.status(503).json({ error: 'Service not configured' })
     const cleaned = cleanFounderProfilePayload(req.body)
     if (!cleaned.ok) return res.status(400).json({ error: 'Invalid profile data' })
@@ -1485,7 +1494,7 @@ export function createApp({
   }
 
   // Idempotent on id: an existing thread owned by the caller is returned as is.
-  app.post('/api/threads', messageWriteRateLimit, async (req, res) => {
+  app.post('/api/threads', messageWriteRateLimit, care.careGate(bodyFields('title')), async (req, res) => {
     if (!supabaseAdmin) return res.status(503).json({ error: 'Service not configured' })
     const payload = cleanThreadPayload(req.body)
     if (!payload) return res.status(400).json({ error: 'Invalid thread data' })
@@ -1536,7 +1545,7 @@ export function createApp({
   })
 
   // Server inserts still hit the table, so sync_conversation_thread_from_message fires.
-  app.post('/api/messages', messageWriteRateLimit, async (req, res) => {
+  app.post('/api/messages', messageWriteRateLimit, care.careGate(founderMessageContent), async (req, res) => {
     if (!supabaseAdmin) return res.status(503).json({ error: 'Service not configured' })
     const payload = cleanMessageCreate(req.body)
     if (!payload) return res.status(400).json({ error: 'Invalid message data' })
@@ -1591,7 +1600,7 @@ export function createApp({
     return { message, decision: decideMessageAccess({ message, session, userId, action }) }
   }
 
-  app.patch('/api/messages/:id', messageWriteRateLimit, async (req, res) => {
+  app.patch('/api/messages/:id', messageWriteRateLimit, care.careGate(founderMessageContent), async (req, res) => {
     if (!supabaseAdmin) return res.status(503).json({ error: 'Service not configured' })
     if (!isUuid(req.params.id)) return res.status(400).json({ error: 'Invalid message id' })
 
