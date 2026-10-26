@@ -76,7 +76,6 @@ const enough = () => verdict({ has_detail: true, missing: 'none', question: '' }
 const readReply = (over = {}) => JSON.stringify({
   headline: 'You have not sent the price the clinics asked for.',
   body: 'You wrote "I have a demo ready". You also wrote that the clinics asked for pricing three weeks ago. Nobody has had an answer since then. That is the open gap.',
-  underlines: [],
   closing_question: 'Have you gone back to either of those clinics since the demo?',
   ...over,
 })
@@ -332,8 +331,7 @@ test('the Read: shape, usage row on the read step, stored once, no feedback endp
     const id = (await create(call, 1)).body.situation_id
     const res = await call('POST', `/api/situations/${id}/read`)
     assert.equal(res.status, 200)
-    assert.deepEqual(Object.keys(res.body).sort(), ['answered', 'body', 'closing_question', 'headline', 'situation_id', 'skipped', 'underlines'])
-    assert.deepEqual(res.body.underlines, [])
+    assert.deepEqual(Object.keys(res.body).sort(), ['answered', 'body', 'closing_question', 'headline', 'situation_id', 'skipped'])
     assert.equal(openai.calls[1].payload.model, 'gpt-5.2-2025-12-11')
     const usage = rows('model_usage_logs')
     assert.equal(usage.length, 2)
@@ -380,6 +378,8 @@ test('the Read check: banned phrase, teaser and a closing line that is not a que
     [readReply({ closing_question: 'Want to see why the clinics went quiet?' }), /teaser question/],
     [readReply({ closing_question: 'The clinics asked for pricing three weeks ago.' }), /not a question/],
     [readReply({ closing_question: 'What is your biggest fear right now?' }), /no thread from the founder/],
+    [readReply({ underlines: [] }), /no underlines/],
+    [readReply({ underlines: ['asked for pricing'] }), /no underlines/],
   ]
   for (const [raw, rx] of cases) {
     const out = checkRead({ read: JSON.parse(raw), answerTexts })
@@ -397,7 +397,6 @@ test('the Read: two failures give the plain fallback, which quotes the founder a
     const res = await call('POST', `/api/situations/${id}/read`)
     assert.equal(res.status, 200)
     assert.equal(openai.calls.length, 3)
-    assert.deepEqual(res.body.underlines, [])
     assert.match(res.body.body, /You wrote: "I have a demo ready but I have not emailed the clinics that asked for pricing three weeks ago"/)
     assert.equal(rows('reads')[0].source, 'fallback')
     assert.equal(rows('model_usage_logs').length, 3)
@@ -412,7 +411,6 @@ test('the Read: model errors and unparseable replies also end in the fallback', 
     const id = (await create(call, 1)).body.situation_id
     const res = await call('POST', `/api/situations/${id}/read`)
     assert.equal(res.status, 200)
-    assert.deepEqual(res.body.underlines, [])
   } finally { await close() }
 })
 

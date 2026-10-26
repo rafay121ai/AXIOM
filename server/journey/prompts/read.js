@@ -4,11 +4,10 @@
 export const READ_SCHEMA = Object.freeze({
   type: 'object',
   additionalProperties: false,
-  required: ['headline', 'body', 'underlines', 'closing_question'],
+  required: ['headline', 'body', 'closing_question'],
   properties: {
     headline: { type: 'string', minLength: 10, maxLength: 140 },
     body: { type: 'string', minLength: 80, maxLength: 700 },
-    underlines: { type: 'array', maxItems: 2, items: { type: 'string', minLength: 2, maxLength: 120 } },
     closing_question: { type: 'string', minLength: 10, maxLength: 200 },
   },
 })
@@ -20,7 +19,7 @@ export const READ_PROMPT = [
   'headline: one plain sentence that states the finding in everyday words. Built only from things the founder said.',
   'body: 3 to 4 short sentences. They hold (1) the thing the founder has not said outright, (2) proof from their own words or numbers, and (3) only if it is real, the cost of waiting in their own date or number. Name your basis ("You wrote...", "You said...").',
   'Quote only with double quotation marks, and only words copied exactly from what the founder typed. Never change or invent a quote. Use only numbers and dates that appear in what the founder wrote or chose. Never add, convert or estimate one.',
-  'underlines: use []. The Read has no underlines.',
+  'No underlines, emphasis or markup of any kind: plain words only.',
   'closing_question: one real question the founder can answer in a reply box. It asks for a missing piece, is about something they said (use their words, a number or a date), and the answer will be used in the lesson. No yes/no teaser, no "want to see why?", no asking them to rate or confirm the Read.',
   '',
   'Voice: plain everyday words and short sentences. Direct and urgent, never harsh: hard on the situation, never on the person. No metaphors, no clever contrasts ("not X, but Y"), no hypotheticals. Specific to this founder only.',

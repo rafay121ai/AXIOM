@@ -262,7 +262,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
   }
 
   const readView = (row) => ({
-    headline: row.headline, body: row.body, underlines: row.underlines, closing_question: row.closing_question,
+    headline: row.headline, body: row.body, closing_question: row.closing_question,
     answered: row.answered_at !== null, skipped: row.skipped === true,
   })
 
@@ -281,7 +281,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
       deps: { callStructured, userId, log },
     })
     const inserted = await supabase.from('reads').insert({
-      situation_id: situation.id, headline: made.headline, body: made.body, underlines: made.underlines,
+      situation_id: situation.id, headline: made.headline, body: made.body,
       closing_question: made.closing_question, source, closing_answer: null, skipped: false, answered_at: null, created_at: iso(),
     }).select().single()
     if (inserted.error?.code === '23505') return { situation_id: situation.id, ...readView(await readOf(situation.id)) }

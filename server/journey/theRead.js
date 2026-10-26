@@ -26,7 +26,6 @@ export function fallbackRead(founderTexts) {
   return {
     headline: 'Here is what you told me today.',
     body: `You wrote: "${snippet}". That is where we start. Next I will bring in what authors have said about it, and give you one small step to take today.`,
-    underlines: [],
     closing_question: `What have you already tried on "${opening}"?`,
   }
 }
@@ -34,7 +33,8 @@ export function fallbackRead(founderTexts) {
 const clean = (data) => {
   const body = stripFiller(data.body).text
   const closing = stripFiller(data.closing_question).text
-  return { headline: data.headline.trim(), body, underlines: data.underlines.map((u) => u.trim()), closing_question: closing }
+  // underlines is carried only so the checker can reject it; the Read has none.
+  return { headline: data.headline.trim(), body, ...(data.underlines === undefined ? {} : { underlines: data.underlines }), closing_question: closing }
 }
 
 // Problems with a read. answerTexts: sign-up strings plus what the founder
@@ -43,8 +43,9 @@ const clean = (data) => {
 export function checkRead({ read, answerTexts }) {
   const problems = []
   if (read.body.length < 40) problems.push('body is too short')
+  if (read.underlines !== undefined) problems.push('the Read has no underlines')
   const own = checkFirstReading({
-    reading: { headline: read.headline, body: `${read.body} ${read.closing_question}`, underlines: read.underlines },
+    reading: { headline: read.headline, body: `${read.body} ${read.closing_question}`, underlines: [] },
     answerTexts,
   })
   problems.push(...own.problems)

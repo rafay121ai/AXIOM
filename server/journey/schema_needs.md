@@ -64,7 +64,7 @@ ARCHITECTURE.md; the code only needs the columns below. RLS on, server-only
 ## reads
 - `id uuid pk`, `situation_id uuid not null unique references situations on delete cascade`
 - `headline text`, `body text` (ARCHITECTURE.md says body[]; the Read body is stored as one text),
-  `underlines jsonb` (array, at most 2), `closing_question text`
+  `closing_question text` (the Read has no underlines; only the first reading keeps up to 2, and that is not stored here)
 - `source text` ('model' or 'fallback')
 - `closing_answer text null`, `skipped boolean not null default false`,
   `answered_at timestamptz null` (first answer or skip wins)
