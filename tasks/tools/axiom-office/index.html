@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Axiom Build Office</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0b10; --panel: #11141d; --line: #232839; --text: #e8eaf2; --dim: #868ca3;
+    --ok: #5fd68a; --warn: #ffb454; --bad: #ff6b6b; --brain: #ff8fb8;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.45 ui-monospace, "SF Mono", Menlo, monospace; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 14px 16px; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+  h1 { font: 11px "Press Start 2P", monospace; margin: 0; letter-spacing: .5px; }
+  .sp { flex: 1; }
+  .pill { display: inline-block; padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--dim); font-size: 11px; white-space: nowrap; }
+  .pill.running, .pill.done { color: var(--ok); border-color: var(--ok); }
+  .pill.paused, .pill.doing { color: var(--warn); border-color: var(--warn); }
+  .pill.blocked { color: var(--bad); border-color: var(--bad); }
+  .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); margin-right: 6px; }
+  .headline { margin: 10px 2px; font-size: 14px; }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 12px; align-items: start; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+  .layout > div { min-width: 0; }
+  .stage { position: relative; }
+  canvas { display: block; width: 100%; height: auto; background: radial-gradient(ellipse at 50% 45%, #14172a 0%, #0a0b10 70%); border: 1px solid var(--line); border-radius: 8px; }
+  #tip { position: absolute; pointer-events: none; background: #05060a; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; max-width: 260px; font-size: 12px; display: none; z-index: 5; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+  .card h2 { font: 8px "Press Start 2P", monospace; margin: 0 0 8px; color: var(--dim); letter-spacing: .5px; }
+  .card.need { border-color: var(--warn); } .card.need h2 { color: var(--warn); }
+  .card.stuck { border-color: var(--bad); } .card.stuck h2 { color: var(--bad); }
+  .card ul { margin: 0; padding-left: 16px; }
+  .meter { height: 8px; background: #1b2030; border-radius: 3px; overflow: hidden; margin: 4px 0; }
+  .meter i { display: block; height: 100%; background: var(--ok); }
+  .dim { color: var(--dim); } .ok { color: var(--ok); } .bad { color: var(--bad); }
+  .step { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-top: 1px solid var(--line); font-size: 12px; }
+  .step:first-of-type { border-top: 0; }
+  .step .id { width: 28px; color: var(--dim); }
+  .step .t { flex: 1; min-width: 0; }
+  .step .note { color: var(--dim); font-size: 11px; }
+  .step.todo .t { color: var(--dim); }
+  .flag { color: var(--brain); }
+  .banner { background: #2a1d0b; border: 1px solid var(--warn); color: var(--warn); padding: 8px 12px; border-radius: 8px; margin-bottom: 10px; display: none; }
+  .events div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px; color: var(--dim); }
+  .demo { font-size: 11px; color: var(--dim); } .demo a { color: var(--brain); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar">
+    <h1>AXIOM · BUILD OFFICE</h1>
+    <span class="pill"><span class="dot" id="live"></span><span id="liveText">connecting</span></span>
+    <span class="pill" id="mode"></span><span class="pill" id="phase"></span><span class="pill" id="updated"></span>
+    <span class="sp"></span><span class="demo" id="demoNote"></span>
+  </div>
+  <p class="headline" id="headline">Waiting for the first status…</p>
+
+  <div class="layout">
+    <div>
+      <div class="banner" id="rate"></div>
+      <div class="stage">
+        <canvas id="c" width="760" height="520"></canvas>
+        <div id="tip"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card need" id="needCard" style="display:none"><h2>NEEDS YOU</h2><ul id="needs"></ul></div>
+      <div class="card stuck" id="stuckCard" style="display:none"><h2>STUCK ON</h2><ul id="stuck"></ul></div>
+      <div class="card"><h2>RIGHT NOW</h2><div id="now" class="dim">Nothing started yet.</div></div>
+      <div class="card">
+        <h2>TASK STATUS</h2>
+        <div class="meter"><i id="stepBar" style="width:0"></i></div>
+        <div class="dim" id="stepText" style="margin-bottom:6px"></div>
+        <div id="steps"></div>
+        <div class="dim" style="margin-top:6px"><span class="flag">⚑</span> checkpoint: I stop and show you</div>
+      </div>
+      <div class="card"><h2>REAL AI TESTING BUDGET</h2><div class="meter"><i id="spendBar" style="width:0"></i></div><div id="spendText" class="dim"></div></div>
+      <div class="card"><h2>TESTS</h2><div id="tests" class="dim">No tests run yet.</div></div>
+      <div class="card"><h2>NEXT STOP</h2><div id="next" class="dim">—</div></div>
+      <div class="card events"><h2>WHAT HAPPENED LATELY</h2><div id="events"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const STATUS_URL = '../../build_status.json';
+const DEMO = new URLSearchParams(location.search).has('demo');
+const CHECKPOINTS = new Set(['B1', 'B9', 'B10', 'B11', 'B12']);
+
+// agent names must match `python3 tasks/status.py helper <name> ...`
+const TEAMS = [
+  { name: 'SERVER',          color: '#5fd68a', gx: 6,  gy: 0,  card: 'below', agents: [
+      ['builder', '#6ea8ff', 'Writes the code'], ['test-runner', '#5fd68a', 'Runs install, build, tests'],
+      ['backend-auditor', '#ffb454', 'Audits server and database use'], ['migration-checker', '#b48cff', 'Checks database migrations'] ] },
+  { name: 'APP & VOICE',     color: '#ff8fb8', gx: -6, gy: 0,  card: 'above', agents: [
+      ['app-builder', '#ff8fb8', 'Builds the Expo screens'], ['voice-checker', '#ff9ed0', 'Checks every line of copy'] ] },
+  { name: 'QUALITY',         color: '#9d7bff', gx: 0,  gy: 6,  card: 'below', agents: [
+      ['axiom-reviewer', '#4fd6d6', 'Reviews against the documents'], ['care-tester', '#9be37a', 'Tests the distress check'] ] },
+  { name: 'LEARNING',        color: '#f2c94c', gx: 0,  gy: -6, card: 'above', agents: [
+      ['learning-loop', '#f2e266', 'Finds root causes, writes lessons'], ['dead-code-hunter', '#ff7a6b', 'Finds leftover dead code'] ] },
+];
+const OX = 380, OY = 262, HW = 32, HH = 16, PLAT_Z = 10;
+const LOCAL = { 4: [[-1.3, -1.1], [1.3, -1.1], [-1.3, 1.1], [1.3, 1.1]], 2: [[-1, 1], [1, -1]] };
+
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+const P = (x, y, z = 0) => [OX + (x - y) * HW, OY + (x + y) * HH - z];
+
+const AGENTS = [];
+TEAMS.forEach(tm => {
+  tm.center = P(tm.gx, tm.gy, PLAT_Z + 14);
+  tm.agents = tm.agents.map(([name, color, role], i) => {
+    const [lx, ly] = LOCAL[tm.agents.length][i];
+    const a = { name, color, role, team: tm, gx: tm.gx + lx, gy: tm.gy + ly, state: 'idle', h: null };
+    [a.sx, a.sy] = P(a.gx, a.gy, PLAT_Z + 8);
+    AGENTS.push(a);
+    return a;
+  });
+});
+const BRAIN = { pos: P(0, 0, 40) };
+
+let status = null, prev = {}, parts = [], lastSpawn = {};
+
+const ago = ms => { const s = Math.max(0, Math.round(ms / 1000)); if (s < 60) return s + 's ago'; const m = Math.round(s / 60); return m < 60 ? m + ' min ago' : Math.round(m / 60) + ' h ago'; };
+const hhmm = iso => { const d = new Date(iso); return isNaN(d) ? '' : d.toTimeString().slice(0, 5); };
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function demoStatus() {
+  const phase = Math.floor(Date.now() / 4000);
+  const states = ['running', 'waiting', 'reported', 'running', 'failed'];
+  const helpers = AGENTS.filter((_, k) => (phase + k) % 7 !== 3).map((a, k) => {
+    const state = states[(phase + k) % states.length];
+    return { name: a.name, state, task: 'Demo task for ' + a.name, report: state === 'reported' ? '12 checks pass' : undefined };
+  });
+  const ids = ['B0', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10', 'B11', 'B12'];
+  const titles = ['Set up the new branch', 'Server foundation', 'Care check', 'Sign-up answers', 'Situation and Read', 'Learn and citations', 'Move', 'Report and sharing', 'Pushes and scheduler', 'Home, History, Settings', 'Database migrations', 'The Expo app', 'Review and final report'];
+  return {
+    headline: 'Demo: building the Read screen (B4)', mode: 'running', phase: 'Server', updated: new Date().toISOString(),
+    steps: ids.map((id, i) => ({ id, title: titles[i], state: i < 4 ? 'done' : i === 4 ? 'doing' : 'todo', note: i === 4 ? '3 of 8 checks written' : '' })),
+    now: { what: 'Writing the Read check', why: "Every quote must be the founder's own words", how: 'Tests first' },
+    helpers, spend: { capUsd: 6, usedUsd: 1.2, runs: 1, maxRuns: 3 }, tests: { passing: 41, failing: phase % 5 === 4 ? 2 : 0, last: 'node --test server' },
+    needs_you: [], blockers: [], next_stop: { name: 'Checkpoint 2: after B9', note: 'Server done' },
+    events: [{ t: new Date().toISOString(), text: 'Demo data, not the real build' }], rate_limit: { state: 'ok' },
+  };
+}
+
+async function load() {
+  try {
+    if (DEMO) status = demoStatus();
+    else { const r = await fetch(STATUS_URL + '?' + Date.now(), { cache: 'no-store' }); if (!r.ok) throw new Error(r.status); status = await r.json(); }
+  } catch { status = null; }
+  applyStatus();
+  renderPanel();
+}
+
+function applyStatus() {
+  const byName = {};
+  (status?.helpers || []).forEach(h => { byName[h.name] = h; });
+  AGENTS.forEach(a => {
+    const h = byName[a.name], state = h ? h.state : 'idle', was = prev[a.name];
+    if (was !== undefined && was !== state) {
+      if (state === 'running') burst(a, true, 4, '#ffffff');
+      if (state === 'reported') burst(a, false, 6, '#ffd75e');
+      if (state === 'failed') burst(a, false, 3, '#ff6b6b');
+    }
+    prev[a.name] = state; a.state = state; a.h = h || null;
+  });
+}
+
+const route = (a, out) => { const p = [BRAIN.pos, a.team.center, [a.sx, a.sy - 14]]; return out ? p : p.slice().reverse(); };
+function burst(a, out, n, color) { for (let i = 0; i < n; i++) parts.push({ path: route(a, out), p: -i * 0.1, v: 0.01 + Math.random() * 0.004, color, big: true }); }
+
+function renderPanel() {
+  const s = status;
+  document.getElementById('demoNote').innerHTML = DEMO ? 'Demo data · <a href="?">show the real build</a>' : '<a href="?demo=1">see a demo</a>';
+  const live = document.getElementById('live'), liveText = document.getElementById('liveText');
+  if (!s) { live.style.background = '#6b7290'; liveText.textContent = 'no build yet'; document.getElementById('headline').textContent = 'No build is running yet. The office fills in when the build starts.'; return; }
+  live.style.background = s.mode === 'running' ? '#5fd68a' : '#ffb454'; liveText.textContent = DEMO ? 'demo' : 'connected';
+  document.getElementById('headline').textContent = s.headline || '';
+  const mode = document.getElementById('mode'); mode.textContent = s.mode || 'no mode'; mode.className = 'pill ' + (s.mode || '');
+  document.getElementById('phase').textContent = s.phase || 'no phase';
+  document.getElementById('updated').textContent = 'updated ' + ago(Date.now() - Date.parse(s.updated));
+  const rate = document.getElementById('rate');
+  if (s.rate_limit?.state === 'waiting') { rate.style.display = 'block'; rate.textContent = 'Paused: usage limit reached. Resumes by itself' + (s.rate_limit.resumes_at ? ' at ' + hhmm(s.rate_limit.resumes_at) : ' when the limit resets') + '.'; }
+  else rate.style.display = 'none';
+  const list = (id, card, items) => { document.getElementById(card).style.display = items.length ? 'block' : 'none'; document.getElementById(id).innerHTML = items.map(n => '<li>' + esc(n) + '</li>').join(''); };
+  list('needs', 'needCard', s.needs_you || []); list('stuck', 'stuckCard', s.blockers || []);
+  const now = s.now;
+  document.getElementById('now').innerHTML = now ? esc(now.what) + (now.why ? '<div class="dim">Why: ' + esc(now.why) + '</div>' : '') + (now.how ? '<div class="dim">How: ' + esc(now.how) + '</div>' : '') : '<span class="dim">Nothing started yet.</span>';
+  const steps = s.steps || [], done = steps.filter(x => x.state === 'done').length;
+  document.getElementById('stepBar').style.width = steps.length ? (done / steps.length * 100) + '%' : '0';
+  document.getElementById('stepText').textContent = done + ' of ' + steps.length + ' steps done';
+  document.getElementById('steps').innerHTML = steps.map(x => '<div class="step ' + x.state + '"><span class="id">' + x.id + '</span><span class="t">' + esc(x.title) + (CHECKPOINTS.has(x.id) ? ' <span class="flag">⚑</span>' : '') + (x.note && x.state !== 'todo' ? '<div class="note">' + esc(x.note) + '</div>' : '') + '</span><span class="pill ' + x.state + '">' + x.state + '</span></div>').join('');
+  if (s.spend) {
+    document.getElementById('spendBar').style.width = Math.min(100, s.spend.usedUsd / s.spend.capUsd * 100) + '%';
+    document.getElementById('spendText').textContent = '$' + s.spend.usedUsd.toFixed(2) + ' of $' + s.spend.capUsd.toFixed(2) + ' · ' + s.spend.runs + ' of ' + s.spend.maxRuns + ' runs';
+  }
+  document.getElementById('tests').innerHTML = s.tests ? '<span class="ok">' + s.tests.passing + ' passing</span>' + (s.tests.failing ? ' <span class="bad">' + s.tests.failing + ' failing</span>' : '') + (s.tests.last ? '<div class="dim">' + esc(s.tests.last) + '</div>' : '') : '<span class="dim">No tests run yet.</span>';
+  document.getElementById('next').innerHTML = s.next_stop ? esc(s.next_stop.name) + (s.next_stop.note ? '<div class="dim">' + esc(s.next_stop.note) + '</div>' : '') : '—';
+  document.getElementById('events').innerHTML = (s.events || []).slice(-6).reverse().map(e => '<div>' + hhmm(e.t) + '  ' + esc(e.text) + '</div>').join('');
+}
+
+// ---------- drawing ----------
+function shade(hex, f) {
+  const n = parseInt(hex.slice(1), 16);
+  const c = v => Math.max(0, Math.min(255, Math.round(v * f)));
+  return `rgb(${c(n >> 16 & 255)},${c(n >> 8 & 255)},${c(n & 255)})`;
+}
+const poly = (pts, fill, stroke) => { ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); } };
+function isoBox(x, y, w, d, h, z0, top, left, right, stroke) {
+  const x1 = x - w / 2, x2 = x + w / 2, y1 = y - d / 2, y2 = y + d / 2, zt = z0 + h;
+  poly([P(x1, y2, zt), P(x2, y2, zt), P(x2, y2, z0), P(x1, y2, z0)], left, stroke);
+  poly([P(x2, y2, zt), P(x2, y1, zt), P(x2, y1, z0), P(x2, y2, z0)], right, stroke);
+  poly([P(x1, y1, zt), P(x2, y1, zt), P(x2, y2, zt), P(x1, y2, zt)], top, stroke);
+}
+const R = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(Math.round(x), Math.round(y), w, h); };
+const FONT = 'ui-monospace, Menlo, monospace';
+function T(txt, x, y, c, size = 8, align = 'center', weight = 'bold') { ctx.font = `${weight} ${size}px ${FONT}`; ctx.fillStyle = c; ctx.textAlign = align; ctx.fillText(txt, Math.round(x), Math.round(y)); }
+function fit(txt, max, size) { ctx.font = `bold ${size}px ${FONT}`; if (ctx.measureText(txt).width <= max) return txt; while (txt.length > 1 && ctx.measureText(txt + '…').width > max) txt = txt.slice(0, -1); return txt + '…'; }
+function chip(txt, x, y, color, size = 7) {
+  ctx.font = `bold ${size}px ${FONT}`; const w = Math.ceil(ctx.measureText(txt).width) + 10;
+  R(x - w / 2, y - 7, w, 12, 'rgba(6,8,14,.92)'); R(x - w / 2, y - 7, w, 1, color); R(x - w / 2, y + 4, w, 1, 'rgba(255,255,255,.08)');
+  T(txt, x, y + 2, color, size);
+}
+
+function drawPlatform(tm, t) {
+  const active = tm.agents.some(a => a.state === 'running');
+  const glow = active ? 0.5 + 0.3 * Math.sin(t / 300) : 0.18;
+  ctx.save(); ctx.globalAlpha = glow; poly([P(tm.gx - 3, tm.gy - 3, 0), P(tm.gx + 3, tm.gy - 3, 0), P(tm.gx + 3, tm.gy + 3, 0), P(tm.gx - 3, tm.gy + 3, 0)], tm.color); ctx.restore();
+  isoBox(tm.gx, tm.gy, 5, 5, PLAT_Z, 0, shade(tm.color, 0.5), shade(tm.color, 0.3), shade(tm.color, 0.22), 'rgba(0,0,0,.35)');
+  ctx.strokeStyle = 'rgba(255,255,255,.07)'; ctx.lineWidth = 1;
+  for (let i = -2; i <= 3; i++) {
+    const a = P(tm.gx + i - 0.5, tm.gy - 2.5, PLAT_Z), b = P(tm.gx + i - 0.5, tm.gy + 2.5, PLAT_Z), c = P(tm.gx - 2.5, tm.gy + i - 0.5, PLAT_Z), d = P(tm.gx + 2.5, tm.gy + i - 0.5, PLAT_Z);
+    ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.moveTo(c[0], c[1]); ctx.lineTo(d[0], d[1]); ctx.stroke();
+  }
+  ctx.strokeStyle = tm.color; ctx.globalAlpha = 0.7; const e = [P(tm.gx - 2.5, tm.gy - 2.5, PLAT_Z), P(tm.gx + 2.5, tm.gy - 2.5, PLAT_Z), P(tm.gx + 2.5, tm.gy + 2.5, PLAT_Z), P(tm.gx - 2.5, tm.gy + 2.5, PLAT_Z)];
+  ctx.beginPath(); e.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath(); ctx.stroke(); ctx.globalAlpha = 1;
+}
+
+function drawRoads(t) {
+  TEAMS.forEach(tm => {
+    const horiz = tm.gy === 0; // road runs along x when team sits on the x axis
+    const x1 = horiz ? Math.sign(tm.gx) * 1.5 : 0, x2 = horiz ? Math.sign(tm.gx) * 3.5 : 0;
+    const y1 = horiz ? 0 : Math.sign(tm.gy) * 1.5, y2 = horiz ? 0 : Math.sign(tm.gy) * 3.5;
+    const w = horiz ? 0 : 0.5, d = horiz ? 0.5 : 0;
+    poly([P(x1 - w, y1 - d, 1), P(x2 - w, y2 - d, 1), P(x2 + w, y2 + d, 1), P(x1 + w, y1 + d, 1)], '#1a1e2b', '#2a3048');
+    const a = P(x1, y1, 1), b = P(x2, y2, 1), on = tm.agents.some(g => g.state === 'running' || g.state === 'reported');
+    ctx.strokeStyle = on ? tm.color : '#343b57'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]); ctx.lineDashOffset = -t / 60;
+    ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.setLineDash([]);
+  });
+}
+
+const BRAIN_MAP = ['....XXXX.XXXX...', '..XXXXXXXXXXXX..', '.XXaXXXbXXXaXXX.', 'XXXXXaXXXXXbXXXX', 'XXbXXXXXaXXXXXXX', 'XXXXXaXXXXXbXXXX', '.XXXXXXXXXXaXXX.', '..XXXXXXXXXXXX..', '....XXXXXXXX....', '......XXXX......'];
+function drawBrainBase() {
+  isoBox(0, 0, 3, 3, 8, 0, '#241d33', '#171224', '#120e1c', 'rgba(0,0,0,.4)');
+  isoBox(0, 0, 1.4, 1.4, 6, 8, '#3a2f4f', '#2a2140', '#211a33', 'rgba(0,0,0,.4)');
+}
+function drawBrain(t, thinking) {
+  const [cx, cy0] = BRAIN.pos, cy = cy0 - Math.round(Math.sin(t / 500) * 2);
+  const g = thinking ? 0.32 + 0.14 * Math.sin(t / 250) : 0.1;
+  const grad = ctx.createRadialGradient(cx, cy, 6, cx, cy, 70);
+  grad.addColorStop(0, `rgba(255,143,184,${g * 2})`); grad.addColorStop(1, 'rgba(255,143,184,0)');
+  ctx.fillStyle = grad; ctx.fillRect(cx - 80, cy - 80, 160, 160);
+  const sc = 3, ox = cx - 8 * sc, oy = cy - 5 * sc;
+  BRAIN_MAP.forEach((row, j) => [...row].forEach((ch, i) => { if (ch !== '.') R(ox + i * sc, oy + j * sc, sc, sc, ch === 'X' ? '#ff8fb8' : ch === 'a' ? '#d9648f' : '#ffb3cf'); }));
+  const done = (status?.steps || []).filter(s => s.state === 'done').length, tot = (status?.steps || []).length;
+  chip('THE BRAIN · Claude decides' + (tot ? ' · ' + done + '/' + tot : ''), cx, cy + 40, '#ff8fb8', 7);
+  const w = status?.now?.what;
+  if (w) { const txt = fit(w, 150, 7); ctx.font = `bold 7px ${FONT}`; const bw = ctx.measureText(txt).width + 12; R(cx - bw / 2, cy - 52, bw, 14, '#0a0c12'); R(cx - bw / 2, cy - 52, bw, 1, '#ff8fb8'); T(txt, cx, cy - 42, '#ffe0ee', 7); }
+}
+
+function drawAgent(a, t) {
+  const { sx, sy, color } = a, st = a.state;
+  if (st === 'running') { ctx.save(); ctx.globalAlpha = 0.25 + 0.15 * Math.sin(t / 150); ctx.fillStyle = color; ctx.beginPath(); ctx.ellipse(sx, sy + 6, 30, 13, 0, 0, 7); ctx.fill(); ctx.restore(); }
+  // desk
+  isoBox(a.gx, a.gy, 1.5, 0.9, 8, PLAT_Z, '#7a5638', '#4e3524', '#3a281b', 'rgba(0,0,0,.35)');
+  // monitor
+  const mx = sx + 3, my = sy - 22;
+  R(mx, my, 20, 15, '#0a0c12'); R(mx + 1, my + 1, 18, 13, '#06080d'); R(mx + 8, my + 15, 4, 3, '#222836');
+  const px = mx + 2, py = my + 2, pw = 16, ph = 11;
+  if (st === 'running') { R(px, py, pw, ph, '#07190f'); for (let i = 0; i < 4; i++) { const w = 4 + ((Math.floor(t / 170) * 7 + i * 5) % 11); R(px + 1, py + 1 + i * 3, w, 1, i % 2 ? '#5fd68a' : color); } }
+  else if (st === 'reported') { R(px, py, pw, ph, '#0a1a2e'); R(px + 4, py + 6, 2, 2, '#6ea8ff'); R(px + 6, py + 7, 2, 2, '#6ea8ff'); R(px + 8, py + 5, 2, 2, '#6ea8ff'); R(px + 10, py + 3, 2, 2, '#6ea8ff'); }
+  else if (st === 'failed') { R(px, py, pw, ph, Math.floor(t / 350) % 2 ? '#3a0c0c' : '#240808'); R(px + 5, py + 2, 2, 7, '#ff6b6b'); R(px + 9, py + 2, 2, 7, '#ff6b6b'); }
+  else if (st === 'waiting') { R(px, py, pw, ph, '#14151e'); R(px + 5 + (Math.floor(t / 400) % 2) * 2, py + 5, 4, 1, '#4b5068'); }
+  else R(px, py, pw, ph, '#10121a');
+  // robot
+  const rx = sx - 22, bob = st === 'running' ? Math.round(Math.sin(t / 120)) : (st === 'idle' || st === 'waiting') ? Math.round(Math.sin(t / 700)) : 0, ry = sy - 31 + bob;
+  const dark = '#10131c';
+  R(rx + 6, ry - 5, 2, 5, '#9aa0b4'); R(rx + 5, ry - 7, 4, 3, (st === 'failed' && Math.floor(t / 300) % 2) ? '#ff6b6b' : st === 'reported' ? '#ffd75e' : color);
+  R(rx, ry, 14, 11, color); R(rx, ry, 14, 1, 'rgba(255,255,255,.35)'); R(rx + 13, ry, 1, 11, 'rgba(0,0,0,.25)'); R(rx + 1, ry + 2, 12, 6, dark);
+  if (st === 'idle' || st === 'waiting') { R(rx + 3, ry + 5, 3, 1, color); R(rx + 8, ry + 5, 3, 1, color); }
+  else if (st === 'failed') { for (const ex of [3, 8]) { R(rx + ex, ry + 3, 1, 1, '#ff6b6b'); R(rx + ex + 2, ry + 3, 1, 1, '#ff6b6b'); R(rx + ex + 1, ry + 4, 1, 1, '#ff6b6b'); R(rx + ex, ry + 5, 1, 1, '#ff6b6b'); R(rx + ex + 2, ry + 5, 1, 1, '#ff6b6b'); } }
+  else if (st === 'reported') { R(rx + 3, ry + 5, 3, 1, '#ffd75e'); R(rx + 4, ry + 4, 1, 1, '#ffd75e'); R(rx + 8, ry + 5, 3, 1, '#ffd75e'); R(rx + 9, ry + 4, 1, 1, '#ffd75e'); }
+  else { const blink = Math.floor(t / 1700) % 6 === 0; R(rx + 3, ry + 3, 3, blink ? 1 : 4, '#fff'); R(rx + 8, ry + 3, 3, blink ? 1 : 4, '#fff'); }
+  R(rx + 1, ry + 12, 12, 11, color); R(rx + 1, ry + 12, 12, 1, 'rgba(255,255,255,.25)'); R(rx + 5, ry + 15, 4, 2, dark);
+  const arm = Math.floor(t / 130) % 2;
+  if (st === 'running') { R(rx + 13, ry + 15, 8, 2, color); R(rx + 20, ry + 20 + (arm ? 0 : 2), 4, 2, color); }
+  else if (st === 'reported') { R(rx + 13, ry + 15, 4, 2, color); R(rx + 16, ry + 6, 3, 11, color); R(rx + 15, ry + 3, 5, 4, color); }
+  else { R(rx + 13, ry + 15, 6, 2, color); R(rx + 18, ry + 16, 3, 5, color); }
+  R(sx - 12, sy - 4, 14, 3, '#2a3040'); // keyboard
+  if (st === 'idle' || st === 'waiting') { const k = Math.floor(t / 600) % 3; T('z', sx + 4 + k * 4, sy - 36 - k * 4, '#8a90b0', 7 + k * 2); }
+  if (st === 'reported') T('✓', sx + 12, sy - 40, '#ffd75e', 11);
+  if (st === 'failed') T('!', sx + 12, sy - 40, '#ff6b6b', 11);
+}
+
+function drawTag(a) {
+  const col = a.state === 'idle' ? '#7a809c' : a.color;
+  const lab = a.state === 'running' ? a.name + ' ▸' : a.name;
+  chip(lab, a.sx, a.sy + 22, col, 7);
+}
+
+function drawCard(tm) {
+  const n = tm.agents.length, cnt = s => tm.agents.filter(a => a.state === s).length;
+  const x = tm.center[0] - 66, y = tm.card === 'above' ? tm.center[1] - 14 - 40 - 74 + 6 : tm.center[1] + 14 + 78;
+  R(x, y, 132, 44, 'rgba(8,10,16,.94)'); R(x, y, 132, 2, tm.color); R(x, y + 43, 132, 1, 'rgba(255,255,255,.08)');
+  T(tm.name, x + 8, y + 15, tm.color, 8, 'left');
+  T(String(n), x + 100, y + 22, '#fff', 14, 'left'); T('agents', x + 112, y + 22, '#8a90a6', 6, 'left');
+  const wk = cnt('running'), rp = cnt('reported'), fl = cnt('failed');
+  T('working ' + wk + ' · done ' + rp + (fl ? ' · failed ' + fl : ''), x + 8, y + 34, fl ? '#ff6b6b' : '#8a90a6', 6.5, 'left');
+}
+
+function pos(path, p) {
+  const seg = [], total = path.reduce((s, q, i) => { if (!i) return 0; const l = Math.hypot(q[0] - path[i - 1][0], q[1] - path[i - 1][1]); seg.push(l); return s + l; }, 0);
+  let d = Math.min(1, p) * total;
+  for (let i = 0; i < seg.length; i++) { if (d <= seg[i]) { const f = seg[i] ? d / seg[i] : 0; return [path[i][0] + (path[i + 1][0] - path[i][0]) * f, path[i][1] + (path[i + 1][1] - path[i][1]) * f]; } d -= seg[i]; }
+  return path[path.length - 1];
+}
+function spawnSteady(t) {
+  AGENTS.forEach(a => {
+    if (a.state !== 'running') return;
+    if (!lastSpawn[a.name] || t - lastSpawn[a.name] > 700) {
+      lastSpawn[a.name] = t; const out = Math.random() < 0.6;
+      parts.push({ path: route(a, out), p: 0, v: 0.011, color: out ? '#ffffff' : a.color, big: false });
+    }
+  });
+}
+function drawParts() {
+  parts = parts.filter(q => q.p < 1);
+  parts.forEach(q => {
+    q.p += q.v; if (q.p < 0) return;
+    const [x, y] = pos(q.path, q.p), s = q.big ? 4 : 3;
+    ctx.globalAlpha = 0.35; R(x - s, y - s, s * 2 + 1, s * 2 + 1, q.color); ctx.globalAlpha = 1; R(x - s / 2, y - s / 2, s, s, q.color);
+  });
+}
+
+function frame(t) {
+  ctx.fillStyle = '#0a0b10'; ctx.clearRect(0, 0, 760, 520);
+  TEAMS.slice().sort((a, b) => (a.gx + a.gy) - (b.gx + b.gy)).forEach(tm => drawPlatform(tm, t));
+  drawBrainBase();
+  drawRoads(t);
+  spawnSteady(t);
+  const draw = [];
+  AGENTS.forEach(a => draw.push({ y: a.sy, f: () => drawAgent(a, t) }));
+  draw.sort((a, b) => a.y - b.y).forEach(d => d.f());
+  AGENTS.forEach(a => drawTag(a));
+  drawParts();
+  drawBrain(t, status?.mode === 'running' || AGENTS.some(a => a.state === 'running'));
+  TEAMS.forEach(drawCard);
+  requestAnimationFrame(frame);
+}
+
+const tip = document.getElementById('tip');
+cv.addEventListener('mousemove', e => {
+  const r = cv.getBoundingClientRect(), mx = (e.clientX - r.left) * 760 / r.width, my = (e.clientY - r.top) * 520 / r.height;
+  const a = AGENTS.find(a => mx >= a.sx - 28 && mx <= a.sx + 26 && my >= a.sy - 40 && my <= a.sy + 28);
+  if (!a) { tip.style.display = 'none'; return; }
+  const label = { running: 'working', waiting: 'waiting', reported: 'reported back', failed: 'failed', idle: 'at rest' }[a.state];
+  tip.innerHTML = '<b style="color:' + a.color + '">' + esc(a.name) + '</b> · ' + label + '<div class="dim">' + esc(a.role) + '</div>' + (a.h?.task ? '<div>' + esc(a.h.task) + '</div>' : '') + (a.h?.report ? '<div class="ok">Report: ' + esc(a.h.report) + '</div>' : '');
+  tip.style.display = 'block';
+  const sr = cv.parentElement.getBoundingClientRect();
+  tip.style.left = Math.max(0, Math.min(sr.width - 270, e.clientX - sr.left + 14)) + 'px'; tip.style.top = (e.clientY - sr.top + 14) + 'px';
+});
+cv.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+
+load(); setInterval(load, 3000);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

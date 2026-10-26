@@ -90,6 +90,8 @@ export const register: Register = on => {
     const glyph = (st: string) => (st === 'done' ? '✓' : st === 'doing' ? '▸' : st === 'blocked' ? '✕' : '·')
     const glyphColor = (st: string) => (st === 'done' ? 'success' : st === 'doing' ? 'claude' : st === 'blocked' ? 'error' : 'inactive')
     const hState = (st: string) => (st === 'running' ? 'working' : st === 'reported' ? 'reported back' : st === 'failed' ? 'failed' : 'waiting')
+    const face = (st: string) => (st === 'running' ? '[•‿•]⌨' : st === 'reported' ? '[^‿^]✓' : st === 'failed' ? '[x_x]!' : '[-_-]z')
+    const dot = (st: string) => (st === 'done' ? '●' : st === 'doing' ? '◉' : st === 'blocked' ? '✕' : '○')
 
     return (
       <Box flexDirection="column" paddingX={1} gap={1}>
@@ -127,6 +129,7 @@ export const register: Register = on => {
         {steps.length > 0 && (
           <Box flexDirection="column">
             <Text weight="semibold">Steps</Text>
+            <Text>{steps.map(st => dot(st.state)).join('─')}</Text>
             {steps.map(st => (
               <Box flexDirection="column">
                 <Text>
@@ -144,7 +147,7 @@ export const register: Register = on => {
             {helpers.map(helper => (
               <Box flexDirection="column">
                 <Text>
-                  {helper.name} <Text dimColor>· {hState(helper.state)}</Text>
+                  {face(helper.state)} {helper.name} <Text dimColor>· {hState(helper.state)}</Text>
                 </Text>
                 <Text dimColor>   {helper.task}</Text>
                 {helper.report && <Text dimColor>   Report: {helper.report}</Text>}

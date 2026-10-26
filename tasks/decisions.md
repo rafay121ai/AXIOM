@@ -634,3 +634,10 @@ Groups, each divided by thin lines, plain labels:
 - Standing rules: fix from the root, delete dead code, a learning-loop agent after every milestone, a plain-English report when all screens exist, resume by itself after a usage limit (mechanism awaiting a yes).
 - New agents (in ~/.claude/agents): learning-loop, voice-checker, care-tester, app-builder. Conductor = me. Max 3 helpers at once. Proposed: a conductor session plus a Server session and an App session.
 - New: tasks/status.py and tasks/build_status.json, and the "axiom-build-monitor" panel (command /axiom-build). The panel loads only after Rafay answers "Turn them on" to the engine's question.
+
+## Build monitor look (October 2026)
+- Rafay wants the monitor to be a pixel-art office: each agent a small robot in its own booth at a desk, Claude's brain in the centre, glowing dots travelling along lines when work is handed out and reported back, robot moods (typing, asleep, thumbs up, red light), and B0 to B12 shown as a path of nodes.
+- Both a side panel (small text robots) and a live page (`tasks/tools/axiom-office/index.html`, served by the `axiom-office` preview on port 8765, `?demo=1` shows fake data). A slim strip on the page shows needs-you, budget, tests, rate-limit status.
+- Rafay shared a reference (an isometric "agents office": coloured platforms per team, a central Brain, roads with moving data, team cards, task list on the right). The office page was redone to match: four team platforms (Server, App & Voice, Quality, Learning), Claude's brain in the centre, a task-status list on the right.
+
+- Rafay said go: agent list approved, three sessions approved, 20-minute resume task approved (October 26, 2026).
