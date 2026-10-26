@@ -133,3 +133,46 @@ validation flags are server-only and are never returned by the API.
 - `match_wiki_chunks(query_embedding vector, match_count int, filter_pillar text)`
   as recorded in `supabase/migrations_archive/20261019000000_knowledge_halfvec_shrink.sql`.
   Learn uses `id, author, title, key_frameworks (the passage text), similarity`.
+
+# Schema needs for the Move (B6)
+
+New table `moves`. Same rules as above: RLS on, server-only (service role)
+access, no client policies. ARCHITECTURE.md says the old `experiments` table
+gets the new states; it is not reused here because `experiments.session_id` is
+NOT NULL with a foreign key to the old `sessions`, its status check has the old
+values, and the old web app still reads it. To be confirmed by Rafay.
+
+## moves
+- `id uuid pk default gen_random_uuid()`, `user_id uuid not null references auth.users`
+- `situation_id uuid not null references situations on delete cascade`
+- `learn_id uuid not null references learn_conversations on delete cascade`
+- `status text not null check (status in ('draft','committed','report_due','reported','closed_no_report','swapped'))`
+  (`reported` is set by the Report step; nothing here deletes a move)
+- Shown: `title text not null`, `mission text not null`, `success_condition text not null`,
+  `words text not null default ''`, `checklist jsonb not null` (2 to 4 strings),
+  `prediction text not null`, `start_minutes int not null check (start_minutes between 1 and 10)`
+- Server only: `hypothesis text not null`, `validation jsonb not null` (the
+  experiment validator's result), `swap_reason text null`
+- `swap_count int not null default 0 check (swap_count between 0 and 1)`
+- `swapped_from uuid null references moves`, unique `(swapped_from)` where not
+  null: one replacement per move (a repeated swap returns it)
+- unique `(learn_id)` where `swapped_from is null`: one first move per Learn
+  conversation (a repeated or concurrent create returns it)
+- `active_slot smallint null check (active_slot in (1,2))`, **unique
+  `(user_id, active_slot)` where `active_slot is not null`**. NEEDED: this is
+  the cap of 2 committed moves. A commit takes slot 1 or 2 by a conditional
+  update; the unique index makes a third concurrent commit fail with 23505.
+  The slot is cleared when a move is swapped or closed (and must be cleared by
+  the Report step when it marks a move `reported`).
+- `committed_at timestamptz null`, `report_due_at timestamptz null` (the
+  check-in time; the push scheduler reads it), `report_time_local text null`
+  ('HH:MM'), `time_zone text null` (IANA), `closes_at timestamptz null`
+  (commit + 48 hours), `closed_at timestamptz null`, `swapped_at timestamptz null`
+- `created_at timestamptz not null`, `updated_at timestamptz not null`
+- indexes `(user_id, status, created_at)`, `(learn_id, created_at desc)`,
+  `(status, report_due_at)` for the scheduler
+
+## Existing columns read
+- `founder_profiles.report_time_local` and `founder_profiles.timezone` (from
+  migration 20261013000003): the founder's check-in time and zone. When the
+  zone is empty, the phone's zone sent with the commit is used, then UTC.

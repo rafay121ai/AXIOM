@@ -12,6 +12,7 @@ import { HttpError } from '../situations.js'
 import { retrieveEvidence } from './retrieve.js'
 import { composeReply } from './reply.js'
 import { decideMoveOffer, isRealReply, asksWhatNext, MAX_MOVE_OFFERS, MOVE_NOTICE, AXIOM_LINES } from './moveOffer.js'
+import { hasMoveRoom, NO_ROOM_LINE } from '../move/room.js'
 
 const SAY_MORE = 'Say a bit more.'
 export const LOCK_MS = 2 * 60 * 1000
@@ -241,7 +242,11 @@ export function createLearn({ supabase, knowledgeSupabase = null, embed = null, 
   async function answer({ userId, conversation, offers, turns, text, name }) {
     const situation = await ownSituation(userId, conversation.situation_id)
     const replies = turns.filter((t) => t.role === 'founder').map((t) => t.text)
-    const decision = decideMoveOffer({ replies, offers })
+    let decision = decideMoveOffer({ replies, offers })
+    // No card while the founder already has 2 moves open; the offer is not used up.
+    if (decision.offer !== 'none' && !(await hasMoveRoom({ supabase, userId, nowMs: clock.now(), exceptLearnId: conversation.id }))) {
+      decision = { ...decision, offer: 'none', reason: 'no_room' }
+    }
     const capped = decision.reason === 'cap'
 
     // A fixed line from the approved mock: no model call.
@@ -259,6 +264,8 @@ export function createLearn({ supabase, knowledgeSupabase = null, embed = null, 
       row = await fixedTurn(AXIOM_LINES.intent)
     } else if (capped && asksWhatNext(text)) {
       row = await fixedTurn(AXIOM_LINES.after_cap)
+    } else if (decision.reason === 'no_room' && asksWhatNext(text)) {
+      row = await fixedTurn(NO_ROOM_LINE)
     } else {
       const mode = decision.offer === 'none' ? 'reply' : 'offer'
       ;({ row, subject, fact } = await makeTurn({ userId, situation, conversation, mode, step: 'learn', learnTurns: turns }))

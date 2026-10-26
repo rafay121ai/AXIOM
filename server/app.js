@@ -270,6 +270,7 @@ export function createApp({
   app.use('/api/first-reading', requireAuth)
   app.use('/api/situations', requireAuth)
   app.use('/api/learn', requireAuth)
+  app.use('/api/moves', requireAuth)
   app.use('/api/loading-hint', requireAuth)
 
   // ─── Routes ───────────────────────────────────────────────────────────────────
