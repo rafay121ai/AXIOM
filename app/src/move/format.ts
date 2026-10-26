@@ -1,0 +1,11 @@
+/** The phone's time zone, which the server uses for the report time when the founder has not saved one. */
+export function deviceTimeZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
+/** The server's 'HH:MM' as the mock says it: '20:00' is '8 pm', '18:30' is '6:30 pm'. */
+export function spokenTime(local: string): string {
+  const [h, m] = local.split(':').map(Number);
+  const hour = h % 12 === 0 ? 12 : h % 12;
+  return `${hour}${m ? `:${String(m).padStart(2, '0')}` : ''} ${h < 12 ? 'am' : 'pm'}`;
+}

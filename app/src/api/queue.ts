@@ -10,6 +10,12 @@ export class HttpError extends Error {
 /** The server says today's limit is used up. Trying again changes nothing. */
 export const isDailyLimit = (e: unknown): boolean => e instanceof HttpError && e.status === 429 && e.code === 'daily_limit';
 
+/** Both move places are taken. Trying again changes nothing until one is reported. */
+export const isMoveCap = (e: unknown): boolean => e instanceof HttpError && e.status === 409 && e.code === 'move_cap';
+
+/** The move has already been changed once. */
+export const isSwapUsed = (e: unknown): boolean => e instanceof HttpError && e.status === 409 && e.code === 'swap_used';
+
 /** Worth trying again: no network, a server fault, a rate limit, or a sign-in that has just lapsed. */
 export const isRetryable = (e: unknown): boolean => {
   const status = e instanceof HttpError ? e.status : undefined;

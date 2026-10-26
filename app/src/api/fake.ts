@@ -1,4 +1,5 @@
-import type { AxiomApi, FirstReading, LearnReply, LearnTurn, Question, Read, ReadAnswerResult, Screened, SituationReply } from './types';
+import { HttpError } from './queue';
+import type { AxiomApi, Commitment, FirstReading, LearnReply, LearnTurn, MoveView, Question, Read, ReadAnswerResult, Screened, SituationReply, SwapResult } from './types';
 
 // Fixture questions, word for word from tasks/design/mock-onboarding-v2.html.
 const QUESTIONS: Question[] = [
@@ -112,6 +113,29 @@ const FOLLOW_UP_ANSWERS = [
 const FAKE_LEARN_ID = 'fake-learn-1';
 const FAKE_HINT = { book: 'Never Split the Difference', quote: '“No” feels like salvation, like an oasis.' };
 
+// The Move sheet, word for word from the mock (sample founder). The changed move is a placeholder:
+// the mock shows no second move, and its swap example is "I only have their email".
+const FAKE_MOVE: MoveView = {
+  id: 'fake-move-1', learn_id: FAKE_LEARN_ID, situation_id: 'fake-situation-1', status: 'draft',
+  title: 'Ask both clinics for one concrete next step.',
+  mission: 'Message both clinics today and ask for a 20-minute follow-up call in the next 3 days.',
+  success: 'Both give you a day and time. Yes or no.',
+  words: "I'd like to show you what has changed since we last spoke. Can we book 20 minutes in the next 3 days?",
+  checklist: ['Open the last message from each clinic', 'Paste the wording and change one word to sound like you', 'Send it to both'],
+  prediction: 'My read: at least one of them will not answer. That is also an answer. Tonight tells us.',
+  start_minutes: 10, can_swap: true, swapped_from: null, committed_at: null, report_due_at: null, report_time_local: null,
+  time_zone: null, created_at: '2026-10-26T09:00:00.000Z',
+};
+const FAKE_SWAPPED: MoveView = {
+  ...FAKE_MOVE, id: 'fake-move-2', swapped_from: FAKE_MOVE.id, can_swap: false,
+  title: 'Email both clinics and ask for one concrete next step.',
+  mission: 'Email both clinics today and ask for a 20-minute follow-up call in the next 3 days.',
+  words: "I'd like to show you what has changed since we last spoke. Can we book 20 minutes in the next 3 days?",
+  checklist: ['Find the email of each clinic', 'Paste the wording and change one word to sound like you', 'Send it to both'],
+};
+const FAKE_REPORT_TIME = '20:00';
+const NEED_REASON = '"I\'m busy" isn\'t a reason I can work with. What makes this the wrong move?';
+
 // The mock's rule for "ok": fewer than 3 words that say something is not an answer.
 const FILLER = new Set('ok okay k yes yeah yep yup no nope sure fine hmm hm mm um uh thanks thank you thx cool got it i see makes sense right true alright maybe idk good nice lol so well kinda'.split(' '));
 const isReal = (t: string) => t.toLowerCase().replace(/[^a-z0-9%$\s']/g, ' ').split(/\s+/).filter((w) => w && !FILLER.has(w)).length >= 3;
@@ -162,6 +186,10 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0): AxiomApi {
     id: `fake-learn-turn-${nextLearnTurn++}`, kind, text, sources: [], picture: null, follow_ups: [], ...extra,
   });
 
+  // The move, kept in memory: asking again returns the same one, a commit twice is one commit, a swap twice is one swap.
+  let move = FAKE_MOVE;
+  let swapped: SwapResult | null = null;
+
   return {
     async signInWithGoogle() {},
     async getQuestions() {
@@ -209,6 +237,28 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0): AxiomApi {
     async tapFollowUp(_learnId, turnId, index) {
       await wait();
       return learnReply({ turn: learnTurn('followup', FOLLOW_UP_ANSWERS[index] ?? FOLLOW_UP_ANSWERS[0], { for_turn_id: turnId, followup_index: index }) });
+    },
+    async openMove() {
+      await wait();
+      return move;
+    },
+    async commitMove(moveId, timezone): Promise<Commitment> {
+      if (moveId !== move.id) throw new HttpError(404, 'Not found');
+      if (move.status !== 'committed') {
+        move = { ...move, status: 'committed', committed_at: '2026-10-26T09:05:00.000Z', report_time_local: FAKE_REPORT_TIME, time_zone: timezone };
+      }
+      return { move, report: { due_at: '2026-10-26T20:00:00.000Z', local_time: move.report_time_local ?? FAKE_REPORT_TIME, time_zone: move.time_zone ?? timezone } };
+    },
+    async swapMove(moveId, reason): Promise<Screened<SwapResult>> {
+      const flagged = await screen();
+      if (flagged.care) return flagged;
+      if (swapped && moveId === FAKE_MOVE.id) return swapped;
+      if (moveId !== move.id) throw new HttpError(404, 'Not found');
+      if (!move.can_swap) throw new HttpError(409, 'swap_used');
+      if (!isReal(reason)) return { status: 'need_reason', reply: NEED_REASON };
+      swapped = { status: 'swapped', replaced_id: move.id, move: FAKE_SWAPPED };
+      move = FAKE_SWAPPED;
+      return swapped;
     },
     async getLoadingHint() {
       return FAKE_HINT;

@@ -1,6 +1,6 @@
 import type { Auth } from './auth';
 import { createSaveQueue, HttpError } from './queue';
-import type { AxiomApi, FirstReading, LearnReply, LoadingQuote, Question, Read, ReadAnswerResult, Screened, SituationReply } from './types';
+import type { AxiomApi, Commitment, FirstReading, LearnReply, LoadingQuote, MoveView, Question, Read, ReadAnswerResult, Screened, SituationReply, SwapResult } from './types';
 
 type Options = { baseUrl: string; auth: Auth; fetch?: typeof fetch };
 
@@ -48,6 +48,11 @@ export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch
     sendLearnTurn: (learnId, text, turnId) =>
       request<Screened<LearnReply>>('POST', `/api/learn/${learnId}/turn`, { text, client_turn_id: turnId }),
     tapFollowUp: (learnId, turnId, index) => request<LearnReply>('POST', `/api/learn/${learnId}/followup/${index}`, { turn_id: turnId }),
+    async openMove(learnId) {
+      return (await request<{ move: MoveView }>('POST', `/api/learn/${learnId}/move`)).move;
+    },
+    commitMove: (moveId, timezone) => request<Commitment>('POST', `/api/moves/${moveId}/commit`, { timezone }),
+    swapMove: (moveId, reason) => request<Screened<SwapResult>>('POST', `/api/moves/${moveId}/swap`, { reason }),
     // The hint is only a nicety: any failure means no quote.
     async getLoadingHint(seed) {
       try {

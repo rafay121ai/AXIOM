@@ -160,6 +160,37 @@ export type LearnReply = {
   move_notice: MoveNotice | null;
 };
 
+/** One move, as the server shows it. `words` is the suggested wording, if the move needs any. */
+export type MoveView = {
+  id: string;
+  learn_id: string;
+  situation_id: string;
+  /** `draft` until committed; the server has more states after that. */
+  status: string;
+  title: string;
+  mission: string;
+  success: string;
+  words: string | null;
+  checklist: string[];
+  prediction: string;
+  start_minutes: number;
+  /** False once the one change has been used. */
+  can_swap: boolean;
+  swapped_from: string | null;
+  committed_at: string | null;
+  report_due_at: string | null;
+  /** 'HH:MM' in the founder's time zone. */
+  report_time_local: string | null;
+  time_zone: string | null;
+  created_at: string;
+};
+
+/** Committing a move schedules its report. `local_time` is when Axiom will remind the founder, as 'HH:MM'. */
+export type Commitment = { move: MoveView; report: { due_at: string; local_time: string; time_zone: string } };
+
+/** `need_reason`: the reason was not a real one, `reply` is Axiom's line. `swapped`: `move` is the new draft. */
+export type SwapResult = { status: 'swapped'; replaced_id: string; move: MoveView } | { status: 'need_reason'; reply: string };
+
 /** One verified quote for the loading hint, with the book name only. */
 export type LoadingQuote = { book: string; quote: string };
 
@@ -189,6 +220,12 @@ export interface AxiomApi {
   sendLearnTurn(learnId: string, text: string, turnId: string): Promise<Screened<LearnReply>>;
   /** The founder tapped suggestion `index` under Axiom's turn `turnId`. Axiom's own text: not screened, no founder message. */
   tapFollowUp(learnId: string, turnId: string, index: number): Promise<LearnReply>;
+  /** The move behind a Learn conversation's card. Asking again returns the same move. */
+  openMove(learnId: string): Promise<MoveView>;
+  /** Commits a move and schedules its report in the phone's time zone (`timezone`, IANA). Safe to send again. */
+  commitMove(moveId: string, timezone: string): Promise<Commitment>;
+  /** Changes a move once, with the founder's reason. Screened first. Sending the same swap again returns the new move. */
+  swapMove(moveId: string, reason: string): Promise<Screened<SwapResult>>;
   /** One verified quote and its book while an answer is on its way, or null when nothing fits. Never throws for the screen. */
   getLoadingHint(seed: string): Promise<LoadingQuote | null>;
 }

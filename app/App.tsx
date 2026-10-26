@@ -15,6 +15,7 @@ import { loadReading } from './src/onboarding/reading';
 import { LINE_EVERY, waitLines, waitMinMs } from './src/onboarding/waitLines';
 import { CareScreen } from './src/screens/CareScreen';
 import { LearnScreen } from './src/screens/LearnScreen';
+import { MoveScreen } from './src/screens/MoveScreen';
 import { QuestionsScreen } from './src/screens/QuestionsScreen';
 import { ReadingScreen } from './src/screens/ReadingScreen';
 import { ReadScreen } from './src/screens/ReadScreen';
@@ -31,7 +32,7 @@ type Stage =
   | { name: 'situation'; chat: Chat; opening: string; suggestion?: string }
   | { name: 'read'; situationId: string }
   | { name: 'learn'; situationId: string; chat: LearnChat }
-  | { name: 'move'; learnId: string }
+  | { name: 'move'; learnId: string; back: Stage }
   | { name: 'care'; message: string; help: HelpLine[]; back: Stage };
 
 const run = (anim: Animated.CompositeAnimation) => new Promise<void>((resolve) => anim.start(() => resolve()));
@@ -142,12 +143,20 @@ export default function App() {
                 send={(id, text, turnId) => api.sendLearnTurn(id, text, turnId)}
                 tap={(id, turnId, index) => api.tapFollowUp(id, turnId, index)}
                 loadHint={(seed) => api.getLoadingHint(seed)}
-                onOpenMove={(learnId) => goTo({ name: 'move', learnId })}
+                onOpenMove={(learnId) => goTo({ name: 'move', learnId, back: stageRef.current })}
                 onCare={showCare}
               />
             )}
-            {/* The Move sheet is built separately; until then the card leads to an empty stage. */}
-            {stage.name === 'move' && <View style={styles.flex} />}
+            {stage.name === 'move' && (
+              <MoveScreen
+                open={() => api.openMove(stage.learnId)}
+                commit={(id, timezone) => api.commitMove(id, timezone)}
+                swap={(id, reason) => api.swapMove(id, reason)}
+                loadHint={(seed) => api.getLoadingHint(seed)}
+                onClose={() => goTo(stage.back)}
+                onCare={showCare}
+              />
+            )}
             {stage.name === 'reading' && <ReadingScreen reading={stage.reading} onContinue={() => beginSituation(false)} />}
           </Animated.View>
         </View>
