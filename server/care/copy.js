@@ -5,12 +5,15 @@
 
 export const CARE_COPY = Object.freeze({
   // Care screen: shown when the text is clear distress or explicit words.
-  clearMessage:
-    'What you wrote matters more than anything we were working on, so I have stopped there. '
-    + 'If you are in danger or might act on these thoughts, call your local emergency number now. '
-    + 'You do not have to be sure it is serious enough. '
-    + 'I am an assistant, not a counsellor, and a person can help in ways I cannot. '
-    + 'I am here if you want to keep talking.',
+  // Paragraphs separated by a blank line. The first is the heading; the app shows
+  // the help block after the third paragraph, then the rest. The app holds no care words.
+  clearMessage: [
+    'What you just wrote matters more than the business.',
+    "I'm not going to give you a lesson or a move right now.",
+    "If you might hurt yourself, or you're in danger, please call your local emergency number now.",
+    "If you can, tell someone near you how you're feeling. You don't have to be okay for me to be here.",
+    "I'm an assistant, not a counsellor. But I'm here if you want to keep talking.",
+  ].join('\n\n'),
 
   // Unclear: one soft question. No lesson, no move, no model-written text.
   unclearReply:

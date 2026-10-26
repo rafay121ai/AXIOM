@@ -414,8 +414,21 @@ test('care copy has no emoji or exclamation marks', () => {
   }
 })
 
+// The one approved sentence that tells the founder there is no lesson or move is allowed.
+const NO_LESSON_LINE = "I'm not going to give you a lesson or a move right now."
+
 test('care copy never mentions lessons, moves or reports', () => {
-  for (const [key, value] of Object.entries(CARE_COPY)) {
+  for (const [key, raw] of Object.entries(CARE_COPY)) {
+    const value = raw.replace(NO_LESSON_LINE, '')
     assert.ok(!/\b(lesson|move|report|streak|goal)s?\b/i.test(value), `${key} mentions the journey`)
   }
+})
+
+test('clear message is a heading plus body paragraphs, in the approved order', () => {
+  const paras = CARE_COPY.clearMessage.split('\n\n')
+  assert.equal(paras.length, 5)
+  assert.equal(paras[0], 'What you just wrote matters more than the business.')
+  assert.equal(paras[1], NO_LESSON_LINE)
+  assert.ok(paras[3].startsWith('If you can, tell someone near you'))
+  assert.equal(paras[4], "I'm an assistant, not a counsellor. But I'm here if you want to keep talking.")
 })
