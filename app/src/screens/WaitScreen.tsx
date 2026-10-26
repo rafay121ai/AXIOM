@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
 import { Logo } from '../components/Logo';
+import { LINE_EVERY } from '../onboarding/waitLines';
 import { type } from '../theme';
 
 type Props = { lines: string[] };
 
-const EVERY = 3000;
 const FADE = 450;
 
 // The wait: the logo drawing itself and four lines written for founders.
@@ -21,7 +21,7 @@ export function WaitScreen({ lines }: Props) {
         setN(n + 1);
         Animated.timing(opacity, { toValue: 1, duration: FADE, useNativeDriver: true }).start();
       });
-    }, EVERY);
+    }, LINE_EVERY);
     return () => clearTimeout(id);
   }, [n, lines.length, opacity]);
 

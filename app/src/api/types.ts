@@ -91,6 +91,9 @@ export type CareUnclear = { care: 'unclear'; reply: string };
 /** Every text the founder sends is screened first. No `care` field means carry on. */
 export type Screened<T = object> = (T & { care?: undefined }) | CareClear | CareUnclear;
 
+/** The first reading, written from the sign-up answers. At most 2 underlines, each a phrase that is in the body. */
+export type FirstReading = { headline: string; body: string; underlines: string[] };
+
 export interface AxiomApi {
   /** Starts Google sign-in. Resolves when the founder is signed in. */
   signInWithGoogle(): Promise<void>;
@@ -98,6 +101,8 @@ export interface AxiomApi {
   getQuestions(): Promise<Question[]>;
   /** Saves one answer as soon as it is given, so an interrupted founder can resume. Typed answers are screened. */
   saveAnswer(key: string, answer: Answer): Promise<Screened>;
+  /** The first reading. Resolves once every saved answer has reached the server and the reading is written. */
+  getFirstReading(): Promise<FirstReading>;
   /** Sends something the founder typed. Screened before anything else happens. */
   sendMessage(text: string): Promise<Screened>;
 }

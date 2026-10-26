@@ -4,13 +4,15 @@ import { Animated, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { api } from './src/api';
-import type { Answer, HelpLine, Question, Screened } from './src/api/types';
+import type { Answer, FirstReading, HelpLine, Question, Screened } from './src/api/types';
 import { routeScreened } from './src/care/route';
 import { AxiomMessage } from './src/components/AxiomMessage';
 import { Glow } from './src/components/Glow';
-import { waitLines } from './src/onboarding/waitLines';
+import { loadReading } from './src/onboarding/reading';
+import { LINE_EVERY, waitLines, waitMinMs } from './src/onboarding/waitLines';
 import { CareScreen } from './src/screens/CareScreen';
 import { QuestionsScreen } from './src/screens/QuestionsScreen';
+import { ReadingScreen } from './src/screens/ReadingScreen';
 import { SignInScreen } from './src/screens/SignInScreen';
 import { WaitScreen } from './src/screens/WaitScreen';
 import { colors, motion, serifFiles, space } from './src/theme';
@@ -19,6 +21,8 @@ type Stage =
   | { name: 'signin' }
   | { name: 'questions'; questions: Question[] }
   | { name: 'wait'; lines: string[] }
+  | { name: 'reading'; reading: FirstReading }
+  | { name: 'situation' }
   | { name: 'care'; message: string; help: HelpLine[]; back: Stage };
 
 const run = (anim: Animated.CompositeAnimation) => new Promise<void>((resolve) => anim.start(() => resolve()));
@@ -68,7 +72,10 @@ export default function App() {
   }, [goTo]);
 
   const finish = useCallback((answers: Record<string, Answer>) => {
-    goTo({ name: 'wait', lines: waitLines((answers.building as string | undefined) ?? '') });
+    const lines = waitLines((answers.building as string | undefined) ?? '');
+    goTo({ name: 'wait', lines });
+    loadReading(() => api.getFirstReading(), { minMs: waitMinMs(lines), retryMs: LINE_EVERY })
+      .then((reading) => goTo({ name: 'reading', reading }));
   }, [goTo]);
 
   if (!fontsReady) return <View style={styles.page} />;
@@ -88,6 +95,7 @@ export default function App() {
             )}
             {soft && stage.name !== 'care' && <View style={styles.soft}><AxiomMessage text={soft} /></View>}
             {stage.name === 'wait' && <WaitScreen lines={stage.lines} />}
+            {stage.name === 'reading' && <ReadingScreen reading={stage.reading} onContinue={() => goTo({ name: 'situation' })} />}
           </Animated.View>
         </View>
       </View>

@@ -48,6 +48,8 @@ export const type = {
   legal: { fontFamily: fonts.sans, fontSize: 11.5, lineHeight: 18, color: ink(0.42) },
   careHead: { fontFamily: fonts.serifMedium, fontSize: 25, lineHeight: 32.5, color: '#f1f1ef' },
   care: { fontFamily: fonts.serif, fontSize: 17.5, lineHeight: 27, color: colors.body },
+  readingHead: { fontFamily: fonts.serifMedium, fontSize: 25, lineHeight: 32.5, color: colors.inkBright },
+  reading: { fontFamily: fonts.serif, fontSize: 19.5, lineHeight: 28.5, letterSpacing: -0.04, color: ink(0.96) },
   waitLine: { fontFamily: fonts.serif, fontSize: 21, lineHeight: 31.5, color: ink(0.85), textAlign: 'center' as const },
 };
 

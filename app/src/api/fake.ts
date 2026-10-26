@@ -1,4 +1,4 @@
-import type { AxiomApi, Question, Screened } from './types';
+import type { AxiomApi, FirstReading, Question, Screened } from './types';
 
 // Fixture questions, word for word from tasks/design/mock-onboarding-v2.html.
 const QUESTIONS: Question[] = [
@@ -36,6 +36,19 @@ const QUESTIONS: Question[] = [
     placeholder: 'The thing I keep avoiding is…', minLength: 20, shortHint: 'A little more, so Axiom has something real to work with.' },
 ];
 
+// Fixture first reading, from the sample answers in the mock (every quote is the sample founder's own words).
+const READING: FirstReading = {
+  headline: 'You keep building when you should be asking.',
+  body: [
+    'You have spent 6 to 12 months on “A scheduling tool for dental clinics”, evenings and weekends. Nobody pays yet.',
+    'You wrote “I keep adding features instead of showing it to clinics”, and the thing you said you avoid most is talking to customers.',
+    'That is one problem told twice: you keep doing the work nobody can say no to.',
+    'You want your first customer in 3 months.',
+    'We begin with the last time you put it in front of someone.',
+  ].join(' '),
+  underlines: ['I keep adding features instead of showing it to clinics', 'talking to customers'],
+};
+
 // What the fake screening returns, so each route can be seen: 'none' carries on.
 export type CareSim = 'none' | 'clear' | 'unclear';
 
@@ -65,6 +78,9 @@ export function createFakeApi(sim: CareSim = 'none'): AxiomApi {
       return QUESTIONS;
     },
     saveAnswer: screen,
+    async getFirstReading() {
+      return READING;
+    },
     sendMessage: screen,
   };
 }

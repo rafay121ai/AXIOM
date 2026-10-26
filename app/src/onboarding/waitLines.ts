@@ -19,3 +19,10 @@ export function waitLines(building: string): string[] {
     'Checking what you have already tried, so I do not hand it back to you.',
   ];
 }
+
+/** How long each line stays before the next, and how long the last stays: from the mock. */
+export const LINE_EVERY = 3000;
+const LAST_HOLD = 3200;
+
+/** The least time the wait is shown, so every line is read. */
+export const waitMinMs = (lines: string[]) => (lines.length - 1) * LINE_EVERY + LAST_HOLD;
