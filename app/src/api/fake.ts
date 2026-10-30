@@ -380,7 +380,7 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
       return move;
     },
     async commitMove(moveId, timezone): Promise<Commitment> {
-      if (moveId !== move.id) throw new HttpError(404, 'Not found');
+      if (moveId !== move.id) throw new HttpError(404);
       if (move.status !== 'committed') {
         move = { ...move, status: 'committed', committed_at: '2026-10-26T09:05:00.000Z', report_time_local: FAKE_REPORT_TIME, time_zone: timezone };
       }
@@ -390,7 +390,7 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
       const flagged = await screen();
       if (flagged.care) return flagged;
       if (swapped && moveId === FAKE_MOVE.id) return swapped;
-      if (moveId !== move.id) throw new HttpError(404, 'Not found');
+      if (moveId !== move.id) throw new HttpError(404);
       if (!move.can_swap) throw new HttpError(409, 'swap_used');
       if (!isReal(reason)) return { status: 'need_reason', reply: NEED_REASON };
       swapped = { status: 'swapped', replaced_id: move.id, move: FAKE_SWAPPED };
@@ -401,14 +401,14 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
       return FAKE_HINT;
     },
     async getMove(moveId) {
-      if (moveId !== move.id) throw new HttpError(404, 'Not found');
+      if (moveId !== move.id) throw new HttpError(404);
       return move;
     },
     async getDueReports() {
       return (homeState === 'evening' || homeState === 'report') && !reported ? [FAKE_DUE] : [];
     },
     async sendReport(moveId, outcome, note): Promise<Screened<ReportResult>> {
-      if (moveId !== FAKE_DUE.move_id) throw new HttpError(404, 'Not found');
+      if (moveId !== FAKE_DUE.move_id) throw new HttpError(404);
       if (reported) return reported;
       const flagged = await screen();
       if (flagged.care) return flagged;
@@ -449,7 +449,7 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
     },
     async getHistoryPage(id): Promise<HistoryPage> {
       const h = HISTORY.find((x) => x.row.id === id);
-      if (!h) throw new HttpError(404, 'Not found');
+      if (!h) throw new HttpError(404);
       const [kind, label] = HISTORY_ACTION[h.row.status];
       return { ...h.page, id, title: h.row.title, status: h.row.status, status_label: h.row.status_label, action: { kind, label, target: { stage: h.row.status === 'open' ? 'move' : 'learn', situation_id: id } } };
     },
@@ -459,7 +459,7 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
     async updateSettings(patch) {
       const { share_automatically, keep_items, mentor_style, ...reminders } = patch;
       const next: Settings = { ...settings, reminders: { ...settings.reminders, ...reminders } };
-      if (inQuiet(next.reminders.checkin_time, next.reminders.quiet_hours)) throw new HttpError(400, 'checkin_time falls inside quiet hours');
+      if (inQuiet(next.reminders.checkin_time, next.reminders.quiet_hours)) throw new HttpError(400, 'quiet_hours_clash');
       if (keep_items !== undefined) next.keep_items = keep_items;
       if (mentor_style) next.mentor_style = mentor_style;
       if (share_automatically !== undefined) next.privacy = { share_automatically, text: share_automatically ? SHARE_TEXT.on : SHARE_TEXT.off };

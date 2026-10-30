@@ -45,7 +45,7 @@ export function HomeScreen({ load, checkIn, onLoaded, onStart, onOpen, onPast, o
   const [home, setHome] = useState<Home | null>(null);
   const [failure, setFailure] = useState<{ text: string; canRetry: boolean } | null>(null);
   const [soft, setSoft] = useState<string | null>(null);
-  const [notOpened, setNotOpened] = useState(false);
+  const [notOpened, setNotOpened] = useState<string | null>(null);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [offline, setOffline] = useState(false);
@@ -64,8 +64,8 @@ export function HomeScreen({ load, checkIn, onLoaded, onStart, onOpen, onPast, o
       const h = await sendUntilDelivered(() => latest.current.load(), { cancelled: () => !live.current });
       if (!live.current) return;
       setHome(h);
-      setNotOpened(false);
-      await (async () => latest.current.onLoaded(h))().catch(() => { if (live.current) setNotOpened(true); });
+      setNotOpened(null);
+      await (async () => latest.current.onLoaded(h))().catch((e) => { if (live.current) setNotOpened(failureLine(e, 'open').text); });
     } catch (e) {
       if (live.current) setFailure(failureLine(e, 'read'));
     }
@@ -90,12 +90,12 @@ export function HomeScreen({ load, checkIn, onLoaded, onStart, onOpen, onPast, o
   }
 
   async function open(target: Target) {
-    setNotOpened(false);
+    setNotOpened(null);
     setDrawerOpen(false);
     try {
       await onOpen(target);
-    } catch {
-      if (live.current) setNotOpened(true);
+    } catch (e) {
+      if (live.current) setNotOpened(failureLine(e, 'open').text);
     }
   }
 
@@ -167,7 +167,7 @@ export function HomeScreen({ load, checkIn, onLoaded, onStart, onOpen, onPast, o
             {home && (
               <Fade key={soft ?? home.greeting.text} duration={1100}>
                 <Text accessibilityLiveRegion="polite" style={[styles.greeting, soft !== null && styles.soft]}>{soft ?? home.greeting.text}</Text>
-                {notOpened && <Text style={styles.notOpened}>{copy.home.couldNotOpen}</Text>}
+                {notOpened && <Text style={styles.notOpened}>{notOpened}</Text>}
               </Fade>
             )}
           </View>

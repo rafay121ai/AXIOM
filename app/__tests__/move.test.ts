@@ -24,14 +24,19 @@ describe('move calls', () => {
   });
 
   it('say the server line for a full house and never offer a retry', async () => {
-    const api = createHttpApi({ baseUrl: 'http://x', auth, fetch: jest.fn().mockResolvedValue(json(409, { error: 'move_cap', message: 'x', moves: [] })) });
+    const api = createHttpApi({ baseUrl: 'http://x', auth, fetch: jest.fn().mockResolvedValue(json(409, { error: 'move_cap', code: 'move_cap', message: 'You have 3 moves open. Tell me first.', moves: [] })) });
     const e = await api.openMove('l1').catch((err) => err);
     expect(e).toBeInstanceOf(HttpError);
-    expect(failureLine(e, 'read')).toEqual({ text: copy.move.noRoom, canRetry: false });
+    expect(failureLine(e, 'read')).toEqual({ text: 'You have 3 moves open. Tell me first.', canRetry: false });
+  });
+
+  it('never write the number of moves themselves when the server sends no line', () => {
+    expect(copy.move.noRoom).not.toMatch(/\d/);
+    expect(failureLine(new HttpError(409, 'move_cap'))).toEqual({ text: copy.move.noRoom, canRetry: false });
   });
 
   it('say the swap is used and never offer a retry', async () => {
-    const api = createHttpApi({ baseUrl: 'http://x', auth, fetch: jest.fn().mockResolvedValue(json(409, { error: 'swap_used' })) });
+    const api = createHttpApi({ baseUrl: 'http://x', auth, fetch: jest.fn().mockResolvedValue(json(409, { error: 'swap_used', code: 'swap_used', message: 'You have changed this move once already.' })) });
     const e = await api.swapMove('m1', 'no email').catch((err) => err);
     expect(failureLine(e)).toEqual({ text: copy.move.swapUsed, canRetry: false });
   });

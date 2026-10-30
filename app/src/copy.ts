@@ -1,4 +1,4 @@
-import { isDailyLimit, isMoveCap, isSwapUsed } from './api/queue';
+import { HttpError } from './api/queue';
 
 // The words the app itself says in the Situation, Read, Learn, Move and Report screens. Everything else Axiom says comes
 // from the server. Source for each line: tasks/design/mock-onboarding-v2.html, mock-states-v1.html,
@@ -52,8 +52,8 @@ export const copy = {
     // mock-states-v1.html, section 4: said once, after the phone's own permission box was refused.
     remindersOff: "Reminders are off on your phone. I'll keep tonight's check-in waiting on your home screen.",
     phoneSettings: 'Turn on in phone settings',
-    // NEEDS APPROVAL: the server's own line when both places are taken (server/journey/move/room.js NO_ROOM_LINE), shown as it is.
-    noRoom: 'You have 2 moves open. Tell me how one of them went first, then I will give you the next.',
+    // NEEDS APPROVAL: used only if the server sends no line of its own with "no room" (it sends NO_ROOM_LINE, which names the limit).
+    noRoom: 'You have no room for another move. Tell me how one of them went first, then I will give you the next.',
     // NEEDS APPROVAL: the server's own line when the one change is used up (moveService.js), shown as it is.
     swapUsed: 'You have changed this move once already.',
   },
@@ -166,10 +166,42 @@ export const copy = {
   dailyLimit: 'That is the limit for new situations today. Pick one that is still open.',
 } as const;
 
-/** What to say when a send fails for a reason other than no connection, and whether trying again can help. */
-export function failureLine(e: unknown, whatFailed: 'message' | 'read' = 'message'): { text: string; canRetry: boolean } {
-  if (isDailyLimit(e)) return { text: copy.dailyLimit, canRetry: false };
-  if (isMoveCap(e)) return { text: copy.move.noRoom, canRetry: false };
-  if (isSwapUsed(e)) return { text: copy.move.swapUsed, canRetry: false };
-  return { text: whatFailed === 'read' ? copy.couldNotRead : copy.couldNotAnswer, canRetry: true };
+type Line = { text: string; canRetry: boolean };
+
+// NEEDS APPROVAL: every line below is new (no mock has them). One per stable error code the server sends. A "moment"
+// line is for a step the server is still finishing, so trying again can work; the rest will not change by waiting.
+const BY_CODE: Record<string, Line> = {
+  daily_limit: { text: copy.dailyLimit, canRetry: false },
+  swap_used: { text: copy.move.swapUsed, canRetry: false },
+  move_not_ready: { text: 'Your move is not ready yet. Try again in a moment.', canRetry: true },
+  move_changing: { text: 'I am still changing this move. Try again in a moment.', canRetry: true },
+  move_not_committable: { text: 'You already started this move.', canRetry: false },
+  move_not_changeable: { text: 'This move can no longer be changed.', canRetry: false },
+  turn_busy: { text: 'I am still on your last message. Try again in a moment.', canRetry: true },
+  report_saving: { text: 'Your check-in is still saving. Try again in a moment.', canRetry: true },
+  report_not_allowed: { text: 'This move cannot be checked in.', canRetry: false },
+  share_not_allowed: { text: 'This check-in cannot be shared.', canRetry: false },
+  read_started: { text: 'I have already read this one. Start something new for anything else.', canRetry: false },
+  read_missing: { text: 'I have not read this one yet.', canRetry: false },
+  read_unanswered: { text: 'Answer or skip the question first.', canRetry: false },
+  situation_empty: { text: 'Tell me what is going on first.', canRetry: false },
+  lesson_not_started: { text: 'This lesson has not started yet.', canRetry: false },
+  signup_unfinished: { text: 'Finish the sign-up questions first.', canRetry: false },
+  quiet_hours_clash: { text: 'That time is inside your quiet hours. Pick another.', canRetry: false },
+};
+
+/** The line for a failure that is not "no connection" (that one waits and sends by itself), and whether trying again can help. */
+export function failureLine(e: unknown, whatFailed: 'message' | 'read' | 'save' | 'open' = 'message'): Line {
+  if (e instanceof HttpError) {
+    // Both places taken: the server words it with its own limit; the app never writes the number.
+    if (e.code === 'move_cap') return { text: e.line ?? copy.move.noRoom, canRetry: false };
+    const known = e.code ? BY_CODE[e.code] : undefined;
+    if (known) return known;
+  }
+  switch (whatFailed) {
+    case 'read': return { text: copy.couldNotRead, canRetry: true };
+    case 'save': return { text: copy.settings.notSaved, canRetry: false };
+    case 'open': return { text: copy.home.couldNotOpen, canRetry: false };
+    case 'message': return { text: copy.couldNotAnswer, canRetry: true };
+  }
 }

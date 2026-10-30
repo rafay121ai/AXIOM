@@ -30,7 +30,7 @@ function Section({ label, children }: { label: string; children: React.ReactNode
 export function PastScreen({ load, onAction, onBack }: Props) {
   const [page, setPage] = useState<HistoryPage | null>(null);
   const [failure, setFailure] = useState<{ text: string; canRetry: boolean } | null>(null);
-  const [notOpened, setNotOpened] = useState(false);
+  const [notOpened, setNotOpened] = useState<string | null>(null);
   const live = useRef(true);
   const latest = useRef(load);
   latest.current = load;
@@ -90,12 +90,12 @@ export function PastScreen({ load, onAction, onBack }: Props) {
             <View style={styles.action}>
               <Pressable
                 accessibilityRole="button"
-                onPress={() => { setNotOpened(false); onAction(page.action.target).catch(() => live.current && setNotOpened(true)); }}
+                onPress={() => { setNotOpened(null); onAction(page.action.target).catch((e) => live.current && setNotOpened(failureLine(e, 'open').text)); }}
                 style={styles.actionLine}
               >
                 <Text style={styles.actionText}>{page.action.label}</Text>
               </Pressable>
-              {notOpened && <Text style={[styles.small, { marginTop: 14 }]}>{copy.home.couldNotOpen}</Text>}
+              {notOpened && <Text style={[styles.small, { marginTop: 14 }]}>{notOpened}</Text>}
             </View>
           </Fade>
         )}

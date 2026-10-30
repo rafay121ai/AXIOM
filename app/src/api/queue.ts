@@ -1,20 +1,17 @@
 import type { Answer, Screened } from './types';
 
-/** A failed request. `status` is missing when the network itself failed; `code` is the server's short error name. */
+/**
+ * A failed request. `status` is missing when the network itself failed; `code` is the server's short error name;
+ * `line` is the sentence the server wrote for the founder, when it sent one.
+ */
 export class HttpError extends Error {
-  constructor(readonly status?: number, readonly code?: string, message = `Request failed${status ? ` (${status})` : ''}`) {
-    super(message);
+  constructor(readonly status?: number, readonly code?: string, readonly line?: string) {
+    super(line ?? `Request failed${status ? ` (${status})` : ''}`);
   }
 }
 
 /** The server says today's limit is used up. Trying again changes nothing. */
 export const isDailyLimit = (e: unknown): boolean => e instanceof HttpError && e.status === 429 && e.code === 'daily_limit';
-
-/** Both move places are taken. Trying again changes nothing until one is reported. */
-export const isMoveCap = (e: unknown): boolean => e instanceof HttpError && e.status === 409 && e.code === 'move_cap';
-
-/** The move has already been changed once. */
-export const isSwapUsed = (e: unknown): boolean => e instanceof HttpError && e.status === 409 && e.code === 'swap_used';
 
 /** Worth trying again: no network, a server fault, a rate limit, or a sign-in that has just lapsed. */
 export const isRetryable = (e: unknown): boolean => {

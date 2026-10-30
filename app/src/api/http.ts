@@ -2,6 +2,8 @@ import type { Auth } from './auth';
 import { createSaveQueue, HttpError } from './queue';
 import type { AccountRequest, AxiomApi, Commitment, ConsentResult, DueReport, FirstReading, HistoryPage, HistoryRow, Home, LearnReply, LoadingQuote, MoveView, Read, ReadAnswerResult, ReportResult, Screened, Settings, Signup, SituationReply, Story, SwapResult } from './types';
 
+const CODE_NAME = /^[a-z]+(_[a-z]+)*$/;
+
 type Options = { baseUrl: string; auth: Auth; fetch?: typeof fetch };
 
 // The real client. Care-screened routes answer 200 with a `care` field; anything else is carry on.
@@ -15,8 +17,10 @@ export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch
       throw new HttpError();
     });
     if (!res.ok) {
-      const body = (await res.json().catch(() => ({}))) as { error?: unknown };
-      throw new HttpError(res.status, typeof body?.error === 'string' ? body.error : undefined);
+      const body = (await res.json().catch(() => ({}))) as { code?: unknown; error?: unknown; message?: unknown };
+      // Every refusal the app acts on carries `code`; the daily limit names itself in `error`.
+      const code = typeof body?.code === 'string' ? body.code : typeof body?.error === 'string' && CODE_NAME.test(body.error) ? body.error : undefined;
+      throw new HttpError(res.status, code, typeof body?.message === 'string' ? body.message : undefined);
     }
     return res.json() as Promise<T>;
   }

@@ -96,10 +96,10 @@ export function SettingsScreen({ load, save, requestExport, requestDelete, onEdi
     try {
       const saved = await sendUntilDelivered(() => save(patch), { cancelled: () => !live.current });
       if (live.current) setS(saved);
-    } catch {
+    } catch (e) {
       if (!live.current) return;
       setS(before);
-      setFailure({ text: copy.settings.notSaved, canRetry: false });
+      setFailure(failureLine(e, 'save'));
     }
   }
 
