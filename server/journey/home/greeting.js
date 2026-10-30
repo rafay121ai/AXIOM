@@ -30,9 +30,12 @@ export function daysTo(deadline, nowMs) {
   return Math.ceil((end - nowMs) / DAY_MS)
 }
 
-const fill = (text, vars) => text
-  .replace(', {name}', vars.name ? `, ${vars.name}` : '')
-  .replace(/\{(\w+)\}/g, (_, k) => vars[k])
+// Fills every {placeholder} in one pass, so text put in (a name, a goal) is
+// never read as a placeholder itself. With no name, ", {name}" is dropped.
+export const fillGreeting = (text, vars) => text.replace(/(, )?\{(\w+)\}/g, (_, comma = '', k) => {
+  const value = vars[k]
+  return value === null || value === undefined || value === '' ? (k === 'name' ? '' : comma) : `${comma}${value}`
+})
 
 // Returns { id, kind, text }. lastId: the id of the greeting shown last time.
 export function pickGreeting({ nowMs, timeZone = null, name = null, goal = null, deadline = null, lastId = null }) {
@@ -51,5 +54,5 @@ export function pickGreeting({ nowMs, timeZone = null, name = null, goal = null,
   const fresh = pool.filter((g) => g.id !== lastId)
   const options = fresh.length ? fresh : pool
   const chosen = options[Math.floor(nowMs / DAY_MS) % options.length]
-  return { id: chosen.id, kind, text: fill(chosen.text, vars) }
+  return { id: chosen.id, kind, text: fillGreeting(chosen.text, vars) }
 }

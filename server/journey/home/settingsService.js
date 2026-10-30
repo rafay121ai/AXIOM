@@ -2,7 +2,7 @@
 // Reminders and "share with other founders" keep their own rules and their own
 // routes (push/settings.js, report/sharing.js); this reads and saves them
 // together. Everything is validated before anything is written.
-import { cleanReminderSettings, createReminderSettings, saveOwnRow } from '../../push/settings.js'
+import { cleanReminderSettings, createReminderSettings, writeSettingsPlan } from '../../push/settings.js'
 import { cleanFirstName } from '../../writeValidation.js'
 import { validTimeZone } from '../move/schedule.js'
 import { createSignupStore } from '../signup.js'
@@ -67,20 +67,20 @@ export function createSettings({ supabase, clock, links = {} }) {
   }
 
   // value: the result of cleanSettings. Returns { value: the page } or { error }.
+  // Every check (sign-up finished, check-in time outside quiet hours) runs
+  // before the first write, so a refused change writes nothing.
   async function update({ user, value: { own, reminders: reminderPatch } }) {
     if ('timezone' in own) {
-      const timezone = new Intl.DateTimeFormat('en-US', { timeZone: own.timezone }).resolvedOptions().timeZone
-      const done = await one(supabase.from('founder_profiles').update({ timezone, updated_at: iso() }).eq('user_id', user.id).select('user_id'))
-      if (done.length === 0) return fail('Finish sign-up first.')
+      const profile = await one(supabase.from('founder_profiles').select('user_id').eq('user_id', user.id).maybeSingle())
+      if (!profile) return fail('Finish sign-up first.')
     }
-    if (reminderPatch) {
-      const done = await reminders.update(user.id, reminderPatch) // refuses a check-in time inside quiet hours before writing
-      if (done.error) return done
-    }
-    const fields = {}
-    if ('mentor_style' in own) fields.mentor_style = own.mentor_style
-    if ('keep_items' in own) fields.keep_items = own.keep_items
-    if (Object.keys(fields).length > 0) await saveOwnRow(supabase, 'user_settings', user.id, { ...fields, updated_at: iso() })
+    const planned = reminderPatch ? await reminders.plan(user.id, reminderPatch) : { profile: {}, settings: {} }
+    if (planned.error) return planned
+
+    if ('timezone' in own) planned.profile.timezone = new Intl.DateTimeFormat('en-US', { timeZone: own.timezone }).resolvedOptions().timeZone
+    if ('mentor_style' in own) planned.settings.mentor_style = own.mentor_style
+    if ('keep_items' in own) planned.settings.keep_items = own.keep_items
+    await writeSettingsPlan(supabase, user.id, planned, iso())
     if ('name' in own) {
       const first_name = cleanFirstName(own.name)
       const done = await one(supabase.from('users').update({ first_name }).eq('id', user.id).select('id'))

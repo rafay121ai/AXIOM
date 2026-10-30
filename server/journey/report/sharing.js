@@ -43,8 +43,10 @@ export function createSharing({ supabase, clock, db = createShareDb({ supabase, 
     return row?.share_auto === true
   }
 
+  // The consent row is written first: if it cannot be, the setting is not changed.
   async function setShareAuto(userId, on) {
     if ((await shareAuto(userId)) === on) return on
+    await logConsent({ userId, action: on ? 'auto_share_on' : 'auto_share_off', wordingVersion: SHARE_AUTO_VERSION })
     const fields = { share_auto: on, updated_at: iso() }
     const updated = await one(supabase.from('user_settings').update(fields).eq('user_id', userId).select('user_id'))
     if (updated.length === 0) {
@@ -52,7 +54,6 @@ export function createSharing({ supabase, clock, db = createShareDb({ supabase, 
       if (inserted.error?.code === '23505') await one(supabase.from('user_settings').update(fields).eq('user_id', userId).select('user_id'))
       else if (inserted.error) throw inserted.error
     }
-    await logConsent({ userId, action: on ? 'auto_share_on' : 'auto_share_off', wordingVersion: SHARE_AUTO_VERSION })
     return on
   }
 

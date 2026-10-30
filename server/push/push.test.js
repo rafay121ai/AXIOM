@@ -8,6 +8,7 @@ import { composePush, HIDDEN_BODY, LOCK_SCREEN_MODES, PUSH_WORDING } from './com
 import { duePushes } from './due.js'
 import { createPushScheduler } from './scheduler.js'
 import { cleanTokenPayload, EXPO_TOKEN_RX } from './tokens.js'
+import { founderFirstName } from '../journey/home/name.js'
 import { createExpoSender } from './expoSender.js'
 
 const USER = { id: '11111111-1111-4111-8111-111111111111', email: 'founder@example.com' }
@@ -45,35 +46,23 @@ const seed = ({ moves = [move()], tokens = [{ id: uuid(1), token: TOKEN, user_id
   notification_log: [],
 })
 
-// The real database keeps (user_id, dedupe_key) unique in notification_log
-// and token unique in push_tokens. The in-memory fake does not, so this does.
-const UNIQUE = { notification_log: ['user_id', 'dedupe_key'], push_tokens: ['token'], user_settings: ['user_id'], founder_profiles: ['user_id'] }
-function withKeys(base) {
-  return {
-    ...base,
-    from(table) {
-      const b = base.from(table)
-      let payload = null
-      const { insert, then } = b
-      b.insert = (p) => { payload = p; insert(p); return b }
-      b.then = (resolve, reject) => {
-        const cols = UNIQUE[table]
-        if (payload && cols && base.rows(table).some((r) => cols.every((c) => r[c] === payload[c]))) {
-          return Promise.resolve({ data: null, error: { code: '23505', message: 'duplicate key' } }).then(resolve, reject)
-        }
-        return then(resolve, reject)
-      }
-      return b
-    },
-  }
+// The database's unique indexes (schema_needs.md), enforced by the fake:
+// one row per push, and one counting row per founder, local day and slot.
+const COUNTING = (r) => r.status === 'sending' || r.status === 'sent'
+const UNIQUE = {
+  notification_log: [{ cols: ['user_id', 'dedupe_key'] }, { cols: ['user_id', 'local_day', 'slot'], where: COUNTING }],
+  push_tokens: [{ cols: ['token'] }],
+  user_settings: [{ cols: ['user_id'] }],
+  founder_profiles: [{ cols: ['user_id'] }],
+  account_requests: [{ cols: ['user_id', 'kind'], where: (r) => r.status === 'queued' }],
 }
 
-function schedulerSetup({ care = async () => false, respond, name = 'Rafay', start = T('2026-10-26T03:00:00Z'), ...opts } = {}) {
-  const base = createFakeSupabase({ tables: seed(opts) })
-  const supabase = withKeys(base)
+function schedulerSetup({ care = async () => false, respond, name = 'Rafay', start = T('2026-10-26T03:00:00Z'), tables = {}, maxRows, pageSize, ...opts } = {}) {
+  const base = createFakeSupabase({ tables: { ...seed(opts), ...tables }, unique: UNIQUE, maxRows })
+  const supabase = base
   const clock = createFakeClock(start)
   const sender = createFakePushSender(respond ? { respond } : undefined)
-  const make = () => createPushScheduler({ supabase, sender, clock, isCareOpen: care, nameOf: async () => name, log: () => {} })
+  const make = ({ db = supabase, at = clock } = {}) => createPushScheduler({ supabase: db, sender, clock: at, isCareOpen: care, nameOf: async () => name, log: () => {}, pageSize })
   return { base, supabase, clock, sender, scheduler: make(), make, log: () => base.rows('notification_log') }
 }
 
@@ -311,6 +300,106 @@ test('scheduler: idempotent across ticks, restarts and two schedulers at once', 
   assert.equal(s.log().length, 1)
 })
 
+// Holds the first `n` notification_log reads until all `n` have been asked,
+// so two schedulers decide from the same (stale) log before either claims.
+function withLogBarrier(base, n = 2) {
+  const waiting = []
+  let reads = 0
+  return {
+    ...base,
+    from(table) {
+      const b = base.from(table)
+      if (table !== 'notification_log') return b
+      let write = false
+      for (const m of ['insert', 'update', 'delete', 'upsert']) {
+        const original = b[m]
+        b[m] = (...args) => { write = true; original(...args); return b }
+      }
+      const { then } = b
+      b.then = (resolve, reject) => {
+        if (write || reads >= n) return then(resolve, reject)
+        reads += 1
+        const go = new Promise((r) => waiting.push(r))
+        if (waiting.length === n) waiting.forEach((r) => r())
+        return go.then(() => then(resolve, reject))
+      }
+      return b
+    },
+  }
+}
+
+const MORNING_SENT = { id: uuid(700), user_id: USER.id, kind: 'morning', dedupe_key: 'morning:2026-10-26', status: 'sent', local_day: '2026-10-26', slot: 'morning', attempts: 1, created_at: at(T('2026-10-26T03:00:00Z')) }
+const countedToday = (s) => s.log().filter((r) => r.local_day === '2026-10-26' && COUNTING(r))
+
+test('scheduler: two interleaved schedulers on one database never send a third push in a day', async () => {
+  const second = move({ id: uuid(301), title: 'Call the gym owner who asked about the trial.', learn_id: null })
+  const s = schedulerSetup({ start: DUE, moves: [move(), second], tables: { notification_log: [MORNING_SENT] } })
+  const db = withLogBarrier(s.base)
+  const [a, b] = [s.make({ db }), s.make({ db })]
+  await Promise.all([a.tick(), b.tick()])
+  assert.equal(s.sender.sent.length, 1)
+  assert.equal(countedToday(s).length, 2)
+})
+
+test('scheduler: the database slot index stops a third push the stale log would allow', async () => {
+  // A sees the first move still open; B, later, sees only the second. Both read
+  // the log before either claims, so only the (user, day, slot) index stops B.
+  const first = move({ report_due_at: at(DUE), closes_at: at(DUE + 10 * MIN) })
+  const second = move({ id: uuid(301), title: 'Call the gym owner who asked about the trial.', learn_id: null, report_due_at: at(DUE + MIN) })
+  const s = schedulerSetup({ start: DUE, moves: [first, second], tables: { notification_log: [MORNING_SENT] } })
+  const db = withLogBarrier(s.base)
+  const a = s.make({ db, at: createFakeClock(DUE + 5 * MIN) })
+  const b = s.make({ db, at: createFakeClock(DUE + 15 * MIN) })
+  await Promise.all([a.tick(), b.tick()])
+  assert.equal(s.sender.sent.length, 1)
+  assert.equal(countedToday(s).length, 2)
+  assert.deepEqual(countedToday(s).map((r) => r.slot).sort(), ['evening', 'morning'])
+})
+
+test('scheduler: a founder with a queued delete request gets no pushes', async () => {
+  const deleting = schedulerSetup({ start: DUE, tables: { account_requests: [{ id: uuid(60), user_id: USER.id, kind: 'delete', status: 'queued' }] } })
+  await deleting.scheduler.tick()
+  assert.equal(deleting.sender.sent.length, 0)
+  assert.equal(deleting.log().length, 0)
+  const exporting = schedulerSetup({ start: DUE, tables: { account_requests: [{ id: uuid(61), user_id: USER.id, kind: 'export', status: 'queued' }] } })
+  await exporting.scheduler.tick()
+  assert.equal(exporting.sender.sent.length, 1)
+})
+
+test('scheduler: queries are paged, so a row cap never drops a founder', async () => {
+  const founders = [1, 2, 3, 4, 5].map((n) => `00000000-0000-4000-8000-0000000000a${n}`)
+  const s = schedulerSetup({
+    start: DUE,
+    maxRows: 2,
+    pageSize: 2,
+    moves: founders.map((u, i) => move({ id: uuid(400 + i), user_id: u, situation_id: uuid(500 + i), learn_id: null })),
+    tokens: founders.map((u, i) => ({ id: uuid(10 + i), token: `ExponentPushToken[founder${i}abcdefgh]`, user_id: u, platform: 'ios', timezone: 'Asia/Karachi', updated_at: at(COMMITTED) })),
+  })
+  await s.scheduler.tick()
+  assert.equal(s.sender.sent.length, founders.length)
+})
+
+test('scheduler: nothing due now means no settings, care or log reads for that founder', async () => {
+  const s = schedulerSetup({ start: T('2026-10-26T08:00:00Z') }) // 1 pm in Karachi: morning over, check-in ahead
+  const read = []
+  let cared = 0
+  const db = { ...s.base, from: (t) => { read.push(t); return s.base.from(t) } }
+  const scheduler = createPushScheduler({ supabase: db, sender: s.sender, clock: s.clock, isCareOpen: async () => { cared += 1; return false }, nameOf: async () => null, log: () => {} })
+  await scheduler.tick()
+  assert.equal(s.sender.sent.length, 0)
+  assert.equal(cared, 0)
+  assert.ok(!read.includes('notification_log') && !read.includes('user_settings'), read.join(','))
+})
+
+test('scheduler: the push uses the same first name as the greeting (saved name first, then sign-in)', async () => {
+  const s = schedulerSetup({ start: DUE, tables: { users: [{ id: USER.id, first_name: 'Samira' }] } })
+  s.base.auth.admin = { getUserById: async () => ({ data: { user: { user_metadata: { given_name: 'Sam' } } }, error: null }) }
+  const scheduler = createPushScheduler({ supabase: s.base, sender: s.sender, clock: s.clock, isCareOpen: async () => false, log: () => {} })
+  await scheduler.tick()
+  assert.equal(s.sender.sent[0].body, 'Samira, how did it go?')
+  assert.equal(await founderFirstName(s.base, OTHER.id), 'Sam') // no saved name: the sign-in name
+})
+
 test('scheduler: the log row is written before the push is sent', async () => {
   let seen = null
   const s = schedulerSetup({
@@ -325,9 +414,9 @@ test('scheduler: the log row is written before the push is sent', async () => {
   assert.equal(s.log()[0].status, 'sent')
 })
 
-test('scheduler: a failed send is retried on the same row and counted once', async () => {
+test('scheduler: a send Expo clearly refused is retried on the same row and counted once', async () => {
   let fail = true
-  const s = schedulerSetup({ start: DUE, respond: () => (fail ? { ok: false, error: 'network' } : { ok: true }) })
+  const s = schedulerSetup({ start: DUE, respond: () => (fail ? { ok: false, unknown: false, error: 'MessageRateExceeded' } : { ok: true }) })
   await s.scheduler.tick()
   assert.deepEqual(s.log().map((r) => [r.status, r.attempts]), [['failed', 1]])
   fail = false
@@ -338,14 +427,32 @@ test('scheduler: a failed send is retried on the same row and counted once', asy
   assert.equal(s.sender.sent.length, 2) // one failed try, one delivery
 })
 
-test('scheduler: a sender that keeps failing gives up after 3 tries; a throw is a failure too', async () => {
-  const s = schedulerSetup({ start: DUE, respond: () => { throw new Error('boom') } })
+test('scheduler: a sender Expo keeps refusing gives up after 3 tries', async () => {
+  const s = schedulerSetup({ start: DUE, respond: () => ({ ok: false, unknown: false, error: 'InvalidCredentials' }) })
   for (let i = 0; i < 6; i += 1) {
     await s.scheduler.tick()
     s.clock.advance(MIN)
   }
   assert.equal(s.sender.sent.length, 3)
   assert.deepEqual(s.log().map((r) => [r.status, r.attempts]), [['failed', 3]])
+})
+
+test('scheduler: a timeout, network error, 5xx or throw is unknown: the row stays sending, counts, and is never resent', async () => {
+  for (const respond of [
+    () => ({ ok: false, unknown: true, error: 'timeout' }),
+    () => ({ ok: false, unknown: true, error: 'http_502' }),
+    () => { throw new Error('socket hang up') },
+  ]) {
+    const s = schedulerSetup({ start: DUE, respond })
+    const summary = await s.scheduler.tick()
+    assert.equal(summary.unknown, 1)
+    for (let i = 0; i < 5; i += 1) {
+      s.clock.advance(10 * MIN)
+      await s.scheduler.tick()
+    }
+    assert.equal(s.sender.sent.length, 1)
+    assert.deepEqual(s.log().map((r) => [r.status, r.attempts, r.local_day, r.slot]), [['sending', 1, '2026-10-26', 'evening']])
+  }
 })
 
 test('scheduler: a device Expo no longer knows is dropped', async () => {
@@ -412,8 +519,8 @@ test('scheduler: after 3 quiet days, one check on the open situation, in the fou
 // ── Tokens and settings through the API ──────────────────────────────────────
 
 async function apiSetup(tables = {}) {
-  const base = createFakeSupabase({ users: { tok: USER, tok2: OTHER }, tables: { founder_profiles: [], user_settings: [], push_tokens: [], ...tables } })
-  const app = createApp({ env: ENV, supabase: withKeys(base), openai: createFakeOpenAI([]), clock: createFakeClock(DUE) })
+  const base = createFakeSupabase({ users: { tok: USER, tok2: OTHER }, tables: { founder_profiles: [], user_settings: [], push_tokens: [], ...tables }, unique: UNIQUE })
+  const app = createApp({ env: ENV, supabase: base, openai: createFakeOpenAI([]), clock: createFakeClock(DUE) })
   const server = app.listen(0)
   await new Promise((r) => server.once('listening', r))
   const url = `http://127.0.0.1:${server.address().port}`
@@ -470,7 +577,7 @@ test('push token routes: auth, validation, one row per device, ownership', async
 })
 
 test('reminder settings: defaults, partial updates, validation', async () => {
-  const { call, callAnon, rows, close } = await apiSetup()
+  const { call, callAnon, rows, close } = await apiSetup({ founder_profiles: [{ user_id: USER.id, timezone: null, report_time_local: null }] })
   try {
     assert.equal((await callAnon('GET', '/api/settings/reminders')).status, 401)
     const first = await call('GET', '/api/settings/reminders')
@@ -507,6 +614,21 @@ test('reminder settings: defaults, partial updates, validation', async () => {
   }
 })
 
+test('reminder settings: before sign-up a check-in time is refused and nothing is written, no stub profile', async () => {
+  const { call, rows, close } = await apiSetup()
+  try {
+    const res = await call('PUT', '/api/settings/reminders', { lock_screen: 'full', checkin_time: '21:00' })
+    assert.deepEqual([res.status, res.body.error], [400, 'Finish sign-up first.'])
+    assert.equal(rows('founder_profiles').length, 0)
+    assert.equal(rows('user_settings').length, 0)
+    // Settings that live on user_settings alone still save.
+    assert.equal((await call('PUT', '/api/settings/reminders', { lock_screen: 'full' })).status, 200)
+    assert.equal(rows('founder_profiles').length, 0)
+  } finally {
+    await close()
+  }
+})
+
 // ── The real sender, against a fake fetch (nothing reaches Expo) ─────────────
 
 test('the Expo sender reads tickets and flags a device that is gone', async () => {
@@ -514,7 +636,18 @@ test('the Expo sender reads tickets and flags a device that is gone', async () =
   const okSender = createExpoSender({ fetchImpl: reply(200, { data: { status: 'ok', id: 'x' } }) })
   assert.deepEqual(await okSender.send({ to: TOKEN, body: 'b' }), { ok: true })
   const gone = createExpoSender({ fetchImpl: reply(200, { data: { status: 'error', details: { error: 'DeviceNotRegistered' } } }) })
-  assert.deepEqual(await gone.send({ to: TOKEN, body: 'b' }), { ok: false, invalidToken: true, error: 'DeviceNotRegistered' })
+  assert.deepEqual(await gone.send({ to: TOKEN, body: 'b' }), { ok: false, unknown: false, invalidToken: true, error: 'DeviceNotRegistered' })
+  // Unknown: it may have reached the phone.
   const down = createExpoSender({ fetchImpl: async () => { throw new Error('offline') } })
-  assert.deepEqual(await down.send({ to: TOKEN, body: 'b' }), { ok: false, invalidToken: false, error: 'network' })
+  assert.deepEqual(await down.send({ to: TOKEN, body: 'b' }), { ok: false, unknown: true, invalidToken: false, error: 'network' })
+  const slow = createExpoSender({ fetchImpl: async () => { throw Object.assign(new Error('t'), { name: 'TimeoutError' }) } })
+  assert.equal((await slow.send({ to: TOKEN, body: 'b' })).error, 'timeout')
+  assert.equal((await slow.send({ to: TOKEN, body: 'b' })).unknown, true)
+  const broken = createExpoSender({ fetchImpl: reply(503, null) })
+  assert.deepEqual(await broken.send({ to: TOKEN, body: 'b' }), { ok: false, unknown: true, invalidToken: false, error: 'http_503' })
+  const noTicket = createExpoSender({ fetchImpl: reply(200, { data: [] }) })
+  assert.equal((await noTicket.send({ to: TOKEN, body: 'b' })).unknown, true)
+  // A clear refusal: retried later.
+  const refused = createExpoSender({ fetchImpl: reply(400, { errors: [{ code: 'VALIDATION_ERROR' }] }) })
+  assert.deepEqual(await refused.send({ to: TOKEN, body: 'b' }), { ok: false, unknown: false, invalidToken: false, error: 'VALIDATION_ERROR' })
 })

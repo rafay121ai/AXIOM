@@ -10,8 +10,8 @@
 // - only for something real: a move title, or a situation title, by id;
 // - one reminder per move, only after its check-in push went out and while the
 //   report is unanswered; after that, nothing (the move closes quietly);
-// - never the same push twice (dedupe key), a failed send retried at most
-//   MAX_ATTEMPTS times on the same log row.
+// - never the same push twice (dedupe key), a send Expo clearly refused
+//   retried at most MAX_ATTEMPTS times on the same log row.
 import { LIMITS } from '../config.js'
 import { localParts, localToUtc, validTimeZone } from '../journey/move/schedule.js'
 import { normalizeReportTime } from '../writeValidation.js'
@@ -29,7 +29,9 @@ export const DEFAULT_QUIET_HOURS = Object.freeze({ start: '22:00', end: '06:00' 
 // the phone) or a send that went out. A failed send does not count.
 export const COUNTING_STATUSES = Object.freeze(['sending', 'sent'])
 
-const SLOT = Object.freeze({ morning: 'morning', quiet_check: 'morning', evening: 'evening', reminder: 'evening' })
+// The day's two places. notification_log keeps one counting row per founder,
+// local day and slot (a partial unique index), so the cap holds in the database.
+export const SLOT = Object.freeze({ morning: 'morning', quiet_check: 'morning', evening: 'evening', reminder: 'evening' })
 const SWITCH = Object.freeze({ morning: 'morning_on', quiet_check: 'morning_on', evening: 'evening_on', reminder: 'evening_on' })
 const MOVE_KINDS = new Set(['morning', 'evening', 'reminder'])
 
@@ -79,8 +81,8 @@ function isReal(kind, item) {
 // care: false only when the care lookup answered "no open event".
 // kind: one of PUSH_KINDS. item: { key, dueAt, expiresAt, moveId?, title?,
 //   reported?, situationId?, situationTitle? }
-// Returns { send: true, localDay, retry } (retry: the failed row to reuse, or
-// null) or { send: false, reason }.
+// Returns { send: true, localDay, slot, retry } (retry: the failed row to
+// reuse, or null) or { send: false, reason }.
 export function decidePush({ founder, now, log = [], care, kind, item }) {
   const no = (reason) => ({ send: false, reason })
   if (care !== false) return no('care')
@@ -108,5 +110,5 @@ export function decidePush({ founder, now, log = [], care, kind, item }) {
   const today = log.filter((r) => r.local_day === day && COUNTING_STATUSES.includes(r.status))
   if (today.length >= LIMITS.MAX_PUSH_PER_DAY) return no('cap')
   if (today.some((r) => SLOT[r.kind] === SLOT[kind])) return no('slot_used')
-  return { send: true, localDay: day, retry: prior }
+  return { send: true, localDay: day, slot: SLOT[kind], retry: prior }
 }

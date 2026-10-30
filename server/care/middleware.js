@@ -88,14 +88,16 @@ export function createCare({ supabase, callStructured, clock = { now: () => Date
     }
   }
 
-  // Closes open events once the founder has been checked in on.
+  // Closes open events once the founder has been checked in on. A failed write
+  // throws, so no caller reports the check-in done when nothing was closed.
   async function resolveCare(userId) {
     if (!supabase) return
-    await supabase
+    const { error } = await supabase
       .from('care_events')
       .update({ resolved_at: new Date(clock.now()).toISOString() })
       .eq('user_id', userId)
       .is('resolved_at', null)
+    if (error) throw error
   }
 
   // extract: (req) => string | string[] | null. Add context(req) => string[]

@@ -11,13 +11,24 @@ const one = async (query) => {
 }
 
 export function createAccount({ supabase, clock }) {
+  const waiting = (userId, kind) => one(supabase.from('account_requests').select('id, created_at')
+    .eq('user_id', userId).eq('kind', kind).eq('status', 'queued').limit(1))
+
+  // The database keeps one queued row per founder and kind; a request that
+  // races another and loses (23505) returns the one already queued.
   async function request(userId, kind) {
-    const waiting = await one(supabase.from('account_requests').select('id, created_at').eq('user_id', userId).eq('kind', kind).eq('status', 'queued').limit(1))
-    if (waiting.length > 0) return waiting[0]
-    const rows = await one(supabase.from('account_requests').insert({
+    const queued = await waiting(userId, kind)
+    if (queued.length > 0) return queued[0]
+    const inserted = await supabase.from('account_requests').insert({
       user_id: userId, kind, status: 'queued', created_at: new Date(clock.now()).toISOString(),
-    }).select('id, created_at'))
-    return rows[0]
+    }).select('id, created_at')
+    if (inserted.error?.code !== '23505') {
+      if (inserted.error) throw inserted.error
+      return inserted.data[0]
+    }
+    const [row] = await waiting(userId, kind)
+    if (!row) throw inserted.error
+    return row
   }
 
   async function requestExport(userId) {

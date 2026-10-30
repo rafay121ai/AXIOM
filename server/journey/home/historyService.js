@@ -7,6 +7,12 @@ import { HISTORY_ACTIONS, STATUS_LABELS } from './wording.js'
 import { HISTORY_MAX, loadStates, stageOf, statusOf } from './state.js'
 
 export const SEARCH_MAX = 100
+// The most matching founder turns read for one search.
+export const SEARCH_HITS_MAX = 1000
+
+// An ILIKE pattern for "contains q": \ % _ are escaped; PostgREST reads * as a
+// wildcard and cannot escape it, so * matches any one character.
+export const containsPattern = (q) => `%${q.replace(/[\\%_]/g, '\\$&').replace(/\*/g, '_')}%`
 
 const one = async (query) => {
   const { data, error } = await query
@@ -27,27 +33,28 @@ function actionOf(status, state, situationId) {
 
 export function createHistory({ supabase, clock }) {
   // A situation matches when the text is in its title, in anything the founder
-  // said in it, or in the headline of its Read.
-  async function matching(situations, needle) {
+  // said in it, or in the headline of its Read. The matching runs in the
+  // database (ILIKE, escaped), over this founder's situations only; no turn
+  // text is loaded to search it.
+  async function matching(userId, situations, q) {
     const ids = situations.map((s) => s.id)
     if (ids.length === 0) return []
-    const [turns, reads] = await Promise.all([
-      one(supabase.from('situation_turns').select('situation_id, text, role').in('situation_id', ids)),
-      one(supabase.from('reads').select('situation_id, headline').in('situation_id', ids)),
+    const pattern = containsPattern(q)
+    const [titles, turns, reads] = await Promise.all([
+      one(supabase.from('situations').select('id').eq('user_id', userId).in('id', ids).ilike('title', pattern)),
+      one(supabase.from('situation_turns').select('situation_id').in('situation_id', ids).eq('role', 'founder')
+        .ilike('text', pattern).limit(SEARCH_HITS_MAX)),
+      one(supabase.from('reads').select('situation_id').in('situation_id', ids).ilike('headline', pattern)),
     ])
-    const hit = new Set([
-      ...turns.filter((t) => t.role === 'founder'),
-      ...reads.map((r) => ({ situation_id: r.situation_id, text: r.headline })),
-    ].filter((r) => String(r.text ?? '').toLowerCase().includes(needle)).map((r) => r.situation_id))
-    return situations.filter((s) => hit.has(s.id) || (s.title ?? '').toLowerCase().includes(needle))
+    const hit = new Set([...titles.map((r) => r.id), ...turns.map((r) => r.situation_id), ...reads.map((r) => r.situation_id)])
+    return situations.filter((s) => hit.has(s.id))
   }
 
   async function list({ userId, q = '' }) {
     const nowMs = clock.now()
     const situations = await one(supabase.from('situations').select().eq('user_id', userId)
       .order('last_activity_at', { ascending: false }).limit(HISTORY_MAX))
-    const needle = q.trim().toLowerCase()
-    const shown = needle ? await matching(situations, needle) : situations
+    const shown = q.trim() ? await matching(userId, situations, q.trim()) : situations
     const states = await loadStates(supabase, userId, shown)
     return {
       items: shown.map((s) => {

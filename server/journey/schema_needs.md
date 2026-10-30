@@ -373,9 +373,21 @@ only when `EXPO_PUSH=on` (index.js).
   push is sent; a second tick or process that hits this sends nothing
 - `local_day date not null` (the founder's local date at send; the cap counts
   rows of today with status sending or sent)
-- `status text not null check (status in ('sending','sent','failed'))`
+- `slot text not null check (slot in ('morning','evening'))` (morning and
+  quiet_check take the morning slot, evening and reminder the evening slot)
+- **Partial unique index `(user_id, local_day, slot) where status in
+  ('sending','sent')`. NEEDED:** this is the 2 a day cap in the database. Two
+  schedulers deciding from the same log cannot both claim a slot: the loser
+  gets 23505, reloads the log and decides again (it sends nothing). A failed
+  row holds no slot, so its retry (an update back to 'sending') can hit the
+  index too and is then dropped the same way.
+- `status text not null check (status in ('sending','sent','failed'))`.
+  A send whose fate is unknown (timeout, network error, Expo 5xx, no ticket)
+  stays 'sending' for good: it counts for the day and is never resent. Only a
+  clear Expo refusal (4xx or an error ticket) becomes 'failed' and is retried.
 - `attempts smallint not null default 1 check (attempts between 1 and 3)`
-- `error text null` (an Expo error code only, never push text)
+- `error text null` (an Expo error code only, never push text; set on an
+  unknown send too, while the status stays 'sending')
 - `move_id uuid null references moves on delete set null`,
   `situation_id uuid null references situations on delete set null`
 - `created_at timestamptz not null`, `sent_at timestamptz null`, `updated_at timestamptz not null`
@@ -399,7 +411,25 @@ only when `EXPO_PUSH=on` (index.js).
 - Read by the scheduler: `moves (status, title, committed_at, report_due_at,
   closes_at, learn_id, time_zone)`, `learn_conversations.move_subject`,
   `situations (status, title, last_activity_at)`, `care_events` (through
-  `isCareOpen`). The scheduler writes nothing to moves or situations.
+  `isCareOpen`), `account_requests` (queued deletes: no pushes to that
+  founder), `users.first_name` (then the auth user's name, the same rule as
+  the greeting). The scheduler writes nothing to moves or situations.
+- The scheduler pages every list it reads by `id` (keyset, 500 rows a page,
+  below PostgREST's max rows), so no founder is dropped. Indexes that keep it
+  cheap: `moves (status, closes_at)`, `situations (status, last_activity_at)`,
+  `account_requests (kind, status)`. Founders with nothing due right now are
+  skipped before their settings, log or care state is read.
+- `PUT /api/settings/reminders` (and `PUT /api/settings`) checks everything
+  before writing, and only updates an existing `founder_profiles` row: a
+  check-in time or time zone before sign-up is refused ("Finish sign-up
+  first."), never a stub profile.
+
+## Future (not built): binding a push token to the signed-in session
+- Audit item 9, skipped here because it needs the app: a token registered by
+  one account keeps receiving that account's pushes until the phone registers
+  it again or signs out. Binding the token to the session (or re-registering
+  on every sign-in, and removing it on sign-out in the app) needs app work and
+  possibly an `auth_session_id` column on `push_tokens`.
 
 # Schema needs for Home, History and Settings (B9)
 
@@ -414,8 +444,16 @@ No new table. Columns added to `user_settings` (same rules as above).
 - Defaults matter: other code inserts a `user_settings` row with only the
   column it needs.
 
-Existing columns read: `users.first_name` (the name in the greeting, then the
-sign-in name), `founder_profiles (country, timezone, deadline,
+History search (`GET /api/history?q=`) runs in the database: ILIKE, with
+`\`, `%` and `_` escaped, over `situations.title`, founder
+`situation_turns.text` and `reads.headline`, only within the founder's newest
+200 situations (scoped by `user_id`). At most 1000 matching turns are read per
+search. PostgREST reads `*` as a wildcard and cannot escape it, so a `*` in the
+search matches any one character. Optional, for speed later: `pg_trgm` GIN
+indexes on those three columns.
+
+Existing columns read: `users.first_name` (the name in the greeting and in
+pushes, then the sign-in name), `founder_profiles (country, timezone, deadline,
 signup_answers)`, `push_tokens` (is any device registered), `situations`,
 `reads`, `learn_conversations`, `learn_turns.sources`, `moves`, `reports`.
 
@@ -423,6 +461,11 @@ signup_answers)`, `push_tokens` (is any device registered), `situations`,
 - `id uuid pk default gen_random_uuid()`, `user_id uuid not null references auth.users`
 - `kind text not null check (kind in ('export','delete'))`
 - `status text not null default 'queued'`, `created_at timestamptz not null`
+- **Partial unique index `(user_id, kind) where status = 'queued'`. NEEDED:**
+  one waiting request per founder and kind. Two requests at once: the loser
+  gets 23505 and returns the one already queued.
+- index `(kind, status)`: the push scheduler reads queued deletes every tick
+  and sends that founder nothing more. `GET /api/home` says nothing about it.
 - RLS on, server only. `POST /api/account/export` and `DELETE /api/account` only
   insert here (one waiting row per kind) and delete NOTHING. A deletion plan
   (what goes, what stays, the private outcome link, the order) must be written

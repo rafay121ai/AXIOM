@@ -73,36 +73,62 @@ export async function saveOwnRow(supabase, table, userId, fields) {
   else if (inserted.error) throw inserted.error
 }
 
+// What a reminder patch writes, checked against the current settings before
+// anything is saved. Pure. current: reminderSettingsOf(...). hasProfile: the
+// founder finished sign-up (the check-in time lives on founder_profiles, and
+// no stub profile is ever made here). Returns { error } or
+// { profile: fields for founder_profiles, settings: fields for user_settings }.
+export function planReminderUpdate({ current, patch, hasProfile }) {
+  const next = { ...current, ...patch }
+  // The check-in time must not fall inside quiet hours, or it could never ring.
+  if (isQuietTime(next.checkin_time, next.quiet_hours)) return fail('checkin_time falls inside quiet hours')
+  if (patch.checkin_time && !hasProfile) return fail('Finish sign-up first.')
+  const settings = {}
+  for (const k of ['morning_on', 'evening_on', 'lock_screen']) if (k in patch) settings[k] = patch[k]
+  if (patch.quiet_hours) Object.assign(settings, { quiet_start: patch.quiet_hours.start, quiet_end: patch.quiet_hours.end })
+  return { profile: patch.checkin_time ? { report_time_local: patch.checkin_time } : {}, settings }
+}
+
+// Writes a checked plan: the founder's existing profile first (it may only be
+// updated, never created), then their settings row.
+export async function writeSettingsPlan(supabase, userId, { profile, settings }, now) {
+  if (Object.keys(profile).length > 0) {
+    const done = await one(supabase.from('founder_profiles').update({ ...profile, updated_at: now }).eq('user_id', userId).select('user_id'))
+    if (done.length === 0) throw new Error('founder profile missing')
+  }
+  if (Object.keys(settings).length > 0) await saveOwnRow(supabase, 'user_settings', userId, { ...settings, updated_at: now })
+}
+
 export function createReminderSettings({ supabase, clock }) {
   const iso = () => new Date(clock.now()).toISOString()
-  const save = (table, userId, fields) => saveOwnRow(supabase, table, userId, fields)
 
-  async function load(userId) {
-    const [settingsRow, profileRow, devices] = await Promise.all([
-      one(supabase.from('user_settings').select('morning_on, evening_on, lock_screen, quiet_start, quiet_end').eq('user_id', userId).maybeSingle()),
-      one(supabase.from('founder_profiles').select('report_time_local, timezone').eq('user_id', userId).maybeSingle()),
-      one(supabase.from('push_tokens').select('id').eq('user_id', userId).limit(1)),
-    ])
-    return {
-      ...reminderSettingsOf({ settingsRow, profileRow }),
-      timezone: profileRow?.timezone ?? null,
-      push_registered: devices.length > 0,
-    }
+  const rowsOf = (userId) => Promise.all([
+    one(supabase.from('user_settings').select('morning_on, evening_on, lock_screen, quiet_start, quiet_end').eq('user_id', userId).maybeSingle()),
+    one(supabase.from('founder_profiles').select('report_time_local, timezone').eq('user_id', userId).maybeSingle()),
+    one(supabase.from('push_tokens').select('id').eq('user_id', userId).limit(1)),
+  ]).then(([settingsRow, profileRow, devices]) => ({ settingsRow, profileRow, devices }))
+
+  const view = ({ settingsRow, profileRow, devices }) => ({
+    ...reminderSettingsOf({ settingsRow, profileRow }),
+    timezone: profileRow?.timezone ?? null,
+    push_registered: devices.length > 0,
+  })
+
+  const load = async (userId) => view(await rowsOf(userId))
+
+  // patch: from cleanReminderSettings. { error } before any write, or the
+  // plan for the caller to write with others ({ profile, settings }).
+  async function plan(userId, patch) {
+    const rows = await rowsOf(userId)
+    return planReminderUpdate({ current: reminderSettingsOf(rows), patch, hasProfile: Boolean(rows.profileRow) })
   }
 
   async function update(userId, patch) {
-    const current = await load(userId)
-    const next = { ...current, ...patch }
-    // The check-in time must not fall inside quiet hours, or it could never ring.
-    if (isQuietTime(next.checkin_time, next.quiet_hours)) return fail('checkin_time falls inside quiet hours')
-    const now = iso()
-    const own = {}
-    for (const k of ['morning_on', 'evening_on', 'lock_screen']) if (k in patch) own[k] = patch[k]
-    if (patch.quiet_hours) Object.assign(own, { quiet_start: patch.quiet_hours.start, quiet_end: patch.quiet_hours.end })
-    if (Object.keys(own).length > 0) await save('user_settings', userId, { ...own, updated_at: now })
-    if (patch.checkin_time) await save('founder_profiles', userId, { report_time_local: patch.checkin_time, updated_at: now })
+    const planned = await plan(userId, patch)
+    if (planned.error) return planned
+    await writeSettingsPlan(supabase, userId, planned, iso())
     return { value: await load(userId) }
   }
 
-  return { load, update }
+  return { load, plan, update }
 }

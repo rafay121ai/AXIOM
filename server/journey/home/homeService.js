@@ -9,8 +9,8 @@ import { createMoves } from '../move/moveService.js'
 import { validTimeZone } from '../move/schedule.js'
 import { CARE_COPY } from '../../care/copy.js'
 import { saveOwnRow } from '../../push/settings.js'
-import { firstNameOf } from '../learn/learnRoutes.js'
 import { pickGreeting } from './greeting.js'
+import { founderFirstName } from './name.js'
 import { ITEM_LABELS } from './wording.js'
 import { isActiveMove, loadStates, stageOf, statusOf, HISTORY_MAX } from './state.js'
 
@@ -32,12 +32,6 @@ export function createHome({ supabase, care, callStructured, clock, log = () => 
   const moves = createMoves({ supabase, callStructured, clock, log })
   const iso = () => new Date(clock.now()).toISOString()
 
-  // The first name: the one the founder saved, else the one from sign-in.
-  async function nameOf(user) {
-    const row = await one(supabase.from('users').select('first_name').eq('id', user.id).maybeSingle())
-    return (row?.first_name && firstNameOf({ user_metadata: { given_name: row.first_name } })) || firstNameOf(user)
-  }
-
   const rememberGreeting = (userId, id) => saveOwnRow(supabase, 'user_settings', userId, { last_greeting: id, updated_at: iso() })
 
   const rowOf = (s, state, nowMs) => ({
@@ -58,7 +52,7 @@ export function createHome({ supabase, care, callStructured, clock, log = () => 
     const [profile, settings, name, devices, { moves: open }] = await Promise.all([
       one(supabase.from('founder_profiles').select('timezone, deadline, signup_answers').eq('user_id', userId).maybeSingle()),
       one(supabase.from('user_settings').select('last_greeting, keep_items').eq('user_id', userId).maybeSingle()),
-      nameOf(user),
+      founderFirstName(supabase, userId, user),
       one(supabase.from('push_tokens').select('id').eq('user_id', userId).limit(1)),
       moves.listActive({ userId }), // also settles: due moves become report_due, expired ones close
     ])

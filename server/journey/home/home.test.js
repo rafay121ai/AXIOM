@@ -5,7 +5,10 @@ import { createFakeClock, createFakeOpenAI, createFakeSupabase } from '../../tes
 import { FULL_ANSWERS } from '../fixtures.js'
 import { BANNED_PHRASES } from '../ownWords.js'
 import { CARE_COPY } from '../../care/copy.js'
-import { contextOf, daysTo, goalPhrase, pickGreeting } from './greeting.js'
+import { contextOf, daysTo, fillGreeting, goalPhrase, pickGreeting } from './greeting.js'
+import { containsPattern } from './historyService.js'
+import { createAccount } from './accountService.js'
+import { createSharing } from '../report/sharing.js'
 import { ACCOUNT_COPY, DELETION_PLAN, GREETINGS, ITEM_LABELS } from './wording.js'
 import { FADE_AFTER_MS } from './homeService.js'
 
@@ -30,9 +33,9 @@ const move = (over = {}) => ({
   committed_at: at(NOW - 8 * HOUR), report_due_at: at(NOW - HOUR), closes_at: at(NOW + 40 * HOUR), created_at: at(NOW - 9 * HOUR), ...over,
 })
 
-const seed = ({ moves = [], settings = [], tokens = [{ id: uuid(1), user_id: USER.id, token: 'ExponentPushToken[abcdefghij1234567890]' }], care = [], reports, extraSituations = [] } = {}) => ({
+const seed = ({ moves = [], settings = [], tokens = [{ id: uuid(1), user_id: USER.id, token: 'ExponentPushToken[abcdefghij1234567890]' }], care = [], reports, extraSituations = [], signedUp = true } = {}) => ({
   users: [{ id: USER.id, email: USER.email, first_name: 'Sam' }],
-  founder_profiles: [{ user_id: USER.id, signup_answers: FULL_ANSWERS, timezone: 'Asia/Karachi', country: 'Pakistan', deadline: '2027-01-26', report_time_local: null }],
+  founder_profiles: signedUp ? [{ user_id: USER.id, signup_answers: FULL_ANSWERS, timezone: 'Asia/Karachi', country: 'Pakistan', deadline: '2027-01-26', report_time_local: null }] : [],
   situations: [
     { id: SIT_DONE, user_id: USER.id, title: 'Pricing emails to clinics', status: 'open', last_activity_at: at(NOW - 3 * HOUR), created_at: at(NOW - 10 * HOUR) },
     { id: SIT_OPEN, user_id: USER.id, title: 'Hiring a first engineer', status: 'open', last_activity_at: at(NOW - 2 * DAY), created_at: at(NOW - 3 * DAY) },
@@ -59,10 +62,11 @@ const seed = ({ moves = [], settings = [], tokens = [{ id: uuid(1), user_id: USE
   outcome_author_links: [{ peer_outcome_id: uuid(900), user_id: USER.id, report_id: uuid(500), created_at: at(NOW) }],
 })
 
-async function setup(opts = {}) {
-  const base = createFakeSupabase({ users: { tok: USER, tok2: OTHER }, tables: seed(opts) })
+// wrap(base) => the supabase the app uses (to fail or watch one table).
+async function setup({ wrap = (b) => b, ...opts } = {}) {
+  const base = createFakeSupabase({ users: { tok: USER, tok2: OTHER }, tables: seed(opts), unique: UNIQUE })
   const clock = createFakeClock(NOW)
-  const app = createApp({ env: ENV, supabase: base, openai: createFakeOpenAI([]), clock })
+  const app = createApp({ env: ENV, supabase: wrap(base), openai: createFakeOpenAI([]), clock })
   const server = app.listen(0)
   await new Promise((r) => server.once('listening', r))
   const url = `http://127.0.0.1:${server.address().port}`
@@ -77,6 +81,27 @@ async function setup(opts = {}) {
   }
   return { call: as('tok'), callOther: as('tok2'), callAnon: as(null), clock, rows: (t) => base.rows(t), close: () => new Promise((r) => server.close(r)) }
 }
+
+// The database's unique indexes these routes rely on (schema_needs.md).
+const UNIQUE = {
+  user_settings: [{ cols: ['user_id'] }],
+  founder_profiles: [{ cols: ['user_id'] }],
+  account_requests: [{ cols: ['user_id', 'kind'], where: (r) => r.status === 'queued' }],
+}
+
+// A supabase whose `method` on `table` answers with a database error.
+const failing = (table, method) => (base) => ({
+  ...base,
+  from(t) {
+    const b = base.from(t)
+    if (t !== table) return b
+    b[method] = () => {
+      b.then = (resolve, reject) => Promise.resolve({ data: null, error: { code: 'XX000', message: 'db down' } }).then(resolve, reject)
+      return b
+    }
+    return b
+  },
+})
 
 // ── Greeting ─────────────────────────────────────────────────────────────────
 
@@ -352,5 +377,98 @@ test('home routes need sign-in', async () => {
     for (const [m, p] of [['GET', '/api/home'], ['POST', '/api/home/checkin'], ['GET', '/api/history'], ['GET', `/api/history/${SIT_DONE}`]]) {
       assert.equal((await callAnon(m, p, m === 'POST' ? {} : undefined)).status, 401, p)
     }
+  } finally { await close() }
+})
+
+// ── Audit fixes ──────────────────────────────────────────────────────────────
+
+test('greeting placeholders are filled in one pass; filled text is never read as a placeholder', () => {
+  assert.equal(fillGreeting('{hour} am, {name}. What is the plan?', { hour: 6, name: '{day}', day: 'Monday' }), '6 am, {day}. What is the plan?')
+  assert.equal(fillGreeting('{days} days to {goal}, {name}.', { days: 9, goal: 'your {name} list', name: 'Sam' }), '9 days to your {name} list, Sam.')
+  assert.equal(fillGreeting('Still up, {name}? Make it count.', { name: null }), 'Still up? Make it count.')
+})
+
+test('check-in: when the care event cannot be closed, the answer is an error, never ok', async () => {
+  const care = [{ id: uuid(800), user_id: USER.id, level: 'clear', scope_id: null, created_at: at(NOW - HOUR), resolved_at: null }]
+  const { call, rows, close } = await setup({ care, wrap: failing('care_events', 'update') })
+  try {
+    const res = await call('POST', '/api/home/checkin', { text: 'Better today, thanks' })
+    assert.equal(res.status, 500)
+    assert.notDeepEqual(res.body, { ok: true })
+    assert.equal(rows('care_events')[0].resolved_at, null)
+  } finally { await close() }
+})
+
+test('settings: every check runs before any write, so a refused change writes nothing', async () => {
+  const { call, rows, close } = await setup()
+  try {
+    // The time zone is fine, the check-in time falls in quiet hours: nothing changes.
+    const res = await call('PUT', '/api/settings', { timezone: 'Europe/London', mentor_style: 'calm', checkin_time: '23:30' })
+    assert.deepEqual([res.status, res.body.error], [400, 'checkin_time falls inside quiet hours'])
+    assert.equal(rows('founder_profiles')[0].timezone, 'Asia/Karachi')
+    assert.equal(rows('user_settings').length, 0)
+  } finally { await close() }
+
+  const early = await setup({ signedUp: false })
+  try {
+    for (const body of [{ keep_items: true, checkin_time: '21:00' }, { keep_items: true, timezone: 'Europe/London' }]) {
+      const res = await early.call('PUT', '/api/settings', body)
+      assert.deepEqual([res.status, res.body.error], [400, 'Finish sign-up first.'], JSON.stringify(body))
+    }
+    assert.equal(early.rows('founder_profiles').length, 0) // no stub profile before sign-up
+    assert.equal(early.rows('user_settings').length, 0)
+  } finally { await early.close() }
+})
+
+test('share automatically: the consent row is written first; if it fails the setting does not change', async () => {
+  const base = createFakeSupabase({ tables: { user_settings: [], consent_log: [] } })
+  const sharing = createSharing({ supabase: failing('consent_log', 'insert')(base), clock: createFakeClock(NOW) })
+  await assert.rejects(sharing.setShareAuto(USER.id, true))
+  assert.equal(base.rows('user_settings').length, 0)
+  assert.equal(await sharing.shareAuto(USER.id), false)
+})
+
+test('account: two delete requests at once leave one queued row and both are answered', async () => {
+  const base = createFakeSupabase({ tables: { account_requests: [] }, unique: UNIQUE })
+  const account = createAccount({ supabase: base, clock: createFakeClock(NOW) })
+  const [a, b] = await Promise.all([account.requestDelete(USER.id), account.requestDelete(USER.id)])
+  assert.deepEqual([a.status, b.status, a.requested_at], ['recorded', 'recorded', b.requested_at])
+  assert.equal(base.rows('account_requests').length, 1)
+})
+
+test('home says nothing about a queued delete request', async () => {
+  const { call, close } = await setup({ moves: [move()] })
+  try {
+    const before = (await call('GET', '/api/home')).body
+    await call('DELETE', '/api/account')
+    const after = await call('GET', '/api/home')
+    assert.deepEqual(Object.keys(after.body), Object.keys(before))
+    assert.doesNotMatch(after.text, /delet|account|request/i)
+  } finally { await close() }
+})
+
+test('history search runs in the database, escaped, over this founder only', async () => {
+  assert.equal(containsPattern('50%_off\\'), '%50\\%\\_off\\\\%')
+  assert.equal(containsPattern('a*b'), '%a_b%')
+  const searched = []
+  const watch = (base) => ({
+    ...base,
+    from(t) {
+      const b = base.from(t)
+      const { ilike } = b
+      b.ilike = (col, pattern) => { searched.push([t, col]); return ilike(col, pattern) }
+      return b
+    },
+  })
+  const { call, close } = await setup({ wrap: watch, extraSituations: [{ id: uuid(104), user_id: USER.id, title: 'Hiring a 1st engineer', status: 'open', last_activity_at: at(NOW - DAY), created_at: at(NOW - DAY) }] })
+  try {
+    assert.deepEqual((await call('GET', '/api/history?q=nobody has said')).body.items.map((i) => i.id), [SIT_DONE])
+    assert.deepEqual(searched.map(([t, c]) => `${t}.${c}`).sort(), ['reads.headline', 'situation_turns.text', 'situations.title'])
+    // _ and % are literal, not wildcards.
+    assert.deepEqual((await call('GET', '/api/history?q=1_t')).body.items, [])
+    assert.deepEqual((await call('GET', '/api/history?q=%25')).body.items, [])
+    assert.deepEqual((await call('GET', '/api/history?q=1st')).body.items.map((i) => i.id), [uuid(104)])
+    // Another founder's title never matches.
+    assert.deepEqual((await call('GET', '/api/history?q=secret plan')).body.items, [])
   } finally { await close() }
 })

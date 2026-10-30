@@ -57,16 +57,45 @@ export function createFakePushSender({ respond = () => ({ ok: true }) } = {}) {
 }
 
 // In-memory Supabase. Supports the chain the server uses:
-// from(t).select/insert/update/upsert/delete + eq/neq/gt/gte/lt/lte/in/is/not,
+// from(t).select/insert/update/upsert/delete + eq/neq/gt/gte/lt/lte/in/is/not/ilike,
 // order, limit, maybeSingle, single; awaiting the chain returns { data, error }.
 // `.or(...)` is not interpreted and is recorded as-is. auth.getUser(token)
 // resolves tokens registered with addUser.
-export function createFakeSupabase({ tables = {}, users = {}, idFactory = randomUUID } = {}) {
+// unique: { table: [{ cols: [...], where?: (row) => bool }] }, the database's
+// unique (and partial unique) indexes; an insert or update that breaks one
+// changes nothing and returns error 23505, as Postgres does. Upsert is not
+// checked. maxRows: the most rows any one response holds (PostgREST max-rows).
+export function createFakeSupabase({ tables = {}, users = {}, idFactory = randomUUID, unique = {}, maxRows = Infinity } = {}) {
   const store = new Map(Object.entries(tables).map(([name, rows]) => [name, rows.map((r) => ({ ...r }))]))
   const tokens = new Map(Object.entries(users))
   const rowsOf = (name) => {
     if (!store.has(name)) store.set(name, [])
     return store.get(name)
+  }
+  // Whether these rows, as the whole table, break a unique index of `table`.
+  const breaksUnique = (table, rows) => (unique[table] ?? []).some(({ cols, where = () => true }) => {
+    const seen = new Set()
+    for (const r of rows.filter(where)) {
+      const key = JSON.stringify(cols.map((c) => r[c] ?? null))
+      if (cols.some((c) => r[c] === null || r[c] === undefined)) continue
+      if (seen.has(key)) return true
+      seen.add(key)
+    }
+    return false
+  })
+  const duplicate = { code: '23505', message: 'duplicate key value violates unique constraint' }
+  // SQL ILIKE with backslash escapes; PostgREST also reads `*` as `%`.
+  const likeRx = (pattern) => {
+    let rx = ''
+    const p = String(pattern)
+    for (let i = 0; i < p.length; i += 1) {
+      const c = p[i]
+      if (c === '\\' && i + 1 < p.length) rx += p[++i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      else if (c === '%' || c === '*') rx += '[\\s\\S]*'
+      else if (c === '_') rx += '[\\s\\S]'
+      else rx += c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    }
+    return new RegExp(`^${rx}$`, 'i')
   }
 
   function builder(table) {
@@ -97,6 +126,7 @@ export function createFakeSupabase({ tables = {}, users = {}, idFactory = random
         case 'in': return val.includes(v)
         case 'is': return v === val
         case 'not': return !negated(v, val)
+        case 'ilike': return typeof v === 'string' && likeRx(val).test(v)
         default: return true
       }
     })
@@ -105,11 +135,13 @@ export function createFakeSupabase({ tables = {}, users = {}, idFactory = random
       const rows = rowsOf(table)
       if (action === 'insert' || action === 'upsert') {
         const inserted = [].concat(payload).map((r) => ({ id: idFactory(), ...r }))
+        if (action === 'insert' && breaksUnique(table, [...rows, ...inserted])) return { error: duplicate }
         rows.push(...inserted)
         return inserted
       }
       const hit = rows.filter(matches)
       if (action === 'update') {
+        if (breaksUnique(table, rows.map((r) => (hit.includes(r) ? { ...r, ...payload } : r)))) return { error: duplicate }
         hit.forEach((r) => Object.assign(r, payload))
         return hit
       }
@@ -133,10 +165,11 @@ export function createFakeSupabase({ tables = {}, users = {}, idFactory = random
       single() { single = 'one'; return api },
       then(resolve, reject) {
         let data = run()
+        if (data.error) return Promise.resolve({ data: null, error: data.error }).then(resolve, reject)
         for (const [col, asc] of [...orderBy].reverse()) {
           data = [...data].sort((a, b) => (a[col] < b[col] ? -1 : a[col] > b[col] ? 1 : 0) * (asc ? 1 : -1))
         }
-        data = data.slice(0, max).map((r) => ({ ...r }))
+        data = data.slice(0, Math.min(max, maxRows)).map((r) => ({ ...r }))
         let result
         if (single === 'maybe') result = { data: data[0] ?? null, error: null }
         else if (single === 'one') {
@@ -148,7 +181,7 @@ export function createFakeSupabase({ tables = {}, users = {}, idFactory = random
       },
     }
     api.not = (col, operator, value) => { filters.push(['not', col, { operator, value }]); return api }
-    for (const op of ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'in', 'is']) {
+    for (const op of ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'in', 'is', 'ilike']) {
       api[op] = (col, val) => { filters.push([op, col, val]); return api }
     }
     return api
