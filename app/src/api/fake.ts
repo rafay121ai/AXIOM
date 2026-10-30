@@ -1,5 +1,5 @@
 import { HttpError } from './queue';
-import type { AxiomApi, Commitment, ConsentResult, DueReport, FirstReading, Home, HomeItem, LearnReply, LearnTurn, MoveView, Outcome, Question, Read, ReadAnswerResult, ReportResult, Screened, SituationReply, Story, SwapResult } from './types';
+import type { AxiomApi, Commitment, ConsentResult, DueReport, FirstReading, HistoryPage, HistoryRow, Home, HomeItem, LearnReply, LearnTurn, MoveView, Outcome, Question, Read, ReadAnswerResult, ReportResult, Screened, SituationReply, Story, SwapResult } from './types';
 
 // Fixture questions, word for word from tasks/design/mock-onboarding-v2.html.
 const QUESTIONS: Question[] = [
@@ -180,6 +180,33 @@ const FAKE_RECENT = [
   { id: 'fake-situation-3', title: 'Which feature to cut first', status: 'couldnt' },
   { id: 'fake-situation-4', title: 'Why nobody replies to my emails', status: 'didnt' },
 ];
+
+// History and a past situation, from the mock's sample rows (placeholder authors, as the mock says).
+const HISTORY: { row: HistoryRow; page: Omit<HistoryPage, 'id' | 'title' | 'status' | 'status_label' | 'action'> }[] = [
+  { row: { id: FAKE_SITUATION, title: 'Asking the two clinics for a call', status: 'open', status_label: 'Open', last_activity_at: '2026-10-26T09:00:00.000Z' },
+    page: { what_i_read: { headline: 'Nobody has actually said yes or no to this yet.', body: '', closing_question: '', your_answer: null },
+      what_you_learned: { text: '', sources: [{ author: 'Rob Fitzpatrick', book: 'The Mom Test' }] },
+      your_move: { title: 'Ask the clinics', mission: 'Message both clinics today and ask for a 20-minute call in the next 3 days.', success: 'Both give you a day and time.' }, how_it_went: null } },
+  { row: { id: 'fake-situation-2', title: 'Whether to charge for the pilot', status: 'done', status_label: 'Done', last_activity_at: '2026-10-25T09:00:00.000Z' },
+    page: { what_i_read: { headline: 'You are afraid a price will end the conversation.', body: '', closing_question: '', your_answer: null },
+      what_you_learned: { text: '', sources: [{ author: 'Alex Hormozi', book: '$100M Offers' }] },
+      your_move: { title: 'Quote a paid pilot', mission: 'Quote a paid pilot to one clinic before the call ends.', success: 'They name a yes or a no.' },
+      how_it_went: { outcome: 'done', note: 'The clinic asked for a day to think, then said yes to a smaller pilot.', reply: '', prediction: { text: '', check: null }, sharing: 'shared' } } },
+  { row: { id: 'fake-situation-3', title: 'Which feature to cut first', status: 'couldnt', status_label: "Couldn't", last_activity_at: '2026-10-23T09:00:00.000Z' },
+    page: { what_i_read: { headline: 'You keep every feature because cutting one feels like admitting it was wrong.', body: '', closing_question: '', your_answer: null },
+      what_you_learned: { text: '', sources: [{ author: 'Eric Ries', book: 'The Lean Startup' }] },
+      your_move: { title: 'List the features', mission: 'List every feature and mark the one nobody asked for.', success: 'One feature is marked.' },
+      how_it_went: { outcome: 'couldnt', note: 'The clinic closed for the holiday. A smaller version was offered.', reply: '', prediction: { text: '', check: null }, sharing: 'private' } } },
+  { row: { id: 'fake-situation-4', title: 'Why nobody replies to my emails', status: 'didnt', status_label: "Didn't", last_activity_at: '2026-10-22T09:00:00.000Z' },
+    page: { what_i_read: { headline: 'Your emails ask for a lot before they give anything.', body: '', closing_question: '', your_answer: null },
+      what_you_learned: { text: '', sources: [{ author: 'Chris Voss', book: 'Never Split the Difference' }] },
+      your_move: { title: 'Rewrite the email', mission: 'Rewrite the first email so it asks one small question.', success: 'The email asks one question.' },
+      how_it_went: { outcome: 'didnt', note: 'I did not know what to write.', reply: '', prediction: { text: '', check: null }, sharing: 'private' } } },
+  { row: { id: 'fake-situation-5', title: 'Hiring plan', status: 'paused', status_label: 'Paused', last_activity_at: '2026-10-10T09:00:00.000Z' },
+    page: { what_i_read: { headline: 'You are planning a hire before you have a customer.', body: '', closing_question: '', your_answer: null },
+      what_you_learned: null, your_move: null, how_it_went: null } },
+];
+const HISTORY_ACTION = { open: ['pick_up', 'Pick it up'], paused: ['bring_back', 'Bring it back'], done: ['talk_again', 'Talk about this again'], couldnt: ['talk_again', 'Talk about this again'], didnt: ['talk_again', 'Talk about this again'] } as const;
 
 // The mock's greeting for the hour. The server picks one from its approved set; these are the mock's own six.
 function fakeGreeting(now: Date): { kind: string; text: string } {
@@ -389,6 +416,17 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
       if (flagged.care) return flagged;
       checkedIn = true;
       return { ok: true };
+    },
+    async getHistory(q) {
+      const needle = q.trim().toLowerCase();
+      const hay = (h: (typeof HISTORY)[number]) => `${h.row.title} ${h.page.what_i_read?.headline ?? ''} ${h.page.what_you_learned?.sources.map((x) => `${x.author} ${x.book}`).join(' ') ?? ''}`.toLowerCase();
+      return HISTORY.filter((h) => !needle || hay(h).includes(needle)).map((h) => h.row);
+    },
+    async getHistoryPage(id): Promise<HistoryPage> {
+      const h = HISTORY.find((x) => x.row.id === id);
+      if (!h) throw new HttpError(404, 'Not found');
+      const [kind, label] = HISTORY_ACTION[h.row.status];
+      return { ...h.page, id, title: h.row.title, status: h.row.status, status_label: h.row.status_label, action: { kind, label, target: { stage: h.row.status === 'open' ? 'move' : 'learn', situation_id: id } } };
     },
     async registerPushToken() {},
     async removePushToken() {},

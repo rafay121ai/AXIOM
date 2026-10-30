@@ -260,6 +260,22 @@ export type Home = {
   due_reports: { move_id: string; situation_id: string; title: string | null; report_due_at: string }[];
 };
 
+/** One row of History: a plain title and one quiet status word, `status_label`, as the server words it. */
+export type HistoryRow = { id: string; title: string | null; status: 'open' | 'done' | 'couldnt' | 'didnt' | 'paused'; status_label: string; last_activity_at: string };
+
+/** A past situation, read only. A section is null when that part was never reached. `action` is the one thing to do from here. */
+export type HistoryPage = {
+  id: string;
+  title: string | null;
+  status: HistoryRow['status'];
+  status_label: string;
+  what_i_read: { headline: string; body: string; closing_question: string; your_answer: string | null } | null;
+  what_you_learned: { text: string; sources: LearnSource[] } | null;
+  your_move: { title: string; mission: string; success: string } | null;
+  how_it_went: { outcome: Outcome; note: string | null; reply: string; prediction: { text: string; check: string | null }; sharing: 'shared' | 'private' } | null;
+  action: { kind: 'pick_up' | 'bring_back' | 'talk_again'; label: string; target: Target };
+};
+
 /** The sign-up as it stands: the questions, what the founder has answered, and whether every one is answered. */
 export type Signup = { questions: Question[]; answers: Record<string, Answer>; complete: boolean };
 
@@ -319,6 +335,10 @@ export interface AxiomApi {
   sendCheckIn(text: string): Promise<Screened<{ ok: true }>>;
   /** Tells the server this phone can get the evening reminder. Safe to send again. */
   registerPushToken(token: string, platform: PushPlatform, timeZone: string): Promise<void>;
+  /** Past situations, newest first. `q` searches titles, what the founder said and the Read's headline. */
+  getHistory(q: string): Promise<HistoryRow[]>;
+  /** One past situation. */
+  getHistoryPage(id: string): Promise<HistoryPage>;
   /** This phone no longer gets reminders for this founder. */
   removePushToken(token: string): Promise<void>;
 }

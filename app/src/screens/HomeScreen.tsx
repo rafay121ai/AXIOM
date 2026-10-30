@@ -26,6 +26,9 @@ type Props = {
   onStart: (text: string) => void;
   /** An item or a menu row was tapped. A rejection means it could not be opened. */
   onOpen: (target: Target) => Promise<void>;
+  /** A history or paused row: its page, where it can be picked up again. */
+  onPast: (id: string) => void;
+  onHistory: () => void;
   onCare: (message: string, help: HelpLine[]) => void;
 };
 
@@ -35,7 +38,7 @@ const SLIDE_MS = 500;
 // The returning founder's home: Axiom's greeting in serif, a chat bar, up to 2 small items for what was left off,
 // and a menu that slides in from the left. Typing in the bar starts something new. While a care check-in is open,
 // only the gentle line and the bar are here.
-export function HomeScreen({ load, checkIn, onLoaded, onStart, onOpen, onCare }: Props) {
+export function HomeScreen({ load, checkIn, onLoaded, onStart, onOpen, onPast, onHistory, onCare }: Props) {
   const insets = useSafeAreaInsets();
   const reduce = useReduceMotion();
   const [home, setHome] = useState<Home | null>(null);
@@ -122,7 +125,10 @@ export function HomeScreen({ load, checkIn, onLoaded, onStart, onOpen, onCare }:
   const checking = home?.care_check_in === true;
   const rows = home ? menuRows(home.drawer) : null;
   const pushed = width * DRAWER_SHARE;
-  const rowTarget = (row: MenuRow) => { if (row.target) void open(row.target); };
+  const rowTarget = (row: MenuRow) => {
+    if (row.target) void open(row.target);
+    else if (row.situationId) onPast(row.situationId);
+  };
 
   return (
     <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)} style={styles.root}>
@@ -135,7 +141,7 @@ export function HomeScreen({ load, checkIn, onLoaded, onStart, onOpen, onCare }:
           aria-hidden={!drawer}
           style={[StyleSheet.absoluteFill, { opacity: slide, transform: [{ translateX: slide.interpolate({ inputRange: [0, 1], outputRange: [-pushed * 0.14, 0] }) }] }]}
         >
-          <HomeDrawer rows={rows} onStartNew={startNew} onRow={rowTarget} />
+          <HomeDrawer rows={rows} onStartNew={startNew} onRow={rowTarget} onSeeAll={onHistory} />
         </Animated.View>
       )}
       <Animated.View style={[styles.main, drawer && styles.mainPushed, { transform: [{ translateX: slide.interpolate({ inputRange: [0, 1], outputRange: [0, pushed] }) }] }]}>

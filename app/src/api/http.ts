@@ -1,6 +1,6 @@
 import type { Auth } from './auth';
 import { createSaveQueue, HttpError } from './queue';
-import type { AxiomApi, Commitment, ConsentResult, DueReport, FirstReading, Home, LearnReply, LoadingQuote, MoveView, Read, ReadAnswerResult, ReportResult, Screened, Signup, SituationReply, Story, SwapResult } from './types';
+import type { AxiomApi, Commitment, ConsentResult, DueReport, FirstReading, HistoryPage, HistoryRow, Home, LearnReply, LoadingQuote, MoveView, Read, ReadAnswerResult, ReportResult, Screened, Signup, SituationReply, Story, SwapResult } from './types';
 
 type Options = { baseUrl: string; auth: Auth; fetch?: typeof fetch };
 
@@ -77,6 +77,10 @@ export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch
       request<ConsentResult>('POST', `/api/reports/${reportId}/consent`, { share, wording_version: wordingVersion }),
     getHome: (timeZone) => request<Home>('GET', `/api/home?time_zone=${encodeURIComponent(timeZone)}`),
     sendCheckIn: (text) => request<Screened<{ ok: true }>>('POST', '/api/home/checkin', { text }),
+    async getHistory(q) {
+      return (await request<{ items: HistoryRow[] }>('GET', `/api/history?q=${encodeURIComponent(q)}`)).items;
+    },
+    getHistoryPage: (id) => request<HistoryPage>('GET', `/api/history/${id}`),
     async registerPushToken(token, platform, timeZone) {
       await request('POST', '/api/push/token', { token, platform, timezone: timeZone });
     },

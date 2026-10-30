@@ -11,6 +11,7 @@ type Props = {
   rows: MenuRows;
   onStartNew: () => void;
   onRow: (row: MenuRow) => void;
+  onSeeAll: () => void;
 };
 
 function Row({ row, onPress }: { row: MenuRow; onPress: (row: MenuRow) => void }) {
@@ -36,7 +37,7 @@ function Section({ label, children }: { label: string; children: React.ReactNode
 }
 
 // The menu: it slides in from the left and pushes the home aside. Sections divided by thin lines, no day headings.
-export function HomeDrawer({ rows, onStartNew, onRow }: Props) {
+export function HomeDrawer({ rows, onStartNew, onRow, onSeeAll }: Props) {
   const insets = useSafeAreaInsets();
   return (
     <View style={[styles.drawer, { paddingTop: insets.top + 54 }]}>
@@ -52,6 +53,17 @@ export function HomeDrawer({ rows, onStartNew, onRow }: Props) {
             ? <Text style={styles.none}>{copy.home.nothingToDo}</Text>
             : rows.open.map((r) => <Row key={r.key} row={r} onPress={onRow} />)}
         </Section>
+        <Section label={copy.home.history}>
+          {rows.history.map((r) => <Row key={r.key} row={r} onPress={onRow} />)}
+          <Pressable accessibilityRole="button" onPress={onSeeAll} style={styles.row}>
+            <Text style={[styles.rowText, { color: ink(0.6) }]}>{copy.home.seeAll}</Text>
+          </Pressable>
+        </Section>
+        {rows.paused.length > 0 && (
+          <Section label={copy.home.paused}>
+            {rows.paused.map((r) => <Row key={r.key} row={r} onPress={onRow} />)}
+          </Section>
+        )}
       </ScrollView>
     </View>
   );

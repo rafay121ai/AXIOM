@@ -88,6 +88,19 @@ export const copy = {
     // NEEDS APPROVAL: opening a home item or a menu row failed; no mock says what Axiom says.
     couldNotOpen: "I couldn't open that just now.",
   },
+  // mock-onboarding-v2.html, screens 12 and 13 (History and a past situation).
+  history: {
+    title: 'History',
+    search: 'Search your situations',
+    none: 'Nothing matches that.',
+    back: 'Back',
+    read: 'What I read',
+    learned: 'What you learned',
+    move: 'Your move',
+    how: 'How it went',
+    shared: 'Shared without your name',
+    private: 'Kept private',
+  },
   send: 'Send',
   tryAgain: 'Try again',
   noConnection: 'No connection. Your messages are saved.',

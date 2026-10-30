@@ -17,7 +17,9 @@ import { Glow } from './src/components/Glow';
 import { loadReading } from './src/onboarding/reading';
 import { LINE_EVERY, waitLines, waitMinMs } from './src/onboarding/waitLines';
 import { CareScreen } from './src/screens/CareScreen';
+import { HistoryScreen } from './src/screens/HistoryScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
+import { PastScreen } from './src/screens/PastScreen';
 import { LearnScreen } from './src/screens/LearnScreen';
 import { MoveScreen } from './src/screens/MoveScreen';
 import { ReportScreen } from './src/screens/ReportScreen';
@@ -39,8 +41,13 @@ type Stage =
   | { name: 'learn'; situationId: string; chat: LearnChat }
   | { name: 'move'; source: MoveSource; back: Stage }
   | { name: 'home' }
+  | { name: 'history' }
+  | { name: 'past'; id: string }
   | { name: 'report'; report: DueReport; next: DueReport[] }
   | { name: 'care'; message: string; help: HelpLine[]; back: Stage };
+
+// Screens with the faint gold wash instead of the drifting light.
+const QUIET: Stage['name'][] = ['home', 'history', 'past'];
 
 const run = (anim: Animated.CompositeAnimation) => new Promise<void>((resolve) => anim.start(() => resolve()));
 
@@ -153,7 +160,7 @@ export default function App() {
     <SafeAreaProvider>
       <View style={styles.page}>
         <View style={styles.phone}>
-          {stage.name !== 'care' && stage.name !== 'home' && <Glow />}
+          {stage.name !== 'care' && !QUIET.includes(stage.name) && <Glow />}
           <Animated.View style={[styles.flex, { opacity: fade, transform: [{ translateY: rise }] }]}>
             {stage.name === 'signin' && <SignInScreen onContinue={signIn} />}
             {stage.name === 'questions' && (
@@ -224,7 +231,20 @@ export default function App() {
                 onLoaded={homeLoaded}
                 onStart={(text) => goTo({ name: 'situation', chat: newChat({ pending: text }), opening: copy.situation.openingFresh })}
                 onOpen={async (target) => openDestination(await destinationOf(api, target))}
+                onPast={(id) => goTo({ name: 'past', id })}
+                onHistory={() => goTo({ name: 'history' })}
                 onCare={showCare}
+              />
+            )}
+            {stage.name === 'history' && (
+              <HistoryScreen load={(q) => api.getHistory(q)} onOpen={(id) => goTo({ name: 'past', id })} onBack={() => goTo({ name: 'home' })} />
+            )}
+            {stage.name === 'past' && (
+              <PastScreen
+                key={stage.id}
+                load={() => api.getHistoryPage(stage.id)}
+                onAction={async (target) => openDestination(await destinationOf(api, target))}
+                onBack={() => goTo({ name: 'history' })}
               />
             )}
             {stage.name === 'reading' && <ReadingScreen reading={stage.reading} onContinue={() => beginSituation(false)} />}
