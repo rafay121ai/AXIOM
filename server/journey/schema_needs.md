@@ -189,8 +189,9 @@ warning or removal column anywhere.
 ## reports
 - `id uuid pk default gen_random_uuid()`, `user_id uuid not null references auth.users`
 - `move_id uuid not null references moves`, **unique `(move_id)`**. NEEDED: one
-  report per move; a repeated or concurrent report hits 23505 and the code
-  returns the stored one.
+  report per move. The row is inserted (claimed) before the model is called;
+  a repeated or concurrent report hits 23505, waits for the reply and returns
+  the stored one, so a double tap costs one model call.
 - `situation_id uuid not null references situations on delete cascade`
 - `outcome text not null check (outcome in ('done','couldnt','didnt'))`
 - `note text null` (the founder's answer; it passed the care gate)
@@ -198,15 +199,26 @@ warning or removal column anywhere.
 - `prediction text not null` (the move's prediction when it was reported)
 - `prediction_check text not null check (prediction_check in ('right','wrong','unclear','not_tested'))`
 - `reply text not null` (Axiom's reply, checked, or the fixed line)
+- `reply_pending boolean not null default false` (true from the claim until
+  the checked reply is written; the fixed line holds the place meanwhile)
 - `share_state text null check (share_state in ('asked','shared','private','withdrawn','not_offered'))`
   (null only between the insert and the sharing decision a moment later;
   'not_offered' when the care check touched the situation)
 - `share_automatic boolean not null default false`, `share_decided_at timestamptz null`
 - `consent_wording_version text null` (the question that was asked)
+- `consent_versions text[] null` (the consent question versions offered with
+  this report: `share-alone-v1`, plus `share-after-story-v1` only when a
+  founder story was offered. A consent naming any other version is refused.
+  Null on older rows means the plain question only)
 - `created_at timestamptz not null`, `updated_at timestamptz not null`
 - index `(user_id, created_at desc)`
 - **Must never hold a peer outcome id.** Founders may later SELECT their own
   reports; that must not reveal which peer outcome is theirs.
+
+## situations (existing table, one new column)
+- `care_flag boolean not null default false`. Set by the report route when
+  the care gate stops a report note, so sharing fails closed for the
+  situation even if the gate could not write its care event.
 
 ## Moves (existing table from B6, no new column)
 - The report sets `status = 'reported'` and `active_slot = null` (the slot is
@@ -221,6 +233,65 @@ warning or removal column anywhere.
   in `server/journey/report/wording.js`)
 - `decided_at timestamptz not null`
 - index `(user_id, decided_at)`, `(report_id)`
+
+## share_outcome / unshare_outcome (NEEDED for production, SQL functions)
+supabase-js cannot run several statements in one transaction. The server
+calls these two functions with `supabase.rpc` and, while they do not exist
+(PGRST202), runs the same steps in a safe order instead
+(`server/journey/report/shareDb.js`). Both are `security definer`, owned by the
+service role, `execute` revoked from `anon` and `authenticated`. Each returns
+the report row after the change, or no row when `share_state` was no longer
+`p_from` (nothing written).
+
+```sql
+create function share_outcome(p_user_id uuid, p_report_id uuid, p_from text,
+  p_automatic boolean, p_action text, p_wording_version text, p_peer jsonb,
+  p_now timestamptz) returns setof reports language plpgsql security definer
+  set search_path = public as $$
+declare r reports; peer_id uuid;
+begin
+  select * into r from reports where id = p_report_id and user_id = p_user_id for update;
+  if not found or r.share_state is distinct from p_from or p_from in ('shared','not_offered') then return; end if;
+  insert into consent_log (user_id, report_id, action, wording_version, decided_at)
+    values (p_user_id, p_report_id, p_action, p_wording_version, p_now);
+  insert into peer_outcomes (status, stage, customer_market, business_model, outcome, draft,
+      story, lesson, reviewed_by, reviewed_at, withdrawn_at, created_at)
+    values ('pending_review', p_peer->>'stage', p_peer->>'customer_market', p_peer->>'business_model',
+      p_peer->>'outcome', p_peer->'draft', null, null, null, null, null, p_now)
+    returning id into peer_id;
+  insert into outcome_author_links (peer_outcome_id, user_id, report_id, created_at, withdrawn_at)
+    values (peer_id, p_user_id, p_report_id, p_now, null);
+  return query update reports set share_state = 'shared', share_automatic = p_automatic,
+      share_decided_at = p_now, updated_at = p_now
+    where id = p_report_id returning *;
+end $$;
+
+create function unshare_outcome(p_user_id uuid, p_report_id uuid, p_from text,
+  p_to text, p_action text, p_wording_version text, p_now timestamptz)
+  returns setof reports language plpgsql security definer
+  set search_path = public as $$
+declare r reports;
+begin
+  select * into r from reports where id = p_report_id and user_id = p_user_id for update;
+  if not found or r.share_state is distinct from p_from or p_to not in ('private','withdrawn','not_offered') then return; end if;
+  update peer_outcomes set status = 'withdrawn', draft = null, story = null, lesson = null, withdrawn_at = p_now
+    where id in (select peer_outcome_id from outcome_author_links
+      where report_id = p_report_id and user_id = p_user_id and withdrawn_at is null);
+  update outcome_author_links set withdrawn_at = p_now
+    where report_id = p_report_id and user_id = p_user_id and withdrawn_at is null;
+  if p_action is not null then
+    insert into consent_log (user_id, report_id, action, wording_version, decided_at)
+      values (p_user_id, p_report_id, p_action, p_wording_version, p_now);
+  end if;
+  return query update reports set share_state = p_to, share_automatic = false,
+      share_decided_at = p_now, updated_at = p_now
+    where id = p_report_id returning *;
+end $$;
+```
+`p_action` null is the care check closing sharing (`not_offered`), which is
+not a founder decision and writes no consent row. The row lock serialises a
+share and a withdraw on the same report, so a live peer outcome never outlasts
+a report that is not shared, and a share never exists without its consent row.
 
 ## user_settings (only the column this step needs)
 - `user_id uuid pk references auth.users`
@@ -329,3 +400,31 @@ only when `EXPO_PUSH=on` (index.js).
   closes_at, learn_id, time_zone)`, `learn_conversations.move_subject`,
   `situations (status, title, last_activity_at)`, `care_events` (through
   `isCareOpen`). The scheduler writes nothing to moves or situations.
+
+# Schema needs for Home, History and Settings (B9)
+
+No new table. Columns added to `user_settings` (same rules as above).
+
+- `last_greeting text null`: the id of the greeting shown last, so the same
+  line is not shown twice in a row (an id like `morning:a`, never founder text)
+- `keep_items boolean not null default false`: Settings > On screen, "keep my
+  open items on screen"
+- `mentor_style text not null default 'direct' check (mentor_style in ('calm','direct','hard'))`:
+  Settings > How Axiom talks. Stored only; nothing reads it yet
+- Defaults matter: other code inserts a `user_settings` row with only the
+  column it needs.
+
+Existing columns read: `users.first_name` (the name in the greeting, then the
+sign-in name), `founder_profiles (country, timezone, deadline,
+signup_answers)`, `push_tokens` (is any device registered), `situations`,
+`reads`, `learn_conversations`, `learn_turns.sources`, `moves`, `reports`.
+
+## account_requests (new table, B9)
+- `id uuid pk default gen_random_uuid()`, `user_id uuid not null references auth.users`
+- `kind text not null check (kind in ('export','delete'))`
+- `status text not null default 'queued'`, `created_at timestamptz not null`
+- RLS on, server only. `POST /api/account/export` and `DELETE /api/account` only
+  insert here (one waiting row per kind) and delete NOTHING. A deletion plan
+  (what goes, what stays, the private outcome link, the order) must be written
+  from a dump of the live schema and approved before any deletion is built.
+- Env (optional): `PRIVACY_URL`, `TERMS_URL` fill Settings > Privacy and Terms.

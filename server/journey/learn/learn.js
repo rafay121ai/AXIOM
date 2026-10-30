@@ -22,7 +22,7 @@ const busy = () => new HttpError(409, { error: 'This turn is still being process
 
 // What the app sees of one Learn turn. Evidence, chunk ids, handles and
 // validation flags stay on the server.
-const sourceView = (s) => ({ author: s.author, book: s.book, ...(s.quote ? { quote: s.quote } : {}) })
+export const sourceView = (s) => ({ author: s.author, book: s.book, ...(s.quote ? { quote: s.quote } : {}) })
 export function turnView(row) {
   if (row.role === 'founder') return { id: row.id, role: 'founder', text: row.text, created_at: row.created_at }
   return {

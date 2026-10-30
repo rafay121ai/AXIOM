@@ -57,21 +57,25 @@ export function cleanReminderSettings(body) {
 }
 
 
+const one = async (query) => {
+  const { data, error } = await query
+  if (error) throw error
+  return data
+}
+
+// Update the founder's row in a table keyed by user_id, or create it; a racing
+// first save updates.
+export async function saveOwnRow(supabase, table, userId, fields) {
+  const updated = await one(supabase.from(table).update(fields).eq('user_id', userId).select('user_id'))
+  if (updated.length > 0) return
+  const inserted = await supabase.from(table).insert({ user_id: userId, ...fields }).select('user_id')
+  if (inserted.error?.code === '23505') await one(supabase.from(table).update(fields).eq('user_id', userId).select('user_id'))
+  else if (inserted.error) throw inserted.error
+}
+
 export function createReminderSettings({ supabase, clock }) {
   const iso = () => new Date(clock.now()).toISOString()
-  const one = async (query) => {
-    const { data, error } = await query
-    if (error) throw error
-    return data
-  }
-  // Update the founder's row, or create it; a racing first save updates.
-  async function save(table, userId, fields) {
-    const updated = await one(supabase.from(table).update(fields).eq('user_id', userId).select('user_id'))
-    if (updated.length > 0) return
-    const inserted = await supabase.from(table).insert({ user_id: userId, ...fields }).select('user_id')
-    if (inserted.error?.code === '23505') await one(supabase.from(table).update(fields).eq('user_id', userId).select('user_id'))
-    else if (inserted.error) throw inserted.error
-  }
+  const save = (table, userId, fields) => saveOwnRow(supabase, table, userId, fields)
 
   async function load(userId) {
     const [settingsRow, profileRow, devices] = await Promise.all([

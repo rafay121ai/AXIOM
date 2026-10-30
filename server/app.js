@@ -274,6 +274,9 @@ export function createApp({
   app.use('/api/moves', requireAuth)
   app.use('/api/reports', requireAuth)
   app.use('/api/settings', requireAuth)
+  app.use('/api/home', requireAuth)
+  app.use('/api/history', requireAuth)
+  app.use('/api/account', requireAuth)
   app.use('/api/push', requireAuth)
   app.use('/api/loading-hint', requireAuth)
 
@@ -1343,6 +1346,7 @@ export function createApp({
     care,
     callStructured: callStructuredForApp,
     clock,
+    links: { privacy: env.PRIVACY_URL?.trim() || null, terms: env.TERMS_URL?.trim() || null },
   })
   mountPushRoutes(app, { supabase: supabaseAdmin, clock })
 
