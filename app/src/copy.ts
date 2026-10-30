@@ -42,8 +42,16 @@ export const copy = {
     swapPlaceholder: 'What makes this the wrong move?',
     swapNote: '"I\'m busy" isn\'t a reason I can work with.',
     swapGo: 'Give me a different move',
-    // mock-onboarding-v2.html, after Commit: "I will remind you at 8 pm." The time comes from the server.
+    // mock-onboarding-v2.html, after Commit: "Want a reminder tonight?" Yes / No thanks. Yes: "I will remind you at 8 pm."
+    // (the time comes from the server). No: "No problem."
+    remindAsk: 'Want a reminder tonight?',
+    remindYes: 'Yes',
+    remindNo: 'No thanks',
     remind: (time: string) => `I will remind you at ${time}.`,
+    remindNone: 'No problem.',
+    // mock-states-v1.html, section 4: said once, after the phone's own permission box was refused.
+    remindersOff: "Reminders are off on your phone. I'll keep tonight's check-in waiting on your home screen.",
+    phoneSettings: 'Turn on in phone settings',
     // NEEDS APPROVAL: the server's own line when both places are taken (server/journey/move/room.js NO_ROOM_LINE), shown as it is.
     noRoom: 'You have 2 moves open. Tell me how one of them went first, then I will give you the next.',
     // NEEDS APPROVAL: the server's own line when the one change is used up (moveService.js), shown as it is.
@@ -64,6 +72,21 @@ export const copy = {
     // because the app does not yet keep an unsent check-in once it is closed.
     saved: 'Your check-in is saved.',
     willSend: "I'll send it as soon as you're back online.",
+  },
+  // mock-onboarding-v2.html, screen 9 (home) and its menu drawer.
+  home: {
+    placeholder: "What's going on?",
+    menu: 'Menu',
+    startNew: 'Start something new',
+    open: "What's open",
+    nothingToDo: 'Nothing to do right now.',
+    history: 'History',
+    seeAll: 'See all history ›',
+    paused: 'Paused',
+    // NEEDS APPROVAL: a situation the server sent without a title; no mock shows one.
+    untitled: 'No title yet',
+    // NEEDS APPROVAL: opening a home item or a menu row failed; no mock says what Axiom says.
+    couldNotOpen: "I couldn't open that just now.",
   },
   send: 'Send',
   tryAgain: 'Try again',

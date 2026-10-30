@@ -34,7 +34,7 @@ const BAR_DELAY = 1400;
 export function SituationScreen({ chat, opening, suggestion, send, onReady, onCare }: Props) {
   const insets = useSafeAreaInsets();
   const [items, setItems] = useState<ChatItem[]>(() => {
-    if (chat.items.length === 0) chat.items = [{ id: chat.nextId++, who: 'ax', text: opening }];
+    if (chat.items.length === 0 && !chat.pending) chat.items = [{ id: chat.nextId++, who: 'ax', text: opening }];
     return chat.items;
   });
   const [text, setText] = useState('');
@@ -91,14 +91,25 @@ export function SituationScreen({ chat, opening, suggestion, send, onReady, onCa
     }
   }
 
+  function post(said: string) {
+    const sent: Extract<ChatItem, { who: 'me' }> = { id: chat.nextId++, who: 'me', text: said, turnId: newTurnId(), state: 'sent' };
+    change([...chat.items, sent]);
+    void deliver(sent);
+  }
+
   function submit() {
     const said = text.trim();
     if (!said || busy) return;
-    const sent: Extract<ChatItem, { who: 'me' }> = { id: chat.nextId++, who: 'me', text: said, turnId: newTurnId(), state: 'sent' };
-    change([...chat.items, sent]);
     setText('');
-    void deliver(sent);
+    post(said);
   }
+
+  // What the founder typed on the home screen goes out as the first message, once.
+  useEffect(() => {
+    const first = chat.pending;
+    chat.pending = null;
+    if (first) post(first);
+  }, []);
 
   const lastSent = [...items].reverse().find((i) => i.who === 'me');
   const started = items.some((i) => i.who === 'me');

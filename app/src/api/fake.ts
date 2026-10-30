@@ -1,5 +1,5 @@
 import { HttpError } from './queue';
-import type { AxiomApi, Commitment, ConsentResult, DueReport, FirstReading, LearnReply, LearnTurn, MoveView, Outcome, Question, Read, ReadAnswerResult, ReportResult, Screened, SituationReply, Story, SwapResult } from './types';
+import type { AxiomApi, Commitment, ConsentResult, DueReport, FirstReading, Home, HomeItem, LearnReply, LearnTurn, MoveView, Outcome, Question, Read, ReadAnswerResult, ReportResult, Screened, SituationReply, Story, SwapResult } from './types';
 
 // Fixture questions, word for word from tasks/design/mock-onboarding-v2.html.
 const QUESTIONS: Question[] = [
@@ -164,6 +164,56 @@ const ASK_AFTER_STORY = { text: 'They shared theirs so it could help you. Would 
 const SHARED_LINE = 'Thank you. That opens more founder stories for you.';
 const KEPT_PRIVATE_LINE = 'Kept private. You can change this any time in settings.';
 
+// The home screen, from the mock (sample founder). The words are the server's own (server/journey/home/wording.js):
+// the mock's "Tonight: tell me how it went" is "Tell me how it went" there. Which items show follows the mock's states.
+export type HomeSim = 'morning' | 'report' | 'evening' | 'nothing' | 'care';
+
+const FAKE_SITUATION = 'fake-situation-1';
+const TODAY_ITEM: HomeItem = { kind: 'move', label: 'Today: ask the clinics for a call', title: FAKE_DUE.title, stays: false, target: { stage: 'move', situation_id: FAKE_SITUATION, move_id: FAKE_MOVE.id } };
+const STILL_ITEM: HomeItem = { ...TODAY_ITEM, label: 'Still to do: ask the clinics for a call' };
+const REPORT_ITEM: HomeItem = { kind: 'report', label: 'Tell me how it went', title: FAKE_DUE.title, stays: false, target: { stage: 'report', situation_id: FAKE_SITUATION, move_id: FAKE_DUE.move_id } };
+const DUE_REPORT = { move_id: FAKE_DUE.move_id, situation_id: FAKE_SITUATION, title: FAKE_DUE.title, report_due_at: '2026-10-26T20:00:00.000Z' };
+const FAKE_PAUSED = { id: 'fake-situation-5', title: 'Hiring plan', stage: null, last_activity_at: '2026-10-10T09:00:00.000Z' };
+const FAKE_RECENT = [
+  { id: FAKE_SITUATION, title: 'Asking the two clinics for a call', status: 'open' },
+  { id: 'fake-situation-2', title: 'Whether to charge for the pilot', status: 'done' },
+  { id: 'fake-situation-3', title: 'Which feature to cut first', status: 'couldnt' },
+  { id: 'fake-situation-4', title: 'Why nobody replies to my emails', status: 'didnt' },
+];
+
+// The mock's greeting for the hour. The server picks one from its approved set; these are the mock's own six.
+function fakeGreeting(now: Date): { kind: string; text: string } {
+  const h = now.getHours();
+  const day = now.getDay();
+  if (day === 6 || day === 0) return { kind: 'weekend', text: "Saturday, Rafay. Nobody's watching. What are you building?" };
+  if (h >= 4 && h < 7) return { kind: 'early', text: "6 am, Rafay. Most people aren't up. Their loss. What's the plan?" };
+  if (h < 12) return { kind: 'morning', text: "78 days to your first customer, Rafay. No pressure. Some pressure. What's the move?" };
+  if (h < 17) return { kind: 'midday', text: "Midday, Rafay. Coffee doesn't count as progress. What have you moved?" };
+  if (h < 22) return { kind: 'evening', text: "Day's nearly done, Rafay. What got done besides email?" };
+  return { kind: 'late', text: 'Still up, Rafay? Make it count, or go to sleep.' };
+}
+
+function fakeHome(state: HomeSim, now: Date): Home {
+  const drawer = (to_do: HomeItem[]): Home['drawer'] => ({
+    to_do,
+    open: to_do.length > 0 ? [{ id: FAKE_SITUATION, title: 'Asking the two clinics for a call', stage: to_do[0].target.stage, last_activity_at: '2026-10-26T09:00:00.000Z' }] : [],
+    paused: [FAKE_PAUSED],
+    recent: FAKE_RECENT,
+  });
+  if (state === 'care') {
+    return { greeting: { kind: 'care_check_in', text: 'How are you doing today?' }, care_check_in: true, items: [], fade_after_ms: 8000, drawer: { to_do: [], open: [], paused: [], recent: [] }, due_reports: [] };
+  }
+  const to_do = { morning: [TODAY_ITEM], report: [REPORT_ITEM], evening: [STILL_ITEM, REPORT_ITEM], nothing: [] }[state];
+  return {
+    greeting: fakeGreeting(now),
+    care_check_in: false,
+    items: to_do,
+    fade_after_ms: 8000,
+    drawer: drawer(to_do),
+    due_reports: state === 'report' || state === 'evening' ? [DUE_REPORT] : [],
+  };
+}
+
 // The mock's rule for "ok": fewer than 3 words that say something is not an answer.
 const FILLER = new Set('ok okay k yes yeah yep yup no nope sure fine hmm hm mm um uh thanks thank you thx cool got it i see makes sense right true alright maybe idk good nice lol so well kinda'.split(' '));
 const isReal = (t: string) => t.toLowerCase().replace(/[^a-z0-9%$\s']/g, ' ').split(/\s+/).filter((w) => w && !FILLER.has(w)).length >= 3;
@@ -172,7 +222,10 @@ const isEnough = (t: string) => t.split(/\s+/).length >= 8 && /\d|\b(one|two|thr
 
 // `latencyMs` makes the Learn calls take a while, so the loading hint can be seen.
 // `reportDue` puts the mock's check-in waiting, as it is on the evening of a committed move.
-export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = false): AxiomApi {
+// `home` makes the fake a founder who has signed up already, landing on that home state.
+export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = false, home?: HomeSim): AxiomApi {
+  const homeState: HomeSim | undefined = reportDue ? 'evening' : home;
+  let checkedIn = false;
   const wait = () => (latencyMs > 0 ? new Promise<void>((r) => setTimeout(r, latencyMs)) : undefined);
   const screen = async (): Promise<Screened> => (sim === 'clear' ? CLEAR : sim === 'unclear' ? UNCLEAR : {});
 
@@ -224,8 +277,8 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
 
   return {
     async signInWithGoogle() {},
-    async getQuestions() {
-      return QUESTIONS;
+    async getSignup() {
+      return { questions: QUESTIONS, answers: {}, complete: homeState !== undefined };
     },
     saveAnswer: screen,
     async getFirstReading() {
@@ -295,8 +348,12 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
     async getLoadingHint() {
       return FAKE_HINT;
     },
+    async getMove(moveId) {
+      if (moveId !== move.id) throw new HttpError(404, 'Not found');
+      return move;
+    },
     async getDueReports() {
-      return reportDue && !reported ? [FAKE_DUE] : [];
+      return (homeState === 'evening' || homeState === 'report') && !reported ? [FAKE_DUE] : [];
     },
     async sendReport(moveId, outcome, note): Promise<Screened<ReportResult>> {
       if (moveId !== FAKE_DUE.move_id) throw new HttpError(404, 'Not found');
@@ -323,5 +380,17 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
         reply: share ? SHARED_LINE : KEPT_PRIVATE_LINE,
       };
     },
+    async getHome() {
+      const settled = (homeState === 'care' && checkedIn) || (reported && (homeState === 'evening' || homeState === 'report'));
+      return fakeHome(settled ? 'nothing' : homeState ?? 'nothing', new Date());
+    },
+    async sendCheckIn(): Promise<Screened<{ ok: true }>> {
+      const flagged = await screen();
+      if (flagged.care) return flagged;
+      checkedIn = true;
+      return { ok: true };
+    },
+    async registerPushToken() {},
+    async removePushToken() {},
   };
 }

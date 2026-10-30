@@ -7,9 +7,12 @@ export type ChatItem =
   | { id: number; who: 'ax'; text: string }
   | { id: number; who: 'me'; text: string; turnId: string; state: 'sent' | 'waiting' | 'failed' };
 
-export type Chat = { situationId: string | null; items: ChatItem[]; nextId: number };
+/** `pending` is a text the founder typed on the home screen: the screen sends it as its first message, once. */
+export type Chat = { situationId: string | null; items: ChatItem[]; nextId: number; pending: string | null };
 
-export const newChat = (): Chat => ({ situationId: null, items: [], nextId: 1 });
+/** A new conversation, or one picked up again (`situationId`), optionally starting with what was typed at home. */
+export const newChat = ({ situationId = null, pending = null }: { situationId?: string | null; pending?: string | null } = {}): Chat =>
+  ({ situationId, items: [], nextId: 1, pending });
 
 /** Sends one founder text: the first starts a situation, later ones continue it. */
 export type SendTurn = (situationId: string | null, text: string, turnId: string) => Promise<Screened<SituationReply>>;

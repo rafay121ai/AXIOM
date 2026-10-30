@@ -4,16 +4,20 @@ import { Animated, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { api } from './src/api';
-import type { Answer, DueReport, FirstReading, HelpLine, Question, Screened } from './src/api/types';
+import type { Answer, DueReport, FirstReading, HelpLine, Home, Question, Screened } from './src/api/types';
 import { routeScreened } from './src/care/route';
 import { copy } from './src/copy';
+import { type Destination, destinationOf, type MoveSource } from './src/home/flow';
 import { newLearnChat, type LearnChat } from './src/learn/chat';
+import { deviceTimeZone } from './src/move/format';
+import { push } from './src/push';
 import { newChat, type Chat } from './src/situation/chat';
 import { AxiomMessage } from './src/components/AxiomMessage';
 import { Glow } from './src/components/Glow';
 import { loadReading } from './src/onboarding/reading';
 import { LINE_EVERY, waitLines, waitMinMs } from './src/onboarding/waitLines';
 import { CareScreen } from './src/screens/CareScreen';
+import { HomeScreen } from './src/screens/HomeScreen';
 import { LearnScreen } from './src/screens/LearnScreen';
 import { MoveScreen } from './src/screens/MoveScreen';
 import { ReportScreen } from './src/screens/ReportScreen';
@@ -33,7 +37,8 @@ type Stage =
   | { name: 'situation'; chat: Chat; opening: string; suggestion?: string }
   | { name: 'read'; situationId: string }
   | { name: 'learn'; situationId: string; chat: LearnChat }
-  | { name: 'move'; learnId: string; back: Stage }
+  | { name: 'move'; source: MoveSource; back: Stage }
+  | { name: 'home' }
   | { name: 'report'; report: DueReport; next: DueReport[] }
   | { name: 'care'; message: string; help: HelpLine[]; back: Stage };
 
@@ -72,6 +77,12 @@ export default function App() {
     switching.current = false;
   }, [fade, rise]);
 
+  // Resolves once no screen change is under way. A change asked for while one is running is dropped, so a caller that
+  // moves on by itself (the home screen sending a due check-in to the Report) waits for this first.
+  const idle = useCallback(async () => {
+    while (switching.current) await new Promise((resume) => setTimeout(resume, 50));
+  }, []);
+
   // Every text-sending call lands here: clear distress opens the care screen, unclear gets a soft reply.
   const route = useCallback((res: Screened) => {
     const r = routeScreened(res);
@@ -89,19 +100,44 @@ export default function App() {
     goTo({ name: 'situation', chat: newChat(), opening: suggestion ? copy.situation.opening : copy.situation.openingFresh, suggestion });
   }, [goTo]);
 
-  // Opening the app on a due check-in (the evening reminder's target) lands on the Report, the one due first.
+  // The check-ins waiting, the one due first; when none is left the founder lands on the home screen.
   const openReports = useCallback((due: DueReport[]) => {
     const [report, ...next] = due;
     if (report) goTo({ name: 'report', report, next });
-    else beginSituation(true);
-  }, [goTo, beginSituation]);
+    else goTo({ name: 'home' });
+  }, [goTo]);
 
+  // Signing in lands a returning founder on the home screen; a due check-in (the evening reminder's target) opens the Report.
+  // A new founder, or one who stopped part way, goes to the questions.
+  const landing = useRef(false);
   const signIn = useCallback(async () => {
     await api.signInWithGoogle();
+    const signup = await api.getSignup();
+    landing.current = signup.complete;
+    goTo(signup.complete ? { name: 'home' } : { name: 'questions', questions: signup.questions });
+  }, [goTo]);
+
+  const homeLoaded = useCallback(async (home: Home) => {
+    void push.refresh().catch(() => {});
+    const arriving = landing.current;
+    landing.current = false;
+    if (!arriving || home.due_reports.length === 0) return;
     const due = (await api.getDueReports()).filter((r) => r.due);
-    if (due.length > 0) openReports(due);
-    else goTo({ name: 'questions', questions: await api.getQuestions() });
-  }, [goTo, openReports]);
+    await idle();
+    openReports(due);
+  }, [openReports, idle]);
+
+  // Where a tap on a home item, a menu row or a history action leads.
+  const openDestination = useCallback((d: Destination) => {
+    switch (d.kind) {
+      case 'situation': return goTo({ name: 'situation', chat: newChat({ situationId: d.situationId }), opening: copy.situation.openingFresh });
+      case 'read': return goTo({ name: 'read', situationId: d.situationId });
+      case 'learn': return goTo({ name: 'learn', situationId: d.situationId, chat: newLearnChat() });
+      case 'move': return goTo({ name: 'move', source: d.source, back: stageRef.current });
+      case 'report': return goTo({ name: 'report', report: d.report, next: d.next });
+      case 'home': return goTo({ name: 'home' });
+    }
+  }, [goTo]);
 
   const finish = useCallback((answers: Record<string, Answer>) => {
     stuck.current = typeof answers.stuck === 'string' ? answers.stuck.trim() || undefined : undefined;
@@ -117,7 +153,7 @@ export default function App() {
     <SafeAreaProvider>
       <View style={styles.page}>
         <View style={styles.phone}>
-          {stage.name !== 'care' && <Glow />}
+          {stage.name !== 'care' && stage.name !== 'home' && <Glow />}
           <Animated.View style={[styles.flex, { opacity: fade, transform: [{ translateY: rise }] }]}>
             {stage.name === 'signin' && <SignInScreen onContinue={signIn} />}
             {stage.name === 'questions' && (
@@ -154,17 +190,19 @@ export default function App() {
                 send={(id, text, turnId) => api.sendLearnTurn(id, text, turnId)}
                 tap={(id, turnId, index) => api.tapFollowUp(id, turnId, index)}
                 loadHint={(seed) => api.getLoadingHint(seed)}
-                onOpenMove={(learnId) => goTo({ name: 'move', learnId, back: stageRef.current })}
+                onOpenMove={(learnId) => goTo({ name: 'move', source: { learnId }, back: stageRef.current })}
                 onCare={showCare}
               />
             )}
             {stage.name === 'move' && (
               <MoveScreen
-                open={() => api.openMove(stage.learnId)}
+                open={() => ('learnId' in stage.source ? api.openMove(stage.source.learnId) : api.getMove(stage.source.moveId))}
                 commit={(id, timezone) => api.commitMove(id, timezone)}
                 swap={(id, reason) => api.swapMove(id, reason)}
                 loadHint={(seed) => api.getLoadingHint(seed)}
+                push={push}
                 onClose={() => goTo(stage.back)}
+                onDone={() => goTo({ name: 'home' })}
                 onCare={showCare}
               />
             )}
@@ -176,6 +214,16 @@ export default function App() {
                 story={(id) => api.getStory(id)}
                 consent={(id, share, version) => api.setConsent(id, share, version)}
                 onFinish={() => openReports(stage.next)}
+                onCare={showCare}
+              />
+            )}
+            {stage.name === 'home' && (
+              <HomeScreen
+                load={() => api.getHome(deviceTimeZone())}
+                checkIn={(text) => api.sendCheckIn(text)}
+                onLoaded={homeLoaded}
+                onStart={(text) => goTo({ name: 'situation', chat: newChat({ pending: text }), opening: copy.situation.openingFresh })}
+                onOpen={async (target) => openDestination(await destinationOf(api, target))}
                 onCare={showCare}
               />
             )}

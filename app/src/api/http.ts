@@ -1,6 +1,6 @@
 import type { Auth } from './auth';
 import { createSaveQueue, HttpError } from './queue';
-import type { AxiomApi, Commitment, ConsentResult, DueReport, FirstReading, LearnReply, LoadingQuote, MoveView, Question, Read, ReadAnswerResult, ReportResult, Screened, SituationReply, Story, SwapResult } from './types';
+import type { AxiomApi, Commitment, ConsentResult, DueReport, FirstReading, Home, LearnReply, LoadingQuote, MoveView, Read, ReadAnswerResult, ReportResult, Screened, Signup, SituationReply, Story, SwapResult } from './types';
 
 type Options = { baseUrl: string; auth: Auth; fetch?: typeof fetch };
 
@@ -30,8 +30,9 @@ export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch
 
   return {
     signInWithGoogle: () => auth.signInWithGoogle(),
-    async getQuestions() {
-      return (await request<{ questions: Question[] }>('GET', '/api/signup')).questions;
+    async getSignup() {
+      const { questions, answers, complete } = await request<Signup>('GET', '/api/signup');
+      return { questions, answers, complete };
     },
     saveAnswer: (key, answer) => queue.save(key, answer),
     async getFirstReading() {
@@ -61,6 +62,9 @@ export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch
         return null;
       }
     },
+    async getMove(moveId) {
+      return (await request<{ move: MoveView }>('GET', `/api/moves/${moveId}`)).move;
+    },
     async getDueReports() {
       return (await request<{ reports: DueReport[] }>('GET', '/api/reports/due')).reports;
     },
@@ -71,5 +75,13 @@ export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch
     },
     setConsent: (reportId, share, wordingVersion) =>
       request<ConsentResult>('POST', `/api/reports/${reportId}/consent`, { share, wording_version: wordingVersion }),
+    getHome: (timeZone) => request<Home>('GET', `/api/home?time_zone=${encodeURIComponent(timeZone)}`),
+    sendCheckIn: (text) => request<Screened<{ ok: true }>>('POST', '/api/home/checkin', { text }),
+    async registerPushToken(token, platform, timeZone) {
+      await request('POST', '/api/push/token', { token, platform, timezone: timeZone });
+    },
+    async removePushToken(token) {
+      await request('DELETE', '/api/push/token', { token });
+    },
   };
 }

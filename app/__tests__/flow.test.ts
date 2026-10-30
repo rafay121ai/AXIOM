@@ -6,7 +6,7 @@ import {
 import { clip, waitLines } from '../src/onboarding/waitLines';
 
 let questions: Question[];
-beforeAll(async () => { questions = await createFakeApi().getQuestions(); });
+beforeAll(async () => { questions = (await createFakeApi().getSignup()).questions; });
 const byKey = <T extends Question>(k: string) => questions.find((q) => q.key === k) as T;
 
 describe('questions', () => {

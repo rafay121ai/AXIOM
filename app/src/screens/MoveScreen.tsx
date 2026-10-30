@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Animated, Easing, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, type ScrollViewInstance, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { sendUntilDelivered } from '../api/delivery';
 import type { Commitment, HelpLine, LoadingQuote, MoveView, Screened, SwapResult } from '../api/types';
@@ -7,10 +7,12 @@ import { routeScreened } from '../care/route';
 import { Fade } from '../components/Fade';
 import { GoldButton } from '../components/GoldButton';
 import { LoadingHint } from '../components/LoadingHint';
+import { RoundMark } from '../components/RoundMark';
 import { TextAction } from '../components/TextAction';
 import { useReduceMotion } from '../components/useReduceMotion';
 import { copy, failureLine } from '../copy';
 import { deviceTimeZone, spokenTime } from '../move/format';
+import type { Push } from '../push/push';
 import { colors, fonts, gold, ink, type } from '../theme';
 
 type Props = {
@@ -18,16 +20,24 @@ type Props = {
   commit: (moveId: string, timezone: string) => Promise<Commitment>;
   swap: (moveId: string, reason: string) => Promise<Screened<SwapResult>>;
   loadHint: (seed: string) => Promise<LoadingQuote | null>;
-  /** The founder closed the sheet: back to the chat. */
+  /** The phone's reminder: asked about only when the founder says yes. */
+  push: Push;
+  /** The founder closed the sheet before committing: back to the chat. */
   onClose: () => void;
+  /** The move is committed and the reminder question is settled: on to the home screen. */
+  onDone: () => void;
   onCare: (message: string, help: HelpLine[]) => void;
 };
 
 const SLIDE_MS = 600;
+const LEAVE_MS = 1400;
+
+/** The reminder question after Commit. `refused`: the phone's own box was refused, so the check-in waits on the home screen. */
+type Reminder = 'none' | 'ask' | 'yes' | 'no' | 'refused';
 
 // The Move: a solid sheet that slides up over the chat. Mission, what success looks like, the words to use,
 // a checklist, Axiom's prediction, Commit, and a quiet "Change this move" that works once.
-export function MoveScreen({ open, commit, swap, loadHint, onClose, onCare }: Props) {
+export function MoveScreen({ open, commit, swap, loadHint, push, onClose, onDone, onCare }: Props) {
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const reduce = useReduceMotion();
@@ -40,12 +50,16 @@ export function MoveScreen({ open, commit, swap, loadHint, onClose, onCare }: Pr
   const [reason, setReason] = useState('');
   // Axiom's line under the reason box: the "need a real reason" reply, or a soft reply to an unclear text.
   const [say, setSay] = useState<string | null>(null);
+  const [reminder, setReminder] = useState<Reminder>('none');
+  const [pressed, setPressed] = useState<'yes' | 'no' | null>(null);
   const [failure, setFailure] = useState<{ text: string; canRetry: boolean; retry: () => void } | null>(null);
   const live = useRef(true);
   // The sheet asks for the move once, however often its parent redraws.
-  const latest = useRef({ open, loadHint });
-  latest.current = { open, loadHint };
-  useEffect(() => () => { live.current = false; }, []);
+  const latest = useRef({ open, loadHint, onDone });
+  latest.current = { open, loadHint, onDone };
+  const leave = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const scroller = useRef<ScrollViewInstance>(null);
+  useEffect(() => () => { live.current = false; clearTimeout(leave.current); }, []);
 
   useEffect(() => {
     const up = Animated.timing(slide, { toValue: 0, duration: reduce ? 0 : SLIDE_MS, easing: Easing.bezier(0.2, 0.8, 0.2, 1), useNativeDriver: true });
@@ -76,14 +90,48 @@ export function MoveScreen({ open, commit, swap, loadHint, onClose, onCare }: Pr
   }, [run]);
   useEffect(() => { void load(); }, [load]);
 
+  const goHomeSoon = useCallback(() => {
+    clearTimeout(leave.current);
+    leave.current = setTimeout(() => { if (live.current) latest.current.onDone(); }, LEAVE_MS);
+  }, []);
+
   // Committing twice is one commitment on the server, so a lost answer is simply asked for again.
+  // Then the reminder: asked once if the phone has not been asked; if reminders are allowed already, it is simply set.
   async function doCommit(m: MoveView) {
     if (busy) return;
     try {
       const res = await run(() => commit(m.id, deviceTimeZone()), 'commit');
-      if (live.current) setMove(res.move);
+      if (!live.current) return;
+      setMove(res.move);
+      const state = await push.state().catch(() => 'off' as const);
+      if (!live.current) return;
+      if (state === 'ask') return setReminder('ask');
+      if (state === 'on') {
+        await push.refresh().catch(() => {});
+        if (live.current) setReminder('yes');
+      }
+      goHomeSoon();
     } catch (e) {
       if (live.current) setFailure({ ...failureLine(e), retry: () => void doCommit(m) });
+    }
+  }
+
+  async function answerReminder(yes: boolean) {
+    if (pressed) return;
+    setPressed(yes ? 'yes' : 'no');
+    if (!yes) {
+      setReminder('no');
+      return goHomeSoon();
+    }
+    try {
+      const result = await push.enable();
+      if (!live.current) return;
+      setReminder(result === 'on' ? 'yes' : 'refused');
+      if (result === 'on') goHomeSoon();
+    } catch (e) {
+      if (!live.current) return;
+      setPressed(null);
+      setFailure({ ...failureLine(e), retry: () => void answerReminder(true) });
     }
   }
 
@@ -108,17 +156,24 @@ export function MoveScreen({ open, commit, swap, loadHint, onClose, onCare }: Pr
     }
   }
 
+  // The reminder question and its answer sit at the bottom of a long sheet: bring them into view.
+  useEffect(() => {
+    if (reminder === 'none') return;
+    const t = setTimeout(() => scroller.current?.scrollToEnd({ animated: true }), 450);
+    return () => clearTimeout(t);
+  }, [reminder]);
+
   const tick = (n: number) => setTicked((t) => (t.includes(n) ? t.filter((i) => i !== n) : [...t, n]));
   const committed = move?.report_time_local ? move : null;
 
   return (
     <View style={styles.dim}>
       <Animated.View style={[styles.sheet, { top: Math.max(insets.top, 24) + 16, transform: [{ translateY: slide }] }]}>
-        <Pressable accessibilityRole="button" accessibilityLabel={copy.move.back} onPress={onClose} style={styles.close}>
+        <Pressable accessibilityRole="button" accessibilityLabel={copy.move.back} onPress={committed ? onDone : onClose} style={styles.close}>
           <Text style={styles.closeMark}>×</Text>
         </Pressable>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
-          <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={[styles.inner, { paddingBottom: insets.bottom + 40 }]}>
+          <ScrollView ref={scroller} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={[styles.inner, { paddingBottom: insets.bottom + 40 }]}>
             {!move && busy && <LoadingHint hint={hint} />}
             {move && (
               <Fade duration={500}>
@@ -146,7 +201,23 @@ export function MoveScreen({ open, commit, swap, loadHint, onClose, onCare }: Pr
                 {committed?.report_time_local ? (
                   <Fade duration={350}>
                     <Text style={styles.committed}>{copy.move.committed}</Text>
-                    <Text style={styles.committed}>{copy.move.remind(spokenTime(committed.report_time_local))}</Text>
+                    {reminder === 'ask' && (
+                      <Fade duration={400} style={styles.ask}>
+                        <Text style={styles.committedAsk}>{copy.move.remindAsk}</Text>
+                        <View style={styles.marks}>
+                          <RoundMark label={copy.move.remindYes} mark="tick" state={pressed === null ? 'idle' : pressed === 'yes' ? 'on' : 'dim'} onPress={() => void answerReminder(true)} />
+                          <RoundMark label={copy.move.remindNo} mark="pause" state={pressed === null ? 'idle' : pressed === 'no' ? 'on' : 'dim'} onPress={() => void answerReminder(false)} />
+                        </View>
+                      </Fade>
+                    )}
+                    {reminder === 'yes' && <Text style={styles.committed}>{copy.move.remind(spokenTime(committed.report_time_local))}</Text>}
+                    {reminder === 'no' && <Text style={styles.committed}>{copy.move.remindNone}</Text>}
+                    {reminder === 'refused' && (
+                      <Fade duration={400} style={styles.ask}>
+                        <Text style={styles.committedAsk}>{copy.move.remindersOff}</Text>
+                        <TextAction label={copy.move.phoneSettings} size={15} onPress={() => void Linking.openSettings().catch(() => {})} />
+                      </Fade>
+                    )}
                   </Fade>
                 ) : (
                   <GoldButton label={copy.move.commit} onPress={() => void doCommit(move)} disabled={busy} />
@@ -221,6 +292,9 @@ const styles = StyleSheet.create({
   itemDone: { opacity: 0.5, textDecorationLine: 'line-through' },
   prediction: { fontFamily: fonts.serif, fontStyle: 'italic', fontSize: 16, lineHeight: 24, color: ink(0.8), marginVertical: 24 },
   committed: { fontFamily: fonts.serif, fontSize: 16, lineHeight: 25, color: ink(0.8), textAlign: 'center', paddingTop: 10 },
+  ask: { alignItems: 'center', marginTop: 22, paddingTop: 18, borderTopWidth: 1, borderTopColor: ink(0.12) },
+  committedAsk: { fontFamily: fonts.serif, fontSize: 17, lineHeight: 25, color: colors.ink, textAlign: 'center', marginBottom: 14 },
+  marks: { flexDirection: 'row', justifyContent: 'center', gap: 22 },
   change: { marginTop: 16, alignItems: 'center' },
   swap: { alignSelf: 'stretch', marginTop: 8 },
   swapAsk: { fontFamily: fonts.sans, fontSize: 13, lineHeight: 19.5, color: ink(0.6), marginBottom: 10 },

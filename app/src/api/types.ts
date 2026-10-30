@@ -237,11 +237,40 @@ export type Story = { story: string; lesson: string | null; outcome: string; sta
 /** After the founder shares or keeps private: the server's own confirmation line. */
 export type ConsentResult = { consent: ConsentState; reply: string };
 
+/** Where the screens a home item or a history action leads: the stage, the situation, and the move when there is one. */
+export type Target = { stage: 'situation' | 'read' | 'learn' | 'move' | 'report'; situation_id: string; move_id?: string };
+
+/** One thing still to do. `stays` is true when it must not fade (the founder asked, or no phone can ring). */
+export type HomeItem = { kind: 'report' | 'move' | 'situation'; label: string; title: string | null; stays: boolean; target: Target };
+
+/** A situation listed in the menu. `stage` is where it stands, null once it has no live screen. */
+export type DrawerSituation = { id: string; title: string | null; stage: Target['stage'] | null; last_activity_at: string };
+
+/**
+ * The home screen. Axiom's greeting comes from the server, as does every label. While a care event is open
+ * (`care_check_in`) the greeting is the gentle check-in line and there is nothing else.
+ */
+export type Home = {
+  greeting: { kind: string; text: string };
+  care_check_in: boolean;
+  /** At most 2, shown above the bar and faded after `fade_after_ms`, except those that stay. */
+  items: HomeItem[];
+  fade_after_ms: number;
+  drawer: { to_do: HomeItem[]; open: DrawerSituation[]; paused: DrawerSituation[]; recent: { id: string; title: string | null; status: string }[] };
+  due_reports: { move_id: string; situation_id: string; title: string | null; report_due_at: string }[];
+};
+
+/** The sign-up as it stands: the questions, what the founder has answered, and whether every one is answered. */
+export type Signup = { questions: Question[]; answers: Record<string, Answer>; complete: boolean };
+
+/** The kind of phone a reminder token belongs to. */
+export type PushPlatform = 'ios' | 'android';
+
 export interface AxiomApi {
   /** Starts Google sign-in. Resolves when the founder is signed in. */
   signInWithGoogle(): Promise<void>;
-  /** The onboarding questions, in order. */
-  getQuestions(): Promise<Question[]>;
+  /** The onboarding questions in order, with the founder's saved answers. */
+  getSignup(): Promise<Signup>;
   /** Saves one answer as soon as it is given, so an interrupted founder can resume. Typed answers are screened. */
   saveAnswer(key: string, answer: Answer): Promise<Screened>;
   /** The first reading. Resolves once every saved answer has reached the server and the reading is written. */
@@ -271,6 +300,8 @@ export interface AxiomApi {
   swapMove(moveId: string, reason: string): Promise<Screened<SwapResult>>;
   /** One verified quote and its book while an answer is on its way, or null when nothing fits. Never throws for the screen. */
   getLoadingHint(seed: string): Promise<LoadingQuote | null>;
+  /** One move by id: the sheet behind a home item. */
+  getMove(moveId: string): Promise<MoveView>;
   /** Moves waiting for a check-in, the one due first. Empty while the care screen is open. */
   getDueReports(): Promise<DueReport[]>;
   /**
@@ -282,4 +313,12 @@ export interface AxiomApi {
   getStory(reportId: string): Promise<Story | null>;
   /** Share or keep private, with the wording version of the question the founder saw. Sending the same answer again is safe. */
   setConsent(reportId: string, share: boolean, wordingVersion: string): Promise<ConsentResult>;
+  /** The home screen. `timeZone` is the phone's, used when the founder has none saved. Each call picks a new greeting. */
+  getHome(timeZone: string): Promise<Home>;
+  /** The answer to the care check-in. Screened first; `{ ok: true }` means it was read and home is normal again. */
+  sendCheckIn(text: string): Promise<Screened<{ ok: true }>>;
+  /** Tells the server this phone can get the evening reminder. Safe to send again. */
+  registerPushToken(token: string, platform: PushPlatform, timeZone: string): Promise<void>;
+  /** This phone no longer gets reminders for this founder. */
+  removePushToken(token: string): Promise<void>;
 }

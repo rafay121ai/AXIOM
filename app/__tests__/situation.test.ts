@@ -110,7 +110,7 @@ describe('the conversation', () => {
   });
   it('starts a fresh conversation for a new topic', () => {
     const old = { id: 0, who: 'ax', text: 'old question' } as const;
-    const chat = { situationId: 's1', items: [old, me], nextId: 3 };
+    const chat = { ...newChat({ situationId: 's1' }), items: [old, me], nextId: 3 };
     const items = applyReply(chat, reply({ situation_id: 's2', started_new: true }), me);
     expect(items.map((i) => i.who)).toEqual(['me', 'ax']);
     expect(chat.situationId).toBe('s2');
