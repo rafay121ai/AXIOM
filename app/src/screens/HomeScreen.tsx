@@ -3,7 +3,7 @@ import { Animated, BackHandler, Easing, KeyboardAvoidingView, Platform, Pressabl
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { sendUntilDelivered } from '../api/delivery';
-import type { HelpLine, Home, HomeItem, Screened, Target } from '../api/types';
+import type { CareHelp, Home, HomeItem, Screened, Target } from '../api/types';
 import { routeScreened } from '../care/route';
 import { Composer } from '../components/Composer';
 import { Fade } from '../components/Fade';
@@ -30,7 +30,7 @@ type Props = {
   onPast: (id: string) => void;
   onHistory: () => void;
   onSettings: () => void;
-  onCare: (message: string, help: HelpLine[]) => void;
+  onCare: (message: string, help: CareHelp) => void;
 };
 
 const DRAWER_SHARE = 0.84;

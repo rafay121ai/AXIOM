@@ -100,6 +100,8 @@ export const copy = {
     how: 'How it went',
     shared: 'Shared without your name',
     private: 'Kept private',
+    // NEEDS APPROVAL: the mock styles a withdraw link (.withdraw) but shows no words for it.
+    takeDown: 'Take it down',
   },
   // mock-onboarding-v2.html, screen 11 (Settings) and mock-states-v1.html section 4, word for word.
   settings: {

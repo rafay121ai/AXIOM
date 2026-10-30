@@ -30,7 +30,7 @@ describe('home calls', () => {
   });
 
   it('passes a care answer to the check-in through unchanged', async () => {
-    const care = { care: 'clear', message: 'm', help: [] };
+    const care = { care: 'clear', message: 'm', help: { country: null, emergency: null, lines: [], fallback: 'f', needs_verification: true } };
     const api = createHttpApi({ baseUrl: 'http://x', auth, fetch: jest.fn().mockResolvedValue(json(200, care)) });
     expect(routeScreened(await api.sendCheckIn('text')).kind).toBe('care');
   });

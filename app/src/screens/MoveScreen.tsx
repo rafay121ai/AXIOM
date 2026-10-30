@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Easing, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, type ScrollViewInstance, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { sendUntilDelivered } from '../api/delivery';
-import type { Commitment, HelpLine, LoadingQuote, MoveView, Screened, SwapResult } from '../api/types';
+import type { Commitment, CareHelp, LoadingQuote, MoveView, Screened, SwapResult } from '../api/types';
 import { routeScreened } from '../care/route';
 import { Fade } from '../components/Fade';
 import { GoldButton } from '../components/GoldButton';
@@ -26,7 +26,7 @@ type Props = {
   onClose: () => void;
   /** The move is committed and the reminder question is settled: on to the home screen. */
   onDone: () => void;
-  onCare: (message: string, help: HelpLine[]) => void;
+  onCare: (message: string, help: CareHelp) => void;
 };
 
 const SLIDE_MS = 600;

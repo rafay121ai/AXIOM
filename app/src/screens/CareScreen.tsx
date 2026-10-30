@@ -1,11 +1,11 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { HelpLine } from '../api/types';
+import type { CareHelp } from '../api/types';
 import { careParagraphs } from '../care/route';
 import { Logo } from '../components/Logo';
 import { colors, fonts, ink, type } from '../theme';
 
-type Props = { message: string; help: HelpLine[]; onKeepTalking: () => void };
+type Props = { message: string; help: CareHelp; onKeepTalking: () => void };
 
 // Calm on purpose: no glow, no animation, nothing that pushes the founder anywhere.
 // The words and numbers come from the server; the app holds none.
@@ -22,12 +22,16 @@ export function CareScreen({ message, help, onKeepTalking }: Props) {
       <Text accessibilityRole="header" style={[type.careHead, styles.heading]}>{heading}</Text>
       {body.map((p) => <Text key={p} style={[type.care, styles.p]}>{p}</Text>)}
       <View style={styles.help}>
-        {help.map((h) => (
-          <View key={h.label} style={styles.row}>
-            <Text style={styles.key}>{h.label}</Text>
-            <Text selectable style={styles.value}>{h.value}</Text>
+        {help.emergency && (
+          <View style={styles.row}><Text selectable style={styles.value}>{help.emergency}</Text></View>
+        )}
+        {help.lines.map((h) => (
+          <View key={h.name} style={styles.row}>
+            <Text style={styles.key}>{h.name}</Text>
+            {h.contact && <Text selectable style={styles.value}>{h.contact}</Text>}
           </View>
         ))}
+        <View style={styles.row}><Text selectable style={styles.value}>{help.fallback}</Text></View>
       </View>
       <Pressable accessibilityRole="button" onPress={onKeepTalking} style={styles.keep}>
         <Text style={styles.keepText}>Keep talking</Text>

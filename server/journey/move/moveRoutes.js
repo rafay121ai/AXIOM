@@ -38,7 +38,7 @@ export function mountMoveRoutes(app, { supabase, care, callStructured, clock }) 
   }
 
   // Builds the move behind Learn's card; the founder sends no text here.
-  app.post('/api/learn/:id/move', limiter(5),
+  app.post('/api/learn/:id/move', limiter(5), care.careHold,
     handle((req) => service.create({ userId: req.user.id, learnId: idParam(req) })))
 
   app.get('/api/moves/active', limiter(60),
@@ -47,14 +47,14 @@ export function mountMoveRoutes(app, { supabase, care, callStructured, clock }) 
   app.get('/api/moves/:id', limiter(60),
     handle((req) => service.get({ userId: req.user.id, moveId: idParam(req) })))
 
-  app.post('/api/moves/:id/commit', limiter(20),
+  app.post('/api/moves/:id/commit', limiter(20), care.careHold,
     handle((req) => {
       const timeZone = req.body?.timezone
       if (timeZone !== undefined && timeZone !== null && !validTimeZone(timeZone)) bad('timezone is not valid')
       return service.commit({ userId: req.user.id, moveId: idParam(req), timeZone: timeZone ?? null })
     }))
 
-  app.post('/api/moves/:id/swap', limiter(5), care.careGate(bodyFields('reason')),
+  app.post('/api/moves/:id/swap', limiter(5), care.careHold, care.careGate(bodyFields('reason')),
     handle((req) => {
       const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : ''
       if (!reason) bad('reason is required')

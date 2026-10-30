@@ -1,8 +1,8 @@
-import type { HelpLine, Screened } from '../api/types';
+import type { CareHelp, Screened } from '../api/types';
 
 // Where a screened response sends the founder. One rule for every text-sending call.
 export type CareRoute =
-  | { kind: 'care'; message: string; help: HelpLine[] }
+  | { kind: 'care'; message: string; help: CareHelp }
   | { kind: 'unclear'; reply: string }
   | { kind: 'carry' };
 

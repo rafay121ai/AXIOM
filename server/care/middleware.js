@@ -75,15 +75,20 @@ export function createCare({ supabase, callStructured, clock = { now: () => Date
     return data?.country ?? null
   }
 
-  // True while a clear care event is unresolved. Pushes for this founder stay
-  // paused. If the lookup fails we answer true: pausing is the safe side.
-  async function isCareOpen(userId) {
+  // True while a clear care event is unresolved. Throws when the lookup fails.
+  async function clearIsOpen(userId) {
     if (!supabase) return false
+    const { data, error } = await supabase
+      .from('care_events').select('id').eq('user_id', userId).eq('level', 'clear').is('resolved_at', null).limit(1)
+    if (error) throw error
+    return (data || []).length > 0
+  }
+
+  // Pushes for this founder stay paused while care is open. If the lookup
+  // fails we answer true: pausing is the safe side.
+  async function isCareOpen(userId) {
     try {
-      const { data, error } = await supabase
-        .from('care_events').select('id').eq('user_id', userId).eq('level', 'clear').is('resolved_at', null).limit(1)
-      if (error) throw error
-      return (data || []).length > 0
+      return await clearIsOpen(userId)
     } catch (err) {
       log('open check failed', err)
       return true
@@ -138,14 +143,24 @@ export function createCare({ supabase, callStructured, clock = { now: () => Date
         }
       }
 
-      if (level === 'clear') {
-        let country = null
-        try { country = await countryOf(userId) } catch (err) { log('country read failed', err) }
-        return res.json({ care: 'clear', message: CARE_COPY.clearMessage, help: helpFor(country) })
-      }
+      if (level === 'clear') return sendClear(userId, res)
       return res.json({ care: 'unclear', reply: CARE_COPY.unclearReply })
     }
   }
 
-  return { careGate, isCareOpen, resolveCare }
+  async function sendClear(userId, res) {
+    let country = null
+    try { country = await countryOf(userId) } catch (err) { log('country read failed', err) }
+    return res.json({ care: 'clear', message: CARE_COPY.clearMessage, help: helpFor(country) })
+  }
+
+  // Distress stops the journey until the founder is checked in on (home):
+  // while a clear event is open, a step that would read, teach or give a move
+  // shows the care screen again. No model call, nothing stored, no new event.
+  // A failed lookup is an error, not a care screen for someone who is fine.
+  function careHold(req, res, next) {
+    clearIsOpen(req.user?.id).then((open) => (open ? sendClear(req.user.id, res) : next()), next)
+  }
+
+  return { careGate, careHold, isCareOpen, resolveCare }
 }

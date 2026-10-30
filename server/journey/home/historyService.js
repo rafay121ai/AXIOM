@@ -97,7 +97,7 @@ export function createHistory({ supabase, clock }) {
       what_you_learned: learned,
       your_move: move ? { title: move.title, mission: move.mission, success: move.success_condition } : null,
       how_it_went: report ? {
-        outcome: report.outcome, note: report.note ?? null, reply: report.reply,
+        report_id: report.id, outcome: report.outcome, note: report.note ?? null, reply: report.reply,
         prediction: { text: report.prediction, check: report.prediction_check },
         sharing: report.share_state === 'shared' ? 'shared' : 'private',
       } : null,

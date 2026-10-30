@@ -59,19 +59,19 @@ export function mountLearnRoutes(app, { supabase, knowledgeSupabase = null, embe
   const clientTurnId = (req) => (isUuid(req.body?.client_turn_id) ? req.body.client_turn_id : bad('client_turn_id must be a uuid'))
 
   // Reads the stored situation and Read answer; the founder sends no text here.
-  app.post('/api/situations/:id/learn', limiter(5),
+  app.post('/api/situations/:id/learn', limiter(5), care.careHold,
     handle((req) => service.start({ userId: req.user.id, situationId: idParam(req) })))
 
   app.get('/api/learn/:id', limiter(60),
     handle((req) => service.get({ userId: req.user.id, learnId: idParam(req) })))
 
-  app.post('/api/learn/:id/turn', limiter(30), care.careGate(bodyFields('text')),
+  app.post('/api/learn/:id/turn', limiter(30), care.careHold, care.careGate(bodyFields('text')),
     handle((req) => service.turn({
       userId: req.user.id, learnId: idParam(req), text: textOf(req), clientTurnId: clientTurnId(req), name: firstNameOf(req.user),
     })))
 
   // The tapped suggestion is Axiom's own text, stored on the server: no care gate.
-  app.post('/api/learn/:id/followup/:n', limiter(20),
+  app.post('/api/learn/:id/followup/:n', limiter(20), care.careHold,
     handle((req) => {
       const index = /^\d$/.test(req.params.n) ? Number(req.params.n) : null
       if (index === null) throw new HttpError(404, { error: 'Not found' })

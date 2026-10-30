@@ -12,6 +12,8 @@ import { colors, fonts, gold, ink } from '../theme';
 
 type Props = {
   load: () => Promise<HistoryPage>;
+  /** Takes this check-in's share down; resolves with the server's line. */
+  withdraw: (reportId: string) => Promise<string>;
   /** The one action: pick it up, bring it back, or talk about it again. A rejection means it could not be opened. */
   onAction: (target: Target) => Promise<void>;
   onBack: () => void;
@@ -27,10 +29,11 @@ function Section({ label, children }: { label: string; children: React.ReactNode
 }
 
 // A past situation, read only, divided by thin lines. No delete here: stored situations are the memory.
-export function PastScreen({ load, onAction, onBack }: Props) {
+export function PastScreen({ load, withdraw, onAction, onBack }: Props) {
   const [page, setPage] = useState<HistoryPage | null>(null);
   const [failure, setFailure] = useState<{ text: string; canRetry: boolean } | null>(null);
   const [notOpened, setNotOpened] = useState<string | null>(null);
+  const [takenDown, setTakenDown] = useState<string | null>(null);
   const live = useRef(true);
   const latest = useRef(load);
   latest.current = load;
@@ -84,7 +87,17 @@ export function PastScreen({ load, onAction, onBack }: Props) {
             {how && (
               <Section label={copy.history.how}>
                 <Text style={styles.plain}>{[copy.report.outcome[how.outcome] + '.', how.note].filter(Boolean).join(' ')}</Text>
-                <Text style={styles.small}>{how.sharing === 'shared' ? copy.history.shared : copy.history.private}</Text>
+                <Text style={styles.small}>{how.sharing === 'shared' && !takenDown ? copy.history.shared : copy.history.private}</Text>
+                {how.sharing === 'shared' && !takenDown && (
+                  <TextAction
+                    label={copy.history.takeDown}
+                    size={13.5}
+                    onPress={() => withdraw(how.report_id)
+                      .then((line) => live.current && setTakenDown(line))
+                      .catch((e) => live.current && setTakenDown(failureLine(e, 'save').text))}
+                  />
+                )}
+                {takenDown && <Text style={[styles.small, { marginTop: 10 }]}>{takenDown}</Text>}
               </Section>
             )}
             <View style={styles.action}>

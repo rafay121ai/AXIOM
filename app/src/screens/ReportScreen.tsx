@@ -3,7 +3,7 @@ import { Animated, KeyboardAvoidingView, Platform, ScrollView, type ScrollViewIn
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { newTurnId, sendUntilDelivered } from '../api/delivery';
-import type { ConsentResult, ConsentState, DueReport, HelpLine, Outcome, ReportResult, Screened, Story } from '../api/types';
+import type { ConsentResult, ConsentState, DueReport, CareHelp, Outcome, ReportResult, Screened, Story } from '../api/types';
 import { routeScreened } from '../care/route';
 import { Composer } from '../components/Composer';
 import { Fade } from '../components/Fade';
@@ -23,7 +23,7 @@ type Props = {
   consent: (reportId: string, share: boolean, wordingVersion: string) => Promise<ConsentResult>;
   /** The check-in is done and Axiom has said its last line. */
   onFinish: () => void;
-  onCare: (message: string, help: HelpLine[]) => void;
+  onCare: (message: string, help: CareHelp) => void;
 };
 
 type Choice = { key: string; label: string; mark: MarkName };

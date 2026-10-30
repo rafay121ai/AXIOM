@@ -284,6 +284,13 @@ test('swap: once, only with a real reason, behind the care gate', async () => {
     assert.equal(care.body.care, 'clear')
     assert.equal(rows('moves').length, 1)
 
+    // Care stays open until the founder checks in on home: starting the move is held too, with no model call.
+    const held = await call('POST', `/api/moves/${uuid(301)}/commit`, {})
+    assert.equal(held.body.care, 'clear')
+    assert.equal(rows('moves')[0].status, 'draft')
+    assert.equal(chatCalls().length, 0)
+    assert.deepEqual((await call('POST', '/api/home/checkin', { text: 'All fine, back to the clinics.' })).body, { ok: true })
+
     const res = await call('POST', `/api/moves/${uuid(301)}/swap`, { reason: 'I only have their email, not their phone numbers' })
     assert.equal(res.status, 200)
     assert.equal(res.body.status, 'swapped')

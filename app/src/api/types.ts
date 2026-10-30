@@ -81,11 +81,20 @@ export type TextAnswer = string;
 
 export type Answer = SingleAnswer | WhereAnswer | GoalAnswer | TwoAnswer | MultiAnswer | TextAnswer;
 
-/** One line of real help for the founder's country. The server sends these; the app never holds numbers. */
-export type HelpLine = { label: string; value: string };
+/**
+ * Real help for the founder's country, exactly as the server's care check sends it. Only verified lines are
+ * listed; until a country is verified, `lines` is empty and `fallback` is the line to show. The app holds no numbers.
+ */
+export type CareHelp = {
+  country: string | null;
+  emergency: string | null;
+  lines: { name: string; contact: string | null }[];
+  fallback: string;
+  needs_verification: boolean;
+};
 
 /** Clear distress: show the care screen. No lesson, no move. */
-export type CareClear = { care: 'clear'; message: string; help: HelpLine[] };
+export type CareClear = { care: 'clear'; message: string; help: CareHelp };
 /** Unclear or slang: Axiom answers softly in the chat. No lesson, no move this turn. */
 export type CareUnclear = { care: 'unclear'; reply: string };
 /** Every text the founder sends is screened first. No `care` field means carry on. */
@@ -107,6 +116,16 @@ export type SituationReply = {
   follow_ups_left: number;
   /** The text started a new situation, because it was about something else. */
   started_new?: boolean;
+};
+
+/** One earlier line of a situation, oldest first. Filler turns the server left out are not here. */
+export type SituationTurn = { role: 'founder' | 'axiom'; text: string; created_at: string };
+
+/** A situation as it stands, for picking it up again: what was said so far, and the Read if there is one. */
+export type SituationView = {
+  situation: { id: string; title: string | null; status: string; follow_up_count: number; created_at: string };
+  turns: SituationTurn[];
+  read: Read | null;
 };
 
 /** The Read: a headline, a short body (paragraphs split by blank lines) and one closing question. No underlines. */
@@ -272,7 +291,7 @@ export type HistoryPage = {
   what_i_read: { headline: string; body: string; closing_question: string; your_answer: string | null } | null;
   what_you_learned: { text: string; sources: LearnSource[] } | null;
   your_move: { title: string; mission: string; success: string } | null;
-  how_it_went: { outcome: Outcome; note: string | null; reply: string; prediction: { text: string; check: string | null }; sharing: 'shared' | 'private' } | null;
+  how_it_went: { report_id: string; outcome: Outcome; note: string | null; reply: string; prediction: { text: string; check: string | null }; sharing: 'shared' | 'private' } | null;
   action: { kind: 'pick_up' | 'bring_back' | 'talk_again'; label: string; target: Target };
 };
 
@@ -328,6 +347,8 @@ export interface AxiomApi {
   startSituation(text: string, turnId: string): Promise<Screened<SituationReply>>;
   /** The next text in a situation. Same turn id rules as startSituation. A new topic comes back with `started_new`. */
   sendTurn(situationId: string, text: string, turnId: string): Promise<Screened<SituationReply>>;
+  /** A situation with what was said in it so far: how the app picks a situation up again. */
+  getSituation(situationId: string): Promise<SituationView>;
   /** The Read for a situation. The same Read comes back every time it is asked for. */
   getRead(situationId: string): Promise<Read>;
   /** The founder's reply to the Read's closing question, or a skip. Typed replies are screened. */
@@ -359,6 +380,8 @@ export interface AxiomApi {
   getStory(reportId: string): Promise<Story | null>;
   /** Share or keep private, with the wording version of the question the founder saw. Sending the same answer again is safe. */
   setConsent(reportId: string, share: boolean, wordingVersion: string): Promise<ConsentResult>;
+  /** Takes a shared check-in down. The reply is the server's line, or null when nothing was shared. Safe to repeat. */
+  withdrawShare(reportId: string): Promise<{ consent: ConsentState; reply: string | null }>;
   /** The home screen. `timeZone` is the phone's, used when the founder has none saved. Each call picks a new greeting. */
   getHome(timeZone: string): Promise<Home>;
   /** The answer to the care check-in. Screened first; `{ ok: true }` means it was read and home is normal again. */

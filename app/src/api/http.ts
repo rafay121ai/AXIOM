@@ -1,7 +1,7 @@
 import type { Auth } from './auth';
 import { createOutbox, type KeyValueStore, memoryStore } from './outbox';
 import { createSaveQueue, HttpError } from './queue';
-import type { AccountRequest, AxiomApi, Commitment, ConsentResult, DueReport, FirstReading, HistoryPage, HistoryRow, Home, LearnReply, LoadingQuote, MoveView, Read, ReadAnswerResult, ReportResult, Screened, Settings, Signup, SituationReply, Story, SwapResult } from './types';
+import type { AccountRequest, AxiomApi, Commitment, ConsentResult, ConsentState, DueReport, FirstReading, HistoryPage, HistoryRow, Home, LearnReply, LoadingQuote, MoveView, Read, ReadAnswerResult, ReportResult, Screened, Settings, Signup, SituationReply, SituationView, Story, SwapResult } from './types';
 
 const CODE_NAME = /^[a-z]+(_[a-z]+)*$/;
 
@@ -57,6 +57,7 @@ export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch
     startSituation: (text, turnId) => sendWritten<Screened<SituationReply>>(`turn:${turnId}`, 'POST', '/api/situations', { text, client_turn_id: turnId }),
     sendTurn: (situationId, text, turnId) =>
       sendWritten<Screened<SituationReply>>(`turn:${turnId}`, 'POST', `/api/situations/${situationId}/turn`, { text, client_turn_id: turnId }),
+    getSituation: (situationId) => request<SituationView>('GET', `/api/situations/${situationId}`),
     getRead: (situationId) => request<Read>('POST', `/api/situations/${situationId}/read`),
     answerRead: (situationId, answer) =>
       request<Screened<ReadAnswerResult>>('POST', `/api/situations/${situationId}/read/answer`, answer),
@@ -90,6 +91,7 @@ export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch
     },
     setConsent: (reportId, share, wordingVersion) =>
       request<ConsentResult>('POST', `/api/reports/${reportId}/consent`, { share, wording_version: wordingVersion }),
+    withdrawShare: (reportId) => request<{ consent: ConsentState; reply: string | null }>('POST', `/api/reports/${reportId}/withdraw`),
     getHome: (timeZone) => request<Home>('GET', `/api/home?time_zone=${encodeURIComponent(timeZone)}`),
     sendCheckIn: (text) => sendWritten<Screened<{ ok: true }>>('checkin', 'POST', '/api/home/checkin', { text }),
     async getHistory(q) {

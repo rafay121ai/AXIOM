@@ -298,6 +298,10 @@ test('care gate also stops a turn and a Read reply', async () => {
     const turn = await call('POST', `/api/situations/${id}/turn`, { text: 'I want to kill myself.', client_turn_id: uuid(2) })
     assert.equal(turn.body.care, 'clear')
     assert.equal(rows('situation_turns').filter((t) => t.role === 'founder').length, 1)
+    // Care stays open until the founder checks in on home: no Read until then.
+    assert.equal((await call('POST', `/api/situations/${id}/read`)).body.care, 'clear')
+    assert.equal(rows('reads').length, 0)
+    assert.deepEqual((await call('POST', '/api/home/checkin', { text: 'All fine, back to the clinics.' })).body, { ok: true })
     await call('POST', `/api/situations/${id}/read`)
     const answer = await call('POST', `/api/situations/${id}/read/answer`, { text: 'I want to kill myself.' })
     assert.equal(answer.body.care, 'clear')

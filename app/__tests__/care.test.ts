@@ -12,7 +12,7 @@ describe('screening routes', () => {
     const r = routeScreened(await createFakeApi('clear').startSituation('x', 'turn-2'));
     expect(r.kind).toBe('care');
     if (r.kind === 'care') {
-      expect(r.help.length).toBeGreaterThan(0);
+      expect(r.help.fallback).toBeTruthy();
       expect(r.message.length).toBeGreaterThan(0);
     }
   });

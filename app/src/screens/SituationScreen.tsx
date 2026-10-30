@@ -3,7 +3,7 @@ import { KeyboardAvoidingView, Platform, ScrollView, type ScrollViewInstance, St
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { newTurnId, sendUntilDelivered } from '../api/delivery';
-import type { HelpLine } from '../api/types';
+import type { CareHelp } from '../api/types';
 import { routeScreened } from '../care/route';
 import { Composer } from '../components/Composer';
 import { Fade } from '../components/Fade';
@@ -24,7 +24,7 @@ type Props = {
   send: SendTurn;
   /** Axiom has what it needs: on to the Read. */
   onReady: (situationId: string) => void;
-  onCare: (message: string, help: HelpLine[]) => void;
+  onCare: (message: string, help: CareHelp) => void;
 };
 
 const BAR_DELAY = 1400;

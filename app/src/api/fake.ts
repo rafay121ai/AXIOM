@@ -1,5 +1,5 @@
 import { HttpError } from './queue';
-import type { AccountRequest, AxiomApi, Commitment, ConsentResult, DueReport, FirstReading, HistoryPage, HistoryRow, Home, HomeItem, LearnReply, LearnTurn, MoveView, Outcome, Question, Read, ReadAnswerResult, ReportResult, Screened, Settings, SituationReply, Story, SwapResult } from './types';
+import type { AccountRequest, AxiomApi, Commitment, ConsentResult, DueReport, FirstReading, HistoryPage, HistoryRow, Home, HomeItem, LearnReply, LearnTurn, MoveView, Outcome, Question, Read, ReadAnswerResult, ReportResult, Screened, Settings, SituationReply, SituationView, Story, SwapResult } from './types';
 
 // Fixture questions, word for word from tasks/design/mock-onboarding-v2.html.
 const QUESTIONS: Question[] = [
@@ -63,11 +63,7 @@ const CLEAR: Screened = {
     'Placeholder: a line inviting the founder to tell someone near them.',
     'Placeholder: a line saying Axiom is an assistant, and is here if they want to keep talking.',
   ].join('\n\n'),
-  help: [
-    { label: 'If you are in danger right now', value: 'Emergency number for your country' },
-    { label: 'Talk to someone trained to listen', value: 'A helpline for your country' },
-    { label: 'More help near you', value: 'findahelpline.com' },
-  ],
+  help: { country: null, emergency: null, lines: [], fallback: 'More help near you: findahelpline.com', needs_verification: true },
 };
 const UNCLEAR: Screened = { care: 'unclear', reply: 'That sounded heavy. What is going on?' };
 
@@ -191,17 +187,17 @@ const HISTORY: { row: HistoryRow; page: Omit<HistoryPage, 'id' | 'title' | 'stat
     page: { what_i_read: { headline: 'You are afraid a price will end the conversation.', body: '', closing_question: '', your_answer: null },
       what_you_learned: { text: '', sources: [{ author: 'Alex Hormozi', book: '$100M Offers' }] },
       your_move: { title: 'Quote a paid pilot', mission: 'Quote a paid pilot to one clinic before the call ends.', success: 'They name a yes or a no.' },
-      how_it_went: { outcome: 'done', note: 'The clinic asked for a day to think, then said yes to a smaller pilot.', reply: '', prediction: { text: '', check: null }, sharing: 'shared' } } },
+      how_it_went: { report_id: 'fake-report-1', outcome: 'done', note: 'The clinic asked for a day to think, then said yes to a smaller pilot.', reply: '', prediction: { text: '', check: null }, sharing: 'shared' } } },
   { row: { id: 'fake-situation-3', title: 'Which feature to cut first', status: 'couldnt', status_label: "Couldn't", last_activity_at: '2026-10-23T09:00:00.000Z' },
     page: { what_i_read: { headline: 'You keep every feature because cutting one feels like admitting it was wrong.', body: '', closing_question: '', your_answer: null },
       what_you_learned: { text: '', sources: [{ author: 'Eric Ries', book: 'The Lean Startup' }] },
       your_move: { title: 'List the features', mission: 'List every feature and mark the one nobody asked for.', success: 'One feature is marked.' },
-      how_it_went: { outcome: 'couldnt', note: 'The clinic closed for the holiday. A smaller version was offered.', reply: '', prediction: { text: '', check: null }, sharing: 'private' } } },
+      how_it_went: { report_id: 'fake-report-2', outcome: 'couldnt', note: 'The clinic closed for the holiday. A smaller version was offered.', reply: '', prediction: { text: '', check: null }, sharing: 'private' } } },
   { row: { id: 'fake-situation-4', title: 'Why nobody replies to my emails', status: 'didnt', status_label: "Didn't", last_activity_at: '2026-10-22T09:00:00.000Z' },
     page: { what_i_read: { headline: 'Your emails ask for a lot before they give anything.', body: '', closing_question: '', your_answer: null },
       what_you_learned: { text: '', sources: [{ author: 'Chris Voss', book: 'Never Split the Difference' }] },
       your_move: { title: 'Rewrite the email', mission: 'Rewrite the first email so it asks one small question.', success: 'The email asks one question.' },
-      how_it_went: { outcome: 'didnt', note: 'I did not know what to write.', reply: '', prediction: { text: '', check: null }, sharing: 'private' } } },
+      how_it_went: { report_id: 'fake-report-3', outcome: 'didnt', note: 'I did not know what to write.', reply: '', prediction: { text: '', check: null }, sharing: 'private' } } },
   { row: { id: 'fake-situation-5', title: 'Hiring plan', status: 'paused', status_label: 'Paused', last_activity_at: '2026-10-10T09:00:00.000Z' },
     page: { what_i_read: { headline: 'You are planning a hire before you have a customer.', body: '', closing_question: '', your_answer: null },
       what_you_learned: null, your_move: null, how_it_went: null } },
@@ -283,7 +279,7 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
 
   // Situations kept in memory, so a turn id sent twice gets the same answer, like the server.
   let nextId = 1;
-  const situations = new Map<string, { asked: number; said: string[] }>();
+  const situations = new Map<string, { asked: number; said: string[]; turns: SituationView['turns'] }>();
   const replies = new Map<string, SituationReply>();
   const turn = async (situationId: string | null, text: string, turnId: string): Promise<Screened<SituationReply>> => {
     const flagged = await screen();
@@ -294,16 +290,18 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
     const asked = state?.asked ?? 0;
     const counts = (n: number) => ({ follow_up_count: n, follow_ups_left: MAX_FOLLOW_UPS - n });
     let reply: SituationReply;
+    const at = () => new Date().toISOString();
     if (!isReal(text)) {
       reply = { situation_id: situationId, status: 'say_more', reply: SAY_MORE, ...counts(asked) };
     } else {
       const id = situationId ?? `fake-situation-${nextId++}`;
       const said = [...(state?.said ?? []), text];
       const done = asked >= MAX_FOLLOW_UPS || isEnough(said.join(' '));
-      situations.set(id, { asked: done ? asked : asked + 1, said });
       reply = done
         ? { situation_id: id, status: 'ready', reply: null, ...counts(asked) }
         : { situation_id: id, status: 'follow_up', reply: FOLLOW_UPS[asked], ...counts(asked + 1) };
+      const turns: SituationView['turns'] = [...(state?.turns ?? []), { role: 'founder', text, created_at: at() }, ...(reply.reply ? [{ role: 'axiom' as const, text: reply.reply, created_at: at() }] : [])];
+      situations.set(id, { asked: done ? asked : asked + 1, said, turns });
     }
     replies.set(turnId, reply);
     return reply;
@@ -339,6 +337,11 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
     },
     startSituation: (text, turnId) => turn(null, text, turnId),
     sendTurn: (situationId, text, turnId) => turn(situationId, text, turnId),
+    async getSituation(id): Promise<SituationView> {
+      const state = situations.get(id);
+      if (!state) throw new HttpError(404);
+      return { situation: { id, title: null, status: 'open', follow_up_count: state.asked, created_at: state.turns[0].created_at }, turns: state.turns, read: null };
+    },
     async getRead() {
       return FAKE_READ;
     },
@@ -432,6 +435,9 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
         consent: { ask: false, state: share ? 'shared' : 'private', automatic: false },
         reply: share ? SHARED_LINE : KEPT_PRIVATE_LINE,
       };
+    },
+    async withdrawShare() {
+      return { consent: { ask: false, state: 'withdrawn', automatic: false }, reply: 'Taken down. Nothing from this check-in is shared.' };
     },
     async getHome() {
       const settled = (homeState === 'care' && checkedIn) || (reported && (homeState === 'evening' || homeState === 'report'));

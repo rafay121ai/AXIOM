@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { sendUntilDelivered } from '../api/delivery';
-import type { Answer, HelpLine, Question, Screened, Signup } from '../api/types';
+import type { Answer, CareHelp, Question, Screened, Signup } from '../api/types';
 import { routeScreened } from '../care/route';
 import { Fade } from '../components/Fade';
 import { GoldButton } from '../components/GoldButton';
@@ -21,7 +21,7 @@ type Props = {
   /** Open straight on this question (the Country row). */
   startAt?: string;
   onBack: () => void;
-  onCare: (message: string, help: HelpLine[]) => void;
+  onCare: (message: string, help: CareHelp) => void;
 };
 
 // "What Axiom knows about you": the sign-up questions again, one at a time, with the same input as the first time.

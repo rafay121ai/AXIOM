@@ -3,7 +3,7 @@ import { KeyboardAvoidingView, Platform, ScrollView, type ScrollViewInstance, St
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { sendUntilDelivered } from '../api/delivery';
-import type { HelpLine, Read, ReadAnswer, ReadAnswerResult, Screened } from '../api/types';
+import type { CareHelp, Read, ReadAnswer, ReadAnswerResult, Screened } from '../api/types';
 import { routeScreened } from '../care/route';
 import { Composer } from '../components/Composer';
 import { Fade } from '../components/Fade';
@@ -21,7 +21,7 @@ type Props = {
   onAnswered: () => void;
   /** "Something else on my mind": a new situation. */
   onSomethingElse: () => void;
-  onCare: (message: string, help: HelpLine[]) => void;
+  onCare: (message: string, help: CareHelp) => void;
 };
 
 const FIRST = 500;

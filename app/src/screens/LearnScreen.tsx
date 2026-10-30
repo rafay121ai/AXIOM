@@ -3,7 +3,7 @@ import { KeyboardAvoidingView, Platform, ScrollView, type ScrollViewInstance, St
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { newTurnId, sendUntilDelivered } from '../api/delivery';
-import type { HelpLine, LearnReply, LearnTurn, LoadingQuote, Screened } from '../api/types';
+import type { CareHelp, LearnReply, LearnTurn, LoadingQuote, Screened } from '../api/types';
 import { routeScreened } from '../care/route';
 import { Chip } from '../components/Choice';
 import { Composer } from '../components/Composer';
@@ -26,7 +26,7 @@ type Props = {
   loadHint: (seed: string) => Promise<LoadingQuote | null>;
   /** The move card was tapped: on to the Move step. */
   onOpenMove: (learnId: string) => void;
-  onCare: (message: string, help: HelpLine[]) => void;
+  onCare: (message: string, help: CareHelp) => void;
 };
 
 type Chips = { done: number[]; pressed: string | null; onTap: (index: number) => void };

@@ -4,14 +4,14 @@ import { Animated, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { api } from './src/api';
-import type { Answer, DueReport, FirstReading, HelpLine, Home, Question, Screened } from './src/api/types';
+import type { Answer, DueReport, FirstReading, CareHelp, Home, Question, Screened } from './src/api/types';
 import { routeScreened } from './src/care/route';
 import { copy } from './src/copy';
 import { type Destination, destinationOf, type MoveSource } from './src/home/flow';
 import { newLearnChat, type LearnChat } from './src/learn/chat';
 import { deviceTimeZone } from './src/move/format';
 import { push } from './src/push';
-import { newChat, type Chat } from './src/situation/chat';
+import { chatFromTurns, newChat, type Chat } from './src/situation/chat';
 import { AxiomMessage } from './src/components/AxiomMessage';
 import { Glow } from './src/components/Glow';
 import { loadReading } from './src/onboarding/reading';
@@ -48,7 +48,7 @@ type Stage =
   | { name: 'settings' }
   | { name: 'answers'; startAt?: string }
   | { name: 'report'; report: DueReport; next: DueReport[] }
-  | { name: 'care'; message: string; help: HelpLine[]; back: Stage };
+  | { name: 'care'; message: string; help: CareHelp; back: Stage };
 
 // Screens with the faint gold wash instead of the drifting light.
 const QUIET: Stage['name'][] = ['home', 'history', 'past', 'settings', 'answers'];
@@ -101,7 +101,7 @@ export default function App() {
     if (r.kind === 'care') goTo({ name: 'care', message: r.message, help: r.help, back: stageRef.current }, true);
   }, [goTo]);
 
-  const showCare = useCallback((message: string, help: HelpLine[]) => {
+  const showCare = useCallback((message: string, help: CareHelp) => {
     goTo({ name: 'care', message, help, back: stageRef.current }, true);
   }, [goTo]);
 
@@ -153,7 +153,7 @@ export default function App() {
   // Where a tap on a home item, a menu row or a history action leads.
   const openDestination = useCallback((d: Destination) => {
     switch (d.kind) {
-      case 'situation': return goTo({ name: 'situation', chat: newChat({ situationId: d.situationId }), opening: copy.situation.openingFresh });
+      case 'situation': return goTo({ name: 'situation', chat: chatFromTurns(d.situationId, d.turns), opening: copy.situation.openingFresh });
       case 'read': return goTo({ name: 'read', situationId: d.situationId });
       case 'learn': return goTo({ name: 'learn', situationId: d.situationId, chat: newLearnChat() });
       case 'move': return goTo({ name: 'move', source: d.source, back: stageRef.current });
@@ -266,6 +266,7 @@ export default function App() {
               <PastScreen
                 key={stage.id}
                 load={() => api.getHistoryPage(stage.id)}
+                withdraw={async (reportId) => (await api.withdrawShare(reportId)).reply ?? copy.history.private}
                 onAction={async (target) => openDestination(await destinationOf(api, target))}
                 onBack={() => goTo({ name: 'history' })}
               />

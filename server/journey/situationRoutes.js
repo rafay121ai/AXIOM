@@ -49,19 +49,19 @@ export function mountSituationRoutes(app, { supabase, care, callStructured, cloc
 
   app.get('/api/situations/open', limiter(60), handle((req) => service.list(req.user.id)))
 
-  app.post('/api/situations', limiter(10), care.careGate(bodyFields('text')),
+  app.post('/api/situations', limiter(10), care.careHold, care.careGate(bodyFields('text')),
     handle((req) => service.create({ userId: req.user.id, text: textOf(req), clientTurnId: clientTurnId(req) })))
 
   app.get('/api/situations/:id', limiter(60), handle((req) => service.get(req.user.id, idParam(req))))
 
-  app.post('/api/situations/:id/turn', limiter(30), care.careGate(bodyFields('text')),
+  app.post('/api/situations/:id/turn', limiter(30), care.careHold, care.careGate(bodyFields('text')),
     handle((req) => service.turn({ userId: req.user.id, situationId: idParam(req), text: textOf(req), clientTurnId: clientTurnId(req) })))
 
   // Reads the stored situation; the founder sends no text here.
-  app.post('/api/situations/:id/read', limiter(5),
+  app.post('/api/situations/:id/read', limiter(5), care.careHold,
     handle((req) => service.read({ userId: req.user.id, situationId: idParam(req) })))
 
-  app.post('/api/situations/:id/read/answer', limiter(20), care.careGate(bodyFields('text')),
+  app.post('/api/situations/:id/read/answer', limiter(20), care.careHold, care.careGate(bodyFields('text')),
     handle((req) => {
       const skip = req.body?.skip === true
       if (skip) return service.answerRead({ userId: req.user.id, situationId: idParam(req), skip: true })

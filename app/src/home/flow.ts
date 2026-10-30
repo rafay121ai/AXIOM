@@ -1,4 +1,4 @@
-import type { AxiomApi, DrawerSituation, DueReport, Home, HomeItem, Target } from '../api/types';
+import type { AxiomApi, DrawerSituation, DueReport, Home, HomeItem, SituationTurn, Target } from '../api/types';
 import { copy } from '../copy';
 
 // The rules of the home screen that are not drawing: which rows the menu lists, and where a tap leads.
@@ -35,19 +35,21 @@ export type MoveSource = { learnId: string } | { moveId: string };
 
 /** Where a tap on an item, a menu row or a history action leads. */
 export type Destination =
-  | { kind: 'situation' | 'read' | 'learn'; situationId: string }
+  | { kind: 'read' | 'learn'; situationId: string }
+  | { kind: 'situation'; situationId: string; turns: SituationTurn[] }
   | { kind: 'move'; source: MoveSource }
   | { kind: 'report'; report: DueReport; next: DueReport[] }
   | { kind: 'home' };
 
 /**
- * Turns the server's target into a screen. A move shown without its id (a history page) is found through its
+ * Turns the server's target into a screen. A situation is picked up with what was said in it so far. A move shown without its id (a history page) is found through its
  * lesson, which the server returns unchanged when asked again. A check-in shown without its id is the one
  * waiting, if only one is.
  */
-export async function destinationOf(api: Pick<AxiomApi, 'getDueReports' | 'startLearn'>, t: Target): Promise<Destination> {
+export async function destinationOf(api: Pick<AxiomApi, 'getDueReports' | 'getSituation' | 'startLearn'>, t: Target): Promise<Destination> {
   switch (t.stage) {
     case 'situation':
+      return { kind: 'situation', situationId: t.situation_id, turns: (await api.getSituation(t.situation_id)).turns };
     case 'read':
     case 'learn':
       return { kind: t.stage, situationId: t.situation_id };
