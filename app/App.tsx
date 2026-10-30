@@ -35,7 +35,7 @@ import { colors, motion, serifFiles, space } from './src/theme';
 
 type Stage =
   | { name: 'signin' }
-  | { name: 'questions'; questions: Question[] }
+  | { name: 'questions'; questions: Question[]; answers: Record<string, Answer>; startAt: string | null }
   | { name: 'wait'; lines: string[] }
   | { name: 'reading'; reading: FirstReading }
   | { name: 'situation'; chat: Chat; opening: string; suggestion?: string }
@@ -121,12 +121,16 @@ export default function App() {
   // Signing in lands a returning founder on the home screen; a due check-in (the evening reminder's target) opens the Report.
   // A new founder, or one who stopped part way, goes to the questions.
   const landing = useRef(false);
-  const signIn = useCallback(async () => {
-    await api.signInWithGoogle();
+  const openSignup = useCallback(async () => {
     const signup = await api.getSignup();
     landing.current = signup.complete;
-    goTo(signup.complete ? { name: 'home' } : { name: 'questions', questions: signup.questions });
+    goTo(signup.complete ? { name: 'home' } : { name: 'questions', questions: signup.questions, answers: signup.answers, startAt: signup.next });
   }, [goTo]);
+
+  const signIn = useCallback(async () => {
+    await api.signInWithGoogle();
+    await openSignup();
+  }, [openSignup]);
 
   const homeLoaded = useCallback(async (home: Home) => {
     void push.refresh().catch(() => {});
@@ -162,8 +166,8 @@ export default function App() {
     const lines = waitLines((answers.building as string | undefined) ?? '');
     goTo({ name: 'wait', lines });
     loadReading(() => api.getFirstReading(), { minMs: waitMinMs(lines), retryMs: LINE_EVERY })
-      .then((reading) => goTo({ name: 'reading', reading }));
-  }, [goTo]);
+      .then((reading) => goTo({ name: 'reading', reading }), openSignup);
+  }, [goTo, openSignup]);
 
   if (!fontsReady) return <View style={styles.page} />;
 
@@ -175,7 +179,13 @@ export default function App() {
           <Animated.View style={[styles.flex, { opacity: fade, transform: [{ translateY: rise }] }]}>
             {stage.name === 'signin' && <SignInScreen onContinue={signIn} />}
             {stage.name === 'questions' && (
-              <QuestionsScreen questions={stage.questions} onSave={async (k, a) => route(await api.saveAnswer(k, a))} onFinish={finish} />
+              <QuestionsScreen
+                questions={stage.questions}
+                answers={stage.answers}
+                startAt={stage.startAt}
+                onSave={async (k, a) => route(await api.saveAnswer(k, a))}
+                onFinish={finish}
+              />
             )}
             {stage.name === 'care' && (
               <CareScreen message={stage.message} help={stage.help} onKeepTalking={() => { setSoft(null); goTo(stage.back, true); }} />

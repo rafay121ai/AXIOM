@@ -1,3 +1,4 @@
+import { HttpError } from '../src/api/queue';
 import { loadReading, readingSentences } from '../src/onboarding/reading';
 import { LINE_EVERY, waitLines, waitMinMs } from '../src/onboarding/waitLines';
 
@@ -56,5 +57,11 @@ describe('the wait', () => {
     await expect(loadReading(fetchReading, { minMs: 1, retryMs: 7, wait: async (ms) => { waits.push(ms); } })).resolves.toBe(r);
     expect(fetchReading).toHaveBeenCalledTimes(3);
     expect(waits.filter((w) => w === 7)).toHaveLength(2);
+  });
+
+  it('stops waiting when the server says an answer is missing', async () => {
+    const fetchReading = jest.fn().mockRejectedValue(new HttpError(409, 'signup_unfinished'));
+    await expect(loadReading(fetchReading, { minMs: 1, retryMs: 7, wait: async () => {} })).rejects.toMatchObject({ code: 'signup_unfinished' });
+    expect(fetchReading).toHaveBeenCalledTimes(1);
   });
 });

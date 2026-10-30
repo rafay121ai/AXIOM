@@ -330,7 +330,8 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
   return {
     async signInWithGoogle() {},
     async getSignup() {
-      return { questions: QUESTIONS, answers: homeState !== undefined ? settings.signup_answers : {}, complete: homeState !== undefined };
+      const complete = homeState !== undefined;
+      return { questions: QUESTIONS, answers: complete ? settings.signup_answers : {}, next: complete ? null : QUESTIONS[0].key, complete };
     },
     saveAnswer: screen,
     async getFirstReading() {

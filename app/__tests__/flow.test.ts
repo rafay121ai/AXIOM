@@ -1,7 +1,7 @@
 import { createFakeApi } from '../src/api/fake';
 import type { GoalQuestion, MultiQuestion, Question, TextQuestion, TwoQuestion, WhereQuestion } from '../src/api/types';
 import {
-  MAX_OPTIONS, autoAdvances, countrySuggestions, isDone, needsContinue, optionGroups, tapMulti, tapSingle, tapTwo,
+  MAX_OPTIONS, autoAdvances, countrySuggestions, isDone, needsContinue, optionGroups, startIndex, tapMulti, tapSingle, tapTwo,
 } from '../src/onboarding/flow';
 import { clip, waitLines } from '../src/onboarding/waitLines';
 
@@ -20,6 +20,22 @@ describe('questions', () => {
     expect(questions[9].type).toBe('two');
     expect(questions[10].type).toBe('multi');
     expect(questions.filter((q) => q.type === 'two' || q.type === 'multi')).toHaveLength(2);
+  });
+});
+
+describe('resuming part way', () => {
+  it('starts at the first question the server says is unanswered, not question 1', () => {
+    expect(startIndex(questions, 'building')).toBe(11);
+    expect(startIndex(questions, 'stage')).toBe(0);
+  });
+  it('starts at question 1 when the server names none or an unknown one', () => {
+    expect(startIndex(questions, null)).toBe(0);
+    expect(startIndex(questions, undefined)).toBe(0);
+    expect(startIndex(questions, 'gone')).toBe(0);
+  });
+  it('is what a new fake founder gets from the sign-up', async () => {
+    const signup = await createFakeApi().getSignup();
+    expect(signup).toMatchObject({ answers: {}, next: 'stage', complete: false });
   });
 });
 

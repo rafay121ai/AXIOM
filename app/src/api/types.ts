@@ -306,8 +306,8 @@ export type SettingsPatch = Partial<Pick<Settings, 'mentor_style' | 'keep_items'
 /** What the server says about an export or a delete request. Nothing is deleted yet; `message` is its own line. */
 export type AccountRequest = { status: string; message: string };
 
-/** The sign-up as it stands: the questions, what the founder has answered, and whether every one is answered. */
-export type Signup = { questions: Question[]; answers: Record<string, Answer>; complete: boolean };
+/** The sign-up as it stands: the questions, what the founder has answered, the key of the first unanswered one (null when all are), and whether every one is answered. */
+export type Signup = { questions: Question[]; answers: Record<string, Answer>; next: string | null; complete: boolean };
 
 /** The kind of phone a reminder token belongs to. */
 export type PushPlatform = 'ios' | 'android';

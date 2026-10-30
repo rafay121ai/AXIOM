@@ -7,31 +7,42 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Answer, Question } from '../api/types';
 import { QuestionBody } from '../components/QuestionBody';
 import { GoldButton } from '../components/GoldButton';
+import { failureLine } from '../copy';
 import {
-  autoAdvances, isDone, needsContinue, progress,
+  autoAdvances, isDone, needsContinue, progress, startIndex,
 } from '../onboarding/flow';
 import { colors, goldGradient, ink, motion, space, type } from '../theme';
 
 type Props = {
   questions: Question[];
-  onSave: (key: string, answer: Answer) => void;
+  /** What the founder answered before, when they come back part way. */
+  answers?: Record<string, Answer>;
+  /** The key of the first question not answered yet: the screen starts there. */
+  startAt?: string | null;
+  /** Resolves when the server has the answer (it waits out a bad connection); rejects when the server refuses it. */
+  onSave: (key: string, answer: Answer) => Promise<void>;
   onFinish: (answers: Record<string, Answer>) => void;
 };
 
 const run = (anim: Animated.CompositeAnimation) => new Promise<void>((resolve) => anim.start(() => resolve()));
 
-export function QuestionsScreen({ questions, onSave, onFinish }: Props) {
+export function QuestionsScreen({ questions, answers: saved = {}, startAt, onSave, onFinish }: Props) {
   const insets = useSafeAreaInsets();
-  const [index, setIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, Answer>>({});
+  const [index, setIndex] = useState(() => startIndex(questions, startAt));
+  const [answers, setAnswers] = useState<Record<string, Answer>>(saved);
+  const [refused, setRefused] = useState<string | null>(null);
+  const indexRef = useRef(index);
+  indexRef.current = index;
   const q = questions[index];
   const a = answers[q.key];
 
   const fade = useRef(new Animated.Value(1)).current;
   const slide = useRef(new Animated.Value(0)).current;
   const bar = useRef(new Animated.Value(0)).current;
-  const fill = useRef(new Animated.Value(progress(0, questions.length))).current;
+  const fill = useRef(new Animated.Value(progress(index, questions.length))).current;
   const moving = useRef(false);
+  // The question change under way, so a refusal that comes back meanwhile waits for it to finish.
+  const travel = useRef<Promise<void>>(Promise.resolve());
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const showBar = needsContinue(q, a);
@@ -51,26 +62,48 @@ export function QuestionsScreen({ questions, onSave, onFinish }: Props) {
     }
   };
 
-  async function move(to: number, latest: Record<string, Answer>) {
-    if (moving.current) return;
-    moving.current = true;
-    clearTimeout(timer.current);
-    if (to > index) onSave(q.key, latest[q.key]);
-    if (to >= questions.length) {
-      onFinish(latest);
-      return;
-    }
+  // The old question slides out and the new one in.
+  async function show(to: number, from: number) {
     await run(Animated.parallel([
       Animated.timing(fade, { toValue: 0, duration: motion.swapOut, useNativeDriver: true }),
-      Animated.timing(slide, { toValue: to > index ? -16 : 16, duration: motion.swapOut, useNativeDriver: true }),
+      Animated.timing(slide, { toValue: to > from ? -16 : 16, duration: motion.swapOut, useNativeDriver: true }),
     ]));
     setIndex(to);
     fade.setValue(0);
-    slide.setValue(to > index ? 18 : -18);
+    slide.setValue(to > from ? 18 : -18);
     await run(Animated.parallel([
       Animated.timing(fade, { toValue: 1, duration: motion.swapOut, useNativeDriver: true }),
       Animated.timing(slide, { toValue: 0, duration: motion.swapOut, useNativeDriver: true }),
     ]));
+  }
+
+  // The server refused an answer for good: say so in plain words and put the founder back on that question.
+  async function refuse(from: number, e: unknown) {
+    await travel.current;
+    setRefused(failureLine(e, 'save').text);
+    if (indexRef.current !== from) await show(from, indexRef.current);
+    moving.current = false;
+  }
+
+  async function move(to: number, latest: Record<string, Answer>) {
+    if (moving.current) return;
+    moving.current = true;
+    clearTimeout(timer.current);
+    setRefused(null);
+    const saving = to > index ? onSave(q.key, latest[q.key]) : undefined;
+    if (to >= questions.length) {
+      // The reading needs every answer, so the last one is confirmed before the wait begins.
+      try {
+        await saving;
+      } catch (e) {
+        return refuse(index, e);
+      }
+      onFinish(latest);
+      return;
+    }
+    saving?.catch((e) => refuse(index, e));
+    travel.current = show(to, index);
+    await travel.current;
     moving.current = false;
   }
 
@@ -105,6 +138,7 @@ export function QuestionsScreen({ questions, onSave, onFinish }: Props) {
         >
           <Text accessibilityRole="header" style={[type.question, styles.title]}>{q.title}</Text>
           {q.sub ? <Text style={[type.sub, styles.sub]}>{q.sub}</Text> : <View style={{ height: 18 }} />}
+          {refused && <Text accessibilityLiveRegion="polite" style={[type.sub, styles.refused]}>{refused}</Text>}
           <QuestionBody q={q} a={a} set={set} />
         </ScrollView>
       </Animated.View>
@@ -130,5 +164,6 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: space.screenX, paddingTop: space.qTop, paddingBottom: 150 },
   title: { marginBottom: 10 },
   sub: { marginBottom: 28 },
+  refused: { marginBottom: 20, color: ink(0.7) },
   bar: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: 14, paddingHorizontal: space.screenX },
 });

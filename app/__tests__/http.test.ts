@@ -8,7 +8,7 @@ describe('http api', () => {
   it('sends the Bearer token and reads the sign-up from GET /api/signup', async () => {
     const f = jest.fn().mockResolvedValue(ok({ questions: [{ key: 'stage' }], answers: {}, next: 'stage', complete: false, total: 13 }));
     const api = createHttpApi({ baseUrl: 'http://x', auth, fetch: f });
-    await expect(api.getSignup()).resolves.toEqual({ questions: [{ key: 'stage' }], answers: {}, complete: false });
+    await expect(api.getSignup()).resolves.toEqual({ questions: [{ key: 'stage' }], answers: {}, next: 'stage', complete: false });
     expect(f).toHaveBeenCalledWith('http://x/api/signup', expect.objectContaining({ method: 'GET', headers: expect.objectContaining({ Authorization: 'Bearer tok' }) }));
   });
 

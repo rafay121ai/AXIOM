@@ -1,3 +1,4 @@
+import { HttpError } from '../api/queue';
 import type { FirstReading } from '../api/types';
 
 // The rules of the first reading and its wait, with no screen code in them.
@@ -66,7 +67,9 @@ export async function loadReading(
     for (;;) {
       try {
         return await fetchReading();
-      } catch {
+      } catch (e) {
+        // The server says an answer is missing: waiting cannot fix that, the questions can.
+        if (e instanceof HttpError && e.code === 'signup_unfinished') throw e;
         await wait(retryMs);
       }
     }

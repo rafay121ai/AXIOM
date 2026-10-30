@@ -98,6 +98,11 @@ export function countrySuggestions(countries: string[], typed: string): string[]
   return hits.slice(0, MAX_OPTIONS);
 }
 
+/** Where the questions start: at the first one not answered yet (`next`, from the server), or the first. */
+export function startIndex(questions: Question[], next: string | null | undefined): number {
+  return Math.max(0, questions.findIndex((q) => q.key === next));
+}
+
 export function progress(index: number, total: number): number {
   return (index + 1) / total;
 }

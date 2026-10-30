@@ -52,7 +52,7 @@ describe('the fake settings', () => {
 
   it('refuse a check-in time inside quiet hours and keep the old one', async () => {
     const api = createFakeApi();
-    await expect(api.updateSettings({ checkin_time: '23:00' })).rejects.toMatchObject({ status: 400 });
+    await expect(api.updateSettings({ checkin_time: '23:00' })).rejects.toMatchObject({ status: 400, code: 'quiet_hours_clash' });
     expect((await api.getSettings()).reminders.checkin_time).toBe('20:00');
   });
 
