@@ -68,6 +68,8 @@ export async function callStructured({
   clock = { now: () => Date.now() },
 }) {
   const model = modelForStep(step, env)
+  // Cost rows name the journey step (read, learn, move...), not "chat".
+  const stepUsage = { ...usageContext, call_type: step }
   let problems = []
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -85,14 +87,14 @@ export async function callStructured({
       })
     } catch (err) {
       await logModelUsage({
-        userId, usageContext, model, latencyMs: clock.now() - startedAt,
+        userId, usageContext: stepUsage, model, latencyMs: clock.now() - startedAt,
         error: true, errorDetails: err?.message || 'LLM call failed',
       })
       throw err
     }
 
     await logModelUsage({
-      userId, usageContext, model, usage: response.usage || null, latencyMs: clock.now() - startedAt,
+      userId, usageContext: stepUsage, model, usage: response.usage || null, latencyMs: clock.now() - startedAt,
     })
 
     let parsed

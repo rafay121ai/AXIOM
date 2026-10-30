@@ -274,6 +274,7 @@ ARCHITECTURE.md and need Rafay's decision, then a doc update:
   `intro_requests`.
 - ARCHITECTURE.md allows owner SELECT on founder-owned rows; no client access
   is granted because the new app reads only through the API.
-- `model_usage_logs`: the journey code does not yet set `call_type` to its
-  step (only `embedding`); `server/modelUsage.js` logs every other journey
-  call as `chat`. The widened CHECK is ready for when it does.
+- `model_usage_logs`: every journey model call logs `call_type` as its step
+  (read, learn, followup, move, care, report, memory; `server/llm.js`). The
+  live CHECK rejects those until `20261101000009` is applied, so apply it
+  before the new server goes live, or cost rows for the journey fail to insert.

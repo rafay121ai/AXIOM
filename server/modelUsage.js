@@ -1,3 +1,4 @@
+import { STEPS } from './config.js'
 // USD per 1M tokens, from OpenAI model pages (2026-10-13).
 const GPT_52 = { input: 1.75, cached_input: 0.175, output: 14.0 }
 const GPT_54_MINI = { input: 0.75, cached_input: 0.075, output: 4.5 }
@@ -20,6 +21,9 @@ export const USAGE_CALL_TYPES = Object.freeze([
   'memory_update',
   'concept_state_update',
   'embedding',
+  // Journey steps (config.js STEPS); the live CHECK accepts them once
+  // supabase/migrations/20261101000009_model_usage_call_types.sql is applied.
+  ...STEPS,
 ])
 
 // Unpriced models are never costed at another model's rate: the cost is null

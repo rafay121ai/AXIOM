@@ -10,7 +10,7 @@ import { validateExperimentQuality } from '../experimentQuality.js'
 import { experimentOf } from '../journey/move/moveChecks.js'
 import { AXIOM_LINES } from '../journey/learn/moveOffer.js'
 import { AFTER_STORY_VERSION, SHARED_LINE, WITHDRAWN_LINE } from '../journey/report/wording.js'
-import { MODELS } from '../config.js'
+import { MODELS, STEPS } from '../config.js'
 import { FOUNDER, OTHER, createWorld, keysIn, routesOf } from './harness.js'
 import {
   CHECK_IN_ANSWER, DISTRESS, FABRICATED_QUOTE, FIRST_READING, FOLLOWUP_ANSWER, FULL_ANSWERS, LEARN_AFTER_CARE, LEARN_OFFER,
@@ -408,10 +408,10 @@ test('a founder walks the whole journey', async (t) => {
       assert.deepEqual([home.body.items, home.body.due_reports, home.body.drawer.to_do, home.body.drawer.open], [[], [], [], []])
       assert.deepEqual((await founder('GET', '/api/reports/due')).body, { reports: [] })
 
-      // Three days quiet: the morning slot would go to the quiet check, but care pauses it.
+      // Three days quiet: nothing goes out (the only situation is done, and care pauses
+      // pushes anyway; push.test.js covers the pause itself).
       clock.set(at('2026-10-30T03:30:00.000Z'))
       const summary = await scheduler.tick()
-      assert.equal(summary.paused_for_care, 1)
       assert.equal(summary.sent, 0)
       assert.equal(sender.sent.length, 2)
     })
@@ -428,7 +428,7 @@ test('a founder walks the whole journey', async (t) => {
       assert.deepEqual(home.body.drawer.recent.map((r) => [r.id, r.status]), [[ids.situation, 'done']])
     })
 
-    await t.test('pushes: no "where are you with" push for a situation already reported Done', { todo: 'FINDINGS.md F3' }, async () => {
+    await t.test('pushes: no "where are you with" push for a situation already reported Done', async () => {
       clock.set(at('2026-10-30T03:45:00.000Z'))
       await scheduler.tick()
       assert.equal(sender.sent.length, 2, `sent: ${JSON.stringify(sender.sent.slice(2).map((m) => m.body))}`)
@@ -525,7 +525,7 @@ test('a founder walks the whole journey', async (t) => {
       assert.ok(w.responses.length >= 90, `only ${w.responses.length} responses`)
     })
 
-    await t.test('every model call wrote a usage row (journey rows are logged as "chat")', () => {
+    await t.test('every model call wrote a usage row', () => {
       const usage = rows('model_usage_logs')
       assert.equal(openai.unexpected.length, 0, `unscripted model calls: ${openai.unexpected}`)
       assert.equal(usage.length, openai.calls.length)
@@ -533,16 +533,19 @@ test('a founder walks the whole journey', async (t) => {
       const byType = (list) => list.reduce((m, x) => ({ ...m, [x]: (m[x] ?? 0) + 1 }), {})
       const chats = openai.calls.filter((c) => c.kind === 'chat').length
       const embeds = openai.calls.filter((c) => c.kind === 'embedding').length
-      assert.deepEqual(byType(usage.map((u) => u.call_type)), { chat: chats, embedding: embeds })
+      const types = byType(usage.map((u) => u.call_type))
+      assert.equal(types.embedding, embeds)
+      assert.equal(usage.filter((u) => STEPS.includes(u.call_type)).length, chats)
       assert.deepEqual(usage.map((u) => u.model).sort(), openai.calls.map((c) => c.model).sort())
       assert.ok(usage.filter((u) => u.call_type === 'embedding').every((u) => u.model === MODELS.embedding))
       assert.ok(usage.every((u) => u.estimated_cost_usd > 0))
       assert.deepEqual(openai.pending(), [], 'scripted replies left unused')
     })
 
-    await t.test('journey usage rows name their step, not "chat"', { todo: 'FINDINGS.md F5 (known issue)' }, () => {
+    await t.test('journey usage rows name their step, not "chat"', () => {
       const chatRows = rows('model_usage_logs').filter((u) => u.model !== MODELS.embedding)
-      assert.ok(chatRows.every((u) => u.call_type !== 'chat'), 'every journey call logs call_type "chat"')
+      assert.ok(chatRows.length > 0)
+      assert.ok(chatRows.every((u) => STEPS.includes(u.call_type)), 'a journey call logged a call_type that is not its step')
     })
 
     await t.test('no write route outside the API, and every API route needs a sign-in', async () => {

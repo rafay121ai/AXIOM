@@ -18,6 +18,7 @@
 // to a founder who asked for their account to be deleted.
 import { ACTIVE_STATUSES } from '../journey/move/room.js'
 import { founderFirstName } from '../journey/home/name.js'
+import { loadStates, statusOf } from '../journey/home/state.js'
 import { decidePush, PAUSE_AFTER_MS, QUIET_AFTER_MS } from './policy.js'
 import { duePushes } from './due.js'
 import { composePush } from './compose.js'
@@ -135,8 +136,12 @@ export function createPushScheduler({ supabase, sender, clock, isCareOpen, nameO
     const activity = [latest[0]?.last_activity_at, ...moves.map((m) => m.committed_at)]
       .map((v) => Date.parse(v ?? '')).filter(Number.isFinite)
     const lastActivityAt = activity.length ? iso(Math.max(...activity)) : null
-    const quietSituation = quietSituations
-      .filter((s) => typeof s.title === 'string' && s.title.trim())
+    // A stored "open" situation may already be reported or closed: ask the same
+    // rule History uses, so a push never asks about something that is done.
+    const named = quietSituations.filter((s) => typeof s.title === 'string' && s.title.trim())
+    const states = await loadStates(supabase, userId, named)
+    const quietSituation = named
+      .filter((s) => statusOf(s, states.get(s.id), now) === 'open')
       .sort((a, b) => Date.parse(b.last_activity_at) - Date.parse(a.last_activity_at))[0] ?? null
     // Only what is due right now goes on; the morning push depends on the
     // founder's zone, so this cannot be filtered in the query.
