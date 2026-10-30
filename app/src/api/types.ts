@@ -377,6 +377,11 @@ export interface AxiomApi {
   requestExport(): Promise<AccountRequest>;
   /** Asks to delete everything. Recorded only: nothing is deleted. */
   requestDelete(): Promise<AccountRequest>;
+  /**
+   * Sends what was left unsent when the app was last closed. Resolves when it is all sent, or at the first send that
+   * has to wait for the connection (the rest keeps going in the background). Safe to call again; sign-out forgets it.
+   */
+  resumeUnsent(): Promise<void>;
   /** Signs out of this phone. */
   signOut(): Promise<void>;
   /** This phone no longer gets reminders for this founder. */

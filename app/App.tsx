@@ -122,6 +122,7 @@ export default function App() {
   // A new founder, or one who stopped part way, goes to the questions.
   const landing = useRef(false);
   const openSignup = useCallback(async () => {
+    await api.resumeUnsent();
     const signup = await api.getSignup();
     landing.current = signup.complete;
     goTo(signup.complete ? { name: 'home' } : { name: 'questions', questions: signup.questions, answers: signup.answers, startAt: signup.next });

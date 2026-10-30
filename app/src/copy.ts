@@ -68,10 +68,10 @@ export const copy = {
     storyLabel: 'A founder before you',
     share: 'Share',
     keepPrivate: 'Keep private',
-    // mock-states-v1.html, the evening Report with no signal. The mock adds "You can close the app."; it is left out
-    // because the app does not yet keep an unsent check-in once it is closed.
+    // mock-states-v1.html, the evening Report with no signal, word for word. "You can close the app." is true: the
+    // check-in is written to the phone before it is sent (src/api/outbox.ts) and goes out when the app is next opened.
     saved: 'Your check-in is saved.',
-    willSend: "I'll send it as soon as you're back online.",
+    willSend: "I'll send it as soon as you're back online. You can close the app.",
   },
   // mock-onboarding-v2.html, screen 9 (home) and its menu drawer.
   home: {

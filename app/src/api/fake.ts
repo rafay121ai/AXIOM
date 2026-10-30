@@ -473,6 +473,7 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
     async requestDelete(): Promise<AccountRequest> {
       return { status: 'recorded', message: DELETE_LINE };
     },
+    async resumeUnsent() {},
     async signOut() {},
     async registerPushToken() {},
     async removePushToken() {},

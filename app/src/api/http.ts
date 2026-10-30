@@ -1,13 +1,20 @@
 import type { Auth } from './auth';
+import { createOutbox, type KeyValueStore, memoryStore } from './outbox';
 import { createSaveQueue, HttpError } from './queue';
 import type { AccountRequest, AxiomApi, Commitment, ConsentResult, DueReport, FirstReading, HistoryPage, HistoryRow, Home, LearnReply, LoadingQuote, MoveView, Read, ReadAnswerResult, ReportResult, Screened, Settings, Signup, SituationReply, Story, SwapResult } from './types';
 
 const CODE_NAME = /^[a-z]+(_[a-z]+)*$/;
 
-type Options = { baseUrl: string; auth: Auth; fetch?: typeof fetch };
+type Options = {
+  baseUrl: string;
+  auth: Auth;
+  fetch?: typeof fetch;
+  /** Where unsent answers, messages and check-ins are kept while the app is closed. */
+  store?: KeyValueStore;
+};
 
 // The real client. Care-screened routes answer 200 with a `care` field; anything else is carry on.
-export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch.bind(globalThis) }: Options): AxiomApi {
+export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch.bind(globalThis), store = memoryStore() }: Options): AxiomApi {
   async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
     const res = await doFetch(`${baseUrl}${path}`, {
       method,
@@ -25,9 +32,13 @@ export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch
     return res.json() as Promise<T>;
   }
 
+  // Everything the founder types is written down before it is sent, so it survives the app being closed.
+  const outbox = createOutbox({ store, send: ({ method, path, body }) => request(method, path, body) });
+  const sendWritten = <T>(id: string, method: string, path: string, body?: unknown) => outbox.deliver<T>({ id, method, path, body });
+
   const queue = createSaveQueue({
     async send(key, answer) {
-      const res = await request<Screened>('PUT', `/api/signup/answers/${encodeURIComponent(key)}`, { answer });
+      const res = await sendWritten<Screened>(`answer:${key}`, 'PUT', `/api/signup/answers/${encodeURIComponent(key)}`, { answer });
       return res.care ? res : {};
     },
   });
@@ -43,15 +54,15 @@ export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch
       await queue.drain();
       return request<FirstReading>('POST', '/api/first-reading');
     },
-    startSituation: (text, turnId) => request<Screened<SituationReply>>('POST', '/api/situations', { text, client_turn_id: turnId }),
+    startSituation: (text, turnId) => sendWritten<Screened<SituationReply>>(`turn:${turnId}`, 'POST', '/api/situations', { text, client_turn_id: turnId }),
     sendTurn: (situationId, text, turnId) =>
-      request<Screened<SituationReply>>('POST', `/api/situations/${situationId}/turn`, { text, client_turn_id: turnId }),
+      sendWritten<Screened<SituationReply>>(`turn:${turnId}`, 'POST', `/api/situations/${situationId}/turn`, { text, client_turn_id: turnId }),
     getRead: (situationId) => request<Read>('POST', `/api/situations/${situationId}/read`),
     answerRead: (situationId, answer) =>
       request<Screened<ReadAnswerResult>>('POST', `/api/situations/${situationId}/read/answer`, answer),
     startLearn: (situationId) => request<LearnReply>('POST', `/api/situations/${situationId}/learn`),
     sendLearnTurn: (learnId, text, turnId) =>
-      request<Screened<LearnReply>>('POST', `/api/learn/${learnId}/turn`, { text, client_turn_id: turnId }),
+      sendWritten<Screened<LearnReply>>(`turn:${turnId}`, 'POST', `/api/learn/${learnId}/turn`, { text, client_turn_id: turnId }),
     tapFollowUp: (learnId, turnId, index) => request<LearnReply>('POST', `/api/learn/${learnId}/followup/${index}`, { turn_id: turnId }),
     async openMove(learnId) {
       return (await request<{ move: MoveView }>('POST', `/api/learn/${learnId}/move`)).move;
@@ -73,14 +84,14 @@ export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch
       return (await request<{ reports: DueReport[] }>('GET', '/api/reports/due')).reports;
     },
     sendReport: (moveId, outcome, note, turnId) =>
-      request<Screened<ReportResult>>('POST', `/api/moves/${moveId}/report`, { outcome, note, client_turn_id: turnId }),
+      sendWritten<Screened<ReportResult>>(`turn:${turnId}`, 'POST', `/api/moves/${moveId}/report`, { outcome, note, client_turn_id: turnId }),
     async getStory(reportId) {
       return (await request<{ story: Story | null }>('GET', `/api/reports/${reportId}/story`)).story;
     },
     setConsent: (reportId, share, wordingVersion) =>
       request<ConsentResult>('POST', `/api/reports/${reportId}/consent`, { share, wording_version: wordingVersion }),
     getHome: (timeZone) => request<Home>('GET', `/api/home?time_zone=${encodeURIComponent(timeZone)}`),
-    sendCheckIn: (text) => request<Screened<{ ok: true }>>('POST', '/api/home/checkin', { text }),
+    sendCheckIn: (text) => sendWritten<Screened<{ ok: true }>>('checkin', 'POST', '/api/home/checkin', { text }),
     async getHistory(q) {
       return (await request<{ items: HistoryRow[] }>('GET', `/api/history?q=${encodeURIComponent(q)}`)).items;
     },
@@ -89,7 +100,11 @@ export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch
     updateSettings: (patch) => request<Settings>('PUT', '/api/settings', patch),
     requestExport: () => request<AccountRequest>('POST', '/api/account/export'),
     requestDelete: () => request<AccountRequest>('DELETE', '/api/account'),
-    signOut: () => auth.signOut(),
+    resumeUnsent: () => outbox.resume(),
+    async signOut() {
+      await outbox.clear();
+      await auth.signOut();
+    },
     async registerPushToken(token, platform, timeZone) {
       await request('POST', '/api/push/token', { token, platform, timezone: timeZone });
     },
