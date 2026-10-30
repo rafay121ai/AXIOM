@@ -4,6 +4,7 @@ import { createApp } from '../../app.js'
 import { createFakeClock, createFakeOpenAI, createFakeSupabase } from '../../testing/fakes.js'
 import { FULL_ANSWERS } from '../fixtures.js'
 import { checkReportReply, predictionCheckFor } from './reportChecks.js'
+import { STORY_CAP } from './sharing.js'
 import {
   AFTER_STORY_VERSION, ALONE_VERSION, CONSENT_WORDINGS, KEPT_PRIVATE_LINE, NEED_MORE, OUTCOMES, SHARED_LINE,
   SHARE_AUTO_TEXT, STORY_OFFER, WITHDRAWN_LINE, fallbackReply, openingLine,
@@ -56,7 +57,8 @@ const UNIQUE = {
   user_settings: [['user_id']],
   outcome_author_links: [['peer_outcome_id']],
 }
-function withKeys(base) {
+// fail(table, action, payload): true makes that write answer an error.
+function withKeys(base, { fail = () => false } = {}) {
   return {
     ...base,
     from(table) {
@@ -65,10 +67,15 @@ function withKeys(base) {
       let action = 'select'
       let payload = null
       const { eq, insert, update, then } = b
+      const del = b.delete
+      b.delete = () => { action = 'delete'; del(); return b }
       b.eq = (c, v) => { eqs.push([c, v]); eq(c, v); return b }
       b.insert = (p) => { action = 'insert'; payload = p; insert(p); return b }
       b.update = (p) => { action = 'update'; payload = p; update(p); return b }
       b.then = (resolve, reject) => {
+        if (action !== 'select' && fail(table, action, payload)) {
+          return Promise.resolve({ data: null, error: { code: 'XX000', message: `${table} ${action} failed` } }).then(resolve, reject)
+        }
         const rows = base.rows(table)
         let clash = false
         if (action === 'insert' && UNIQUE[table]) {
@@ -106,7 +113,7 @@ async function setup(script = [], opts = {}) {
   const base = createFakeSupabase({ users: { tok: USER, tok2: OTHER }, tables: seed(opts) })
   const openai = createFakeOpenAI(script)
   const clock = createFakeClock(NOW)
-  const app = createApp({ env: ENV, supabase: withKeys(base), openai, clock })
+  const app = createApp({ env: ENV, supabase: withKeys(base, opts), openai, clock })
   const server = app.listen(0)
   await new Promise((r) => server.once('listening', r))
   const url = `http://127.0.0.1:${server.address().port}`
@@ -122,7 +129,7 @@ async function setup(script = [], opts = {}) {
     return { status: res.status, body: text.startsWith('{') ? JSON.parse(text) : text }
   }
   const chatCalls = () => openai.calls.filter((c) => c.payload?.messages && c.payload.messages[0]?.content?.includes('told you how it went'))
-  return { call: as('tok'), callOther: as('tok2'), callAnon: as(null), clock, chatCalls, responses, rows: (t) => base.rows(t), close: () => new Promise((r) => server.close(r)) }
+  return { call: as('tok'), callOther: as('tok2'), callAnon: as(null), clock, chatCalls, responses, base, rows: (t) => base.rows(t), close: () => new Promise((r) => server.close(r)) }
 }
 
 const report = (call, moveId, body) => call('POST', `/api/moves/${moveId}/report`, { client_turn_id: uuid(900), ...body })
@@ -151,7 +158,7 @@ test('the reply may not invent numbers, claim a check it did not make, or penali
   const knownTexts = [FIRST, NOTE, MOVE.mission]
   const problemsOf = (reply, outcome = 'done', check = 'right') => checkReportReply({ data: { reply, prediction_check: check }, outcome, knownTexts }).problems.join(' | ')
   assert.equal(problemsOf('Both of the 2 clinics heard from you. I was right. Confirm Thursday with the one that replied.'), '')
-  assert.match(problemsOf('3 of the 5 clinics replied. Send the next one.'), /never gave: 3/)
+  assert.match(problemsOf('7 of the 9 clinics replied. Send the next one.'), /never gave: 7/)
   assert.match(problemsOf('I was right. Send it again.', 'didnt', 'right'), /says the prediction was right/)
   assert.match(problemsOf('I was wrong. Send it again.', 'done', 'right'), /says the prediction was wrong/)
   assert.match(problemsOf('That is a strike. Try again tomorrow.', 'didnt', 'unclear'), /penalty/)
@@ -248,27 +255,30 @@ test('no note: the fixed line, no model call, the prediction stays unclear', asy
 })
 
 test('a reply with invented numbers is never stored; the prediction check stays honest', async () => {
-  const invented = JSON.stringify({ reply: '3 of the 5 clinics replied, so I was right. Book the 4 calls.', prediction_check: 'right' })
+  const invented = JSON.stringify({ reply: '6 of the 9 clinics replied, so I was right. Book the 4 calls.', prediction_check: 'right' })
   const { call, rows, chatCalls, close } = await setup([invented, invented])
   try {
     const res = await report(call, M1, { outcome: 'done', note: NOTE })
     assert.equal(res.status, 200)
     assert.equal(chatCalls().length, 2)
-    assert.match(chatCalls()[1].payload.messages.at(-1).content, /never gave: 3/)
+    assert.match(chatCalls()[1].payload.messages.at(-1).content, /never gave: 6/)
     assert.equal(res.body.reply, fallbackReply({ outcome: 'done', title: MOVE.title }))
     assert.equal(res.body.report.prediction.check, 'unclear')
     const stored = rows('reports')[0]
-    assert.ok(!/[345]/.test(stored.reply))
+    assert.ok(!/[469]/.test(stored.reply))
     assert.equal(stored.prediction_check, 'unclear')
   } finally { await close() }
 })
 
 test('a report is saved once: a repeat or a double tap returns the stored one', async () => {
-  const { call, rows, close } = await setup([GOOD_REPLY, GOOD_REPLY])
+  const { call, rows, chatCalls, close } = await setup([GOOD_REPLY, GOOD_REPLY])
   try {
     const [a, b] = await Promise.all([report(call, M1, { outcome: 'done', note: NOTE }), report(call, M1, { outcome: 'done', note: NOTE })])
     assert.deepEqual([a.status, b.status], [200, 200])
     assert.deepEqual(a.body, b.body)
+    assert.equal(a.body.reply, JSON.parse(GOOD_REPLY).reply)
+    assert.equal(chatCalls().length, 1, 'the row is claimed before the model call, so a double tap costs one call')
+    assert.equal(rows('reports')[0].reply_pending, false)
     const again = await report(call, M1, { outcome: 'didnt', note: 'Something else entirely happened here.' })
     assert.deepEqual(again.body, a.body)
     assert.equal(rows('reports').length, 1)
@@ -338,7 +348,11 @@ test('share: the peer outcome holds no user id, only the private link does, and 
 })
 
 test('keep private shares nothing; withdraw takes a share down; both are logged', async () => {
-  const { call, rows, responses, close } = await setup([GOOD_REPLY, GOOD_REPLY])
+  // An approved story from someone else exists, so the after-story question is really offered.
+  const seeded = { id: uuid(790), status: 'approved', stage: 'building', customer_market: 'Mostly abroad', business_model: 'b2b', outcome: 'done',
+    story: 'They asked each clinic to book a call.', lesson: null, draft: null }
+  const { call, rows: allRows, responses, close } = await setup([GOOD_REPLY, GOOD_REPLY], { peers: [seeded] })
+  const rows = (t) => (t === 'peer_outcomes' ? allRows(t).filter((p) => p.id !== seeded.id) : allRows(t))
   try {
     const first = (await report(call, M1, { outcome: 'done', note: NOTE })).body.report.id
     const priv = await call('POST', `/api/reports/${first}/consent`, { share: false })
@@ -487,5 +501,131 @@ test('no route deletes a report or penalises a founder', async () => {
     }
     assert.equal(rows('reports').length, 1)
     assertNoPrivateData(responses.filter((t) => t.startsWith('{')))
+  } finally { await close() }
+})
+
+// ── Audit findings ───────────────────────────────────────────────────────────
+
+const careEvent = (over = {}) => ({ id: uuid(810), user_id: USER.id, level: 'unclear', scope_id: null, created_at: at(NOW), resolved_at: null, ...over })
+
+test('the reply may only use numbers the model was sent, in digits or words, and may not claim a wrong prediction happened', async () => {
+  const knownTexts = [FIRST, NOTE, MOVE.mission]
+  const problemsOf = (reply, check = 'right') => checkReportReply({ data: { reply, prediction_check: check }, outcome: 'done', knownTexts }).problems.join(' | ')
+  assert.match(problemsOf('Five clinics replied. Send the next one.'), /never gave: 5/)
+  assert.equal(problemsOf('Both clinics heard from you after three weeks. Confirm Thursday.'), '')
+  assert.match(problemsOf('I said at least one would not reply, and it happened. Confirm Thursday.', 'wrong'), /says the prediction was right/)
+  assert.match(problemsOf('Just as I said, one did not reply. Confirm Thursday.', 'unclear'), /says the prediction was right/)
+  assert.equal(problemsOf('I said at least one would not reply, and it happened. Confirm Thursday.', 'right'), '')
+
+  // move.words is never sent to the model, so its 45 is not a number the founder gave.
+  const fromWords = JSON.stringify({ reply: 'You offered them 45 minutes. Confirm Thursday with the clinic that replied.', prediction_check: 'right' })
+  const { call, chatCalls, close } = await setup([fromWords, fromWords], { moves: [move(M1, { status: 'report_due', active_slot: 1, words: 'Can we book 45 minutes?' })] })
+  try {
+    const res = await report(call, M1, { outcome: 'done', note: NOTE })
+    assert.equal(chatCalls().length, 2)
+    assert.match(chatCalls()[1].payload.messages.at(-1).content, /never gave: 45/)
+    assert.equal(res.body.reply, fallbackReply({ outcome: 'done', title: MOVE.title }))
+  } finally { await close() }
+})
+
+test('a consent row that cannot be written stops the share, on the asked and the automatic path', async () => {
+  const failShareLog = (table, action, payload) => table === 'consent_log' && action === 'insert' && ['share', 'auto_share'].includes(payload?.action)
+  const asked = await setup([GOOD_REPLY], { fail: failShareLog })
+  try {
+    const id = (await report(asked.call, M1, { outcome: 'done', note: NOTE })).body.report.id
+    assert.equal((await asked.call('POST', `/api/reports/${id}/consent`, { share: true })).status, 500)
+    assert.equal(asked.rows('peer_outcomes').length, 0)
+    assert.equal(asked.rows('reports')[0].share_state, 'asked')
+  } finally { await asked.close() }
+
+  const auto = await setup([GOOD_REPLY], { fail: failShareLog, settings: [{ user_id: USER.id, share_auto: true }] })
+  try {
+    const res = await report(auto.call, M1, { outcome: 'done', note: NOTE })
+    assert.equal(res.status, 200)
+    assert.equal(res.body.consent.state, 'asked', 'a failed automatic share asks; it never claims shared')
+    assert.equal(auto.rows('peer_outcomes').length, 0)
+    assert.deepEqual(auto.rows('consent_log').map((l) => l.action), ['asked'])
+  } finally { await auto.close() }
+})
+
+test('share runs the care check itself: care after the question, or before a re-share, means not_offered and 409', async () => {
+  const { call, base, rows, close } = await setup([GOOD_REPLY, GOOD_REPLY])
+  try {
+    const first = (await report(call, M1, { outcome: 'done', note: NOTE })).body.report.id
+    await base.from('care_events').insert(careEvent())
+    assert.equal((await call('POST', `/api/reports/${first}/consent`, { share: true })).status, 409)
+    assert.equal(rows('reports').find((r) => r.id === first).share_state, 'not_offered')
+    assert.equal(rows('peer_outcomes').length, 0)
+  } finally { await close() }
+
+  const again = await setup([GOOD_REPLY])
+  try {
+    const id = (await report(again.call, M1, { outcome: 'done', note: NOTE })).body.report.id
+    await again.call('POST', `/api/reports/${id}/consent`, { share: true })
+    await again.call('POST', `/api/reports/${id}/withdraw`)
+    await again.base.from('care_events').insert(careEvent({ scope_id: SIT }))
+    assert.equal((await again.call('POST', `/api/reports/${id}/consent`, { share: true })).status, 409)
+    assert.equal(again.rows('peer_outcomes').filter((p) => p.status !== 'withdrawn').length, 0)
+  } finally { await again.close() }
+})
+
+test('no founder story while a care event is open', async () => {
+  const approved = { id: uuid(720), status: 'approved', stage: 'building', customer_market: 'Mostly abroad', business_model: 'b2b', outcome: 'done', story: 'They asked each clinic for a call.', lesson: null, draft: null }
+  const { call, base, close } = await setup([GOOD_REPLY], { peers: [approved] })
+  try {
+    const id = (await report(call, M1, { outcome: 'done', note: NOTE })).body.report.id
+    assert.equal((await call('GET', `/api/reports/${id}/story`)).body.story.story, approved.story)
+    await base.from('care_events').insert(careEvent({ level: 'clear', created_at: at(NOW - 99 * HOUR) }))
+    assert.deepEqual((await call('GET', `/api/reports/${id}/story`)).body, { story: null })
+  } finally { await close() }
+})
+
+test('a care stop whose event was not recorded still closes sharing for that situation', async () => {
+  const { call, rows, close } = await setup([GOOD_REPLY], {
+    settings: [{ user_id: USER.id, share_auto: true }],
+    fail: (table, action) => table === 'care_events' && action === 'insert',
+  })
+  try {
+    const stopped = await report(call, M1, { outcome: 'didnt', note: 'I want to kill myself' })
+    assert.equal(stopped.body.care, 'clear')
+    assert.equal(rows('care_events').length, 0, 'the gate could not record its event')
+    assert.equal(rows('situations')[0].care_flag, true)
+    const later = await report(call, M2, { outcome: 'done', note: NOTE, client_turn_id: uuid(901) })
+    assert.deepEqual(later.body.consent, { ask: false, state: 'not_offered', automatic: false, decided_at: null })
+    assert.equal(rows('peer_outcomes').length, 0)
+  } finally { await close() }
+})
+
+test('the after-story wording is accepted only when a story was offered with that report', async () => {
+  const { call, rows, close } = await setup([GOOD_REPLY])
+  try {
+    const res = await report(call, M1, { outcome: 'done', note: NOTE })
+    assert.equal(res.body.story_offer, null)
+    assert.deepEqual(rows('reports')[0].consent_versions, [ALONE_VERSION])
+    const refused = await call('POST', `/api/reports/${res.body.report.id}/consent`, { share: true, wording_version: AFTER_STORY_VERSION })
+    assert.equal(refused.status, 400)
+    assert.equal(rows('peer_outcomes').length, 0)
+    assert.equal((await call('POST', `/api/reports/${res.body.report.id}/consent`, { share: true, wording_version: ALONE_VERSION })).status, 200)
+  } finally { await close() }
+})
+
+test('a story pick reads at most STORY_CAP outcomes and none of the founder\'s own', async () => {
+  const own = Array.from({ length: 60 }, (_, i) => ({ id: uuid(2000 + i), status: 'approved', stage: 'building', customer_market: 'Mostly abroad', business_model: 'b2b', outcome: 'done', story: `Own ${i}`, lesson: null, draft: null }))
+  const other = { id: uuid(3000), status: 'approved', stage: 'building', customer_market: null, business_model: null, outcome: 'couldnt', story: 'Someone else asked for a call.', lesson: null, draft: null }
+  const links = own.map((p) => ({ peer_outcome_id: p.id, user_id: USER.id, report_id: uuid(999), created_at: at(NOW - 99 * HOUR), withdrawn_at: null }))
+  const { call, base, close } = await setup([GOOD_REPLY], { peers: [...own, other], links })
+  const loaded = []
+  const from = base.from
+  base.from = (table) => {
+    const b = from(table)
+    if (table !== 'peer_outcomes') return b
+    const then = b.then
+    b.then = (resolve, reject) => then((r) => { if (Array.isArray(r.data)) loaded.push(r.data.length); return resolve(r) }, reject)
+    return b
+  }
+  try {
+    const id = (await report(call, M1, { outcome: 'done', note: NOTE })).body.report.id
+    assert.equal((await call('GET', `/api/reports/${id}/story`)).body.story.story, other.story)
+    assert.ok(loaded.length > 0 && Math.max(...loaded) <= STORY_CAP, `read ${Math.max(...loaded)} outcomes at once`)
   } finally { await close() }
 })

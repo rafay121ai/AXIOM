@@ -32,6 +32,25 @@ export function mountReportRoutes(app, { supabase, care, callStructured, clock }
     }
   }
   const bad = (message) => { throw new HttpError(400, { error: message }) }
+  // The care gate ends the request when it stops a note, and it still answers
+  // when writing its care event fails. So whenever it stops a report note, the
+  // move's situation is also marked (care_flag): sharing fails closed there
+  // even with no event on record.
+  const reportCareGate = (gate) => (req, res, next) => {
+    const send = res.json.bind(res)
+    res.json = (body) => {
+      res.json = send
+      if (!body?.care) return send(body)
+      service.markCare({ userId: req.user.id, moveId: req.params.id })
+        .catch((err) => log('care mark failed', err))
+        .finally(() => send(body))
+      return res
+    }
+    return gate(req, res, (err) => {
+      res.json = send
+      next(err)
+    })
+  }
   const idParam = (req) => {
     if (!isUuid(req.params.id)) throw new HttpError(404, { error: 'Not found' })
     return req.params.id
@@ -40,7 +59,7 @@ export function mountReportRoutes(app, { supabase, care, callStructured, clock }
   app.get('/api/reports/due', limiter(60),
     handle((req) => service.due({ userId: req.user.id })))
 
-  app.post('/api/moves/:id/report', limiter(10), care.careGate(bodyFields('note')),
+  app.post('/api/moves/:id/report', limiter(10), reportCareGate(care.careGate(bodyFields('note'))),
     handle((req) => {
       const { outcome, note, client_turn_id: clientTurnId } = req.body ?? {}
       if (!OUTCOMES.includes(outcome)) bad(`outcome must be one of ${OUTCOMES.join(', ')}`)

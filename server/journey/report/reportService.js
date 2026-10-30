@@ -2,18 +2,22 @@
 // - the outcome is exactly done, couldnt or didnt. Nothing here, or in any
 //   route, adds a strike, a warning or removes anything;
 // - a report marks the move `reported` and frees its active slot;
-// - one report per move (the database keeps report.move_id unique), so a
-//   repeat or a double tap returns the stored report;
+// - one report per move (the database keeps report.move_id unique). The row
+//   is claimed before the model is called and the reply filled in after, so a
+//   repeat or a double tap costs one model call and returns the stored report;
 // - the prediction check is right or wrong only after Done with the founder's
-//   own words, and Axiom's reply may only use numbers the founder or the move
-//   gave (reportChecks.js);
+//   own words, and Axiom's reply may only use numbers from what the model was
+//   sent (reportChecks.js);
 // - a report unlocks founder stories for the next situation (sharing.js);
 // - the sharing question is asked at every report, unless the founder turned
 //   on "share automatically"; a situation the care check touched is never
-//   shared. Every decision is logged with its time and wording version.
+//   shared. Every decision is logged with its time and wording version. The
+//   question versions offered with a report are stored on it; a consent may
+//   only name one of them.
 // Tables and columns: see ../schema_needs.md.
 import { HttpError } from '../situations.js'
 import { isFillerReply } from '../filler.js'
+import { isUuid } from '../../writeValidation.js'
 import { createMoves } from '../move/moveService.js'
 import { ACTIVE_STATUSES } from '../move/room.js'
 import { checkReportReply, predictionCheckFor } from './reportChecks.js'
@@ -28,6 +32,13 @@ import {
 // offline check-in is sent when the phone is back online).
 const REPORTABLE = Object.freeze([...ACTIVE_STATUSES, 'closed_no_report'])
 const NOTE_MIN_WORDS = 2
+// A second request for a report still being written waits for the reply this
+// long before answering 409; a reply still missing after STALE_MS is given up
+// on and the fixed line stays.
+const WAIT_STEP_MS = 100
+const WAIT_STEPS = 80
+const STALE_MS = 2 * 60 * 1000
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 const notFound = () => new HttpError(404, { error: 'Not found' })
 const stillSaving = () => new HttpError(409, { error: 'This check-in is still being saved. Try again in a moment.' })
@@ -52,7 +63,13 @@ export function reportView(row, move) {
   }
 }
 
-function consentView(row, storyOffered = false) {
+// The consent question versions offered with this report. Rows from before
+// the column existed offered the plain question only.
+export const offeredVersions = (row) => row.consent_versions ?? [ALONE_VERSION]
+const storyOfferedWith = (row) => row.share_state !== 'not_offered' && offeredVersions(row).includes(AFTER_STORY_VERSION)
+
+function consentView(row) {
+  const storyOffered = storyOfferedWith(row)
   if (row.share_state === 'asked') {
     return {
       ask: true,
@@ -94,28 +111,25 @@ export function createReports({ supabase, callStructured, clock, log = () => {} 
 
   // One model call, a second naming the problems, then the fixed line. With no
   // note there is nothing to answer, so no model call.
+  const fallbackFor = ({ move, outcome, note }) => ({
+    reply: fallbackReply({ outcome, title: move.title }),
+    prediction_check: predictionCheckFor({ outcome, hasNote: Boolean(note) }),
+  })
+
   async function compose({ userId, move, situation, outcome, note }) {
-    const fallback = () => ({
-      reply: fallbackReply({ outcome, title: move.title }),
-      prediction_check: predictionCheckFor({ outcome, hasNote: Boolean(note) }),
-    })
+    const fallback = () => fallbackFor({ move, outcome, note })
     if (!note) return fallback()
 
-    const [turns, read] = await Promise.all([
-      one(supabase.from('situation_turns').select().eq('situation_id', move.situation_id).order('seq', { ascending: true })),
-      one(supabase.from('reads').select().eq('situation_id', move.situation_id).maybeSingle()),
-    ])
+    const turns = await one(supabase.from('situation_turns').select().eq('situation_id', move.situation_id).order('seq', { ascending: true }))
     const founderSaid = turns.filter((t) => t.role === 'founder' && !t.filler).map((t) => t.text)
-    const knownTexts = [
-      ...founderSaid, read?.closing_answer ?? '', note,
-      move.title, move.mission, move.success_condition, move.prediction, move.words ?? '', ...(move.checklist ?? []),
-    ]
     const input = {
       situation: { title: situation?.title ?? null, founder_said: founderSaid },
       move: { title: move.title, mission: move.mission, success: move.success_condition, prediction: move.prediction },
       outcome,
       note,
     }
+    // Exactly what the model is sent: a number from anywhere else is invented.
+    const knownTexts = [input.situation.title ?? '', ...founderSaid, ...Object.values(input.move), note]
     let problems = null
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       let data
@@ -143,7 +157,9 @@ export function createReports({ supabase, callStructured, clock, log = () => {} 
 
   // ── After the report is stored (safe to run again) ─────────────────────────
 
-  // Asks, shares automatically, or (care) does neither. Decided once.
+  // Asks, shares automatically, or (care) does neither. Decided once. The
+  // question versions offered (the plain one, and the one after a founder
+  // story when a story fits) are stored first, once.
   async function decideSharing({ userId, row, move }) {
     const situation = await situationOf(move)
     const setFrom = async (fields) => (await one(supabase.from('reports').update({ ...fields, updated_at: iso() })
@@ -151,12 +167,23 @@ export function createReports({ supabase, callStructured, clock, log = () => {} 
 
     if (await sharing.careTouched(userId, situation)) return (await setFrom({ share_state: 'not_offered' })) ?? ownReport(userId, row.id)
 
+    if (!row.consent_versions) {
+      const versions = (await sharing.findStory(userId)) ? [ALONE_VERSION, AFTER_STORY_VERSION] : [ALONE_VERSION]
+      await one(supabase.from('reports').update({ consent_versions: versions, updated_at: iso() })
+        .eq('id', row.id).eq('user_id', userId).is('consent_versions', null).select('id'))
+      row = await ownReport(userId, row.id)
+      if (row.share_state !== null) return row
+    }
+
     if (await sharing.shareAuto(userId)) {
+      // A failed automatic share asks instead; what shareOutcome left behind
+      // decides, never a guess. The care check inside share() answers 409
+      // after setting not_offered.
       try {
         const shared = await sharing.share({ userId, report: row, move, automatic: true, wordingVersion: SHARE_AUTO_VERSION })
         if (shared) return shared
       } catch (err) {
-        log('automatic share failed, asking instead', err)
+        log('automatic share failed', err)
       }
       const now = await ownReport(userId, row.id)
       if (now.share_state !== null) return now
@@ -175,13 +202,12 @@ export function createReports({ supabase, callStructured, clock, log = () => {} 
     }
     await sharing.unlock({ userId, reportId: row.id, kind: 'report' })
     const decided = row.share_state === null ? await decideSharing({ userId, row, move }) : row
-    const storyOffered = decided.share_state !== 'not_offered' && (await sharing.findStory(userId)) !== null
     return {
       status: 'reported',
       report: reportView(decided, move),
       reply: decided.reply,
-      story_offer: storyOffered ? { text: STORY_OFFER } : null,
-      consent: consentView(decided, storyOffered),
+      story_offer: storyOfferedWith(decided) ? { text: STORY_OFFER } : null,
+      consent: consentView(decided),
       unlock: { granted: true },
     }
   }
@@ -208,17 +234,41 @@ export function createReports({ supabase, callStructured, clock, log = () => {} 
     }
   }
 
+  // A row whose reply is still being written: wait for it. One left pending
+  // past STALE_MS (the writer died) keeps the fixed line it was claimed with.
+  async function settled(userId, row) {
+    for (let step = 0; row.reply_pending && step < WAIT_STEPS; step += 1) {
+      await pause(WAIT_STEP_MS)
+      row = await ownReport(userId, row.id)
+    }
+    if (!row.reply_pending) return row
+    if (clock.now() - Date.parse(row.created_at) < STALE_MS) throw stillSaving()
+    await one(supabase.from('reports').update({ reply_pending: false, updated_at: iso() })
+      .eq('id', row.id).eq('user_id', userId).eq('reply_pending', true).select('id'))
+    return ownReport(userId, row.id)
+  }
+
+  // Fills the claimed row with Axiom's checked reply.
+  async function fillReply({ userId, row, move, outcome, note }) {
+    const { reply, prediction_check } = await compose({ userId, move, situation: await situationOf(move), outcome, note })
+    const filled = await one(supabase.from('reports').update({ reply, prediction_check, reply_pending: false, updated_at: iso() })
+      .eq('id', row.id).eq('user_id', userId).eq('reply_pending', true).select())
+    return filled[0] ?? ownReport(userId, row.id)
+  }
+
   async function report({ userId, moveId, outcome, note = null, clientTurnId }) {
     let move = await ownMove(userId, moveId)
     const stored = await reportOfMove(userId, move.id)
-    if (stored) return finish({ userId, row: stored, move })
+    if (stored) return finish({ userId, row: await settled(userId, stored), move })
     if (note && isFillerReply(note, { minWords: NOTE_MIN_WORDS })) return { status: 'need_more', reply: NEED_MORE }
 
     await moves.settle(userId)
     move = await ownMove(userId, moveId)
     if (!REPORTABLE.includes(move.status)) throw new HttpError(409, { error: 'This move cannot be checked in.' })
 
-    const { reply, prediction_check } = await compose({ userId, move, situation: await situationOf(move), outcome, note })
+    // Claim the move's one report before any model call; the fixed line holds
+    // the place until the reply is written.
+    const { reply, prediction_check } = fallbackFor({ move, outcome, note })
     const inserted = await supabase.from('reports').insert({
       user_id: userId,
       move_id: move.id,
@@ -229,6 +279,8 @@ export function createReports({ supabase, callStructured, clock, log = () => {} 
       prediction: move.prediction,
       prediction_check,
       reply,
+      reply_pending: Boolean(note),
+      consent_versions: null,
       share_state: null,
       share_automatic: false,
       share_decided_at: null,
@@ -236,9 +288,18 @@ export function createReports({ supabase, callStructured, clock, log = () => {} 
       created_at: iso(),
       updated_at: iso(),
     }).select().single()
-    if (inserted.error?.code === '23505') return finish({ userId, row: await reportOfMove(userId, move.id), move })
+    if (inserted.error?.code === '23505') return finish({ userId, row: await settled(userId, await reportOfMove(userId, move.id)), move })
     if (inserted.error) throw inserted.error
-    return finish({ userId, row: inserted.data, move })
+    const row = inserted.data.reply_pending ? await fillReply({ userId, row: inserted.data, move, outcome, note }) : inserted.data
+    return finish({ userId, row, move })
+  }
+
+  // The care gate stopped a note on this move: its situation is never shared.
+  async function markCare({ userId, moveId }) {
+    if (!isUuid(moveId)) return
+    const move = await one(supabase.from('moves').select('situation_id').eq('id', moveId).eq('user_id', userId).maybeSingle())
+    if (!move) return
+    await one(supabase.from('situations').update({ care_flag: true }).eq('id', move.situation_id).eq('user_id', userId).select('id'))
   }
 
   async function get({ userId, reportId }) {
@@ -247,17 +308,22 @@ export function createReports({ supabase, callStructured, clock, log = () => {} 
   }
 
   // The founder story, once they said yes to seeing it. Null when none fits.
+  // None for a report care closed, or while care touches its situation now.
   async function story({ userId, reportId }) {
     const row = await ownReport(userId, reportId)
     if (row.share_state === 'not_offered') return { story: null }
+    const situation = await one(supabase.from('situations').select().eq('id', row.situation_id).eq('user_id', userId).maybeSingle())
+    if (await sharing.careTouched(userId, situation)) return { story: null }
     return { story: await sharing.findStory(userId) }
   }
 
-  // Share or keep private. wordingVersion: which question the founder saw.
+  // Share or keep private. wordingVersion: which question the founder saw;
+  // only a version offered with this report counts.
   async function consent({ userId, reportId, share, wordingVersion = null }) {
     const row = await ownReport(userId, reportId)
     if (row.share_state === null) throw stillSaving()
     if (row.share_state === 'not_offered') throw new HttpError(409, { error: 'This check-in cannot be shared.' })
+    if (wordingVersion && !offeredVersions(row).includes(wordingVersion)) throw new HttpError(400, { error: 'wording_version was not offered' })
     const version = wordingVersion ?? row.consent_wording_version ?? ALONE_VERSION
     const next = share
       ? await sharing.share({ userId, report: row, move: await ownMove(userId, row.move_id), automatic: false, wordingVersion: version })
@@ -275,5 +341,5 @@ export function createReports({ supabase, callStructured, clock, log = () => {} 
     return { consent: consentView(now), reply: now.share_state === 'withdrawn' ? WITHDRAWN_LINE : null }
   }
 
-  return { due, report, get, story, consent, withdraw }
+  return { due, report, markCare, get, story, consent, withdraw }
 }

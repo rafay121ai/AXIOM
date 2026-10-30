@@ -5,15 +5,24 @@
 //   points back to the founder; it starts as pending_review and nobody sees it
 //   until a person approves it;
 // - outcome_author_links (private) is the only thing connecting an outcome to
-//   its author. It is read here to take a share down and to keep a founder's
-//   own outcome out of their stories. No function returns it, nor any id from it;
+//   its author. It is read here and in shareDb.js to take a share down and to
+//   keep a founder's own outcome out of their stories. No function returns it, nor any id from it;
 // - a situation the care check touched is never shared and offers no story;
+//   share() checks it on every path;
 // - every share decision is written to consent_log with its time and the
-//   version of the words the founder saw.
+//   version of the words the founder saw; a share never exists without it;
+// - the share and unshare transitions themselves live in shareDb.js.
 // Tables: see ../schema_needs.md.
+import { HttpError } from '../situations.js'
+import { consentRow, createShareDb } from './shareDb.js'
 import { SHARE_AUTO_VERSION } from './wording.js'
 
-export function createSharing({ supabase, clock }) {
+// The most approved outcomes read for one story pick.
+export const STORY_CAP = 20
+
+const careStopped = () => new HttpError(409, { error: 'This check-in cannot be shared.' })
+
+export function createSharing({ supabase, clock, db = createShareDb({ supabase, clock }) }) {
   const iso = () => new Date(clock.now()).toISOString()
   const one = async (query) => {
     const { data, error } = await query
@@ -25,9 +34,7 @@ export function createSharing({ supabase, clock }) {
 
   // action: asked | share | auto_share | keep_private | withdraw | auto_share_on | auto_share_off
   const logConsent = ({ userId, reportId = null, action, wordingVersion }) =>
-    one(supabase.from('consent_log').insert({
-      user_id: userId, report_id: reportId, action, wording_version: wordingVersion, decided_at: iso(),
-    }).select('id'))
+    one(supabase.from('consent_log').insert(consentRow({ userId, reportId, action, wordingVersion, decidedAt: iso() })).select('id'))
 
   // ── Share automatically (Settings), off by default ──────────────────────────
 
@@ -52,14 +59,17 @@ export function createSharing({ supabase, clock }) {
   // ── Care ───────────────────────────────────────────────────────────────────
 
   // Whether care stops sharing for this situation: a care screen still open,
-  // or any care signal in this situation or since it started. Catch rather
-  // than miss: a failed lookup counts as touched.
+  // any care signal in this situation or since it started, or the situation's
+  // care_flag (set when the care gate stopped a note here, in case its event
+  // was not recorded). Catch rather than miss: a missing situation or a failed
+  // lookup counts as touched.
   async function careTouched(userId, situation) {
+    if (!situation || situation.care_flag === true) return true
     try {
       const events = await one(supabase.from('care_events').select('level, scope_id, created_at, resolved_at').eq('user_id', userId))
       return (events ?? []).some((e) =>
         (e.level === 'clear' && !e.resolved_at)
-        || (situation && (e.scope_id === situation.id || e.created_at >= situation.created_at)))
+        || e.scope_id === situation.id || e.created_at >= situation.created_at)
     } catch {
       return true
     }
@@ -87,11 +97,10 @@ export function createSharing({ supabase, clock }) {
     }
   }
 
-  // Writes the pending outcome and its private link. The draft is raw material
-  // for the anonymised story a person reviews; it is never shown as it is.
-  async function publish({ userId, report, move }) {
-    const now = iso()
-    const peer = await one(supabase.from('peer_outcomes').insert({
+  // The pending outcome. The draft is raw material for the anonymised story a
+  // person reviews; it is never shown as it is.
+  async function peerOf({ userId, report, move }) {
+    return {
       status: 'pending_review',
       ...(await tagsOf(userId)),
       outcome: report.outcome,
@@ -105,74 +114,34 @@ export function createSharing({ supabase, clock }) {
       lesson: null,
       reviewed_by: null,
       reviewed_at: null,
-      withdrawn_at: null,
-      created_at: now,
-    }).select('id').single())
-    const link = await supabase.from('outcome_author_links').insert({
-      peer_outcome_id: peer.id, user_id: userId, report_id: report.id, created_at: now, withdrawn_at: null,
-    }).select('peer_outcome_id')
-    if (link.error) {
-      // An outcome nobody can take down must not exist.
-      await supabase.from('peer_outcomes').delete().eq('id', peer.id)
-      throw link.error
     }
   }
 
-  // Takes every live share of this report down: the outcome keeps no content
-  // and is marked withdrawn, so it can never be shown.
-  async function takeDown({ userId, reportId }) {
-    const now = iso()
-    const links = await one(supabase.from('outcome_author_links').select('peer_outcome_id')
-      .eq('report_id', reportId).eq('user_id', userId).is('withdrawn_at', null))
-    for (const { peer_outcome_id: id } of links) {
-      await one(supabase.from('peer_outcomes').update({ status: 'withdrawn', draft: null, story: null, lesson: null, withdrawn_at: now })
-        .eq('id', id).select('id'))
-      await one(supabase.from('outcome_author_links').update({ withdrawn_at: now }).eq('peer_outcome_id', id).select('peer_outcome_id'))
-    }
-  }
-
-  // Moves a report's share state from `from` to `to` (compare and swap), so a
-  // double tap shares or takes down once. Returns the stored row after it.
-  // The words the founder saw for each decision live in consent_log;
-  // reports.consent_wording_version keeps the question that was asked.
-  async function claim({ userId, reportId, from, fields }) {
-    const q = supabase.from('reports').update({ ...fields, updated_at: iso() }).eq('id', reportId).eq('user_id', userId)
-    const won = await one((from === null ? q.is('share_state', null) : q.eq('share_state', from)).select())
-    return won[0] ?? null
-  }
-
-  // Shares a report (asked or automatic). Returns the row; unchanged when it
-  // was already shared.
+  // Shares a report (asked, automatic, or again after a withdraw). Returns the
+  // row; unchanged when it was already shared; null when the state moved on.
+  // The care check runs here every time: when it touched the situation the
+  // report becomes not_offered and nothing is shared (409).
   async function share({ userId, report, move, automatic, wordingVersion }) {
     if (report.share_state === 'shared') return report
-    const won = await claim({
-      userId, reportId: report.id, from: report.share_state,
-      fields: { share_state: 'shared', share_automatic: automatic, share_decided_at: iso() },
-    })
-    if (!won) return null
-    try {
-      await publish({ userId, report: won, move })
-    } catch (err) {
-      await supabase.from('reports').update({ share_state: report.share_state, share_automatic: false, share_decided_at: report.share_decided_at ?? null })
-        .eq('id', report.id).eq('share_state', 'shared')
-      throw err
+    const situation = await one(supabase.from('situations').select().eq('id', report.situation_id).eq('user_id', userId).maybeSingle())
+    if (await careTouched(userId, situation)) {
+      await db.unshareOutcome({ userId, reportId: report.id, from: report.share_state, to: 'not_offered', action: null, wordingVersion: null })
+      throw careStopped()
     }
-    await logConsent({ userId, reportId: report.id, action: automatic ? 'auto_share' : 'share', wordingVersion })
-    await unlock({ userId, reportId: report.id, kind: 'share' })
+    const won = await db.shareOutcome({
+      userId, reportId: report.id, from: report.share_state, automatic,
+      action: automatic ? 'auto_share' : 'share', wordingVersion, peer: await peerOf({ userId, report, move }),
+    })
+    if (won) await unlock({ userId, reportId: report.id, kind: 'share' })
     return won
   }
 
-  // Keep private, or withdraw: the share (if any) comes down first.
+  // Keep private, or withdraw. Any live share comes down after the claim.
   async function unshare({ userId, report, to, wordingVersion }) {
     if (report.share_state === to) return report
-    if (report.share_state === 'shared') await takeDown({ userId, reportId: report.id })
-    const won = await claim({
-      userId, reportId: report.id, from: report.share_state,
-      fields: { share_state: to, share_automatic: false, share_decided_at: iso() },
+    return db.unshareOutcome({
+      userId, reportId: report.id, from: report.share_state, to, action: to === 'withdrawn' ? 'withdraw' : 'keep_private', wordingVersion,
     })
-    if (!won) return null
-    await logConsent({ userId, reportId: report.id, action: to === 'withdrawn' ? 'withdraw' : 'keep_private', wordingVersion })
-    return won
   }
 
   // ── Give to get ────────────────────────────────────────────────────────────
@@ -191,19 +160,23 @@ export function createSharing({ supabase, clock }) {
 
   // ── Founder stories ────────────────────────────────────────────────────────
 
-  // One approved story that fits, never the founder's own. Matched by stage,
-  // then customer market, then business model. Null when none: then nothing
-  // is said about stories.
+  // One approved story that fits, never the founder's own. Same stage first,
+  // then any stage; within that, customer market then business model. The
+  // query excludes the founder's own outcomes and reads at most STORY_CAP.
+  // Null when none: then nothing is said about stories.
   async function findStory(userId) {
-    const approved = await one(supabase.from('peer_outcomes').select('id, status, stage, customer_market, business_model, outcome, story, lesson')
-      .eq('status', 'approved'))
-    const usable = approved.filter((p) => p.status === 'approved' && typeof p.story === 'string' && p.story.trim())
-    if (usable.length === 0) return null
-    const own = new Set((await one(supabase.from('outcome_author_links').select('peer_outcome_id').eq('user_id', userId)))
-      .map((l) => l.peer_outcome_id))
+    const own = (await one(supabase.from('outcome_author_links').select('peer_outcome_id').eq('user_id', userId)))
+      .map((l) => l.peer_outcome_id)
     const tags = await tagsOf(userId)
-    const score = (p) => (p.stage === tags.stage ? 4 : 0) + (p.customer_market === tags.customer_market ? 2 : 0) + (p.business_model === tags.business_model ? 1 : 0)
-    const best = usable.filter((p) => !own.has(p.id)).sort((a, b) => score(b) - score(a))[0]
+    const score = (p) => (p.customer_market === tags.customer_market ? 2 : 0) + (p.business_model === tags.business_model ? 1 : 0)
+    const pick = async (stage) => {
+      let q = supabase.from('peer_outcomes').select('id, stage, customer_market, business_model, outcome, story, lesson').eq('status', 'approved')
+      if (own.length > 0) q = q.not('id', 'in', `(${own.join(',')})`)
+      if (stage) q = q.eq('stage', stage)
+      const found = await one(q.order('reviewed_at', { ascending: false }).limit(STORY_CAP))
+      return found.filter((p) => typeof p.story === 'string' && p.story.trim()).sort((a, b) => score(b) - score(a))[0] ?? null
+    }
+    const best = (tags.stage && (await pick(tags.stage))) || (await pick(null))
     return best ? { story: best.story, lesson: best.lesson ?? null, outcome: best.outcome, stage: best.stage ?? null } : null
   }
 
