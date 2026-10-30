@@ -41,7 +41,9 @@ export const profileFreeText = (req) => [
 
 const flatText = (value) => [].concat(value ?? []).filter((v) => typeof v === 'string' && v.trim()).join('\n')
 
-export function createCare({ supabase, callStructured, clock = { now: () => Date.now() } } = {}) {
+// onCare({ userId, level, scopeId }): runs whenever the gate stops a step, even
+// when its event could not be recorded (the journey takes shares down there).
+export function createCare({ supabase, callStructured, clock = { now: () => Date.now() }, onCare = null } = {}) {
   const log = (what, err) => console.error(`[Care] ${what}`, err?.message || '')
 
   async function priorUnclear(userId) {
@@ -127,6 +129,13 @@ export function createCare({ supabase, callStructured, clock = { now: () => Date
         await record(userId, level, scopeId)
       } catch (err) {
         log('record failed', err)
+      }
+      if (onCare) {
+        try {
+          await onCare({ userId, level, scopeId })
+        } catch (err) {
+          log('after-care step failed', err)
+        }
       }
 
       if (level === 'clear') {

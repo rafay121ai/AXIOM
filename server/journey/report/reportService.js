@@ -32,13 +32,19 @@ import {
 // offline check-in is sent when the phone is back online).
 const REPORTABLE = Object.freeze([...ACTIVE_STATUSES, 'closed_no_report'])
 const NOTE_MIN_WORDS = 2
-// A second request for a report still being written waits for the reply this
-// long before answering 409; a reply still missing after STALE_MS is given up
-// on and the fixed line stays.
-const WAIT_STEP_MS = 100
-const WAIT_STEPS = 80
-const STALE_MS = 2 * 60 * 1000
-const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+// A second request for a report still being written polls for the reply,
+// backing off (WAIT_FIRST_MS doubling up to WAIT_MAX_STEP_MS) for about
+// WAIT_TOTAL_MS before answering 409. A reply still missing after STALE_MS is
+// given up on and the fixed line shows. STALE_MS is above the worst-case model
+// time: compose makes up to 2 structured calls, each up to 2 attempts, each
+// an OpenAI request of up to 60 s tried twice (server/index.js: timeout 60 s,
+// maxRetries 1), so 8 minutes, plus margin.
+const WAIT_FIRST_MS = 100
+const WAIT_MAX_STEP_MS = 2000
+const WAIT_TOTAL_MS = 8000
+const WORST_MODEL_MS = 2 * 2 * 2 * 60 * 1000
+export const STALE_MS = WORST_MODEL_MS + 2 * 60 * 1000
+const realPause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 const notFound = () => new HttpError(404, { error: 'Not found' })
 const stillSaving = () => new HttpError(409, { error: 'This check-in is still being saved. Try again in a moment.' })
@@ -82,7 +88,7 @@ function consentView(row) {
   return { ask: false, ...sharingView(row) }
 }
 
-export function createReports({ supabase, callStructured, clock, log = () => {} }) {
+export function createReports({ supabase, callStructured, clock, log = () => {}, pause = realPause }) {
   const moves = createMoves({ supabase, callStructured, clock, log })
   const sharing = createSharing({ supabase, clock })
   const iso = () => new Date(clock.now()).toISOString()
@@ -235,10 +241,12 @@ export function createReports({ supabase, callStructured, clock, log = () => {} 
   }
 
   // A row whose reply is still being written: wait for it. One left pending
-  // past STALE_MS (the writer died) keeps the fixed line it was claimed with.
+  // past STALE_MS shows the fixed line it was claimed with; a writer that
+  // still finishes fills it in then (fillReply).
   async function settled(userId, row) {
-    for (let step = 0; row.reply_pending && step < WAIT_STEPS; step += 1) {
-      await pause(WAIT_STEP_MS)
+    for (let waited = 0, step = WAIT_FIRST_MS; row.reply_pending && waited < WAIT_TOTAL_MS; step = Math.min(step * 2, WAIT_MAX_STEP_MS)) {
+      await pause(step)
+      waited += step
       row = await ownReport(userId, row.id)
     }
     if (!row.reply_pending) return row
@@ -248,11 +256,14 @@ export function createReports({ supabase, callStructured, clock, log = () => {} 
     return ownReport(userId, row.id)
   }
 
-  // Fills the claimed row with Axiom's checked reply.
+  // Fills the claimed row with Axiom's checked reply, as long as the row still
+  // holds the fixed line it was claimed with: still pending, or given up on as
+  // stale (then the paid reply is not thrown away). A reply already written
+  // there is the first complete one and stays.
   async function fillReply({ userId, row, move, outcome, note }) {
     const { reply, prediction_check } = await compose({ userId, move, situation: await situationOf(move), outcome, note })
     const filled = await one(supabase.from('reports').update({ reply, prediction_check, reply_pending: false, updated_at: iso() })
-      .eq('id', row.id).eq('user_id', userId).eq('reply_pending', true).select())
+      .eq('id', row.id).eq('user_id', userId).eq('reply', row.reply).eq('prediction_check', row.prediction_check).select())
     return filled[0] ?? ownReport(userId, row.id)
   }
 
@@ -295,11 +306,19 @@ export function createReports({ supabase, callStructured, clock, log = () => {} 
   }
 
   // The care gate stopped a note on this move: its situation is never shared.
-  async function markCare({ userId, moveId }) {
+  // When care_flag cannot be written (the column is missing, or the write
+  // fails) a care event scoped to the situation is written instead, which the
+  // care check also reads: sharing stays blocked either way.
+  async function markCare({ userId, moveId, level }) {
     if (!isUuid(moveId)) return
     const move = await one(supabase.from('moves').select('situation_id').eq('id', moveId).eq('user_id', userId).maybeSingle())
     if (!move) return
-    await one(supabase.from('situations').update({ care_flag: true }).eq('id', move.situation_id).eq('user_id', userId).select('id'))
+    const flagged = await supabase.from('situations').update({ care_flag: true }).eq('id', move.situation_id).eq('user_id', userId).select('id')
+    if (!flagged.error) return
+    log('care flag failed', flagged.error)
+    await one(supabase.from('care_events').insert({
+      user_id: userId, level, scope_id: move.situation_id, created_at: iso(), resolved_at: null,
+    }).select('id'))
   }
 
   async function get({ userId, reportId }) {

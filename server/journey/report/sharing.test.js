@@ -237,3 +237,84 @@ test('an author link that cannot be written leaves no live outcome, even when re
     assert.equal(w.state(), 'asked')
   }
 })
+
+// ── Errors after the publish (re-audit) ──────────────────────────────────────
+
+// rule({ table, action, n }) => 'fail' (nothing written), 'after' (written,
+// then an error) or nothing. n counts that table and action from 1.
+function failAt(rule) {
+  return (base) => {
+    const seen = {}
+    return {
+      ...base,
+      from(table) {
+        const b = base.from(table)
+        let action = 'select'
+        const { insert, update, then } = b
+        const del = b.delete
+        b.insert = (p) => { action = 'insert'; insert(p); return b }
+        b.update = (p) => { action = 'update'; update(p); return b }
+        b.delete = () => { action = 'delete'; del(); return b }
+        b.then = (resolve, reject) => {
+          const key = `${table} ${action}`
+          seen[key] = (seen[key] ?? 0) + 1
+          const verdict = rule({ table, action, n: seen[key] })
+          const error = { data: null, error: { message: `${key} failed` } }
+          if (verdict === 'fail') return Promise.resolve(error).then(resolve, reject)
+          if (verdict === 'after') return then(() => resolve(error), reject)
+          return then(resolve, reject)
+        }
+        return b
+      },
+    }
+  }
+}
+
+test('steps: any error after the publish takes the outcome down and fails closed (asked again)', async () => {
+  const is = (table, action, n) => (op) => op.table === table && op.action === action && op.n === n
+  const any = (...rules) => (op) => rules.map((r) => r(op)).find(Boolean)
+  const tag = (verdict, rule) => (op) => (rule(op) ? verdict : null)
+  const claimFails = tag('fail', is('reports', 'update', 1))
+  const claimWritesThenFails = tag('after', is('reports', 'update', 1))
+  const recheckFails = tag('fail', is('reports', 'select', 1))
+  const linkReadFails = tag('fail', is('outcome_author_links', 'select', 1))
+  const takeDownFails = tag('fail', is('peer_outcomes', 'update', 1))
+  const cases = {
+    'claim fails': claimFails,
+    'claim writes, then fails': claimWritesThenFails,
+    're-read fails': recheckFails,
+    'claim fails, the take-down link read fails': any(claimFails, linkReadFails),
+    'claim fails, the take-down write fails': any(claimFails, takeDownFails),
+    'claim writes then fails, the take-down write fails': any(claimWritesThenFails, takeDownFails),
+    're-read fails, the take-down write fails': any(recheckFails, takeDownFails),
+  }
+  for (const [name, rule] of Object.entries(cases)) {
+    const w = world({ wrap: failAt(rule) })
+    await assert.rejects(() => w.sharing.share({ userId: USER, report: stored(w), move, automatic: false, wordingVersion: 'v' }), undefined, name)
+    assert.equal(w.state(), 'asked', `${name}: the founder is asked again`)
+    assert.equal(w.live().length, 0, `${name}: no outcome stays live`)
+  }
+
+  // A lost claim whose take-down write fails: the outcome is removed instead.
+  const lost = world({ reportOver: { share_state: 'private' }, wrap: failAt(takeDownFails) })
+  assert.equal(await lost.sharing.share({ userId: USER, report: { ...stored(lost), share_state: 'asked' }, move, automatic: false, wordingVersion: 'v' }), null)
+  assert.equal(lost.state(), 'private')
+  assert.equal(lost.live().length, 0)
+
+  // An automatic share (from no state yet) goes back to no state, so the
+  // report can still ask.
+  const auto = world({ reportOver: { share_state: null }, wrap: failAt(claimWritesThenFails) })
+  await assert.rejects(() => auto.sharing.share({ userId: USER, report: stored(auto), move, automatic: true, wordingVersion: 'v' }))
+  assert.equal(auto.state(), null)
+  assert.equal(auto.live().length, 0)
+})
+
+test('care that begins after a share takes every share of the founder down, with no consent row', async () => {
+  const w = world()
+  await w.sharing.share({ userId: USER, report: stored(w), move, automatic: false, wordingVersion: 'v' })
+  assert.equal(w.live().length, 1)
+  await w.sharing.takeDownForCare(USER)
+  assert.equal(w.state(), 'not_offered')
+  assert.equal(w.live().length, 0)
+  assert.deepEqual(w.log(), ['share'])
+})

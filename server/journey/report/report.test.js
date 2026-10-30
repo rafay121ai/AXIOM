@@ -4,6 +4,7 @@ import { createApp } from '../../app.js'
 import { createFakeClock, createFakeOpenAI, createFakeSupabase } from '../../testing/fakes.js'
 import { FULL_ANSWERS } from '../fixtures.js'
 import { checkReportReply, predictionCheckFor } from './reportChecks.js'
+import { STALE_MS, createReports } from './reportService.js'
 import { STORY_CAP } from './sharing.js'
 import {
   AFTER_STORY_VERSION, ALONE_VERSION, CONSENT_WORDINGS, KEPT_PRIVATE_LINE, NEED_MORE, OUTCOMES, SHARED_LINE,
@@ -627,5 +628,91 @@ test('a story pick reads at most STORY_CAP outcomes and none of the founder\'s o
     const id = (await report(call, M1, { outcome: 'done', note: NOTE })).body.report.id
     assert.equal((await call('GET', `/api/reports/${id}/story`)).body.story.story, other.story)
     assert.ok(loaded.length > 0 && Math.max(...loaded) <= STORY_CAP, `read ${Math.max(...loaded)} outcomes at once`)
+  } finally { await close() }
+})
+
+// ── Re-audit leftovers ───────────────────────────────────────────────────────
+
+test('plurals, ordinals and multiples are number claims too', () => {
+  const knownTexts = [FIRST, NOTE, MOVE.mission]
+  const problemsOf = (reply) => checkReportReply({ data: { reply, prediction_check: 'right' }, outcome: 'done', knownTexts }).problems.join(' | ')
+  for (const [reply, n] of [
+    ['Hundreds of clinics need this. Confirm Thursday.', 100], ['Thousands will follow. Confirm Thursday.', 1000],
+    ['Dozens more are out there. Confirm Thursday.', 12], ['Send a seventh email to the clinic.', 7],
+    ['This is the fifth time. Confirm Thursday.', 5], ['Half of them replied. Confirm Thursday.', 0.5],
+    ['Ask for double the time. Confirm Thursday.', 2], ['Email them twice. Confirm Thursday.', 2],
+  ]) {
+    const known = n === 2 ? [MOVE.title] : knownTexts
+    const problems = checkReportReply({ data: { reply, prediction_check: 'right' }, outcome: 'done', knownTexts: known }).problems.join(' | ')
+    assert.match(problems, new RegExp(`never gave: ${String(n).replace('.', '\\.')}`), reply)
+  }
+  // Numbers the founder gave, in any of these forms, are fine.
+  assert.equal(problemsOf('The second clinic did not reply. Confirm Thursday.'), '')
+  assert.equal(problemsOf('Double-check the time, then confirm Thursday.'), '')
+})
+
+test('the stale cut-off is above the worst-case model time', () => {
+  // compose: 2 structured calls x 2 attempts x (60 s request, 1 SDK retry).
+  assert.ok(STALE_MS > 2 * 2 * 2 * 60 * 1000, `STALE_MS ${STALE_MS}`)
+})
+
+test('a waiting duplicate backs off; a stale writer that still finishes keeps its paid reply', async () => {
+  const base = createFakeSupabase({ tables: seed() })
+  const clock = createFakeClock(NOW)
+  let release
+  const modelGate = new Promise((r) => { release = r })
+  const callStructured = async () => { await modelGate; return { data: JSON.parse(GOOD_REPLY) } }
+  const pauses = []
+  const service = createReports({ supabase: base, callStructured, clock, pause: async (ms) => { pauses.push(ms) } })
+  const args = { userId: USER.id, moveId: M1, outcome: 'done', note: NOTE, clientTurnId: uuid(900) }
+
+  const writing = service.report(args)
+  for (let i = 0; i < 50 && base.rows('reports').length === 0; i += 1) await new Promise((r) => setImmediate(r))
+  assert.equal(base.rows('reports')[0].reply_pending, true)
+
+  await assert.rejects(() => service.report(args), (e) => e.status === 409)
+  assert.ok(pauses.length <= 10, `${pauses.length} polls`)
+  assert.ok(pauses.reduce((a, b) => a + b, 0) >= 8000)
+
+  clock.advance(STALE_MS + 1)
+  const givenUp = await service.report(args)
+  assert.equal(givenUp.reply, fallbackReply({ outcome: 'done', title: MOVE.title }))
+
+  release()
+  const written = await writing
+  assert.equal(written.reply, JSON.parse(GOOD_REPLY).reply)
+  assert.equal(base.rows('reports')[0].reply, JSON.parse(GOOD_REPLY).reply)
+  assert.equal(base.rows('reports')[0].reply_pending, false)
+})
+
+test('care that begins after a share takes the share down', async () => {
+  const { call, rows, close } = await setup([GOOD_REPLY])
+  try {
+    const id = (await report(call, M1, { outcome: 'done', note: NOTE })).body.report.id
+    await call('POST', `/api/reports/${id}/consent`, { share: true })
+    assert.equal(rows('peer_outcomes').filter((p) => p.status !== 'withdrawn').length, 1)
+    const stopped = await call('POST', '/api/situations', { text: 'I want to kill myself', client_turn_id: uuid(950) })
+    assert.equal(stopped.body.care, 'clear')
+    assert.equal(rows('reports')[0].share_state, 'not_offered')
+    assert.equal(rows('peer_outcomes').filter((p) => p.status !== 'withdrawn').length, 0)
+    assert.ok(rows('outcome_author_links').every((l) => l.withdrawn_at))
+    assert.deepEqual((await call('GET', `/api/reports/${id}`)).body.report.sharing.state, 'not_offered')
+  } finally { await close() }
+})
+
+test('a care stop whose event and care_flag both fail to write still closes sharing', async () => {
+  let careInserts = 0
+  const { call, rows, close } = await setup([GOOD_REPLY], {
+    settings: [{ user_id: USER.id, share_auto: true }],
+    fail: (table, action) => (table === 'situations' && action === 'update')
+      || (table === 'care_events' && action === 'insert' && (careInserts += 1) === 1),
+  })
+  try {
+    const stopped = await report(call, M1, { outcome: 'didnt', note: 'I want to kill myself' })
+    assert.equal(stopped.body.care, 'clear')
+    assert.deepEqual(rows('care_events').map((e) => e.scope_id), [SIT], 'the fallback event names the situation')
+    const later = await report(call, M2, { outcome: 'done', note: NOTE, client_turn_id: uuid(901) })
+    assert.equal(later.body.consent.state, 'not_offered')
+    assert.equal(rows('peer_outcomes').length, 0)
   } finally { await close() }
 })

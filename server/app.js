@@ -10,6 +10,7 @@ import { ALLOWED_CLIENT_MODELS, MODELS } from './config.js'
 import { callStructured } from './llm.js'
 import { mountJourneyRoutes } from './journey/routes.js'
 import { mountPushRoutes } from './push/routes.js'
+import { createSharing } from './journey/report/sharing.js'
 import { createEmbedder } from './journey/learn/retrieve.js'
 import { createCare, bodyFields, lastUserMessage, founderMessageContent, onboardingAnswers, profileFreeText } from './care/middleware.js'
 import { capExperimentMetadata } from './writeValidation.js'
@@ -71,10 +72,13 @@ export function createApp({
   const trackEvent = createEventTracker({ supabase: supabaseAdmin })
   const { logModelUsage } = createUsageLogger({ supabase: supabaseAdmin })
   const callStructuredForApp = (args) => callStructured({ openai, logModelUsage, clock, ...args })
+  // Care that begins after a share takes the founder's shares down.
+  const careSharing = supabaseAdmin ? createSharing({ supabase: supabaseAdmin, clock }) : null
   const care = createCare({
     supabase: supabaseAdmin,
     callStructured: callStructuredForApp,
     clock,
+    onCare: careSharing && (({ userId }) => careSharing.takeDownForCare(userId)),
   })
   // Read by the push scheduler: no pushes while a care event is open.
   app.locals.isCareOpen = care.isCareOpen

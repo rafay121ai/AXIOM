@@ -16,14 +16,30 @@ const PENALTY = /\b(?:strikes?|warnings?|warned|penalt(?:y|ies)|penalis\w*|penal
 // "I said ... and it happened" is the prompt's own way of saying right.
 const CLAIMS_RIGHT = /\bi was right\b|\bi called it\b|\bmy prediction (?:was right|held)\b|\bi said\b[^.!?]*\band (?:it|that|they) (?:happened|did)\b|\b(?:just )?as i (?:said|predicted)\b/
 const CLAIMS_WRONG = /\bi was wrong\b|\bmy prediction was wrong\b|\bi said\b[^.!?]*\b(?:and|but) (?:it|that) (?:did not|didn't) happen\b/
-// Number words count as numbers. "one" is left out: it is mostly a pronoun.
-const NUMBER_WORDS = Object.freeze({
+// Number words count as numbers: cardinals, their plurals (hundreds), ordinals
+// (third) and multiples (half, twice, double). "one" and "first" are left
+// out: they are mostly a pronoun and an order word.
+const CARDINALS = {
   two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12,
   thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20,
   thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90, hundred: 100, thousand: 1000,
   million: 1000000, dozen: 12,
+}
+const ORDINALS = {
+  second: 2, third: 3, fourth: 4, fifth: 5, sixth: 6, seventh: 7, eighth: 8, ninth: 9, tenth: 10, eleventh: 11,
+  twelfth: 12, thirteenth: 13, fourteenth: 14, fifteenth: 15, sixteenth: 16, seventeenth: 17, eighteenth: 18,
+  nineteenth: 19, twentieth: 20, thirtieth: 30, fortieth: 40, fiftieth: 50, sixtieth: 60, seventieth: 70,
+  eightieth: 80, ninetieth: 90, hundredth: 100, thousandth: 1000, millionth: 1000000,
+}
+const MULTIPLES = { half: 0.5, halves: 0.5, halved: 0.5, twice: 2, double: 2, doubled: 2, thrice: 3, triple: 3, tripled: 3 }
+const NUMBER_WORDS = Object.freeze({
+  ...CARDINALS,
+  ...Object.fromEntries(['tens', 'dozens', 'hundreds', 'thousands', 'millions'].map((w) => [w, CARDINALS[w.slice(0, -1)]])),
+  ...ORDINALS,
+  ...MULTIPLES,
 })
-const NUMBER_WORD_RX = new RegExp(`(?<![a-z])(${Object.keys(NUMBER_WORDS).join('|')})(?![a-z])`, 'g')
+// Longest first, so "hundreds" is read whole; "double-check" is not a number.
+const NUMBER_WORD_RX = new RegExp(`(?<![a-z])(${Object.keys(NUMBER_WORDS).sort((a, b) => b.length - a.length).join('|')})(?![a-z]|-check)`, 'g')
 const numbersIn = (text) => {
   const t = norm(text)
   return [

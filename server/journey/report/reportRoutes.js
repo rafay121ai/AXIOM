@@ -41,7 +41,7 @@ export function mountReportRoutes(app, { supabase, care, callStructured, clock }
     res.json = (body) => {
       res.json = send
       if (!body?.care) return send(body)
-      service.markCare({ userId: req.user.id, moveId: req.params.id })
+      service.markCare({ userId: req.user.id, moveId: req.params.id, level: body.care })
         .catch((err) => log('care mark failed', err))
         .finally(() => send(body))
       return res

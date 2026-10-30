@@ -76,6 +76,17 @@ export function createSharing({ supabase, clock, db = createShareDb({ supabase, 
     }
   }
 
+  // Care began after a share: every shared report of the founder comes down
+  // and becomes not_offered. A care signal touches every situation started
+  // before it (careTouched), so this is all of them. No consent row: care
+  // closed it, not the founder.
+  async function takeDownForCare(userId) {
+    const shared = await one(supabase.from('reports').select('id').eq('user_id', userId).eq('share_state', 'shared'))
+    for (const { id } of shared) {
+      await db.unshareOutcome({ userId, reportId: id, from: 'shared', to: 'not_offered', action: null, wordingVersion: null })
+    }
+  }
+
   async function careOpen(userId) {
     try {
       const open = await one(supabase.from('care_events').select('id').eq('user_id', userId).eq('level', 'clear').is('resolved_at', null).limit(1))
@@ -181,5 +192,5 @@ export function createSharing({ supabase, clock, db = createShareDb({ supabase, 
     return best ? { story: best.story, lesson: best.lesson ?? null, outcome: best.outcome, stage: best.stage ?? null } : null
   }
 
-  return { shareAuto, setShareAuto, careTouched, careOpen, share, unshare, unlock, findStory, logConsent }
+  return { shareAuto, setShareAuto, careTouched, careOpen, takeDownForCare, share, unshare, unlock, findStory, logConsent }
 }
