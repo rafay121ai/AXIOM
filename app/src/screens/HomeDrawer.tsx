@@ -12,6 +12,7 @@ type Props = {
   onStartNew: () => void;
   onRow: (row: MenuRow) => void;
   onSeeAll: () => void;
+  onSettings: () => void;
 };
 
 function Row({ row, onPress }: { row: MenuRow; onPress: (row: MenuRow) => void }) {
@@ -37,7 +38,7 @@ function Section({ label, children }: { label: string; children: React.ReactNode
 }
 
 // The menu: it slides in from the left and pushes the home aside. Sections divided by thin lines, no day headings.
-export function HomeDrawer({ rows, onStartNew, onRow, onSeeAll }: Props) {
+export function HomeDrawer({ rows, onStartNew, onRow, onSeeAll, onSettings }: Props) {
   const insets = useSafeAreaInsets();
   return (
     <View style={[styles.drawer, { paddingTop: insets.top + 54 }]}>
@@ -65,6 +66,10 @@ export function HomeDrawer({ rows, onStartNew, onRow, onSeeAll }: Props) {
           </Section>
         )}
       </ScrollView>
+      <Pressable accessibilityRole="button" onPress={onSettings} style={[styles.foot, { paddingBottom: Math.max(insets.bottom, 12) + 14 }]}>
+        <Text style={styles.footText}>{copy.settings.title}</Text>
+        <Text style={styles.footChev}>›</Text>
+      </Pressable>
     </View>
   );
 }
@@ -82,5 +87,8 @@ const styles = StyleSheet.create({
   label: { fontFamily: fonts.sans, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', color: ink(0.45), marginBottom: 6 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 11, minHeight: 44, paddingVertical: 9 },
   rowText: { flex: 1, fontFamily: fonts.sans, fontSize: 15, lineHeight: 20, color: ink(0.85) },
+  foot: { flexDirection: 'row', alignItems: 'center', minHeight: 56, paddingTop: 14, paddingHorizontal: 22, borderTopWidth: 1, borderTopColor: ink(0.14) },
+  footText: { flex: 1, fontFamily: fonts.sans, fontSize: 15, color: colors.ink },
+  footChev: { fontSize: 20, color: ink(0.4) },
   none: { fontFamily: fonts.sans, fontSize: 14, color: ink(0.5), paddingVertical: 9 },
 });

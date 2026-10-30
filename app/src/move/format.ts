@@ -9,3 +9,9 @@ export function spokenTime(local: string): string {
   const hour = h % 12 === 0 ? 12 : h % 12;
   return `${hour}${m ? `:${String(m).padStart(2, '0')}` : ''} ${h < 12 ? 'am' : 'pm'}`;
 }
+
+/** The server's 'HH:MM' as a clock reading with minutes, as Settings shows it: '20:00' is '8:00 pm'. */
+export function clockTime(local: string): string {
+  const [h, m] = local.split(':').map(Number);
+  return `${h % 12 === 0 ? 12 : h % 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`;
+}

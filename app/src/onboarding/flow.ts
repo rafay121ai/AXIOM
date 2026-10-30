@@ -101,3 +101,15 @@ export function countrySuggestions(countries: string[], typed: string): string[]
 export function progress(index: number, total: number): number {
   return (index + 1) / total;
 }
+
+/** One line that says what the founder answered, for the list of answers in Settings. Empty when nothing is answered. */
+export function answerSummary(a: Answer | undefined): string {
+  if (a === undefined) return '';
+  if (typeof a === 'string') return a;
+  if (Array.isArray(a)) return a.join(', ');
+  if ('value' in a) return a.other ? `${a.value}: ${a.other}` : a.value;
+  if ('a' in a) return [...a.a, ...a.b].join(', ');
+  if ('country' in a || 'customers' in a) return [(a as WhereAnswer).country, (a as WhereAnswer).customers].filter(Boolean).join(', ');
+  const g = a as GoalAnswer;
+  return [g.goal, g.date ?? g.when].filter(Boolean).join(', ');
+}

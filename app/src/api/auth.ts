@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 // Supabase is used here for sign-in and nothing else. Every read and write goes through the Express API.
 export type Auth = {
   signInWithGoogle(): Promise<void>;
+  signOut(): Promise<void>;
   /** The signed-in founder's access token, sent to the API as a Bearer token. */
   getToken(): Promise<string>;
 };
@@ -11,6 +12,10 @@ export function createAuth(client: SupabaseClient): Auth {
   return {
     async signInWithGoogle() {
       const { error } = await client.auth.signInWithOAuth({ provider: 'google' });
+      if (error) throw error;
+    },
+    async signOut() {
+      const { error } = await client.auth.signOut();
       if (error) throw error;
     },
     async getToken() {

@@ -1,7 +1,7 @@
 import type { Auth } from '../src/api/auth';
 import { createHttpApi } from '../src/api/http';
 
-const auth: Auth = { signInWithGoogle: async () => {}, getToken: async () => 'tok' };
+const auth: Auth = { signInWithGoogle: async () => {}, signOut: async () => {}, getToken: async () => 'tok' };
 const ok = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response;
 
 describe('http api', () => {

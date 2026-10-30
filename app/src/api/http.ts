@@ -1,6 +1,6 @@
 import type { Auth } from './auth';
 import { createSaveQueue, HttpError } from './queue';
-import type { AxiomApi, Commitment, ConsentResult, DueReport, FirstReading, HistoryPage, HistoryRow, Home, LearnReply, LoadingQuote, MoveView, Read, ReadAnswerResult, ReportResult, Screened, Signup, SituationReply, Story, SwapResult } from './types';
+import type { AccountRequest, AxiomApi, Commitment, ConsentResult, DueReport, FirstReading, HistoryPage, HistoryRow, Home, LearnReply, LoadingQuote, MoveView, Read, ReadAnswerResult, ReportResult, Screened, Settings, Signup, SituationReply, Story, SwapResult } from './types';
 
 type Options = { baseUrl: string; auth: Auth; fetch?: typeof fetch };
 
@@ -81,6 +81,11 @@ export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch
       return (await request<{ items: HistoryRow[] }>('GET', `/api/history?q=${encodeURIComponent(q)}`)).items;
     },
     getHistoryPage: (id) => request<HistoryPage>('GET', `/api/history/${id}`),
+    getSettings: () => request<Settings>('GET', '/api/settings'),
+    updateSettings: (patch) => request<Settings>('PUT', '/api/settings', patch),
+    requestExport: () => request<AccountRequest>('POST', '/api/account/export'),
+    requestDelete: () => request<AccountRequest>('DELETE', '/api/account'),
+    signOut: () => auth.signOut(),
     async registerPushToken(token, platform, timeZone) {
       await request('POST', '/api/push/token', { token, platform, timezone: timeZone });
     },

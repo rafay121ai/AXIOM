@@ -1,5 +1,5 @@
 import { HttpError } from './queue';
-import type { AxiomApi, Commitment, ConsentResult, DueReport, FirstReading, HistoryPage, HistoryRow, Home, HomeItem, LearnReply, LearnTurn, MoveView, Outcome, Question, Read, ReadAnswerResult, ReportResult, Screened, SituationReply, Story, SwapResult } from './types';
+import type { AccountRequest, AxiomApi, Commitment, ConsentResult, DueReport, FirstReading, HistoryPage, HistoryRow, Home, HomeItem, LearnReply, LearnTurn, MoveView, Outcome, Question, Read, ReadAnswerResult, ReportResult, Screened, Settings, SituationReply, Story, SwapResult } from './types';
 
 // Fixture questions, word for word from tasks/design/mock-onboarding-v2.html.
 const QUESTIONS: Question[] = [
@@ -208,6 +208,30 @@ const HISTORY: { row: HistoryRow; page: Omit<HistoryPage, 'id' | 'title' | 'stat
 ];
 const HISTORY_ACTION = { open: ['pick_up', 'Pick it up'], paused: ['bring_back', 'Bring it back'], done: ['talk_again', 'Talk about this again'], couldnt: ['talk_again', 'Talk about this again'], didnt: ['talk_again', 'Talk about this again'] } as const;
 
+// Settings, from the mock's sample values. The two lines under "share automatically" are the server's own
+// (server/journey/report/wording.js), and the account lines are server/journey/home/wording.js.
+const SHARE_TEXT = {
+  on: 'On. What happens in your check-ins is shared with other founders, with no name, without asking each time. Turn it off any time.',
+  off: 'Off. After each check-in I ask if you want to share what happened, with no name. Nothing is shared unless you say yes.',
+};
+const FAKE_SETTINGS: Settings = {
+  you: { name: 'Rafay', email: 'rafay@example.com', country: 'Pakistan', timezone: 'Asia/Karachi' },
+  signup_answers: {
+    stage: { value: "I'm building it and nobody pays yet" },
+    where: { country: 'Pakistan', customers: 'Mostly abroad' },
+    building: 'A scheduling tool for dental clinics',
+  },
+  links: { privacy: 'https://example.com/privacy', terms: 'https://example.com/terms' },
+  reminders: { checkin_time: '20:00', morning_on: true, evening_on: true, lock_screen: 'short', quiet_hours: { start: '22:00', end: '06:00' }, push_registered: true },
+  mentor_style: 'direct',
+  keep_items: false,
+  privacy: { share_automatically: false, text: SHARE_TEXT.off },
+};
+const EXPORT_LINE = 'I have your request. Your export is queued.';
+const DELETE_LINE = 'I have your request. Nothing has been deleted. Deleting everything Axiom knows about you needs a plan I have not finished, and I will not guess with your history.';
+// The server refuses a check-in time inside quiet hours.
+const inQuiet = (t: string, q: { start: string; end: string }) => (q.start < q.end ? t >= q.start && t < q.end : t >= q.start || t < q.end);
+
 // The mock's greeting for the hour. The server picks one from its approved set; these are the mock's own six.
 function fakeGreeting(now: Date): { kind: string; text: string } {
   const h = now.getHours();
@@ -253,6 +277,7 @@ const isEnough = (t: string) => t.split(/\s+/).length >= 8 && /\d|\b(one|two|thr
 export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = false, home?: HomeSim): AxiomApi {
   const homeState: HomeSim | undefined = reportDue ? 'evening' : home;
   let checkedIn = false;
+  let settings = FAKE_SETTINGS;
   const wait = () => (latencyMs > 0 ? new Promise<void>((r) => setTimeout(r, latencyMs)) : undefined);
   const screen = async (): Promise<Screened> => (sim === 'clear' ? CLEAR : sim === 'unclear' ? UNCLEAR : {});
 
@@ -305,7 +330,7 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
   return {
     async signInWithGoogle() {},
     async getSignup() {
-      return { questions: QUESTIONS, answers: {}, complete: homeState !== undefined };
+      return { questions: QUESTIONS, answers: homeState !== undefined ? settings.signup_answers : {}, complete: homeState !== undefined };
     },
     saveAnswer: screen,
     async getFirstReading() {
@@ -428,6 +453,26 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
       const [kind, label] = HISTORY_ACTION[h.row.status];
       return { ...h.page, id, title: h.row.title, status: h.row.status, status_label: h.row.status_label, action: { kind, label, target: { stage: h.row.status === 'open' ? 'move' : 'learn', situation_id: id } } };
     },
+    async getSettings() {
+      return settings;
+    },
+    async updateSettings(patch) {
+      const { share_automatically, keep_items, mentor_style, ...reminders } = patch;
+      const next: Settings = { ...settings, reminders: { ...settings.reminders, ...reminders } };
+      if (inQuiet(next.reminders.checkin_time, next.reminders.quiet_hours)) throw new HttpError(400, 'checkin_time falls inside quiet hours');
+      if (keep_items !== undefined) next.keep_items = keep_items;
+      if (mentor_style) next.mentor_style = mentor_style;
+      if (share_automatically !== undefined) next.privacy = { share_automatically, text: share_automatically ? SHARE_TEXT.on : SHARE_TEXT.off };
+      settings = next;
+      return settings;
+    },
+    async requestExport(): Promise<AccountRequest> {
+      return { status: 'queued', message: EXPORT_LINE };
+    },
+    async requestDelete(): Promise<AccountRequest> {
+      return { status: 'recorded', message: DELETE_LINE };
+    },
+    async signOut() {},
     async registerPushToken() {},
     async removePushToken() {},
   };

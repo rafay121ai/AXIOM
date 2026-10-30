@@ -20,6 +20,8 @@ import { CareScreen } from './src/screens/CareScreen';
 import { HistoryScreen } from './src/screens/HistoryScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { PastScreen } from './src/screens/PastScreen';
+import { AnswersScreen } from './src/screens/AnswersScreen';
+import { SettingsScreen } from './src/screens/SettingsScreen';
 import { LearnScreen } from './src/screens/LearnScreen';
 import { MoveScreen } from './src/screens/MoveScreen';
 import { ReportScreen } from './src/screens/ReportScreen';
@@ -43,11 +45,13 @@ type Stage =
   | { name: 'home' }
   | { name: 'history' }
   | { name: 'past'; id: string }
+  | { name: 'settings' }
+  | { name: 'answers'; startAt?: string }
   | { name: 'report'; report: DueReport; next: DueReport[] }
   | { name: 'care'; message: string; help: HelpLine[]; back: Stage };
 
 // Screens with the faint gold wash instead of the drifting light.
-const QUIET: Stage['name'][] = ['home', 'history', 'past'];
+const QUIET: Stage['name'][] = ['home', 'history', 'past', 'settings', 'answers'];
 
 const run = (anim: Animated.CompositeAnimation) => new Promise<void>((resolve) => anim.start(() => resolve()));
 
@@ -133,6 +137,13 @@ export default function App() {
     await idle();
     openReports(due);
   }, [openReports, idle]);
+
+  // This phone stops getting this founder's reminders, then the sign-in comes back.
+  const signOut = useCallback(async () => {
+    await push.release().catch(() => {});
+    await api.signOut();
+    goTo({ name: 'signin' });
+  }, [goTo]);
 
   // Where a tap on a home item, a menu row or a history action leads.
   const openDestination = useCallback((d: Destination) => {
@@ -233,6 +244,7 @@ export default function App() {
                 onOpen={async (target) => openDestination(await destinationOf(api, target))}
                 onPast={(id) => goTo({ name: 'past', id })}
                 onHistory={() => goTo({ name: 'history' })}
+                onSettings={() => goTo({ name: 'settings' })}
                 onCare={showCare}
               />
             )}
@@ -245,6 +257,27 @@ export default function App() {
                 load={() => api.getHistoryPage(stage.id)}
                 onAction={async (target) => openDestination(await destinationOf(api, target))}
                 onBack={() => goTo({ name: 'history' })}
+              />
+            )}
+            {stage.name === 'settings' && (
+              <SettingsScreen
+                load={() => api.getSettings()}
+                save={(patch) => api.updateSettings(patch)}
+                requestExport={() => api.requestExport()}
+                requestDelete={() => api.requestDelete()}
+                onEditAnswers={(startAt) => goTo({ name: 'answers', startAt })}
+                onSignOut={signOut}
+                onBack={() => goTo({ name: 'home' })}
+              />
+            )}
+            {stage.name === 'answers' && (
+              <AnswersScreen
+                key={stage.startAt ?? 'all'}
+                load={() => api.getSignup()}
+                save={(key, answer) => api.saveAnswer(key, answer)}
+                startAt={stage.startAt}
+                onBack={() => goTo({ name: 'settings' })}
+                onCare={showCare}
               />
             )}
             {stage.name === 'reading' && <ReadingScreen reading={stage.reading} onContinue={() => beginSituation(false)} />}

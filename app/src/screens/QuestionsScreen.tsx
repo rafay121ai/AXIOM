@@ -1,16 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  Animated, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
+  Animated, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { Answer, GoalAnswer, MultiAnswer, Question, SingleAnswer, TextAnswer, TwoAnswer, WhereAnswer } from '../api/types';
-import { Chip, Row } from '../components/Choice';
-import { DateField } from '../components/DateField';
-import { Field } from '../components/Field';
+import type { Answer, Question } from '../api/types';
+import { QuestionBody } from '../components/QuestionBody';
 import { GoldButton } from '../components/GoldButton';
 import {
-  autoAdvances, countrySuggestions, isDone, isOther, needsContinue, progress, tapMulti, tapSingle, tapTwo,
+  autoAdvances, isDone, needsContinue, progress,
 } from '../onboarding/flow';
 import { colors, goldGradient, ink, motion, space, type } from '../theme';
 
@@ -107,7 +105,7 @@ export function QuestionsScreen({ questions, onSave, onFinish }: Props) {
         >
           <Text accessibilityRole="header" style={[type.question, styles.title]}>{q.title}</Text>
           {q.sub ? <Text style={[type.sub, styles.sub]}>{q.sub}</Text> : <View style={{ height: 18 }} />}
-          <Body q={q} a={a} set={set} />
+          <QuestionBody q={q} a={a} set={set} />
         </ScrollView>
       </Animated.View>
 
@@ -122,117 +120,6 @@ export function QuestionsScreen({ questions, onSave, onFinish }: Props) {
   );
 }
 
-type BodyProps = { q: Question; a: Answer | undefined; set: (next: Answer, forceAdvance?: boolean) => void };
-
-function Body({ q, a, set }: BodyProps) {
-  switch (q.type) {
-    case 'single': {
-      const s = a as SingleAnswer | undefined;
-      return (
-        <View>
-          {q.options.map((o) => (
-            <Row key={o} label={o} selected={s?.value === o} onPress={() => set(tapSingle(a, o))} />
-          ))}
-          {isOther(q, a) && (
-            <View style={styles.gapTop}>
-              <Field placeholder="In a few words" value={s?.other ?? ''} onChangeText={(other) => set({ value: s!.value, other })} />
-            </View>
-          )}
-        </View>
-      );
-    }
-    case 'where': {
-      const w = (a as WhereAnswer | undefined) ?? {};
-      const suggestions = countrySuggestions(q.countries, w.country ?? '');
-      return (
-        <View>
-          <Text style={[type.label, styles.label, { marginTop: 6 }]}>{q.countryLabel}</Text>
-          <Field
-            placeholder={q.countryPlaceholder}
-            value={w.country ?? ''}
-            onChangeText={(country) => set({ ...w, country })}
-            autoCapitalize="words"
-          />
-          {suggestions.length > 0 && (
-            <View style={[styles.chips, styles.gapTop]}>
-              {suggestions.map((c) => <Chip key={c} label={c} selected={false} onPress={() => set({ ...w, country: c })} />)}
-            </View>
-          )}
-          <Text style={[type.label, styles.label]}>{q.customerLabel}</Text>
-          <View style={styles.chips}>
-            {q.customers.map((c) => (
-              <Chip key={c} label={c} selected={w.customers === c} onPress={() => set({ ...w, customers: c }, true)} />
-            ))}
-          </View>
-        </View>
-      );
-    }
-    case 'goal': {
-      const g = (a as GoalAnswer | undefined) ?? {};
-      return (
-        <View>
-          <View style={styles.chips}>
-            {q.goals.map((o) => <Chip key={o} label={o} selected={g.goal === o} onPress={() => set({ ...g, goal: o })} />)}
-          </View>
-          <Text style={[type.label, styles.label]}>{q.whenLabel}</Text>
-          <View style={styles.chips}>
-            {q.whens.map((o) => <Chip key={o} label={o} selected={g.when === o} onPress={() => set({ ...g, when: o })} />)}
-          </View>
-          {g.when === q.dateOption && (
-            <View style={{ marginTop: 16 }}>
-              <DateField value={g.date} onChange={(date) => set({ ...g, date })} />
-            </View>
-          )}
-        </View>
-      );
-    }
-    case 'two': {
-      const t = (a as TwoAnswer | undefined) ?? { a: [], b: [] };
-      return (
-        <View>
-          {q.groups.map((group, n) => (
-            <View key={group.label}>
-              <Text style={[type.label, styles.label, n === 0 && { marginTop: 2 }]}>{group.label}</Text>
-              <View style={styles.chips}>
-                {group.options.map((o) => (
-                  <Chip key={o} label={o} selected={(n === 0 ? t.a : t.b).includes(o)} onPress={() => set(tapTwo(a, n as 0 | 1, o))} />
-                ))}
-              </View>
-            </View>
-          ))}
-        </View>
-      );
-    }
-    case 'multi': {
-      const list = (a as MultiAnswer | undefined) ?? [];
-      return (
-        <View>
-          {q.options.map((o) => (
-            <Row key={o} multi label={o} selected={list.includes(o)} onPress={() => set(tapMulti(q, a, o))} />
-          ))}
-        </View>
-      );
-    }
-    case 'text': {
-      const v = (a as TextAnswer | undefined) ?? '';
-      return (
-        <View>
-          <TextInput
-            multiline
-            value={v}
-            onChangeText={set}
-            placeholder={q.placeholder}
-            placeholderTextColor={ink(0.28)}
-            style={[type.big, styles.big]}
-            textAlignVertical="top"
-          />
-          <Text style={styles.shortHint}>{v.trim().length >= q.minLength ? '' : q.shortHint}</Text>
-        </View>
-      );
-    }
-  }
-}
-
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   head: { paddingHorizontal: space.screenX, flexDirection: 'row', alignItems: 'center' },
@@ -243,13 +130,5 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: space.screenX, paddingTop: space.qTop, paddingBottom: 150 },
   title: { marginBottom: 10 },
   sub: { marginBottom: 28 },
-  label: { marginTop: 28, marginBottom: 12 },
-  gapTop: { marginTop: 22 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 },
   bar: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: 14, paddingHorizontal: space.screenX },
-  big: {
-    minHeight: 210, paddingVertical: 18, paddingHorizontal: 2, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.line,
-    ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null),
-  },
-  shortHint: { fontFamily: type.sub.fontFamily, fontSize: 12, color: ink(0.4), marginTop: 10, minHeight: 16 },
 });

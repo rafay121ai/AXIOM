@@ -6,7 +6,7 @@ import { routeScreened } from '../src/care/route';
 import { copy } from '../src/copy';
 import { consentQuestion, OUTCOME_MARK, outcomeLabel } from '../src/report/flow';
 
-const auth: Auth = { signInWithGoogle: async () => {}, getToken: async () => 'tok' };
+const auth: Auth = { signInWithGoogle: async () => {}, signOut: async () => {}, getToken: async () => 'tok' };
 const json = (status: number, body: unknown) => ({ ok: status < 400, status, json: async () => body }) as Response;
 const TURN = '11111111-1111-4111-8111-111111111111';
 

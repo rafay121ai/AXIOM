@@ -29,6 +29,7 @@ type Props = {
   /** A history or paused row: its page, where it can be picked up again. */
   onPast: (id: string) => void;
   onHistory: () => void;
+  onSettings: () => void;
   onCare: (message: string, help: HelpLine[]) => void;
 };
 
@@ -38,7 +39,7 @@ const SLIDE_MS = 500;
 // The returning founder's home: Axiom's greeting in serif, a chat bar, up to 2 small items for what was left off,
 // and a menu that slides in from the left. Typing in the bar starts something new. While a care check-in is open,
 // only the gentle line and the bar are here.
-export function HomeScreen({ load, checkIn, onLoaded, onStart, onOpen, onPast, onHistory, onCare }: Props) {
+export function HomeScreen({ load, checkIn, onLoaded, onStart, onOpen, onPast, onHistory, onSettings, onCare }: Props) {
   const insets = useSafeAreaInsets();
   const reduce = useReduceMotion();
   const [home, setHome] = useState<Home | null>(null);
@@ -141,7 +142,7 @@ export function HomeScreen({ load, checkIn, onLoaded, onStart, onOpen, onPast, o
           aria-hidden={!drawer}
           style={[StyleSheet.absoluteFill, { opacity: slide, transform: [{ translateX: slide.interpolate({ inputRange: [0, 1], outputRange: [-pushed * 0.14, 0] }) }] }]}
         >
-          <HomeDrawer rows={rows} onStartNew={startNew} onRow={rowTarget} onSeeAll={onHistory} />
+          <HomeDrawer rows={rows} onStartNew={startNew} onRow={rowTarget} onSeeAll={onHistory} onSettings={onSettings} />
         </Animated.View>
       )}
       <Animated.View style={[styles.main, drawer && styles.mainPushed, { transform: [{ translateX: slide.interpolate({ inputRange: [0, 1], outputRange: [0, pushed] }) }] }]}>

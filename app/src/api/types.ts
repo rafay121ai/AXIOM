@@ -276,6 +276,36 @@ export type HistoryPage = {
   action: { kind: 'pick_up' | 'bring_back' | 'talk_again'; label: string; target: Target };
 };
 
+export type LockScreen = 'full' | 'short' | 'hidden';
+export type MentorStyle = 'calm' | 'direct' | 'hard';
+
+/** Settings, as one page. The words under "share automatically" (`privacy.text`) are the server's. */
+export type Settings = {
+  you: { name: string | null; email: string | null; country: string | null; timezone: string | null };
+  signup_answers: Record<string, Answer>;
+  /** Where Privacy and Terms open; null when there is none yet. */
+  links: { privacy: string | null; terms: string | null };
+  reminders: {
+    /** 'HH:MM' in the founder's time zone. */
+    checkin_time: string;
+    morning_on: boolean;
+    evening_on: boolean;
+    lock_screen: LockScreen;
+    quiet_hours: { start: string; end: string };
+    /** False when no phone can ring: the check-in then waits on the home screen. */
+    push_registered: boolean;
+  };
+  mentor_style: MentorStyle;
+  keep_items: boolean;
+  privacy: { share_automatically: boolean; text: string };
+};
+
+/** Any of these can be saved on their own. The answer is the whole page again. */
+export type SettingsPatch = Partial<Pick<Settings, 'mentor_style' | 'keep_items'> & Settings['reminders']> & { share_automatically?: boolean };
+
+/** What the server says about an export or a delete request. Nothing is deleted yet; `message` is its own line. */
+export type AccountRequest = { status: string; message: string };
+
 /** The sign-up as it stands: the questions, what the founder has answered, and whether every one is answered. */
 export type Signup = { questions: Question[]; answers: Record<string, Answer>; complete: boolean };
 
@@ -339,6 +369,16 @@ export interface AxiomApi {
   getHistory(q: string): Promise<HistoryRow[]>;
   /** One past situation. */
   getHistoryPage(id: string): Promise<HistoryPage>;
+  /** The settings page. */
+  getSettings(): Promise<Settings>;
+  /** Saves some settings and returns the page as it now stands. */
+  updateSettings(patch: SettingsPatch): Promise<Settings>;
+  /** Asks for an export of everything Axiom holds. Recorded only. */
+  requestExport(): Promise<AccountRequest>;
+  /** Asks to delete everything. Recorded only: nothing is deleted. */
+  requestDelete(): Promise<AccountRequest>;
+  /** Signs out of this phone. */
+  signOut(): Promise<void>;
   /** This phone no longer gets reminders for this founder. */
   removePushToken(token: string): Promise<void>;
 }
