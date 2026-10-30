@@ -78,7 +78,7 @@ export function mountHomeRoutes(app, { supabase, care, callStructured, clock, li
       const cleaned = cleanSettings(req.body)
       if (cleaned.error) bad(cleaned.error)
       const out = await settings.update({ user: req.user, value: cleaned.value })
-      if (out.error) bad(out.error)
+      if (out.error) throw new HttpError(400, out.code ? { error: out.error, code: out.code } : { error: out.error })
       return out.value
     }))
 

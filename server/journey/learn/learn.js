@@ -18,7 +18,7 @@ const SAY_MORE = 'Say a bit more.'
 export const LOCK_MS = 2 * 60 * 1000
 
 const notFound = () => new HttpError(404, { error: 'Not found' })
-const busy = () => new HttpError(409, { error: 'This turn is still being processed. Try again in a moment.' })
+const busy = () => new HttpError(409, { error: 'This turn is still being processed. Try again in a moment.', code: 'turn_busy' })
 
 // What the app sees of one Learn turn. Evidence, chunk ids, handles and
 // validation flags stay on the server.
@@ -172,7 +172,7 @@ export function createLearn({ supabase, knowledgeSupabase = null, embed = null, 
   async function start({ userId, situationId }) {
     const situation = await ownSituation(userId, situationId)
     const read = await readOf(situation.id)
-    if (!read || !read.answered_at) throw new HttpError(409, { error: 'Answer or skip the question on the Read first.' })
+    if (!read || !read.answered_at) throw new HttpError(409, { error: 'Answer or skip the question on the Read first.', code: 'read_unanswered' })
 
     let conversation = await conversationOf(situation.id)
     if (!conversation) {
@@ -213,7 +213,7 @@ export function createLearn({ supabase, knowledgeSupabase = null, embed = null, 
 
     return withLock(conversation, async () => {
       const turns = await turnsOf(conversation.id)
-      if (!turns.some((t) => t.kind === 'lesson')) throw new HttpError(409, { error: 'The lesson has not started yet.' })
+      if (!turns.some((t) => t.kind === 'lesson')) throw new HttpError(409, { error: 'The lesson has not started yet.', code: 'lesson_not_started' })
       const fresh = await ownConversation(userId, learnId)
       const offers = offersOf(fresh)
       const real = isRealReply(text)

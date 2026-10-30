@@ -608,6 +608,7 @@ test('reminder settings: defaults, partial updates, validation', async () => {
     // A check-in inside quiet hours could never ring.
     const inside = await call('PUT', '/api/settings/reminders', { checkin_time: '23:30' })
     assert.deepEqual([inside.status, inside.body.error], [400, 'checkin_time falls inside quiet hours'])
+    assert.equal(inside.body.code, 'quiet_hours_clash')
     assert.equal(rows('founder_profiles')[0].report_time_local, '21:15')
   } finally {
     await close()

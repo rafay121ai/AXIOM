@@ -36,7 +36,7 @@ export function mountJourneyRoutes(app, { supabase, knowledgeSupabase = null, em
     if (!supabase) return res.status(503).json({ error: 'Service not configured' })
     try {
       const { answers, next } = await signup.view(req.user.id)
-      if (next) return res.status(409).json({ error: 'Sign-up is not finished', next })
+      if (next) return res.status(409).json({ error: 'Sign-up is not finished', code: 'signup_unfinished', next })
       const { reading } = await createFirstReading({
         answers,
         deps: {

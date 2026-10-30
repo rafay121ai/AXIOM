@@ -47,7 +47,7 @@ export const STALE_MS = WORST_MODEL_MS + 2 * 60 * 1000
 const realPause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 const notFound = () => new HttpError(404, { error: 'Not found' })
-const stillSaving = () => new HttpError(409, { error: 'This check-in is still being saved. Try again in a moment.' })
+const stillSaving = () => new HttpError(409, { error: 'This check-in is still being saved. Try again in a moment.', code: 'report_saving' })
 
 // What the app sees of the sharing state. Never a peer outcome id or link.
 function sharingView(row) {
@@ -275,7 +275,7 @@ export function createReports({ supabase, callStructured, clock, log = () => {},
 
     await moves.settle(userId)
     move = await ownMove(userId, moveId)
-    if (!REPORTABLE.includes(move.status)) throw new HttpError(409, { error: 'This move cannot be checked in.' })
+    if (!REPORTABLE.includes(move.status)) throw new HttpError(409, { error: 'This move cannot be checked in.', code: 'report_not_allowed' })
 
     // Claim the move's one report before any model call; the fixed line holds
     // the place until the reply is written.
@@ -341,7 +341,7 @@ export function createReports({ supabase, callStructured, clock, log = () => {},
   async function consent({ userId, reportId, share, wordingVersion = null }) {
     const row = await ownReport(userId, reportId)
     if (row.share_state === null) throw stillSaving()
-    if (row.share_state === 'not_offered') throw new HttpError(409, { error: 'This check-in cannot be shared.' })
+    if (row.share_state === 'not_offered') throw new HttpError(409, { error: 'This check-in cannot be shared.', code: 'share_not_allowed' })
     if (wordingVersion && !offeredVersions(row).includes(wordingVersion)) throw new HttpError(400, { error: 'wording_version was not offered' })
     const version = wordingVersion ?? row.consent_wording_version ?? ALONE_VERSION
     const next = share

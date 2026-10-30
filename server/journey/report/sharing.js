@@ -20,7 +20,7 @@ import { SHARE_AUTO_VERSION } from './wording.js'
 // The most approved outcomes read for one story pick.
 export const STORY_CAP = 20
 
-const careStopped = () => new HttpError(409, { error: 'This check-in cannot be shared.' })
+const careStopped = () => new HttpError(409, { error: 'This check-in cannot be shared.', code: 'share_not_allowed' })
 
 export function createSharing({ supabase, clock, db = createShareDb({ supabase, clock }) }) {
   const iso = () => new Date(clock.now()).toISOString()

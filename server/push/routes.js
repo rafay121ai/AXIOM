@@ -24,7 +24,7 @@ export function mountPushRoutes(app, { supabase, clock }) {
     if (cleaned.error) return res.status(400).json({ error: cleaned.error })
     try {
       const out = await run(req.user.id, cleaned.value)
-      if (out?.error) return res.status(400).json({ error: out.error })
+      if (out?.error) return res.status(400).json(out.code ? { error: out.error, code: out.code } : { error: out.error })
       return res.json(out?.value ?? out)
     } catch (err) {
       console.error('[Push] failed', err?.message || err)

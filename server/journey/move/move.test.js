@@ -209,7 +209,8 @@ test('a retry that fixes the problem is shown', async () => {
 test('no move before Learn offered one, and none without room', async () => {
   const early = await setup([moveJson()], { offers: [] })
   try {
-    assert.equal((await early.call('POST', `/api/learn/${LEARN}/move`)).status, 409)
+    const notReady = await early.call('POST', `/api/learn/${LEARN}/move`)
+    assert.deepEqual([notReady.status, notReady.body], [409, { error: 'The move is not ready yet.', code: 'move_not_ready' }])
     assert.equal(early.chatCalls().length, 0)
   } finally { await early.close() }
 
@@ -219,6 +220,7 @@ test('no move before Learn offered one, and none without room', async () => {
     const res = await full.call('POST', `/api/learn/${LEARN}/move`)
     assert.equal(res.status, 409)
     assert.equal(res.body.error, 'move_cap')
+    assert.equal(res.body.code, 'move_cap')
     assert.equal(res.body.message, NO_ROOM_LINE)
     assert.equal(res.body.moves.length, 2)
     assert.equal(full.chatCalls().length, 0)
@@ -299,6 +301,7 @@ test('swap: once, only with a real reason, behind the care gate', async () => {
     const twice = await call('POST', `/api/moves/${res.body.move.id}/swap`, { reason: 'The owner is away and I only have the front desk email' })
     assert.equal(twice.status, 409)
     assert.equal(twice.body.error, 'swap_used')
+    assert.equal(twice.body.code, 'swap_used')
     assert.equal(chatCalls().length, 1)
 
     // The card for this conversation now opens the replacement.

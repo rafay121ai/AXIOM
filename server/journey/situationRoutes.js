@@ -1,3 +1,9 @@
+// GET /api/situations/:id (also how the app resumes a situation) returns:
+//   { situation: { id, title, status, follow_up_count, created_at },
+//     turns: [{ role: 'founder' | 'axiom', text, created_at }],  // oldest first, filler turns left out
+//     read: null | { headline, body, closing_question, answered, skipped } }
+// Another founder's situation, or a bad id, is a 404 { error: 'Not found' }.
+//
 // Situation and Read routes. Auth comes from app.js; every founder text goes
 // through the care gate first. Another founder's situation is a plain 404.
 import rateLimit from 'express-rate-limit'

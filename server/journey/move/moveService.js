@@ -31,7 +31,7 @@ const MAX_SWAPS = 1
 const notFound = () => new HttpError(404, { error: 'Not found' })
 const failed = () => new HttpError(503, { error: 'Something went wrong. Try again.' })
 const noRoom = (moves) => new HttpError(409, {
-  error: 'move_cap', message: NO_ROOM_LINE, moves: moves.map((m) => ({ id: m.id, title: m.title, status: m.status })),
+  error: 'move_cap', code: 'move_cap', message: NO_ROOM_LINE, moves: moves.map((m) => ({ id: m.id, title: m.title, status: m.status })),
 })
 
 // What the app sees of a move. The hypothesis, validator result, swap reason
@@ -194,7 +194,7 @@ export function createMoves({ supabase, callStructured, clock, log = () => {} })
     const existing = await currentMoveOf(conversation.id)
     if (existing) return { move: moveView(existing) }
     if (!Array.isArray(conversation.offers) || conversation.offers.length === 0) {
-      throw new HttpError(409, { error: 'The move is not ready yet.' })
+      throw new HttpError(409, { error: 'The move is not ready yet.', code: 'move_not_ready' })
     }
     const active = await activeMoves({ supabase, userId, nowMs: clock.now() })
     if (active.length >= LIMITS.MAX_ACTIVE_MOVES) throw noRoom(active)
@@ -227,7 +227,7 @@ export function createMoves({ supabase, callStructured, clock, log = () => {} })
   async function commit({ userId, moveId, timeZone = null }) {
     const move = await ownMove(userId, moveId)
     if (ACTIVE_STATUSES.includes(move.status)) return committedView(move)
-    if (move.status !== 'draft') throw new HttpError(409, { error: 'This move can no longer be committed.' })
+    if (move.status !== 'draft') throw new HttpError(409, { error: 'This move can no longer be committed.', code: 'move_not_committable' })
     if (!validateExperimentQuality(experimentOf({ ...move, success: move.success_condition })).ok) throw failed()
 
     await settle(userId)
@@ -247,7 +247,7 @@ export function createMoves({ supabase, callStructured, clock, log = () => {} })
       // Someone else changed it first (a double tap): answer from what is stored.
       const now = await ownMove(userId, move.id)
       if (ACTIVE_STATUSES.includes(now.status)) return committedView(now)
-      throw new HttpError(409, { error: 'This move can no longer be committed.' })
+      throw new HttpError(409, { error: 'This move can no longer be committed.', code: 'move_not_committable' })
     }
     throw noRoom(await activeMoves({ supabase, userId, nowMs }))
   }
@@ -259,11 +259,11 @@ export function createMoves({ supabase, callStructured, clock, log = () => {} })
     const move = await ownMove(userId, moveId)
     if (move.status === 'swapped') {
       const replacement = await replacementOf(move.id)
-      if (!replacement) throw new HttpError(409, { error: 'This move is still being changed. Try again in a moment.' })
+      if (!replacement) throw new HttpError(409, { error: 'This move is still being changed. Try again in a moment.', code: 'move_changing' })
       return { status: 'swapped', replaced_id: move.id, move: moveView(replacement) }
     }
-    if (!SWAPPABLE.has(move.status)) throw new HttpError(409, { error: 'This move can no longer be changed.' })
-    if ((move.swap_count ?? 0) >= MAX_SWAPS) throw new HttpError(409, { error: 'swap_used', message: 'You have changed this move once already.' })
+    if (!SWAPPABLE.has(move.status)) throw new HttpError(409, { error: 'This move can no longer be changed.', code: 'move_not_changeable' })
+    if ((move.swap_count ?? 0) >= MAX_SWAPS) throw new HttpError(409, { error: 'swap_used', code: 'swap_used', message: 'You have changed this move once already.' })
     if (!isRealSwapReason(reason)) return { status: 'need_reason', reply: NEED_REASON }
 
     const conversation = await ownConversation(userId, move.learn_id)

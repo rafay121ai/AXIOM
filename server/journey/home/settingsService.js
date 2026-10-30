@@ -13,7 +13,7 @@ export const MENTOR_STYLES = Object.freeze(['calm', 'direct', 'hard'])
 export const DEFAULT_MENTOR_STYLE = 'direct'
 
 const OWN_KEYS = ['mentor_style', 'keep_items', 'share_automatically', 'name', 'timezone']
-const fail = (error) => ({ error })
+const fail = (error, code) => (code ? { error, code } : { error })
 
 const one = async (query) => {
   const { data, error } = await query
@@ -72,7 +72,7 @@ export function createSettings({ supabase, clock, links = {} }) {
   async function update({ user, value: { own, reminders: reminderPatch } }) {
     if ('timezone' in own) {
       const profile = await one(supabase.from('founder_profiles').select('user_id').eq('user_id', user.id).maybeSingle())
-      if (!profile) return fail('Finish sign-up first.')
+      if (!profile) return fail('Finish sign-up first.', 'signup_unfinished')
     }
     const planned = reminderPatch ? await reminders.plan(user.id, reminderPatch) : { profile: {}, settings: {} }
     if (planned.error) return planned

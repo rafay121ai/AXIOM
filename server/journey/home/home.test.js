@@ -256,6 +256,9 @@ test('history detail: read, lesson with author and book, move, how it went, shar
     const old = await call('GET', `/api/history/${SIT_OLD}`)
     assert.deepEqual(old.body.action, { kind: 'bring_back', label: 'Bring it back', target: { stage: 'situation', situation_id: SIT_OLD } })
 
+    const due = await setup({ moves: [move()] })
+    try { assert.deepEqual((await due.call('GET', `/api/history/${SIT_DONE}`)).body.action.target, { stage: 'report', situation_id: SIT_DONE, move_id: MOVE_DUE }) } finally { await due.close() }
+
     const priv = await setup({ moves: [move({ status: 'reported', active_slot: null })], reports: [{ ...REPORT, share_state: 'withdrawn' }] })
     try { assert.equal((await priv.call('GET', `/api/history/${SIT_DONE}`)).body.how_it_went.sharing, 'private') } finally { await priv.close() }
 
@@ -405,6 +408,7 @@ test('settings: every check runs before any write, so a refused change writes no
     // The time zone is fine, the check-in time falls in quiet hours: nothing changes.
     const res = await call('PUT', '/api/settings', { timezone: 'Europe/London', mentor_style: 'calm', checkin_time: '23:30' })
     assert.deepEqual([res.status, res.body.error], [400, 'checkin_time falls inside quiet hours'])
+    assert.equal(res.body.code, 'quiet_hours_clash')
     assert.equal(rows('founder_profiles')[0].timezone, 'Asia/Karachi')
     assert.equal(rows('user_settings').length, 0)
   } finally { await close() }

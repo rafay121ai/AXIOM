@@ -39,7 +39,7 @@ const titleOk = (title, founderTexts) => {
   const known = new Set(founderTexts.flatMap(numbersIn))
   return t.length >= 3 && !BANNED_PHRASES.some((b) => wordRx(b).test(t)) && numbersIn(t).every((n) => known.has(n))
 }
-const busy = () => new HttpError(409, { error: 'This turn is still being processed. Try again in a moment.' })
+const busy = () => new HttpError(409, { error: 'This turn is still being processed. Try again in a moment.', code: 'turn_busy' })
 
 export function createSituations({ supabase, callStructured, clock, log = () => {} }) {
   const signup = createSignupStore({ supabase, clock })
@@ -243,7 +243,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     const situation = await ownSituation(userId, situationId)
     const prior = await one(supabase.from('situation_turns').select('id').eq('situation_id', situation.id).eq('client_turn_id', clientTurnId).maybeSingle())
     if (prior) return replayOf(situation.id, clientTurnId)
-    if (await readOf(situation.id)) throw new HttpError(409, { error: 'The Read has started for this situation. Start a new one for something else.' })
+    if (await readOf(situation.id)) throw new HttpError(409, { error: 'The Read has started for this situation. Start a new one for something else.', code: 'read_started' })
     return runTurn({ userId, situation, text, clientTurnId })
   }
 
@@ -272,7 +272,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     if (stored) return { situation_id: situation.id, ...readView(stored) }
 
     const turns = await turnsOf(situation.id)
-    if (founderTextsOf(turns).length === 0) throw new HttpError(409, { error: 'Tell me what is going on first.' })
+    if (founderTextsOf(turns).length === 0) throw new HttpError(409, { error: 'Tell me what is going on first.', code: 'situation_empty' })
     const { answers } = await signup.load(userId)
     const { read: made, source } = await createRead({
       signUpAnswers: answers,
@@ -294,7 +294,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
   async function answerRead({ userId, situationId, text, skip }) {
     const situation = await ownSituation(userId, situationId)
     const stored = await readOf(situation.id)
-    if (!stored) throw new HttpError(409, { error: 'There is no Read for this situation yet.' })
+    if (!stored) throw new HttpError(409, { error: 'There is no Read for this situation yet.', code: 'read_missing' })
     if (!skip && isFillerReply(text)) return { status: 'say_more', reply: SAY_MORE }
     const won = await one(supabase.from('reads')
       .update({ closing_answer: skip ? null : text, skipped: Boolean(skip), answered_at: iso() })

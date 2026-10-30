@@ -4,7 +4,7 @@
 import { HttpError } from '../situations.js'
 import { sourceView } from '../learn/learn.js'
 import { HISTORY_ACTIONS, STATUS_LABELS } from './wording.js'
-import { HISTORY_MAX, loadStates, stageOf, statusOf } from './state.js'
+import { HISTORY_MAX, isActiveMove, loadStates, stageOf, statusOf } from './state.js'
 
 export const SEARCH_MAX = 100
 // The most matching founder turns read for one search.
@@ -23,12 +23,15 @@ const one = async (query) => {
 const notFound = () => new HttpError(404, { error: 'Not found' })
 
 // Where the one action on the page leads. A situation that is done or paused
-// has no live stage, so it goes back to its latest finished screen.
+// has no live stage, so it goes back to its latest finished screen. move_id is
+// there when the situation has a committed or due move, so the app can open it.
 const resumeStage = (state) => stageOf(state) ?? (state.learn ? 'learn' : state.read ? 'read' : 'situation')
 
 function actionOf(status, state, situationId) {
   const kind = status === 'open' ? 'pick_up' : status === 'paused' ? 'bring_back' : 'talk_again'
-  return { kind, label: HISTORY_ACTIONS[kind], target: { stage: resumeStage(state), situation_id: situationId } }
+  const target = { stage: resumeStage(state), situation_id: situationId }
+  if (isActiveMove(state.move)) target.move_id = state.move.id
+  return { kind, label: HISTORY_ACTIONS[kind], target }
 }
 
 export function createHistory({ supabase, clock }) {

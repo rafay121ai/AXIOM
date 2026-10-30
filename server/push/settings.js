@@ -10,7 +10,7 @@ import { DEFAULT_QUIET_HOURS, isQuietTime } from './policy.js'
 const KEYS = Object.freeze(['checkin_time', 'morning_on', 'evening_on', 'lock_screen', 'quiet_hours'])
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/
 
-const fail = (error) => ({ error })
+const fail = (error, code) => (code ? { error, code } : { error })
 
 // The settings the scheduler and the app use, from stored rows (or defaults).
 export function reminderSettingsOf({ settingsRow = null, profileRow = null } = {}) {
@@ -81,8 +81,8 @@ export async function saveOwnRow(supabase, table, userId, fields) {
 export function planReminderUpdate({ current, patch, hasProfile }) {
   const next = { ...current, ...patch }
   // The check-in time must not fall inside quiet hours, or it could never ring.
-  if (isQuietTime(next.checkin_time, next.quiet_hours)) return fail('checkin_time falls inside quiet hours')
-  if (patch.checkin_time && !hasProfile) return fail('Finish sign-up first.')
+  if (isQuietTime(next.checkin_time, next.quiet_hours)) return fail('checkin_time falls inside quiet hours', 'quiet_hours_clash')
+  if (patch.checkin_time && !hasProfile) return fail('Finish sign-up first.', 'signup_unfinished')
   const settings = {}
   for (const k of ['morning_on', 'evening_on', 'lock_screen']) if (k in patch) settings[k] = patch[k]
   if (patch.quiet_hours) Object.assign(settings, { quiet_start: patch.quiet_hours.start, quiet_end: patch.quiet_hours.end })
