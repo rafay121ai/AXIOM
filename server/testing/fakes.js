@@ -57,7 +57,7 @@ export function createFakePushSender({ respond = () => ({ ok: true }) } = {}) {
 }
 
 // In-memory Supabase. Supports the chain the server uses:
-// from(t).select/insert/update/upsert/delete + eq/neq/gt/gte/lt/lte/in/is,
+// from(t).select/insert/update/upsert/delete + eq/neq/gt/gte/lt/lte/in/is/not,
 // order, limit, maybeSingle, single; awaiting the chain returns { data, error }.
 // `.or(...)` is not interpreted and is recorded as-is. auth.getUser(token)
 // resolves tokens registered with addUser.
@@ -77,6 +77,14 @@ export function createFakeSupabase({ tables = {}, users = {}, idFactory = random
     let max = Infinity
     let single = null
 
+    // .not(col, operator, value): the operators the server uses with it.
+    const negated = (v, { operator, value }) => {
+      if (operator === 'in') return String(value).replace(/^\(|\)$/g, '').split(',').includes(String(v))
+      if (operator === 'eq') return v === value
+      if (operator === 'is') return v === value
+      throw new Error(`FakeSupabase: .not(..., '${operator}', ...) is not supported`)
+    }
+
     const matches = (row) => filters.every(([op, col, val]) => {
       const v = row[col]
       switch (op) {
@@ -88,6 +96,7 @@ export function createFakeSupabase({ tables = {}, users = {}, idFactory = random
         case 'lte': return v <= val
         case 'in': return val.includes(v)
         case 'is': return v === val
+        case 'not': return !negated(v, val)
         default: return true
       }
     })
@@ -138,6 +147,7 @@ export function createFakeSupabase({ tables = {}, users = {}, idFactory = random
         return Promise.resolve(result).then(resolve, reject)
       },
     }
+    api.not = (col, operator, value) => { filters.push(['not', col, { operator, value }]); return api }
     for (const op of ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'in', 'is']) {
       api[op] = (col, val) => { filters.push([op, col, val]); return api }
     }
