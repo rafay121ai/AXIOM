@@ -31,17 +31,22 @@ alter table public.user_settings add column if not exists keep_items boolean not
 alter table public.user_settings add column if not exists mentor_style text not null default 'direct';
 alter table public.user_settings add column if not exists created_at timestamptz not null default now();
 
+-- The checks are NOT VALID: a live user_settings that already holds other
+-- values (ARCHITECTURE.md once named lock_screen 'nothing') cannot abort this
+-- file. New and updated rows are checked; old rows are not until someone runs
+-- `alter table public.user_settings validate constraint ...` after fixing them
+-- (MIGRATION_PLAN.md, before applying, step 7).
 alter table public.user_settings drop constraint if exists user_settings_lock_screen_check;
 alter table public.user_settings add constraint user_settings_lock_screen_check
-  check (lock_screen in ('full', 'short', 'hidden'));
+  check (lock_screen in ('full', 'short', 'hidden')) not valid;
 
 alter table public.user_settings drop constraint if exists user_settings_mentor_style_check;
 alter table public.user_settings add constraint user_settings_mentor_style_check
-  check (mentor_style in ('calm', 'direct', 'hard'));
+  check (mentor_style in ('calm', 'direct', 'hard')) not valid;
 
 alter table public.user_settings drop constraint if exists user_settings_last_greeting_len;
 alter table public.user_settings add constraint user_settings_last_greeting_len
-  check (last_greeting is null or char_length(last_greeting) <= 64);
+  check (last_greeting is null or char_length(last_greeting) <= 64) not valid;
 
 alter table public.user_settings enable row level security;
 revoke all on table public.user_settings from PUBLIC, anon, authenticated;

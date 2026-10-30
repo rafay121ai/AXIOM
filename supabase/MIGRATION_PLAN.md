@@ -58,13 +58,40 @@ existing migration.
    `outcome_author_links` (the only private link from an outcome to its
    author), `peer_unlocks` (unique per report and kind), and the functions
    `share_outcome` and `unshare_outcome`.
+   - `share_outcome` raises unless `p_action` is `share` or `auto_share` and
+     `p_automatic = (p_action = 'auto_share')`. After locking the report row
+     it runs the care check (same rule as `careTouched` in
+     `server/journey/report/sharing.js`): `situations.care_flag`, an open
+     clear care event, an event scoped to the situation, or any care event
+     since the situation started. If any holds, or the situation is missing,
+     it writes nothing and returns no row (fails closed).
+   - `unshare_outcome` raises on a null or unknown `p_to`, and unless
+     `(p_action is null) = (p_to = 'not_offered')`: only the care check's
+     `not_offered` goes without a consent row; every founder decision has one.
+   - Trigger `peer_outcomes_guard` (before insert or update): `created_at` is
+     rounded to the UTC day, so it never equals `reports.share_decided_at`,
+     `consent_log.decided_at` or `outcome_author_links.created_at`; and the
+     raw `draft` (note, prediction, move) is set to null when `status` becomes
+     `approved` or `rejected`. It holds on every write path, including the
+     server's step-by-step fallback in `shareDb.js`.
+   - Who approves: a person (Rafay or a reviewer he names) working with the
+     service role sets `status`, `story`, `lesson`, `reviewed_by` and
+     `reviewed_at`. There is no client path and no review screen yet.
+   - Known, not changed here: `peer_outcomes.withdrawn_at` is set to the same
+     time as the withdraw's `reports.share_decided_at`. A withdrawn outcome
+     has its draft, story and lesson cleared, so only its tags and outcome
+     remain. Rounding it too is a one-line change in the trigger if wanted.
 7. `20261101000007_journey_settings_push.sql`
    `user_settings` (share automatically, reminders, quiet hours, lock screen,
    last greeting, keep items, mentor style; every column has a default),
    `push_tokens` (unique token), `notification_log` (unique
    `(user_id, dedupe_key)`, a `slot` of morning or evening, and a partial unique
    `(user_id, local_day, slot)` while the row is sending or sent: the 2 a day
-   push cap is held by the database, not by memory).
+   push cap is held by the database, not by memory). The three
+   `user_settings` CHECKs (`lock_screen`, `mentor_style`, `last_greeting`
+   length) are `NOT VALID`: a live table holding other values (for example
+   `lock_screen = 'nothing'` from ARCHITECTURE.md) cannot abort the file. New
+   and updated rows are checked; see "Before applying", step 7.
 8. `20261101000008_account_requests.sql`
    `account_requests` (export and delete requests; nothing is deleted). Partial
    unique `(user_id, kind)` while `status = 'queued'`: one waiting request per
@@ -73,7 +100,9 @@ existing migration.
    Widens the `model_usage_logs.call_type` CHECK with the journey steps
    (`read`, `learn`, `followup`, `move`, `care`, `report`, `memory`). Every
    value allowed before stays allowed. `NOT VALID`, as before: old rows are
-   not checked.
+   not checked. The swap runs under `set lock_timeout = '5s'` (reset after),
+   so a busy `model_usage_logs` makes the file fail fast instead of queueing
+   every insert behind it.
 
 ## Access rules in every file
 
@@ -86,18 +115,34 @@ existing migration.
 - Identity sequences (`situation_turns.seq`, `learn_turns.seq`): client
   privileges revoked, `service_role` granted usage.
 - `outcome_author_links`: no policies at all, not even owner SELECT.
-- Functions `take_follow_up`, `share_outcome`, `unshare_outcome`:
-  `security definer`, `set search_path = ''` (every table is schema-qualified),
-  `execute` revoked from `PUBLIC`, `anon`, `authenticated`, granted to
-  `service_role` only. They are owned by the role that runs the migration
-  (normally `postgres`).
+- Functions `take_follow_up`, `share_outcome`, `unshare_outcome` and the
+  trigger function `peer_outcomes_guard`: `security invoker` (only
+  `service_role` may execute them, and it already has the table grants and
+  bypasses RLS, so definer rights would add nothing but risk),
+  `set search_path = ''` (every table is schema-qualified), `execute` revoked
+  from `PUBLIC`, `anon`, `authenticated`, granted to `service_role` only.
+
+### founder_profiles client read
+
+`20261013000003` runs `grant select on public.founder_profiles to authenticated`
+(table level) with an own-row policy. So the new `signup_answers` and
+`first_reading` columns are readable by their owner through Supabase, not
+only through the API. A column-level `revoke select (signup_answers,
+first_reading)` does not narrow a table-level grant in Postgres, so it is not
+in migration 1. The only real fix is to revoke the table-level select and
+grant select on a named column list instead (or revoke it entirely, since the
+new app reads nothing directly). That changes an existing grant, so it is left
+for Rafay's decision. Exposure: owner only, own answers only; no other
+founder's row is readable.
 
 ## What is destructive
 
 Nothing. No table, column, view, function or row is removed; no column type
 changes. The only `drop` statements are `drop constraint if exists` right
 before the same constraint is added again (`founder_profiles` jsonb checks,
-`user_settings` checks, `model_usage_logs_call_type_check`). The static test
+`user_settings` checks, `model_usage_logs_call_type_check`), and
+`drop trigger if exists peer_outcomes_guard` right before it is created. The
+static test
 `server/migrations/migrations.test.js` fails if a journey migration contains
 `drop table`, `drop column`, `drop view`, `drop function`, `drop schema`,
 `delete from`, `truncate`, a rename or a column type change.
@@ -109,9 +154,15 @@ One file outside `supabase/migrations/` is removed: the proposal
 
 Each file has a ROLLBACK note at the top. In short:
 
-- Before any founder data is stored: the new tables and functions can be
-  removed by hand in reverse order (9 to 1). This is a manual step with
-  Rafay's approval; no rollback file is checked in on purpose.
+- Before any founder data is stored: `supabase/rollback/20261101_rollback.sql`
+  removes, in reverse order (9 to 1), only what the journey files created:
+  the new tables, functions and trigger, `founder_profiles.signup_answers`
+  and `first_reading` with their checks. It keeps `report_time_local` and
+  `timezone` (from `20261013000003`) and leaves the wider `call_type` check.
+  It is run by hand, with Rafay's approval, and destroys the data in those
+  new objects. It is outside `supabase/migrations/` so it is never pushed,
+  and the static test checks that it names only objects created in
+  `20261101*`.
 - After founder data is stored: do **not** remove anything. Situations,
   turns, reads, Learn, moves, reports and the consent log are founder memory
   and consent evidence (CLAUDE.md). Fix forward with a new migration.
@@ -147,8 +198,13 @@ Take a read-only schema dump of the live main project and check:
    migration 1.
 5. `gen_random_uuid()` is available (pg 13+ or pgcrypto) and `auth.users`
    exists.
-6. The migration role can grant to `service_role` and may own
-   `security definer` functions.
+6. The migration role can grant to `service_role` and create triggers on the
+   new tables.
+7. `user_settings`, if it exists live: any row with a `lock_screen`,
+   `mentor_style` or `last_greeting` outside the new checks. Such rows keep
+   working for reads but an update to them fails until fixed. After fixing,
+   run `alter table public.user_settings validate constraint <name>` for each.
+8. Decide the `founder_profiles client read` question above.
 
 Then push in order, with Rafay's approval, and run the server tests and a
 manual journey check (sign-up, situation with 2 follow-ups, Read, Learn,

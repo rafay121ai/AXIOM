@@ -107,13 +107,15 @@ $$;
 -- Returns the new count, or null when the cap is reached or the situation is
 -- not this founder's. The server may call it with supabase.rpc instead of its
 -- compare-and-swap update; the CHECK above holds either way.
+-- SECURITY INVOKER: only service_role may execute it, and it already has the
+-- table grants and bypasses RLS.
 create or replace function public.take_follow_up(
   p_situation_id uuid,
   p_user_id uuid,
   p_now timestamptz default now()
 ) returns integer
 language sql
-security definer
+security invoker
 set search_path = ''
 as $$
   update public.situations

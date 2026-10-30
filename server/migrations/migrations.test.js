@@ -2,8 +2,10 @@
 // Reads SQL and server source as text: no database, no network, no env.
 //
 // 1. Safety: RLS on every new table, no client grants or policies, nothing
-//    destructive, hardened SECURITY DEFINER functions, peer_outcomes holds
-//    nothing that points back to a founder.
+//    destructive, SECURITY INVOKER functions with a fixed search_path,
+//    peer_outcomes holds nothing that points back to a founder, the sharing
+//    functions hold the care check and their argument rules, and the checked
+//    in rollback touches only what the journey files created.
 // 2. Needed keys and checks: the follow-up cap, the move slots, one report per
 //    move, push dedupe and the daily slot, one waiting account request.
 // 3. Cross-check: every table, column and SQL function the new server code
@@ -22,6 +24,7 @@ import { PUSH_KINDS } from '../push/policy.js'
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SERVER = join(HERE, '..')
 const MIGRATIONS = join(SERVER, '..', 'supabase', 'migrations')
+const ROLLBACK = join(SERVER, '..', 'supabase', 'rollback', '20261101_rollback.sql')
 const FIRST_JOURNEY_MIGRATION = '20261101000001'
 
 // ── SQL parsing ──────────────────────────────────────────────────────────────
@@ -211,11 +214,13 @@ test('migrations: no strike, warning or removal column on any new table', () => 
   }
 })
 
-test('migrations: functions are SECURITY DEFINER with a fixed search_path, executable by service_role only', () => {
+test('migrations: functions are SECURITY INVOKER with a fixed search_path, executable by service_role only', () => {
   const bodies = functionBodies(journeySql)
-  for (const name of ['share_outcome', 'unshare_outcome', 'take_follow_up']) {
+  // service_role already has the table grants and bypasses RLS: no definer.
+  assert.doesNotMatch(journeySql, /security\s+definer/i, 'no journey function may be security definer')
+  for (const name of ['share_outcome', 'unshare_outcome', 'take_follow_up', 'peer_outcomes_guard']) {
     assert.ok(bodies[name], `${name} is missing`)
-    assert.match(bodies[name], /security\s+definer/i, `${name}: not security definer`)
+    assert.match(bodies[name], /security\s+invoker/i, `${name}: not security invoker`)
     assert.match(bodies[name], /set\s+search_path\s*=\s*''/i, `${name}: search_path not fixed`)
   }
   for (const name of Object.keys(bodies)) {
@@ -227,6 +232,128 @@ test('migrations: functions are SECURITY DEFINER with a fixed search_path, execu
       const bare = new RegExp(`\\b(from|into|update|join)\\s+${t}\\b`, 'i')
       assert.doesNotMatch(bodies[name], bare, `${name}: unqualified ${t}`)
     }
+  }
+})
+
+const compactBody = (name) => (functionBodies(journeySql)[name] ?? '').replace(/\s+/g, ' ').toLowerCase()
+
+test('migrations: share_outcome runs the care check under the report lock and fails closed', () => {
+  const body = compactBody('share_outcome')
+  const lock = body.indexOf('for update;')
+  const write = body.indexOf('insert into public.consent_log')
+  assert.ok(lock > 0 && write > lock, 'share_outcome must lock the report before writing')
+  const care = body.slice(lock, write)
+  // Same rule as server/journey/report/sharing.js careTouched.
+  assert.match(care, /select \* into s from public\.situations where id = r\.situation_id; if not found or s\.care_flag then return; end if;/)
+  assert.match(care, /if exists \( select 1 from public\.care_events e where e\.user_id = p_user_id and \(\(e\.level = 'clear' and e\.resolved_at is null\) or e\.scope_id = s\.id or e\.created_at >= s\.created_at\) \) then return; end if;/)
+})
+
+test('migrations: share_outcome refuses any action but share or auto_share, matched to p_automatic', () => {
+  const body = compactBody('share_outcome')
+  const lock = body.indexOf('for update;')
+  const action = body.indexOf("if p_action is null or p_action not in ('share', 'auto_share') then raise exception")
+  const automatic = body.indexOf("if p_automatic is distinct from (p_action = 'auto_share') then raise exception")
+  assert.ok(action >= 0, 'share_outcome must raise on any other p_action')
+  assert.ok(automatic >= 0, 'share_outcome must require p_automatic = (p_action = auto_share)')
+  assert.ok(action < lock && automatic < lock, 'argument checks run before anything else')
+})
+
+test('migrations: unshare_outcome refuses an unknown target, and a founder decision without its consent action', () => {
+  const body = compactBody('unshare_outcome')
+  const lock = body.indexOf('for update;')
+  const to = body.indexOf("if p_to is null or p_to not in ('private', 'withdrawn', 'not_offered') then raise exception")
+  const action = body.indexOf("if (p_action is null) is distinct from (p_to = 'not_offered') then raise exception")
+  assert.ok(to >= 0, 'unshare_outcome must raise on a null or unknown p_to')
+  assert.ok(action >= 0, 'unshare_outcome: only not_offered may go without p_action')
+  assert.ok(to < lock && action < lock, 'argument checks run before anything else')
+  assert.match(body, /if p_action is not null then insert into public\.consent_log/)
+})
+
+test('migrations: peer_outcomes keeps a day-rounded created_at and drops the draft on review', () => {
+  const body = compactBody('peer_outcomes_guard')
+  assert.match(body, /returns trigger/)
+  assert.match(body, /new\.created_at := date_trunc\('day', coalesce\(new\.created_at, now\(\)\), 'utc'\);/)
+  assert.match(body, /if new\.status in \('approved', 'rejected'\) then new\.draft := null; end if;/)
+  assert.match(sqlCompact, /create trigger peer_outcomes_guard before insert or update on public\.peer_outcomes for each row execute function public\.peer_outcomes_guard\(\);/)
+  // Withdrawing clears the draft as well.
+  assert.match(compactBody('unshare_outcome'), /set status = 'withdrawn', draft = null, story = null, lesson = null/)
+})
+
+test('migrations: user_settings checks are NOT VALID, so live rows with other values cannot abort the file', () => {
+  const adds = sqlCompact.match(/alter table public\.user_settings add constraint [^;]*;/g) ?? []
+  assert.ok(adds.length >= 3)
+  for (const stmt of adds) assert.match(stmt, /\) not valid;$/, stmt)
+  assert.match(sqlCompact, /add constraint user_settings_lock_screen_check check \(lock_screen in \([^)]*\)\) not valid;/)
+})
+
+test('migrations: the model_usage_logs constraint swap runs under a lock timeout', () => {
+  const file = journey.find((f) => f.name.startsWith('20261101000009'))
+  const sql = stripSqlComments(file.sql).replace(/\s+/g, ' ').toLowerCase()
+  const set = sql.indexOf("set lock_timeout = '5s';")
+  const drop = sql.indexOf('drop constraint if exists model_usage_logs_call_type_check')
+  const add = sql.indexOf('add constraint model_usage_logs_call_type_check')
+  const reset = sql.indexOf('reset lock_timeout;')
+  assert.ok(set >= 0 && set < drop && drop < add && add < reset, 'set lock_timeout before the swap, reset after')
+})
+
+test('migrations: the plan records the founder_profiles client read decision', () => {
+  const plan = readFileSync(join(SERVER, '..', 'supabase', 'MIGRATION_PLAN.md'), 'utf8')
+  assert.match(plan, /founder_profiles client read/)
+  assert.match(plan, /grant select on public\.founder_profiles to authenticated/)
+  for (const c of ['signup_answers', 'first_reading']) assert.ok(plan.includes(c))
+})
+
+// ── Rollback (run by hand; excluded from the "nothing destructive" check) ────
+
+test('rollback: drops only objects the journey files created, and every one of them', () => {
+  const raw = readFileSync(ROLLBACK, 'utf8')
+  assert.match(raw, /RUN BY HAND ONLY\. DESTRUCTIVE OF NEW DATA ONLY/)
+  const sql = stripSqlComments(raw).replace(/\s+/g, ' ').toLowerCase()
+  assert.doesNotMatch(sql, /\bcascade\b|delete from|\btruncate\b|\bupdate\b|\binsert\b|\brename\b/, 'drops only')
+
+  const older = all.filter((f) => !f.journey)
+  const olderSql = older.map((f) => stripSqlComments(f.sql)).join('\n')
+  const olderSchema = schemaOf(older)
+  const newTables = new Set(journeyTables)
+  const newFunctions = new Set(Object.keys(functionBodies(journeySql)))
+  const newColumns = new Set()
+  for (const [t, { columns }] of Object.entries(schemaOf(journey))) {
+    if (newTables.has(t)) continue
+    for (const c of columns) if (!olderSchema[t]?.columns.has(c)) newColumns.add(`${t}.${c}`)
+  }
+  const constraintsIn = (text) => new Set([...text.matchAll(/add\s+constraint\s+(\w+)/gi)].map((m) => m[1].toLowerCase()))
+  const olderConstraints = constraintsIn(olderSql)
+  const newConstraints = new Set([...constraintsIn(journeySql)].filter((c) => !olderConstraints.has(c)))
+
+  const statements = sql.split(';').map((x) => x.trim()).filter(Boolean)
+  const dropped = { table: new Set(), function: new Set(), column: new Set() }
+  for (const stmt of statements) {
+    if (stmt === 'begin' || stmt === 'commit') continue
+    let m
+    if ((m = /^drop table if exists public\.(\w+)$/.exec(stmt))) {
+      assert.ok(newTables.has(m[1]), `rollback drops ${m[1]}, not created by 20261101*`)
+      dropped.table.add(m[1])
+    } else if ((m = /^drop function if exists public\.(\w+)\([^)]*\)$/.exec(stmt))) {
+      assert.ok(newFunctions.has(m[1]), `rollback drops function ${m[1]}, not created by 20261101*`)
+      dropped.function.add(m[1])
+    } else if ((m = /^alter table public\.(\w+) drop column if exists (\w+)$/.exec(stmt))) {
+      assert.ok(newColumns.has(`${m[1]}.${m[2]}`), `rollback drops ${m[1]}.${m[2]}, not added by 20261101*`)
+      dropped.column.add(`${m[1]}.${m[2]}`)
+    } else if ((m = /^alter table public\.(\w+) drop constraint if exists (\w+)$/.exec(stmt))) {
+      assert.ok(newConstraints.has(m[2]), `rollback drops constraint ${m[2]}, not created by 20261101*`)
+    } else {
+      assert.fail(`rollback statement not allowed: ${stmt}`)
+    }
+  }
+  assert.deepEqual([...dropped.table].sort(), [...newTables].sort(), 'rollback must drop every new table')
+  assert.deepEqual([...dropped.function].sort(), [...newFunctions].sort(), 'rollback must drop every new function')
+  assert.deepEqual([...dropped.column].sort(), [...newColumns].sort(), 'rollback must drop every added column')
+  assert.ok(!dropped.column.has('founder_profiles.report_time_local') && !dropped.column.has('founder_profiles.timezone'))
+  // Reverse order: a table is dropped before any table it references.
+  const order = statements.map((x) => /^drop table if exists public\.(\w+)$/.exec(x)?.[1]).filter(Boolean)
+  for (const t of order) {
+    const refs = [...(schema[t].body ?? '').matchAll(/references\s+public\.(\w+)/gi)].map((m) => m[1])
+    for (const r of refs) if (r !== t && newTables.has(r)) assert.ok(order.indexOf(r) > order.indexOf(t), `${t} must be dropped before ${r}`)
   }
 })
 

@@ -238,60 +238,66 @@ warning or removal column anywhere.
 supabase-js cannot run several statements in one transaction. The server
 calls these two functions with `supabase.rpc` and, while they do not exist
 (PGRST202), runs the same steps in a safe order instead
-(`server/journey/report/shareDb.js`). Both are `security definer`, owned by the
-service role, `execute` revoked from `anon` and `authenticated`. Each returns
-the report row after the change, or no row when `share_state` was no longer
-`p_from` (nothing written).
+(`server/journey/report/shareDb.js`). Both are `security invoker` (only the
+service role may execute them; it has the table grants and bypasses RLS),
+`set search_path = ''`, `execute` revoked from `PUBLIC`, `anon` and
+`authenticated`. Each returns the report row after the change, or no row when
+`share_state` was no longer `p_from` (nothing written). The full text is in
+`supabase/migrations/20261101000006_journey_reports_sharing.sql`; the shape:
 
 ```sql
-create function share_outcome(p_user_id uuid, p_report_id uuid, p_from text,
+create or replace function public.share_outcome(p_user_id uuid, p_report_id uuid, p_from text,
   p_automatic boolean, p_action text, p_wording_version text, p_peer jsonb,
-  p_now timestamptz) returns setof reports language plpgsql security definer
-  set search_path = public as $$
-declare r reports; peer_id uuid;
+  p_now timestamptz) returns setof public.reports language plpgsql security invoker
+  set search_path = '' as $$
+declare r public.reports; s public.situations; peer_id uuid;
 begin
-  select * into r from reports where id = p_report_id and user_id = p_user_id for update;
-  if not found or r.share_state is distinct from p_from or p_from in ('shared','not_offered') then return; end if;
-  insert into consent_log (user_id, report_id, action, wording_version, decided_at)
-    values (p_user_id, p_report_id, p_action, p_wording_version, p_now);
-  insert into peer_outcomes (status, stage, customer_market, business_model, outcome, draft,
-      story, lesson, reviewed_by, reviewed_at, withdrawn_at, created_at)
-    values ('pending_review', p_peer->>'stage', p_peer->>'customer_market', p_peer->>'business_model',
-      p_peer->>'outcome', p_peer->'draft', null, null, null, null, null, p_now)
-    returning id into peer_id;
-  insert into outcome_author_links (peer_outcome_id, user_id, report_id, created_at, withdrawn_at)
-    values (peer_id, p_user_id, p_report_id, p_now, null);
-  return query update reports set share_state = 'shared', share_automatic = p_automatic,
-      share_decided_at = p_now, updated_at = p_now
-    where id = p_report_id returning *;
+  if p_action is null or p_action not in ('share', 'auto_share') then raise exception '...'; end if;
+  if p_automatic is distinct from (p_action = 'auto_share') then raise exception '...'; end if;
+  select * into r from public.reports where id = p_report_id and user_id = p_user_id for update;
+  if not found or r.share_state is distinct from p_from or p_from in ('shared', 'not_offered') then return; end if;
+  -- care check under the lock (same rule as sharing.js careTouched): fail closed
+  select * into s from public.situations where id = r.situation_id;
+  if not found or s.care_flag then return; end if;
+  if exists (select 1 from public.care_events e where e.user_id = p_user_id
+      and ((e.level = 'clear' and e.resolved_at is null) or e.scope_id = s.id
+           or e.created_at >= s.created_at)) then return; end if;
+  insert into public.consent_log (...) values (p_user_id, p_report_id, p_action, p_wording_version, p_now);
+  insert into public.peer_outcomes (...) values ('pending_review', ..., p_now) returning id into peer_id;
+  insert into public.outcome_author_links (...) values (peer_id, p_user_id, p_report_id, p_now, null);
+  return query update public.reports set share_state = 'shared', share_automatic = p_automatic,
+      share_decided_at = p_now, updated_at = p_now where id = p_report_id returning *;
 end $$;
 
-create function unshare_outcome(p_user_id uuid, p_report_id uuid, p_from text,
+create or replace function public.unshare_outcome(p_user_id uuid, p_report_id uuid, p_from text,
   p_to text, p_action text, p_wording_version text, p_now timestamptz)
-  returns setof reports language plpgsql security definer
-  set search_path = public as $$
-declare r reports;
+  returns setof public.reports language plpgsql security invoker
+  set search_path = '' as $$
+declare r public.reports;
 begin
-  select * into r from reports where id = p_report_id and user_id = p_user_id for update;
-  if not found or r.share_state is distinct from p_from or p_to not in ('private','withdrawn','not_offered') then return; end if;
-  update peer_outcomes set status = 'withdrawn', draft = null, story = null, lesson = null, withdrawn_at = p_now
-    where id in (select peer_outcome_id from outcome_author_links
+  if p_to is null or p_to not in ('private', 'withdrawn', 'not_offered') then raise exception '...'; end if;
+  if (p_action is null) is distinct from (p_to = 'not_offered') then raise exception '...'; end if;
+  select * into r from public.reports where id = p_report_id and user_id = p_user_id for update;
+  if not found or r.share_state is distinct from p_from then return; end if;
+  update public.peer_outcomes set status = 'withdrawn', draft = null, story = null, lesson = null, withdrawn_at = p_now
+    where id in (select peer_outcome_id from public.outcome_author_links
       where report_id = p_report_id and user_id = p_user_id and withdrawn_at is null);
-  update outcome_author_links set withdrawn_at = p_now
+  update public.outcome_author_links set withdrawn_at = p_now
     where report_id = p_report_id and user_id = p_user_id and withdrawn_at is null;
   if p_action is not null then
-    insert into consent_log (user_id, report_id, action, wording_version, decided_at)
-      values (p_user_id, p_report_id, p_action, p_wording_version, p_now);
+    insert into public.consent_log (...) values (p_user_id, p_report_id, p_action, p_wording_version, p_now);
   end if;
-  return query update reports set share_state = p_to, share_automatic = false,
-      share_decided_at = p_now, updated_at = p_now
-    where id = p_report_id returning *;
+  return query update public.reports set share_state = p_to, share_automatic = false,
+      share_decided_at = p_now, updated_at = p_now where id = p_report_id returning *;
 end $$;
 ```
 `p_action` null is the care check closing sharing (`not_offered`), which is
-not a founder decision and writes no consent row. The row lock serialises a
-share and a withdraw on the same report, so a live peer outcome never outlasts
-a report that is not shared, and a share never exists without its consent row.
+not a founder decision and writes no consent row; every other target needs its
+action, so a founder decision is never recorded without a consent row. The
+row lock serialises a share and a withdraw on the same report, so a live peer
+outcome never outlasts a report that is not shared, and a share never exists
+without its consent row. The care check runs under the same lock and fails
+closed (no row, nothing written).
 
 ## user_settings (only the column this step needs)
 - `user_id uuid pk references auth.users`
@@ -314,7 +320,11 @@ a report that is not shared, and a share never exists without its consent row.
 - `reviewed_by text null`, `reviewed_at timestamptz null`
 - `withdrawn_at timestamptz null` (withdrawing sets status 'withdrawn' and
   clears draft, story and lesson)
-- `created_at timestamptz not null`
+- `created_at timestamptz not null`, rounded to the UTC day by the trigger
+  `peer_outcomes_guard`, so it never matches the report's, consent row's or
+  private link's exact time
+- The same trigger sets `draft` to null when `status` becomes `approved` or
+  `rejected`. Review is done by a person with the service role.
 - index `(status, stage)`
 
 ## outcome_author_links (PRIVATE, server only, never exposed)

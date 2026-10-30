@@ -7,6 +7,12 @@
 -- columns only; changes no existing column, constraint, grant or policy.
 -- Idempotent: every statement is guarded.
 --
+-- Client access: 20261013000003 grants table-level SELECT on founder_profiles
+-- to authenticated (own row, by policy), so these two columns are readable by
+-- their owner through Supabase. A column REVOKE cannot narrow a table-level
+-- grant in Postgres, so it is not attempted here. Decision for Rafay
+-- (MIGRATION_PLAN.md, "founder_profiles client read").
+--
 -- ROLLBACK (only if no founder has signed up through the new app, or after an
 -- export, because it removes stored answers):
 --   alter table public.founder_profiles drop constraint if exists founder_profiles_signup_answers_object;

@@ -12,6 +12,10 @@
 --
 -- ROLLBACK: re-run the constraint statements of 20260930000001.
 
+-- Both statements take an ACCESS EXCLUSIVE lock on a busy logging table: give
+-- up after 5 seconds instead of queueing every insert behind this file.
+set lock_timeout = '5s';
+
 alter table public.model_usage_logs
   drop constraint if exists model_usage_logs_call_type_check;
 
@@ -32,3 +36,5 @@ alter table public.model_usage_logs
     'report',
     'memory'
   )) not valid;
+
+reset lock_timeout;
