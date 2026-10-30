@@ -1,0 +1,223 @@
+# Journey migration plan (B10)
+
+Nine migration files for everything the new server needs. **None of them is
+applied.** Nothing here was run against any database. They must not be pushed
+until the steps in "Before applying" are done and Rafay approves.
+
+## What the basis is, and what it is not
+
+The files were written from:
+
+- `server/journey/schema_needs.md` (B3 to B9) and the server code itself
+  (`server/journey`, `server/care`, `server/push`): every `.from(...)`, every
+  column, every `rpc`.
+- The existing migrations in `supabase/migrations/` and the care proposal
+  that was in `supabase/pending/`.
+- `audit/schema_main.sql` and `audit/schema_main.md` in the main repo: a dump of
+  the live main schema taken on **29 September 2026**. It is the best basis we
+  have but it is **not a fresh dump**. CLAUDE.md requires a fresh live dump as
+  the basis. That is why every statement is guarded (`if not exists`,
+  `add column if not exists`, `create or replace`, `drop constraint if exists`
+  before re-adding) and why the checks below must be done first.
+
+In the September dump none of the new tables exist, `model_usage_logs` has the
+old `call_type` check, and `founder_profiles` does not exist yet (it comes from
+`20261013000003`, not yet confirmed as pushed).
+
+## Order and what each file does
+
+All files are in `supabase/migrations/` and run in this order, after every
+existing migration.
+
+1. `20261101000001_journey_founder_profiles_columns.sql`
+   Adds `signup_answers jsonb not null default '{}'` (all 13 sign-up answers;
+   check: a JSON object) and `first_reading jsonb` (nullable; nothing writes it
+   yet) to `founder_profiles`. Repeats `report_time_local` and `timezone` as
+   `add column if not exists` guards (they already come from `20261013000003`).
+   Needs `20261013000003` applied first.
+2. `20261101000002_care_events.sql`
+   `care_events` (level, optional scope id, times; never any message text).
+   Replaces `supabase/pending/care_events_PROPOSED.sql`, which is removed.
+3. `20261101000003_journey_situations_reads.sql`
+   `situations` (with `follow_up_count` CHECK 0 to 2, `care_flag`, unique
+   `(user_id, create_turn_id)`), `situation_turns` (unique
+   `(situation_id, client_turn_id)`), `reads` (one per situation), and the
+   function `take_follow_up(situation_id, user_id, now)`.
+4. `20261101000004_journey_learn.sql`
+   `learn_conversations` (one per situation, at most 2 move offers),
+   `learn_turns` (unique founder turn id, unique follow-up tap),
+   `lesson_citations`.
+5. `20261101000005_journey_moves.sql`
+   `moves`: status check, one swap, `active_slot` 1 or 2 with unique
+   `(user_id, active_slot)` (the cap of 2 committed moves), one replacement per
+   move, one first move per Learn conversation. The old `experiments` table is
+   not touched.
+6. `20261101000006_journey_reports_sharing.sql`
+   `reports` (one per move), `consent_log` (append only), `peer_outcomes`
+   (no `user_id`, `report_id`, `move_id` or `situation_id`),
+   `outcome_author_links` (the only private link from an outcome to its
+   author), `peer_unlocks` (unique per report and kind), and the functions
+   `share_outcome` and `unshare_outcome`.
+7. `20261101000007_journey_settings_push.sql`
+   `user_settings` (share automatically, reminders, quiet hours, lock screen,
+   last greeting, keep items, mentor style; every column has a default),
+   `push_tokens` (unique token), `notification_log` (unique
+   `(user_id, dedupe_key)`, a `slot` of morning or evening, and a partial unique
+   `(user_id, local_day, slot)` while the row is sending or sent: the 2 a day
+   push cap is held by the database, not by memory).
+8. `20261101000008_account_requests.sql`
+   `account_requests` (export and delete requests; nothing is deleted). Partial
+   unique `(user_id, kind)` while `status = 'queued'`: one waiting request per
+   kind.
+9. `20261101000009_model_usage_call_types.sql`
+   Widens the `model_usage_logs.call_type` CHECK with the journey steps
+   (`read`, `learn`, `followup`, `move`, `care`, `report`, `memory`). Every
+   value allowed before stays allowed. `NOT VALID`, as before: old rows are
+   not checked.
+
+## Access rules in every file
+
+- Every new table: `enable row level security`, **no policies**,
+  `revoke all ... from PUBLIC, anon, authenticated`, `grant all ... to
+  service_role`. The new app reads and writes nothing directly; everything
+  goes through the Express API with the service role. (ARCHITECTURE.md allows
+  owner SELECT for founder-owned rows; none is added because nothing in the
+  new app needs it.)
+- Identity sequences (`situation_turns.seq`, `learn_turns.seq`): client
+  privileges revoked, `service_role` granted usage.
+- `outcome_author_links`: no policies at all, not even owner SELECT.
+- Functions `take_follow_up`, `share_outcome`, `unshare_outcome`:
+  `security definer`, `set search_path = ''` (every table is schema-qualified),
+  `execute` revoked from `PUBLIC`, `anon`, `authenticated`, granted to
+  `service_role` only. They are owned by the role that runs the migration
+  (normally `postgres`).
+
+## What is destructive
+
+Nothing. No table, column, view, function or row is removed; no column type
+changes. The only `drop` statements are `drop constraint if exists` right
+before the same constraint is added again (`founder_profiles` jsonb checks,
+`user_settings` checks, `model_usage_logs_call_type_check`). The static test
+`server/migrations/migrations.test.js` fails if a journey migration contains
+`drop table`, `drop column`, `drop view`, `drop function`, `drop schema`,
+`delete from`, `truncate`, a rename or a column type change.
+
+One file outside `supabase/migrations/` is removed: the proposal
+`supabase/pending/care_events_PROPOSED.sql`, now migration 2.
+
+## How to roll back
+
+Each file has a ROLLBACK note at the top. In short:
+
+- Before any founder data is stored: the new tables and functions can be
+  removed by hand in reverse order (9 to 1). This is a manual step with
+  Rafay's approval; no rollback file is checked in on purpose.
+- After founder data is stored: do **not** remove anything. Situations,
+  turns, reads, Learn, moves, reports and the consent log are founder memory
+  and consent evidence (CLAUDE.md). Fix forward with a new migration.
+- Migration 9: re-run the constraint statements of `20260930000001`.
+- Migration 1: the two new columns hold sign-up answers once used; export
+  before any change.
+
+## Before applying (must be checked against a fresh LIVE dump)
+
+Take a read-only schema dump of the live main project and check:
+
+1. **Objects that might already exist live** (created by hand, by an earlier
+   branch, or by Supabase): `founder_profiles` (and whether
+   `signup_answers`, `first_reading`, `report_time_local`, `timezone` exist
+   with the types used here), `care_events`, `situations`,
+   `situation_turns`, `reads`, `learn_conversations`, `learn_turns`,
+   `lesson_citations`, `moves`, `reports`, `consent_log`, `peer_outcomes`,
+   `outcome_author_links`, `peer_unlocks`, `user_settings`, `push_tokens`,
+   `notification_log`, `account_requests`, and functions `take_follow_up`,
+   `share_outcome`, `unshare_outcome`. `create table if not exists` silently
+   skips a table that exists with a different shape: its columns, CHECKs
+   and foreign keys would then NOT be what this plan says. Any table found
+   live must be compared column by column, and a different file written.
+2. **Index names**: every unique index here is `create unique index if not
+   exists <name>`. A live index with the same name but different columns
+   would be kept as it is.
+3. `model_usage_logs.call_type`: the current constraint name is
+   `model_usage_logs_call_type_check` and no live row needs a value outside
+   the new list for future inserts.
+4. `20261013000001` (default privileges revoked) and `20261013000003`
+   (`founder_profiles`) are applied first. The explicit revokes in these
+   files hold even if they are not, but `founder_profiles` must exist for
+   migration 1.
+5. `gen_random_uuid()` is available (pg 13+ or pgcrypto) and `auth.users`
+   exists.
+6. The migration role can grant to `service_role` and may own
+   `security definer` functions.
+
+Then push in order, with Rafay's approval, and run the server tests and a
+manual journey check (sign-up, situation with 2 follow-ups, Read, Learn,
+commit a move, report, share and withdraw, a push tick).
+
+## Assumptions
+
+- Foreign keys to `auth.users` have no `on delete cascade` on founder data
+  (`situations`, `learn_conversations`, `moves`, `reports`, `consent_log`,
+  `outcome_author_links`, `peer_unlocks`, `user_settings`,
+  `account_requests`): removing an auth user is blocked until the deletion
+  plan exists. `care_events`, `push_tokens` and `notification_log` cascade,
+  as their specs say.
+- Child rows cascade from their situation (turns, reads, Learn, moves) as in
+  `schema_needs.md`, except `reports`, which reference `moves` without
+  cascade, so a situation with a report cannot be removed by accident.
+- `reads.body` is one text, not `body[]` (schema_needs.md).
+- `moves.report_time_local` is `'HH:MM'` text (the server writes the
+  normalised time); `founder_profiles.report_time_local` stays `time`.
+- `moves.checklist` is a JSON array of 2 to 4 items (the move schema and the
+  check require it).
+- `care_events.scope_id` has no foreign key (it can be a thread or a
+  situation id).
+- `lesson_citations.chunk_ids` are Knowledge project `wiki_chunks.id` values
+  (uuid); no foreign key across projects.
+- `user_settings` gained a `created_at` column (not used yet) for audit.
+- `notification_log.slot` is `not null`: the push scheduler must write it
+  (another builder is changing `server/push` to claim a slot in the database).
+  Until that lands, the current scheduler's claim insert would fail on this
+  column. Do not apply migration 7 before that change is merged.
+- `account_requests`: the partial unique index means a racing second request
+  gets a unique violation; the server should treat it as the existing waiting
+  request.
+- `take_follow_up` exists for the server to call; today the server moves the
+  count with a compare-and-swap update. The CHECK is the backstop either way.
+
+## Conflicts between the server code and ARCHITECTURE.md
+
+The migrations follow the server code (schema_needs.md). These differ from
+ARCHITECTURE.md and need Rafay's decision, then a doc update:
+
+- `moves` is a new table; ARCHITECTURE.md says the old `experiments` table
+  gets the new states.
+- `reports` and `consent_log` (an append-only log) instead of `move_reports`
+  and `consents` (one row per choice).
+- `learn_conversations` is not in ARCHITECTURE.md; `learn_turns` hangs off it,
+  not off `situation_id`, and has different fields.
+- `situation_turns.seq` instead of `turn_seq`; `situations` has no
+  `linked_situation_id` or `started_by`, and has `care_flag` and
+  `create_turn_id`.
+- `reads.body` is text, not `body[]`; no `underlines[]` (only the first
+  reading has underlines).
+- `founder_profiles` keeps the 13 answers in `signup_answers` jsonb instead of
+  separate columns (`months_in`, `commitment`, `team`, ...).
+- `user_settings`: `quiet_start` and `quiet_end` instead of `quiet_hours`;
+  `lock_screen` value `hidden` instead of `nothing`; no `checkin_time_local`
+  or `timezone` (they live on `founder_profiles`).
+- `push_tokens` has no `permission_granted`.
+- `notification_log` has more fields (dedupe key, local day, slot, status).
+- `peer_outcomes.status` is `pending_review, approved, rejected, withdrawn`
+  (ARCHITECTURE.md: `draft, approved, rejected`); no `topic` column; adds
+  `draft` and `withdrawn_at`.
+- `peer_unlocks` adds `kind`.
+- `care_events` adds `scope_id`.
+- Not built here (in ARCHITECTURE.md, not used by the code): `founder_theory`,
+  `usage_daily` (the daily situation cap counts `situations.created_at`),
+  `intro_requests`.
+- ARCHITECTURE.md allows owner SELECT on founder-owned rows; no client access
+  is granted because the new app reads only through the API.
+- `model_usage_logs`: the journey code does not yet set `call_type` to its
+  step (only `embedding`); `server/modelUsage.js` logs every other journey
+  call as `chat`. The widened CHECK is ready for when it does.
