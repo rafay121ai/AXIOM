@@ -327,14 +327,24 @@ also opens if they open the app that evening.
   and stays in history. No strikes, no warnings, no removal.
 
 ### Give to get, with value first
-After Axiom's reply it offers a founder story that fits ("A founder who was in
-your spot shared what went wrong and what worked. Want to see it?"). The first
-story comes with reporting. **Then** it asks for the return: "They shared
-theirs so it could help you. Would you share yours the same way, with no
-name?" (Share / Keep private, nothing pre-selected, skipping means private).
-More stories open up as the founder shares.
-When there is no matching story, Axiom says nothing about stories and asks
-about sharing on its own.
+After Axiom's reply it can offer a founder lesson: an approved story from a
+founder who was in the same spot ("A founder who was in your spot shared what
+went wrong and what worked. Want to see it?"). It shows in the report and in
+Learn, at most one per situation in Learn.
+- The first 2 founder lessons are free. After each, Axiom asks for the return:
+  "They shared theirs so it could help you. Would you share yours the same way,
+  with no name?" (Share / Keep private, nothing pre-selected, skipping means
+  private).
+- After the 2nd, a founder who has not shared gets no more founder lessons.
+  Axiom says so once, plainly, and says that turning on "Share with other
+  founders" in Settings brings them back.
+- Turning that switch on opens founder lessons at once. A founder who has
+  shared an outcome keeps them. Access is worked out from what is stored at the
+  moment of use (lessons shown, the setting, any share); there is no separate
+  flag.
+- A lesson counts only when a real approved story is shown. When no story
+  matches, Axiom says nothing about stories or about this rule and asks about
+  sharing on its own.
 
 ### Consent
 - Consent to share is asked after **every** report. Default is not shared.

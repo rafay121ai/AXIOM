@@ -53,7 +53,7 @@ questions, no withheld information.
   active per founder. One swap allowed, with a real reason.
 - Report outcomes: Done, Couldn't, Didn't. No strikes, no warnings, no
   removal, ever.
-- Give to get: a report unlocks founder cases for the next situation.
+- Give to get: the first 2 founder lessons are free. After the 2nd, no more unless the founder has shared an outcome or turned on "Share with other founders" in Settings (checked from stored data on every request). Axiom says so once.
 - Consent to share is asked at every report, unless the founder has turned
   on "share automatically" in Settings. Default is not shared.
 - Peer outcomes are never shown before human approval. Peer outcome rows

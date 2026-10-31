@@ -641,3 +641,21 @@ Groups, each divided by thin lines, plain labels:
 - Rafay shared a reference (an isometric "agents office": coloured platforms per team, a central Brain, roads with moving data, team cards, task list on the right). The office page was redone to match: four team platforms (Server, App & Voice, Quality, Learning), Claude's brain in the centre, a task-status list on the right.
 
 - Rafay said go: agent list approved, three sessions approved, 20-minute resume task approved (October 26, 2026).
+
+## 2026-10-31: give to get, decided by Rafay
+- The first 2 founder lessons are given free. Each is followed by the share ask.
+- If the founder still has not shared after the 2nd, no more founder lessons. Axiom says so once, plainly, and says that turning on sharing in Settings brings them back.
+- Turning sharing on in Settings unlocks founder lessons immediately. Reason: sharing is the return for what they receive, and the way back in must be one switch they can find.
+- Replaces the open question on how "unlock" works. PRODUCT.md "Give to get" and CLAUDE.md "Hard Rules" to be updated to match.
+
+## 2026-10-31: founder credits and referrals (PARKED, open question)
+Idea from Rafay: founder credits, and growth by referral. Not building until give-to-get has landed and Rafay says go.
+- Direction proposed: credits are the currency for founder lessons beyond the free 2 and for warm introductions (double opt-in). Earned by sharing a reviewed outcome, and by a referred founder completing a first report (not for a sign-up alone).
+- Never buyable: extra active moves (the 2-move rule), care, the Read, anything in the core loop.
+- Needs Rafay's explicit yes first: CLAUDE.md says no gating or payment code until instructed, and credits are a currency.
+- Constraints: referral links must not reveal who referred whom (server-only link, like peer outcomes); credits never expire or get taken away (no strikes, no removal).
+- Founder-lessons access is built as a pure function of stored facts, so a credit balance can become one more term later.
+
+- Built (Oct 31): `founder_lesson_log` (migration 20261101000010, not applied) holds the count; access is derived each request from it, `share_auto` and any 'share' unlock. Wording in tasks/wording_to_approve.md section D. Deliveries made while sharing is on are logged but not counted.
+
+- Calm/Direct/Hard now reaches the model (Oct 31): the Read, Learn replies, Move and Report reply read the saved style live each request (default direct, direct and any care hold add nothing) via one shared module, server/journey/prompts/style.js. Tone only; care, forbidden phrases, citations, Move rules, follow-up cap and fixed copy are never styled. Wording in wording_to_approve.md section E. The sign-up first reading is not styled.

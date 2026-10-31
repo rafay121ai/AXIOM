@@ -102,7 +102,6 @@ Sample headlines and notes at lines 42, 79, 187-206 ("You are afraid a price wil
 - Home item labels are fine ("Today: ...", "Tell me how it went").
 
 ## UNSURE ABOUT
-- The Calm/Direct/Hard dial: no server prompt reads it, so every founder gets Direct whatever Settings says.
 - Whether mock-only lines that break the plain rule (wait lines, "No pressure. Some pressure.") stay because Rafay approved the mock, or get rewritten.
 - LLM-written text (Read, Learn, Report replies) not checked line by line, only the fixed lines in prompts. Prompt examples are plain and in voice.
 
@@ -112,3 +111,33 @@ Sample headlines and notes at lines 42, 79, 187-206 ("You are afraid a price wil
 | app/src/copy.ts history.takeDown | "Take it down" | Link on a past page to take a share back. The mock styles the link (.withdraw) but shows no words. |
 | app/src/copy.ts:181 | "This move can no longer be changed." | Not in a mock. Section A suggests "You already started this move." |
 | server/journey/situations.js:224 | "You have started 5 situations today... Pick one of the open ones." | Server text, not approved. The app shows its own copy.dailyLimit, so founders should not see this; listed so it is not missed. |
+
+## D. Give to get: founder lessons closed (Oct 31)
+| Where | Text | Note |
+|---|---|---|
+| server/journey/report/wording.js FOUNDER_LESSONS_CLOSED_TEXT (founder-lessons-closed-v1) | "You have seen 2 founder lessons and have not shared yet, so I will not show more. To get them back, turn on "Share with other founders" in Settings. They open as soon as it is on." | New. Said once, in place of the third founder lesson, only when an approved story fits. The Settings switch name matches the mock. |
+
+## E. Calm / Direct / Hard: the three style instructions (Oct 31)
+They shape every Read, Learn reply, Move and Report reply, so please read them. Direct adds nothing (it is the voice already in every prompt). Defined once in server/journey/prompts/style.js. Flag: "Hard" must not collide with voice.md "never confrontational": it says hard on the situation, never on the person, never cruel, shaming or cold. Is that enough, or should "pushing" be softer? The first reading at sign-up is not styled (no setting exists yet).
+| Style | Instruction sent to the model |
+|---|---|
+| Direct | (none: today's voice) |
+| Calm | "Style: calm. Gentler in pace and framing: a little more room, softer openings. Still specific, still name the real problem plainly, never vague, never flattering. Tone only: every other rule above stays exactly as it is." |
+| Hard | "Style: hard. Blunter and more pushing: shorter sentences, fewer softeners, get to the point first. Hard on the situation, never on the person: never cruel, never shaming, never cold. Tone only: every other rule above stays exactly as it is." |
+
+## F. Account export and delete (Oct 31)
+All in server/journey/home/wording.js ACCOUNT_COPY. The app shows server text only. {date} is the deletion day written out, for example "7 November 2026". The "care" versions are used when a care check is open: shorter, nothing added.
+| Where | Text | Note |
+|---|---|---|
+| exportReady | "Here is everything Axiom holds about you. It is yours to keep." | First field of the export file. |
+| exportTooLarge | "Your history is too big to send in one file. I have not sent a partial copy." | Over 10 MB. |
+| confirmNeeded | "To delete everything, type DELETE to confirm." | Shown when the typed word is missing or wrong. |
+| deletePending | "Done. On {date} I will delete everything Axiom holds about you. Until then you can cancel and nothing changes. After that it cannot be undone." | Delete switch on. |
+| deletePendingCare | "Your request is in. On {date} everything will be deleted. Until then you can change your mind." | Same, care open. |
+| deleteWaiting | "Your deletion is waiting. On {date} I will delete everything Axiom holds about you. Until then you can cancel and nothing changes. After that it cannot be undone." | Sent in Settings as `pending_deletion.message` when a deletion is waiting, so it shows after the app was closed. |
+| deleteCancelled | "Cancelled. Nothing was deleted. Everything is still here." | |
+| deleteNothingToCancel | "There is no deletion waiting." | |
+| deleteRecorded | "I have your request. Nothing has been deleted. Deleting everything Axiom knows about you is not switched on yet, and I will not guess with your history." | Delete switch off (replaces the older "plan I have not finished" line). |
+| deleteRecordedCare | "I have your request. Nothing has been deleted yet." | Same, care open. |
+| DELETION_PLAN.shared_outcomes | "Outcomes you shared hold no name. Stories already published stay, with nothing that links them to you. Anything still waiting for review is removed." | Shown with the recorded answer. Depends on the shared-outcomes decision in supabase/DELETION_PLAN.md. |
+There is no "deleted" sentence: once deletion runs, the sign-in account is gone and nobody is left to read it.

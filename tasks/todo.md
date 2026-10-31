@@ -317,3 +317,15 @@ Spend baseline $1.8994; hard cap $6.90 (ask before exceeding). Judge = gpt-4.1, 
 - [ ] P4 full Rich Dad, Chasm, transcript; judge 30/source; enrichment-checker 20 blind sign off
 - [ ] P5 Batch API bulk setup (not run), core-library-first order, LIBRARY_REPORT.md, full cost estimate
 - [ ] STOP and report (7 items)
+
+---
+
+# Plan: finish the incomplete items (started 2026-10-31, after the simulator walkthrough)
+
+Order set by Rafay: give-to-get, founder voices, Calm/Direct/Hard prompt, account delete and export, Google sign-in. Then: apply migrations (needs a live schema dump and a specific yes), care wording and verified help numbers, approve new wording, review Home/History/Settings, and whatever is left.
+
+- [ ] 1. Give to get + founder voices (one change; they share the Learn path). Rule from Rafay: the first 2 founder lessons are free, each followed by the share ask. After the 2nd, if the founder has not shared, no more founder lessons; Axiom says so once and says sharing from Settings brings them back. Turning on sharing in Settings unlocks them at once.
+- [ ] 2. Calm / Direct / Hard: the saved setting is read by the prompts.
+- [ ] 3. Account export and delete (real, tested on fakes; never run live).
+- [ ] 4. Google sign-in on phones (native flow).
+- [x] 0. Simulator walkthrough: logo box gone, chat bar slim and capped at 3 lines, care screen no longer dropped mid-transition, wait-screen quote marks a cut with an ellipsis.
