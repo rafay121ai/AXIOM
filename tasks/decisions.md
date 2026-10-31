@@ -673,3 +673,4 @@ Idea from Rafay: founder credits, and growth by referral. Not building until giv
 - The founder's name is read-only in Settings (it comes from Google); the server no longer accepts a name change.
 - The morning push stays a fixed 8 am local time, not a setting (no change).
 - The stray packageManager line in the root package.json is reverted.
+- Migrations (Rafay, Oct 31): apply every pending migration to main, including 20260930000000 (drops weekly_reads, personal_wiki_edges, personal_wiki_nodes and four old sessions columns). Before applying: fresh read-only dump of live, check the applied-migrations list.
