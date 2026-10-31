@@ -6,6 +6,7 @@ import test from 'node:test'
 import { createApp } from '../app.js'
 import { createFakeClock, createFakeOpenAI, createFakeSupabase } from '../testing/fakes.js'
 import { FULL_ANSWERS } from '../journey/fixtures.js'
+import { routesOf } from '../e2e/harness.js'
 
 const USER = { id: '11111111-1111-4111-8111-111111111111', email: 'founder@example.com' }
 const OTHER = { id: '22222222-2222-4222-8222-222222222222', email: 'other@example.com' }
@@ -80,7 +81,7 @@ async function setup({ events = [], script = [], failCareRead = false } = {}) {
   const close = () => new Promise((r) => server.close(r))
   // openCare: writes straight to the store, as the care gate would have.
   const openCare = () => base.from('care_events').insert(careEvent())
-  return { call: as('tok'), callOther: as('tok2'), openai, writes, rows: (t) => base.rows(t), openCare, close }
+  return { app, call: as('tok'), callOther: as('tok2'), openai, writes, rows: (t) => base.rows(t), openCare, close }
 }
 
 const verdict = () => JSON.stringify({
@@ -193,5 +194,59 @@ test('GET routes are not held: home, history, history detail, and a situation', 
       assert.equal(res.body.care, undefined, path)
     }
     assert.equal(openai.calls.length, calls)
+  } finally { await close() }
+})
+
+// Write routes that may run while care is open, each with its reason. Any other
+// write route must be held: a new route fails here until it is held or listed.
+const OLD_WEB_APP = 'old web app (server/app.js): kept until the native app replaces it; has the care gate, not the hold'
+const NOT_HELD = {
+  'POST /api/home/checkin': 'the way out of care',
+  'PUT /api/signup/answers/:key': 'sign-up answers; screened by the care gate',
+  'POST /api/reports/:id/consent': 'sharing a care-touched report is refused inside the share function',
+  'POST /api/reports/:id/withdraw': 'taking a share down is always allowed',
+  'PUT /api/settings/sharing': 'a settings switch; teaches and gives nothing',
+  'PUT /api/settings': 'a settings switch; teaches and gives nothing',
+  'PUT /api/settings/reminders': 'a settings switch; pushes pause during care anyway',
+  'POST /api/push/token': 'device registration; pushes pause during care anyway',
+  'DELETE /api/push/token': 'device removal',
+  'POST /api/account/export': 'the founder can always ask for their data',
+  'DELETE /api/account': 'the founder can always ask to leave',
+  'POST /api/events': OLD_WEB_APP,
+  'POST /api/knowledge/concept-states': OLD_WEB_APP,
+  'POST /api/personal-memories': OLD_WEB_APP,
+  'POST /api/personal-memories/mark-used': OLD_WEB_APP,
+  'POST /api/experiments': OLD_WEB_APP,
+  'POST /api/experiments/:id/status': OLD_WEB_APP,
+  'POST /api/openai/embeddings': OLD_WEB_APP,
+  'POST /api/openai/chat': OLD_WEB_APP,
+  'POST /api/onboarding/complete': OLD_WEB_APP,
+  'PUT /api/founder-profile': OLD_WEB_APP,
+  'POST /api/app-sessions': OLD_WEB_APP,
+  'POST /api/app-sessions/:id/ping': OLD_WEB_APP,
+  'POST /api/app-sessions/:id/close': OLD_WEB_APP,
+  'POST /api/app-sessions/:id/messages-sent': OLD_WEB_APP,
+  'POST /api/session/:id/touch': OLD_WEB_APP,
+  'POST /api/session/:id/memory': OLD_WEB_APP,
+  'POST /api/threads': OLD_WEB_APP,
+  'POST /api/messages': OLD_WEB_APP,
+  'PATCH /api/messages/:id': OLD_WEB_APP,
+  'DELETE /api/messages/:id': OLD_WEB_APP,
+}
+
+test('every write route is held while care is open, or listed with a reason', async () => {
+  const { app, call, openai, close, openCare } = await setup()
+  try {
+    await openCare()
+    const unheld = []
+    for (const { method, path } of routesOf(app)) {
+      if (method === 'GET' || !path.startsWith('/api/')) continue
+      const concrete = path.replace(/:n\b/g, '0').replace(/:[a-z_]+/gi, uuid(99))
+      const res = await call(method, concrete, {})
+      if (res.body?.care !== 'clear') unheld.push(`${method} ${path}`)
+    }
+    assert.deepEqual(unheld.filter((r) => !Object.hasOwn(NOT_HELD, r)), [])
+    assert.deepEqual(Object.keys(NOT_HELD).filter((r) => !unheld.includes(r)), [], 'listed as not held but is held, or no longer exists')
+    assert.equal(openai.calls.length, 0)
   } finally { await close() }
 })
