@@ -344,8 +344,27 @@ closed (no row, nothing written).
 - `used_on_situation_id uuid null references situations`
 - `created_at timestamptz not null`
 - A report grants one ('report'); the first share of a report grants one
-  more ('share'). Never taken away. Nothing reads them yet: founder cases
-  come once approved outcomes exist.
+  more ('share'). Never taken away. A 'share' row keeps founder lessons open
+  (see founder_lesson_log).
+
+## founder_lesson_log (give to get: 2 free founder lessons)
+Migration `20261101000010_founder_lesson_log.sql`. RLS on, service role only.
+- `id uuid pk`, `user_id uuid not null references auth.users`
+- `source_key text not null`: `report:<report id>` or `learn:<conversation id>`;
+  unique `(user_id, source_key)` (a repeat counts nothing; Learn shows one case
+  per situation). The row `closed_notice` records that the founder was told once.
+- `slot smallint null check (slot in (1,2))`, unique `(user_id, slot)`: the
+  compare-and-swap for the 2 free lessons. null = shown while sharing was on.
+- `created_at timestamptz not null`
+- Access is never stored. Per request: open when counted slots < 2, or
+  `user_settings.share_auto` is on, or any `peer_unlocks` row of kind 'share'.
+  A delivery is logged only when an approved story is shown.
+- API (additive): `GET /api/reports/:id/story` -> `{ story, founder_lessons? }`;
+  a Learn turn reply -> `{ ..., founder_case?: { story, lesson, outcome } | null,
+  founder_lessons?: { state: 'closed_notice', notice: { text, wording_version } } }`.
+  `founder_lessons` appears only on the one response that carries the notice.
+  The founder case is not part of `GET /api/learn/:id` (it rides the turn reply
+  and its replay). No outcome id, link row or user id is ever sent.
 
 ## care_events (existing, read only here)
 - Read: `level, scope_id, created_at, resolved_at`. A clear event still open,
@@ -467,17 +486,46 @@ pushes, then the sign-in name), `founder_profiles (country, timezone, deadline,
 signup_answers)`, `push_tokens` (is any device registered), `situations`,
 `reads`, `learn_conversations`, `learn_turns.sources`, `moves`, `reports`.
 
-## account_requests (new table, B9)
+## account_requests (new table, B9; deletion added in migration 11)
 - `id uuid pk default gen_random_uuid()`, `user_id uuid not null references auth.users`
-- `kind text not null check (kind in ('export','delete'))`
-- `status text not null default 'queued'`, `created_at timestamptz not null`
-- **Partial unique index `(user_id, kind) where status = 'queued'`. NEEDED:**
-  one waiting request per founder and kind. Two requests at once: the loser
-  gets 23505 and returns the one already queued.
-- index `(kind, status)`: the push scheduler reads queued deletes every tick
-  and sends that founder nothing more. `GET /api/home` says nothing about it.
-- RLS on, server only. `POST /api/account/export` and `DELETE /api/account` only
-  insert here (one waiting row per kind) and delete NOTHING. A deletion plan
-  (what goes, what stays, the private outcome link, the order) must be written
-  from a dump of the live schema and approved before any deletion is built.
-- Env (optional): `PRIVACY_URL`, `TERMS_URL` fill Settings > Privacy and Terms.
+- `kind text not null check (kind in ('export','delete'))`. Only `'delete'` is
+  written now (export returns the file directly and stores nothing); the
+  `'export'` value is unused and may be tightened later.
+- `status text not null default 'queued'`: `queued` (ACCOUNT_DELETE off, recorded
+  only), `pending` (grace period running), `deleting` (claimed by the hourly
+  check), `cancelled`. `created_at timestamptz not null`.
+- `delete_after timestamptz` (migration 11): end of the 7-day grace period.
+- **Partial unique index `(user_id, kind) where status = 'queued'`. NEEDED.**
+  **Partial unique index `(user_id) where kind = 'delete' and status = 'pending'`
+  (migration 11). NEEDED.** A request that loses the race gets 23505 and
+  returns the row already there.
+- The push scheduler reads `kind = 'delete'` with status `queued`, `pending` or
+  `deleting` every tick and sends that founder nothing.
+- RLS on, server only.
+- Function `delete_account(p_user_id uuid) returns void` (migration 11): see
+  `supabase/DELETION_PLAN.md`. The server calls it with `rpc`; if PostgREST
+  answers PGRST202 (not created yet) it runs the same plan as steps.
+- Env: `ACCOUNT_DELETE=on` turns real deletion on (default off). Optional:
+  `PRIVACY_URL`, `TERMS_URL` fill Settings > Privacy and Terms.
+
+### Account response shapes (the app renders only `message`)
+- `POST /api/account/export` -> 200, `Content-Disposition: attachment;
+  filename="axiom-export.json"`, body: `{ message, exported_at, account:
+  {email, first_name, created_at}, profile, settings, situations,
+  situation_turns, reads, learn_conversations, learn_turns, moves, reports,
+  consent_log, care_events, devices }`. Devices have `token: "redacted"`. No
+  user_id, no evidence, validation, sources, hypothesis, model usage, peer
+  outcome or link row. 413 `{error}` if over 10 MB. Rate limit 5 a minute.
+- `DELETE /api/account` body `{confirm: "DELETE"}`; any other body -> 400
+  `{error}`.
+  - ACCOUNT_DELETE off: 200 `{status: "recorded", deleted: false, requested_at, plan, message}`.
+  - on: 200 `{status: "pending_deletion", deleted: false, requested_at, delete_after, message}`.
+    A repeat returns the same `delete_after`.
+- `DELETE /api/account` body `{cancel: true}` -> 200 `{status: "cancelled", message}`
+  or `{status: "none", message}`.
+- When a care event is open the `message` is the shorter care version.
+
+`GET /api/settings` (and the `PUT` answer) carries `pending_deletion`:
+`{ delete_after, message }` while a delete request is `pending` (read from
+`account_requests` each time), else `null` (also null when ACCOUNT_DELETE is
+off). No other request detail is sent.

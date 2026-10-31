@@ -10,9 +10,10 @@ import { HttpError, TEXT_MAX } from '../situations.js'
 import { createHome } from './homeService.js'
 import { SEARCH_MAX, createHistory } from './historyService.js'
 import { createAccount } from './accountService.js'
+import { createAccountExport } from './accountExport.js'
 import { cleanSettings, createSettings } from './settingsService.js'
 
-export function mountHomeRoutes(app, { supabase, care, callStructured, clock, links = {} }) {
+export function mountHomeRoutes(app, { supabase, care, callStructured, clock, links = {}, deleteOn = false }) {
   const limiter = (max) => rateLimit({
     windowMs: 60 * 1000,
     max,
@@ -24,13 +25,14 @@ export function mountHomeRoutes(app, { supabase, care, callStructured, clock, li
   const log = (what, detail) => console.error(`[Home] ${what}`, detail?.message || detail?.problems || '')
   const home = createHome({ supabase, care, callStructured, clock, log })
   const history = createHistory({ supabase, clock })
-  const settings = createSettings({ supabase, clock, links })
-  const account = createAccount({ supabase, clock })
+  const account = createAccount({ supabase, clock, deleteOn, log })
+  const settings = createSettings({ supabase, clock, links, pendingDeletion: account.pending })
+  const accountExport = createAccountExport({ supabase, clock })
 
   const handle = (fn) => async (req, res) => {
     if (!supabase) return res.status(503).json({ error: 'Service not configured' })
     try {
-      return res.json(await fn(req))
+      return res.json(await fn(req, res))
     } catch (err) {
       if (err instanceof HttpError) return res.status(err.status).json(err.body)
       console.error('[Home] failed', err?.message || err)
@@ -82,8 +84,16 @@ export function mountHomeRoutes(app, { supabase, care, callStructured, clock, li
       return out.value
     }))
 
-  // Stubs: they record the request and delete nothing (accountService.js).
-  app.post('/api/account/export', limiter(5), handle((req) => account.requestExport(req.user.id)))
+  // Everything stored about this founder, as a file. Reads only this founder's rows.
+  app.post('/api/account/export', limiter(5), handle(async (req, res) => {
+    const doc = await accountExport.build(req.user.id)
+    res.set('Content-Disposition', 'attachment; filename="axiom-export.json"')
+    res.set('Cache-Control', 'no-store')
+    return doc
+  }))
 
-  app.delete('/api/account', limiter(5), handle((req) => account.requestDelete(req.user.id)))
+  // Body { confirm: 'DELETE' } asks; { cancel: true } cancels during the grace
+  // period. Deleting runs only when ACCOUNT_DELETE is on (accountService.js).
+  app.delete('/api/account', limiter(5), handle(async (req) =>
+    account.requestDelete(req.user.id, req.body, await care.isCareOpen(req.user.id))))
 }

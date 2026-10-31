@@ -13,6 +13,9 @@ import { retrieveEvidence } from './retrieve.js'
 import { composeReply } from './reply.js'
 import { decideMoveOffer, isRealReply, asksWhatNext, MAX_MOVE_OFFERS, MOVE_NOTICE, AXIOM_LINES } from './moveOffer.js'
 import { hasMoveRoom, NO_ROOM_LINE } from '../move/room.js'
+import { createSharing } from '../report/sharing.js'
+import { createFounderLessons } from '../report/founderLessons.js'
+import { styleOf } from '../prompts/style.js'
 
 const SAY_MORE = 'Say a bit more.'
 export const LOCK_MS = 2 * 60 * 1000
@@ -42,6 +45,8 @@ export function turnView(row) {
 
 export function createLearn({ supabase, knowledgeSupabase = null, embed = null, callStructured, clock, log = () => {} }) {
   const signup = createSignupStore({ supabase, clock })
+  const sharing = createSharing({ supabase, clock })
+  const founderLessons = createFounderLessons({ supabase, sharing, clock })
   const iso = () => new Date(clock.now()).toISOString()
   const one = async (query) => {
     const { data, error } = await query
@@ -131,7 +136,7 @@ export function createLearn({ supabase, knowledgeSupabase = null, embed = null, 
     const evidence = given ?? await retrieveEvidence({ knowledgeSupabase, embed, query: ctx.query, userId, usageContext, log })
     const reply = await composeReply({
       mode, step, evidence, founderTexts: ctx.founderTexts, usageContext,
-      context: { ...ctx.prompt, ...(tapped ? { tapped } : {}) },
+      context: { ...ctx.prompt, ...(tapped ? { tapped } : {}), style: await styleOf(supabase, userId) },
       deps: { callStructured, userId, log },
     })
     const row = await one(supabase.from('learn_turns').insert({
@@ -226,9 +231,10 @@ export function createLearn({ supabase, knowledgeSupabase = null, embed = null, 
       if (claim.error) throw claim.error
 
       try {
-        const result = real
+        const answered = real
           ? await answer({ userId, conversation: fresh, offers, turns: [...turns, claim.data], text, name })
           : response(fresh, offers, { status: 'say_more', reply: SAY_MORE, turn: null, move_offer: 'none', move_notice: null })
+        const result = real && answered.status === 'reply' ? { ...answered, ...(await founderCaseOf({ userId, conversation: fresh })) } : answered
         await one(supabase.from('learn_turns').update({ result }).eq('id', claim.data.id).select('id'))
         return result
       } catch (err) {
@@ -237,6 +243,24 @@ export function createLearn({ supabase, knowledgeSupabase = null, embed = null, 
         throw err
       }
     })
+  }
+
+  // At most one founder case per situation (source key = the conversation),
+  // on the first real reply that finds an approved story. Never breaks Learn:
+  // care, no story, a closed gate or any failure leave the reply as it is.
+  async function founderCaseOf({ userId, conversation }) {
+    try {
+      const situation = await ownSituation(userId, conversation.situation_id)
+      if (await sharing.careTouched(userId, situation)) return {}
+      const { story, fresh, founder_lessons: lessons } = await founderLessons.forSource({ userId, sourceKey: `learn:${conversation.id}` })
+      return {
+        founder_case: fresh && story ? { story: story.story, lesson: story.lesson, outcome: story.outcome } : null,
+        ...(lessons ? { founder_lessons: lessons } : {}),
+      }
+    } catch (err) {
+      log('founder case failed', err)
+      return {}
+    }
   }
 
   async function answer({ userId, conversation, offers, turns, text, name }) {

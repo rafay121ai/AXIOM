@@ -85,7 +85,7 @@ const Settings = {
     checkin_time: 'string', morning_on: 'boolean', evening_on: 'boolean', lock_screen: ['full', 'short', 'hidden'],
     quiet_hours: { start: 'string', end: 'string' }, push_registered: 'boolean',
   },
-  mentor_style: ['calm', 'direct', 'hard'], keep_items: 'boolean', privacy: { share_automatically: 'boolean', text: 'string' },
+  mentor_style: ['calm', 'direct', 'hard'], keep_items: 'boolean', pending_deletion: { $nullable: { delete_after: 'string', message: 'string' } }, privacy: { share_automatically: 'boolean', text: 'string' },
   }
 
 const NotCare = (shape) => ({ ...shape, 'care?': ['__never__'] }) // Screened<T>: no `care` field means carry on.
@@ -153,8 +153,9 @@ export const CONTRACT = Object.freeze({
   },
   getSettings: Settings,
   updateSettings: Settings, // the whole page again
-  requestExport: { status: 'string', message: 'string' },
+  requestExport: { message: 'string', exported_at: 'string' },
   requestDelete: { status: 'string', message: 'string' },
+  cancelDelete: { status: 'string', message: 'string' },
   // Screened<T> when the care check stops a step (types.ts CareClear, CareUnclear).
   careUnclear: { care: ['unclear'], reply: 'string' },
   careClear: { care: ['clear'], message: 'string', help: {
@@ -227,8 +228,9 @@ before(async () => {
   await keep('getHistoryPage', call('GET', `/api/history/${sit}`))
   await keep('getSettings', call('GET', '/api/settings'))
   await keep('updateSettings', call('PUT', '/api/settings', { mentor_style: 'hard', lock_screen: 'full' }))
-  await keep('requestExport', call('POST', '/api/account/export'))
-  await keep('requestDelete', call('DELETE', '/api/account'))
+  await keep('requestExport', call('POST', '/api/account/export', {}))
+  await keep('requestDelete', call('DELETE', '/api/account', { confirm: 'DELETE' }))
+  await keep('cancelDelete', call('DELETE', '/api/account', { cancel: true }))
   await keep('removePushToken', call('DELETE', '/api/push/token', { token: 'ExponentPushToken[shape-test-0001]' }))
 
   await fail(call('GET', `/api/moves/${uuid(77)}`))

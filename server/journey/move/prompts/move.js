@@ -3,6 +3,7 @@
 // that matters (moveChecks.js and the experiment validator); the prompt is
 // not the rule.
 import { MAX_START_MINUTES } from '../moveChecks.js'
+import { styleMessages } from '../../prompts/style.js'
 
 export const MOVE_SCHEMA = Object.freeze({
   type: 'object',
@@ -48,9 +49,10 @@ export const MOVE_PROMPT = [
 
 // input: { signUp, situation, read, learn, subject, fact, swap? }
 //   swap: { previous: { title, mission }, reason }.
-export function moveMessages({ signUp, situation, read, learn, subject, fact, swap = null }, retryProblems = null) {
+export function moveMessages({ signUp, situation, read, learn, subject, fact, swap = null, style }, retryProblems = null) {
   const messages = [
     { role: 'system', content: MOVE_PROMPT },
+    ...styleMessages(style),
     {
       role: 'user',
       content: JSON.stringify({

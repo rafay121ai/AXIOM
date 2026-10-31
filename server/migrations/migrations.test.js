@@ -26,6 +26,7 @@ const SERVER = join(HERE, '..')
 const MIGRATIONS = join(SERVER, '..', 'supabase', 'migrations')
 const ROLLBACK = join(SERVER, '..', 'supabase', 'rollback', '20261101_rollback.sql')
 const FIRST_JOURNEY_MIGRATION = '20261101000001'
+const DELETION_MIGRATION = '20261101000011_account_deletion.sql'
 
 // ── SQL parsing ──────────────────────────────────────────────────────────────
 
@@ -151,7 +152,7 @@ const EXPECTED_NEW_TABLES = [
 // ── 1. Safety ────────────────────────────────────────────────────────────────
 
 test('migrations: the journey files exist, in order, after every older migration', () => {
-  assert.ok(journey.length >= 9, `expected the journey migrations, found ${journey.length}`)
+  assert.ok(journey.length >= 11, `expected the journey migrations, found ${journey.length}`)
   const names = all.map((f) => f.name)
   assert.deepEqual(names, [...names].sort())
   assert.deepEqual(journey.map((f) => f.name), names.slice(names.length - journey.length))
@@ -191,9 +192,23 @@ test('migrations: nothing destructive (no drop table/column, no row removal, no 
     /delete\s+from/i, /\btruncate\b/i, /rename\s+(column|to)\b/i, /alter\s+column\s+\w+\s+type/i,
   ]
   // Checked with comments included: no rollback note may suggest it either.
+  // The one file allowed to remove rows is the account deletion (next test).
   for (const { name, sql } of journey) {
+    if (name === DELETION_MIGRATION) continue
     for (const rx of FORBIDDEN) assert.doesNotMatch(sql, rx, `${name}: ${rx}`)
   }
+})
+
+test('migrations: account deletion only deletes one founder\'s rows, and never drops anything', () => {
+  const sql = stripSqlComments(journey.find((f) => f.name === DELETION_MIGRATION).sql).replace(/\s+/g, ' ').toLowerCase()
+  for (const rx of [/drop\s+(table|column|schema|view|function)/, /\btruncate\b/, /rename\s/]) assert.doesNotMatch(sql, rx)
+  const deletes = sql.split(';').filter((x) => /delete from/.test(x))
+  assert.ok(deletes.length >= 25, 'the deletion function lost steps')
+  for (const d of deletes) {
+    assert.match(d, /where (status <> 'approved' and id in \(select peer_outcome_id from public\.outcome_author_links where user_id = p_user_id\)|(\w+ in \(.*)?(user_id|id) = p_user_id)/, `not filtered to the founder: ${d.trim()}`)
+  }
+  // A published (approved) story stays: only its private link is removed.
+  assert.match(sql, /delete from public\.peer_outcomes where status <> 'approved'/)
 })
 
 test('migrations: peer_outcomes holds nothing that points back to a founder', () => {

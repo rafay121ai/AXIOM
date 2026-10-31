@@ -53,14 +53,24 @@ export const HISTORY_ACTIONS = Object.freeze({
   talk_again: 'Talk about this again',
 })
 
-// The account stubs. Nothing is deleted. (new)
+// Account: export, and deletion with a grace period. {date} is the day the
+// deletion happens, written out (for example "7 November 2026"). The care
+// versions are shorter and warmer: used when a care check is open. (new)
 export const ACCOUNT_COPY = Object.freeze({
-  exportQueued: 'I have your request. Your export is queued.',
-  deleteRecorded: 'I have your request. Nothing has been deleted. Deleting everything Axiom knows about you needs a plan I have not finished, and I will not guess with your history.',
+  exportReady: 'Here is everything Axiom holds about you. It is yours to keep.',
+  exportTooLarge: 'Your history is too big to send in one file. I have not sent a partial copy.',
+  deletePending: 'Done. On {date} I will delete everything Axiom holds about you. Until then you can cancel and nothing changes. After that it cannot be undone.',
+  deletePendingCare: 'Your request is in. On {date} everything will be deleted. Until then you can change your mind.',
+  deleteWaiting: 'Your deletion is waiting. On {date} I will delete everything Axiom holds about you. Until then you can cancel and nothing changes. After that it cannot be undone.',
+  deleteCancelled: 'Cancelled. Nothing was deleted. Everything is still here.',
+  deleteNothingToCancel: 'There is no deletion waiting.',
+  confirmNeeded: 'To delete everything, type DELETE to confirm.',
+  // Delete switch off: the request is recorded and nothing is removed.
+  deleteRecorded: 'I have your request. Nothing has been deleted. Deleting everything Axiom knows about you is not switched on yet, and I will not guess with your history.',
+  deleteRecordedCare: 'I have your request. Nothing has been deleted yet.',
 })
 
-// What a deletion would cover once a plan is approved. Names only; shown as
-// the plan. Nothing here deletes anything. (new)
+// What deleting covers. Names only, shown with the recorded answer. (new)
 export const DELETION_PLAN = Object.freeze({
   status: 'awaiting_plan',
   would_remove: [
@@ -70,5 +80,5 @@ export const DELETION_PLAN = Object.freeze({
     'Your sign-up answers and settings',
     'Your reminders and devices',
   ],
-  shared_outcomes: 'Outcomes you shared hold no name. The private link between you and them would be removed.',
+  shared_outcomes: 'Outcomes you shared hold no name. Stories already published stay, with nothing that links them to you. Anything still waiting for review is removed.',
 })

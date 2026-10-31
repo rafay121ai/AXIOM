@@ -487,10 +487,10 @@ test('a founder walks the whole journey', async (t) => {
 
     await t.test('delete account: recorded, nothing deleted, no more pushes', async () => {
       const before = w.snapshot()
-      const res = await founder('DELETE', '/api/account')
+      const res = await founder('DELETE', '/api/account', { confirm: 'DELETE' })
       assert.equal(res.status, 200)
       assert.deepEqual([res.body.status, res.body.deleted], ['recorded', false])
-      const again = await founder('DELETE', '/api/account')
+      const again = await founder('DELETE', '/api/account', { confirm: 'DELETE' })
       assert.equal(again.body.requested_at, res.body.requested_at)
       const after = w.snapshot()
       for (const table of Object.keys(before)) {

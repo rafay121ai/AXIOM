@@ -59,3 +59,9 @@ export const SHARE_AUTO_TEXT = Object.freeze({
   on: 'On. What happens in your check-ins is shared with other founders, with no name, without asking each time. Turn it off any time.',
   off: 'Off. After each check-in I ask if you want to share what happened, with no name. Nothing is shared unless you say yes.',
 })
+
+// Said once, in place of the third founder lesson, when the founder has used
+// the 2 free ones and has not shared. The version names these words. (new)
+export const FOUNDER_LESSONS_CLOSED_VERSION = 'founder-lessons-closed-v1'
+export const FOUNDER_LESSONS_CLOSED_TEXT =
+  'You have seen 2 founder lessons and have not shared yet, so I will not show more. To get them back, turn on "Share with other founders" in Settings. They open as soon as it is on.'

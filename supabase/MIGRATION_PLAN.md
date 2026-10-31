@@ -1,6 +1,6 @@
 # Journey migration plan (B10)
 
-Nine migration files for everything the new server needs. **None of them is
+Eleven migration files for everything the new server needs. **None of them is
 applied.** Nothing here was run against any database. They must not be pushed
 until the steps in "Before applying" are done and Rafay approves.
 
@@ -103,6 +103,26 @@ existing migration.
    not checked. The swap runs under `set lock_timeout = '5s'` (reset after),
    so a busy `model_usage_logs` makes the file fail fast instead of queueing
    every insert behind it.
+10. `20261101000010_founder_lesson_log.sql`
+    `founder_lesson_log`: one row per approved founder story shown (unique
+    `(user_id, source_key)` makes a repeat count nothing), `slot` 1 or 2 for the
+    two free lessons with unique `(user_id, slot)` (the cap is held by the
+    database: two simultaneous requests cannot both take slot 2), and one
+    `closed_notice` row so the "no more founder lessons" notice is said once.
+    No access flag is stored: access is worked out on each request from this
+    table, `user_settings.share_auto` and any `peer_unlocks` row of kind
+    `share`. Needs Rafay's approval (give-to-get rule).
+11. `20261101000011_account_deletion.sql`
+    Account deletion. `account_requests.delete_after` and a partial unique
+    index `(user_id)` while `kind = 'delete' and status = 'pending'` (one
+    grace period per founder). The function `delete_account(p_user_id)`
+    removes everything stored about one founder in one transaction, in the
+    order written in `supabase/DELETION_PLAN.md`; the server then removes the
+    sign-in account. SECURITY INVOKER, empty search_path, service role only.
+    **It deletes founder data**, so it needs Rafay's explicit approval, a test
+    on a copy of the database first, and the server switch `ACCOUNT_DELETE=on`
+    stays off until then. The migrations test lets this one file contain
+    `delete from`, and checks every delete is filtered to the founder.
 
 ## Access rules in every file
 

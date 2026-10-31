@@ -1,6 +1,8 @@
 // Prompt for the Read: what is really going on in this situation, in plain
 // words, ending on one real question. Voice rules come from tasks/voice.md.
 
+import { styleMessages } from './style.js'
+
 export const READ_SCHEMA = Object.freeze({
   type: 'object',
   additionalProperties: false,
@@ -27,9 +29,10 @@ export const READ_PROMPT = [
 ].join('\n')
 
 // signUp: [{ question, answer }]; conversation: [{ role, text }]
-export function readMessages({ signUp, conversation }, retryProblems = null) {
+export function readMessages({ signUp, conversation, style }, retryProblems = null) {
   const messages = [
     { role: 'system', content: READ_PROMPT },
+    ...styleMessages(style),
     { role: 'user', content: JSON.stringify({ sign_up_answers: signUp, conversation }) },
   ]
   if (retryProblems?.length) {

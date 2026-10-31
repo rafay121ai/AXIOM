@@ -317,21 +317,25 @@ test('settings: bad input is a plain 400 and changes nothing; no auth is 401', a
 
 // ── Account ──────────────────────────────────────────────────────────────────
 
-test('account: export is queued; delete only records the request and deletes nothing', async () => {
+test('account: with the switch off, delete asks for DELETE, records the request and deletes nothing', async () => {
   const { call, callAnon, rows, close } = await setup({ moves: [move()] })
   try {
     const tables = ['situations', 'moves', 'reads', 'reports', 'user_settings', 'founder_profiles', 'users', 'consent_log', 'learn_turns', 'peer_outcomes', 'outcome_author_links']
     const before = JSON.stringify(tables.map(rows))
-    const exp = await call('POST', '/api/account/export', {})
-    assert.deepEqual([exp.status, exp.body.status, exp.body.message], [200, 'queued', ACCOUNT_COPY.exportQueued])
-    const res = await call('DELETE', '/api/account')
+    for (const bad of [undefined, {}, { confirm: 'delete' }, { confirm: true }]) {
+      const refused = await call('DELETE', '/api/account', bad)
+      assert.deepEqual([refused.status, refused.body.error], [400, ACCOUNT_COPY.confirmNeeded])
+    }
+    assert.equal(rows('account_requests').length, 0)
+    const res = await call('DELETE', '/api/account', { confirm: 'DELETE' })
     assert.equal(res.status, 200)
     assert.deepEqual([res.body.status, res.body.deleted, res.body.plan, res.body.message], ['recorded', false, DELETION_PLAN, ACCOUNT_COPY.deleteRecorded])
-    await call('DELETE', '/api/account')
+    await call('DELETE', '/api/account', { confirm: 'DELETE' })
     assert.equal(JSON.stringify(tables.map(rows)), before)
-    assert.deepEqual(rows('account_requests').map((r) => [r.user_id, r.kind, r.status]), [[USER.id, 'export', 'queued'], [USER.id, 'delete', 'queued']])
+    assert.deepEqual(rows('account_requests').map((r) => [r.user_id, r.kind, r.status]), [[USER.id, 'delete', 'queued']])
     assert.equal((await callAnon('DELETE', '/api/account')).status, 401)
     assert.equal((await callAnon('POST', '/api/account/export')).status, 401)
+    assert.equal((await callAnon('DELETE', '/api/account', { confirm: 'DELETE' })).status, 401)
   } finally { await close() }
 })
 
@@ -369,7 +373,7 @@ test('no founder text, name or id reaches the logs', async () => {
     await call('GET', '/api/history?q=secret')
     await call('PUT', '/api/settings', { name: 'Zed', timezone: 'Mars/Base' })
     await call('POST', '/api/home/checkin', { text: 'private words here' })
-    await call('DELETE', '/api/account')
+    await call('DELETE', '/api/account', { confirm: 'DELETE' })
   } finally { console.error = original; await close() }
   for (const line of logged) for (const bad of [USER.id, USER.email, 'Sam', 'Zed', 'private words', 'secret']) assert.ok(!line.includes(bad), `log holds ${bad}`)
 })
@@ -435,7 +439,8 @@ test('share automatically: the consent row is written first; if it fails the set
 test('account: two delete requests at once leave one queued row and both are answered', async () => {
   const base = createFakeSupabase({ tables: { account_requests: [] }, unique: UNIQUE })
   const account = createAccount({ supabase: base, clock: createFakeClock(NOW) })
-  const [a, b] = await Promise.all([account.requestDelete(USER.id), account.requestDelete(USER.id)])
+  const ask = () => account.requestDelete(USER.id, { confirm: 'DELETE' }, false)
+  const [a, b] = await Promise.all([ask(), ask()])
   assert.deepEqual([a.status, b.status, a.requested_at], ['recorded', 'recorded', b.requested_at])
   assert.equal(base.rows('account_requests').length, 1)
 })
@@ -444,7 +449,7 @@ test('home says nothing about a queued delete request', async () => {
   const { call, close } = await setup({ moves: [move()] })
   try {
     const before = (await call('GET', '/api/home')).body
-    await call('DELETE', '/api/account')
+    await call('DELETE', '/api/account', { confirm: 'DELETE' })
     const after = await call('GET', '/api/home')
     assert.deepEqual(Object.keys(after.body), Object.keys(before))
     assert.doesNotMatch(after.text, /delet|account|request/i)

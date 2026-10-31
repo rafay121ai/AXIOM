@@ -5,6 +5,7 @@ import OpenAI from 'openai'
 import { createClient } from '@supabase/supabase-js'
 import { createApp, systemClock } from './app.js'
 import { createExpoSender } from './push/expoSender.js'
+import { createAccount, startDeletionLoop } from './journey/home/accountService.js'
 import { createNameLookup, startPushScheduler } from './push/scheduler.js'
 
 dotenv.config({ path: resolve(dirname(fileURLToPath(import.meta.url)), '../.env') })
@@ -49,6 +50,15 @@ if (env.EXPO_PUSH === 'on' && supabase) {
   console.log('[Axiom API] Push scheduler started')
 } else {
   console.log('[Axiom API] Push scheduler off (EXPO_PUSH is not on)')
+}
+
+// Real deletions only when ACCOUNT_DELETE=on and the database is configured.
+// Off: delete requests are recorded and nothing is removed.
+if (env.ACCOUNT_DELETE === 'on' && supabase) {
+  startDeletionLoop({ account: createAccount({ supabase, clock: systemClock, deleteOn: true, log: (what, err) => console.error(`[Account] ${what}`, err?.message || '') }) })
+  console.log('[Axiom API] Account deletion on')
+} else {
+  console.log('[Axiom API] Account deletion off (ACCOUNT_DELETE is not on)')
 }
 
 process.on('unhandledRejection', (reason) => {

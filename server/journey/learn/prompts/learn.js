@@ -4,7 +4,7 @@
 // every rule that matters (length, citations, quotes, names, numbers in the
 // picture); the prompt is not the rule.
 import { PICTURE_TYPES } from '../pictures.js'
-
+import { styleMessages } from '../../prompts/style.js'
 export const MAX_CITATIONS = 2
 export const MAX_FOLLOW_UPS = 2
 export const FOLLOW_UP_MAX = 60
@@ -93,9 +93,10 @@ export const LEARN_PROMPT = [
 //   signUp: [{ question, answer }]; situation and learn: [{ role, text }];
 //   read: { headline, body, closing_question, founder_answer, skipped };
 //   evidence: [{ handle, text }] (never ids, authors or titles).
-export function learnMessages({ mode, signUp, situation, read, learn, evidence, tapped = null }, retryProblems = null) {
+export function learnMessages({ mode, signUp, situation, read, learn, evidence, tapped = null, style }, retryProblems = null) {
   const messages = [
     { role: 'system', content: LEARN_PROMPT },
+    ...styleMessages(style),
     { role: 'system', content: `This turn: ${MODES[mode].join(' ')}` },
     {
       role: 'user',

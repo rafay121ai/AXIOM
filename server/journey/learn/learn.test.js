@@ -82,8 +82,8 @@ function slow(openai, ms) {
   return openai
 }
 
-async function setup(script = [], { rows = ROWS, answered = true, delayMs = 0 } = {}) {
-  const base = createFakeSupabase({ users: { tok: USER, tok2: OTHER }, tables: seed({ answered }) })
+async function setup(script = [], { rows = ROWS, answered = true, delayMs = 0, tables = {}, unique = {} } = {}) {
+  const base = createFakeSupabase({ users: { tok: USER, tok2: OTHER }, tables: { ...seed({ answered }), ...tables }, unique })
   const supabase = withUniqueKeys(base)
   const openai = createFakeOpenAI(script)
   if (delayMs) slow(openai, delayMs)
@@ -440,5 +440,39 @@ test('loading hint: book name and verified quote only, or null', async () => {
   try {
     assert.deepEqual((await call('GET', '/api/loading-hint')).body, { hint: null })
     assert.equal((await callAnon('GET', '/api/loading-hint')).status, 401)
+  } finally { await close() }
+})
+
+// ── Founder voices ───────────────────────────────────────────────────────────
+
+const APPROVED = {
+  id: uuid(950), status: 'approved', stage: null, customer_market: null, business_model: null, outcome: 'done',
+  story: 'A founder selling to clinics sent the price after a month of waiting. One clinic said yes to a pilot.',
+  lesson: 'Send the price. Waiting does not make it easier.', draft: null, reviewed_by: 'reviewer', reviewed_at: '2026-10-01T00:00:00.000Z', withdrawn_at: null,
+}
+const LOG_UNIQUE = { founder_lesson_log: [{ cols: ['user_id', 'source_key'] }, { cols: ['user_id', 'slot'] }] }
+
+test('a founder case rides on one Learn reply per situation, counts once, and replays with the stored answer', async () => {
+  const { call, id, rows, close } = await started([learnReply(), turnReply(), turnReply()], { tables: { peer_outcomes: [APPROVED] }, unique: LOG_UNIQUE })
+  try {
+    const t1 = await sendTurn(call, id, REAL1, 1)
+    assert.deepEqual(t1.body.founder_case, { story: APPROVED.story, lesson: APPROVED.lesson, outcome: 'done' })
+    assert.ok(!JSON.stringify(t1.body).includes(APPROVED.id))
+    const again = await sendTurn(call, id, REAL1, 1)
+    assert.deepEqual(again.body, t1.body)
+    const t2 = await sendTurn(call, id, REAL2, 2)
+    assert.equal(t2.body.founder_case, null)
+    assert.equal(rows('founder_lesson_log').length, 1)
+  } finally { await close() }
+})
+
+test('Learn without an approved story: no founder_case content, nothing counted, nothing said', async () => {
+  const { call, id, rows, close } = await started([learnReply(), turnReply()], { unique: LOG_UNIQUE })
+  try {
+    const t1 = await sendTurn(call, id, REAL1, 1)
+    assert.equal(t1.status, 200)
+    assert.equal(t1.body.founder_case ?? null, null)
+    assert.equal(t1.body.founder_lessons, undefined)
+    assert.equal(rows('founder_lesson_log').length, 0)
   } finally { await close() }
 })

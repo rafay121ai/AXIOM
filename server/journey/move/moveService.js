@@ -22,6 +22,7 @@ import { validateExperimentQuality } from '../../experimentQuality.js'
 import { MOVE_SCHEMA, moveMessages } from './prompts/move.js'
 import { activeMoves, ACTIVE_STATUSES, NO_ROOM_LINE } from './room.js'
 import { reportDueAt, REPORT_WINDOW_MS } from './schedule.js'
+import { styleOf } from '../prompts/style.js'
 
 export const OPEN_STATUSES = Object.freeze(['draft', ...ACTIVE_STATUSES])
 const SWAPPABLE = new Set(['draft', 'committed'])
@@ -133,6 +134,7 @@ export function createMoves({ supabase, callStructured, clock, log = () => {} })
   // every check passes.
   async function compose({ userId, conversation, kind, swap = null }) {
     const ctx = await contextOf(userId, conversation)
+    const style = await styleOf(supabase, userId)
     const founderTexts = swap ? [...ctx.founderTexts, swap.reason] : ctx.founderTexts
     let problems = null
     for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -145,7 +147,7 @@ export function createMoves({ supabase, callStructured, clock, log = () => {} })
           maxCompletionTokens: 900,
           userId,
           usageContext: { step: 'move', kind, situation_id: conversation.situation_id },
-          messages: moveMessages({ ...ctx.prompt, ...(swap ? { swap } : {}) }, problems),
+          messages: moveMessages({ ...ctx.prompt, ...(swap ? { swap } : {}), style }, problems),
         }))
       } catch (err) {
         log('model call failed', err)

@@ -55,7 +55,7 @@ export function checkRead({ read, answerTexts }) {
 
 // deps: { callStructured, userId, log }. Never throws: any model failure ends
 // in the fallback. Returns { read, source }.
-export async function createRead({ signUpAnswers, conversation, deps, situationId }) {
+export async function createRead({ signUpAnswers, conversation, deps, situationId, style }) {
   const { evidence, answerTexts: signUpTexts } = buildEvidence(signUpAnswers)
   const founderTexts = conversation.filter((t) => t.role === 'founder').map((t) => t.text)
   const answerTexts = [...signUpTexts, ...founderTexts]
@@ -69,7 +69,7 @@ export async function createRead({ signUpAnswers, conversation, deps, situationI
         maxCompletionTokens: 1200,
         userId: deps.userId,
         usageContext: { step: 'read', kind: 'read', situation_id: situationId },
-        messages: readMessages({ signUp: evidence, conversation }, problems),
+        messages: readMessages({ signUp: evidence, conversation, style }, problems),
       })
       const read = clean(data)
       const verdict = checkRead({ read, answerTexts })

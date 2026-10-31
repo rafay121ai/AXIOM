@@ -211,7 +211,7 @@ export function createPushScheduler({ supabase, sender, clock, isCareOpen, nameO
       everyRow(() => supabase.from('situations').select('id, user_id, title, status, last_activity_at')
         .eq('status', 'open').lte('last_activity_at', iso(now - QUIET_AFTER_MS)).gt('last_activity_at', iso(now - PAUSE_AFTER_MS))),
       // A founder who asked for deletion gets no more pushes.
-      everyRow(() => supabase.from('account_requests').select('id, user_id').eq('kind', 'delete').eq('status', 'queued')),
+      everyRow(() => supabase.from('account_requests').select('id, user_id').eq('kind', 'delete').in('status', ['queued', 'pending', 'deleting'])),
     ])
     const deleting = new Set(leaving.map((r) => r.user_id))
     const byFounder = new Map()

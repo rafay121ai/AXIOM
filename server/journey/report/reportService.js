@@ -23,6 +23,8 @@ import { ACTIVE_STATUSES } from '../move/room.js'
 import { checkReportReply, predictionCheckFor } from './reportChecks.js'
 import { REPORT_SCHEMA, reportMessages } from './prompts/report.js'
 import { createSharing } from './sharing.js'
+import { styleOf } from '../prompts/style.js'
+import { createFounderLessons } from './founderLessons.js'
 import {
   AFTER_STORY_VERSION, ALONE_VERSION, CONSENT_WORDINGS, KEPT_PRIVATE_LINE, NEED_MORE, OUTCOMES, OUTCOME_QUESTIONS,
   SHARED_LINE, SHARE_AUTO_VERSION, STORY_OFFER, WITHDRAWN_LINE, WITHDRAW_VERSION, fallbackReply, openingLine,
@@ -91,6 +93,7 @@ function consentView(row) {
 export function createReports({ supabase, callStructured, clock, log = () => {}, pause = realPause }) {
   const moves = createMoves({ supabase, callStructured, clock, log })
   const sharing = createSharing({ supabase, clock })
+  const founderLessons = createFounderLessons({ supabase, sharing, clock })
   const iso = () => new Date(clock.now()).toISOString()
   const one = async (query) => {
     const { data, error } = await query
@@ -136,6 +139,7 @@ export function createReports({ supabase, callStructured, clock, log = () => {},
     }
     // Exactly what the model is sent: a number from anywhere else is invented.
     const knownTexts = [input.situation.title ?? '', ...founderSaid, ...Object.values(input.move), note]
+    const style = await styleOf(supabase, userId)
     let problems = null
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       let data
@@ -147,7 +151,7 @@ export function createReports({ supabase, callStructured, clock, log = () => {},
           maxCompletionTokens: 500,
           userId,
           usageContext: { step: 'report', outcome, situation_id: move.situation_id },
-          messages: reportMessages(input, problems),
+          messages: reportMessages({ ...input, style }, problems),
         }))
       } catch (err) {
         log('model call failed', err)
@@ -333,7 +337,8 @@ export function createReports({ supabase, callStructured, clock, log = () => {},
     if (row.share_state === 'not_offered') return { story: null }
     const situation = await one(supabase.from('situations').select().eq('id', row.situation_id).eq('user_id', userId).maybeSingle())
     if (await sharing.careTouched(userId, situation)) return { story: null }
-    return { story: await sharing.findStory(userId) }
+    const { story, founder_lessons: lessons } = await founderLessons.forSource({ userId, sourceKey: `report:${row.id}` })
+    return { story, ...(lessons ? { founder_lessons: lessons } : {}) }
   }
 
   // Share or keep private. wordingVersion: which question the founder saw;

@@ -1,4 +1,4 @@
--- ROLLBACK of the journey migrations 20261101000001 to 20261101000009.
+-- ROLLBACK of the journey migrations 20261101000001 to 20261101000011.
 --
 -- RUN BY HAND ONLY. DESTRUCTIVE OF NEW DATA ONLY: it removes the tables,
 -- functions, trigger, columns and constraints those files created, and every
@@ -11,13 +11,19 @@
 -- Before running: compare with the pre-apply live dump and confirm each object
 -- below was created by the journey files, not found already live.
 --
--- Reverse order, 9 to 1. No cascade: a dependency this file does not know
+-- Reverse order, 10 to 1. No cascade: a dependency this file does not know
 -- about stops it instead of being removed with it.
 --
 -- 9: model_usage_logs_call_type_check is not new (20260930000001); the wider
 --    list is harmless and is left as it is.
 
 begin;
+
+-- 11 (delete_after and its index go with account_requests in step 8)
+drop function if exists public.delete_account(uuid);
+
+-- 10
+drop table if exists public.founder_lesson_log;
 
 -- 8
 drop table if exists public.account_requests;

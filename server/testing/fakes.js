@@ -68,6 +68,7 @@ export function createFakePushSender({ respond = () => ({ ok: true }) } = {}) {
 export function createFakeSupabase({ tables = {}, users = {}, idFactory = randomUUID, unique = {}, maxRows = Infinity } = {}) {
   const store = new Map(Object.entries(tables).map(([name, rows]) => [name, rows.map((r) => ({ ...r }))]))
   const tokens = new Map(Object.entries(users))
+  const deletedUsers = []
   const rowsOf = (name) => {
     if (!store.has(name)) store.set(name, [])
     return store.get(name)
@@ -190,8 +191,19 @@ export function createFakeSupabase({ tables = {}, users = {}, idFactory = random
   return {
     from: builder,
     rows: (table) => rowsOf(table).map((r) => ({ ...r })),
+    deletedUsers,
+    tableNames: () => [...store.keys()],
     addUser(token, user) { tokens.set(token, user) },
     auth: {
+      // Removes the sign-in account (the Supabase admin API); a missing one is a 404 error.
+      admin: {
+        async deleteUser(id) {
+          const token = [...tokens].find(([, u]) => u.id === id)?.[0]
+          if (token === undefined && !deletedUsers.includes(id)) return { error: { status: 404, message: 'User not found' } }
+          if (token !== undefined) { tokens.delete(token); deletedUsers.push(id) }
+          return { error: null }
+        },
+      },
       async getUser(token) {
         const user = tokens.get(token)
         return user ? { data: { user }, error: null } : { data: { user: null }, error: { message: 'invalid token' } }

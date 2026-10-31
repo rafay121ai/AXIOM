@@ -26,6 +26,7 @@ export const UNIQUE = Object.freeze({
   moves: [{ cols: ['user_id', 'active_slot'] }, { cols: ['learn_id'], where: (r) => r.swapped_from == null }, { cols: ['swapped_from'] }],
   reports: [{ cols: ['move_id'] }],
   peer_unlocks: [{ cols: ['granted_by_report_id', 'kind'] }],
+  founder_lesson_log: [{ cols: ['user_id', 'source_key'] }, { cols: ['user_id', 'slot'] }],
   outcome_author_links: [{ cols: ['peer_outcome_id'] }],
   notification_log: [{ cols: ['user_id', 'dedupe_key'] }, { cols: ['user_id', 'local_day', 'slot'], where: COUNTING }],
   push_tokens: [{ cols: ['token'] }],

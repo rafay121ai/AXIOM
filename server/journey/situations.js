@@ -10,6 +10,7 @@ import { stripFiller, isFillerReply } from './filler.js'
 import { SITUATION_SCHEMA, situationMessages } from './prompts/situation.js'
 import { createRead } from './theRead.js'
 import { BANNED_PHRASES, norm, wordRx } from './ownWords.js'
+import { styleOf } from './prompts/style.js'
 
 export const MAX_NEW_SITUATIONS_PER_DAY = 5
 export const TEXT_MAX = 2000
@@ -278,6 +279,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
       signUpAnswers: answers,
       situationId: situation.id,
       conversation: turns.filter((t) => !t.filler).map((t) => ({ role: t.role, text: t.text })),
+      style: await styleOf(supabase, userId),
       deps: { callStructured, userId, log },
     })
     const inserted = await supabase.from('reads').insert({

@@ -1,6 +1,8 @@
 // Prompt for Axiom's reply to an evening report. The server checks every rule
 // that matters (reportChecks.js); the prompt is not the rule.
 
+import { styleMessages } from '../../prompts/style.js'
+
 export const REPORT_SCHEMA = Object.freeze({
   type: 'object',
   additionalProperties: false,
@@ -31,9 +33,10 @@ export const REPORT_PROMPT = [
 ].join('\n')
 
 // input: { situation, move: { title, mission, success, prediction }, outcome, note }
-export function reportMessages({ situation, move, outcome, note }, retryProblems = null) {
+export function reportMessages({ situation, move, outcome, note, style }, retryProblems = null) {
   const messages = [
     { role: 'system', content: REPORT_PROMPT },
+    ...styleMessages(style),
     { role: 'user', content: JSON.stringify({ situation, move, outcome, founder_said: note }) },
   ]
   if (retryProblems?.length) {

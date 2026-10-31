@@ -1350,6 +1350,7 @@ export function createApp({
     care,
     callStructured: callStructuredForApp,
     clock,
+    deleteOn: env.ACCOUNT_DELETE === 'on',
     links: { privacy: env.PRIVACY_URL?.trim() || null, terms: env.TERMS_URL?.trim() || null },
   })
   mountPushRoutes(app, { supabase: supabaseAdmin, clock })

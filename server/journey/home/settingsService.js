@@ -39,18 +39,19 @@ export function cleanSettings(body) {
   return cleaned.error ? cleaned : { value: { own, reminders: cleaned.value } }
 }
 
-export function createSettings({ supabase, clock, links = {} }) {
+export function createSettings({ supabase, clock, links = {}, pendingDeletion = async () => null }) {
   const iso = () => new Date(clock.now()).toISOString()
   const reminders = createReminderSettings({ supabase, clock })
   const sharing = createSharing({ supabase, clock })
   const signup = createSignupStore({ supabase, clock })
 
   async function get({ user }) {
-    const [profile, row, reminderSettings, shareAutomatically] = await Promise.all([
+    const [profile, row, reminderSettings, shareAutomatically, pending_deletion] = await Promise.all([
       one(supabase.from('users').select('first_name').eq('id', user.id).maybeSingle()),
       one(supabase.from('user_settings').select('mentor_style, keep_items').eq('user_id', user.id).maybeSingle()),
       reminders.load(user.id),
       sharing.shareAuto(user.id),
+      pendingDeletion(user.id),
     ])
     const founder = await one(supabase.from('founder_profiles').select('country, timezone').eq('user_id', user.id).maybeSingle())
     const { answers } = await signup.load(user.id)
@@ -62,6 +63,7 @@ export function createSettings({ supabase, clock, links = {} }) {
       reminders: reminderSettings,
       mentor_style: MENTOR_STYLES.includes(row?.mentor_style) ? row.mentor_style : DEFAULT_MENTOR_STYLE,
       keep_items: row?.keep_items === true,
+      pending_deletion,
       privacy: { share_automatically: shareAutomatically, text: shareAutomatically ? SHARE_AUTO_TEXT.on : SHARE_AUTO_TEXT.off },
     }
   }
