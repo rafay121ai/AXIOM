@@ -48,8 +48,6 @@ export function evidenceFromRows(rows) {
   }))
 }
 
-// What the model is shown of the evidence: handle and passage text only.
-export const evidenceForModel = (evidence) => evidence.map((e) => ({ handle: e.handle, text: e.text }))
 
 // Never throws: a failed embedding or search means no evidence, and the
 // reply is then built from the founder's own facts only.

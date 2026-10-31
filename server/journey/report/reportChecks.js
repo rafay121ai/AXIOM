@@ -8,7 +8,6 @@
 import { stripFiller } from '../filler.js'
 import { BANNED_PHRASES, TEASER, norm, wordRx } from '../ownWords.js'
 
-export const PREDICTION_CHECKS = Object.freeze(['right', 'wrong', 'unclear', 'not_tested'])
 const REPLY_MAX = 600
 
 const QUOTE_MARKS = /["“”„‟«»]/

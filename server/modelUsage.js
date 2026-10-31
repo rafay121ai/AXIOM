@@ -26,12 +26,6 @@ export const USAGE_CALL_TYPES = Object.freeze([
   ...STEPS,
 ])
 
-// Unpriced models are never costed at another model's rate: the cost is null
-// and the row is counted as unpriced by usageSummary and dailyCap.
-export function isModelPriced(model, pricingMap = MODEL_PRICING_PER_MILLION) {
-  return Object.hasOwn(pricingMap, model)
-}
-
 export function estimateModelCost(model, usage = {}, options = {}) {
   const pricingMap = options.pricingMap || MODEL_PRICING_PER_MILLION
   const warn = options.warn || console.warn

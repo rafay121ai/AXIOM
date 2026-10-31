@@ -16,6 +16,8 @@ function pick(): AxiomApi {
     if (!baseUrl) throw new Error('Set EXPO_PUBLIC_API_URL (see app/README.md)');
     return createHttpApi({ baseUrl, auth: authFromEnv(), store: AsyncStorage });
   }
+  // The fixtures hold sample founders, stories and quotes: never in a release build.
+  if (!__DEV__) throw new Error('Release builds must set EXPO_PUBLIC_API=http (see app/README.md)');
   return createFakeApi((process.env.EXPO_PUBLIC_FAKE_CARE as CareSim | undefined) ?? 'none', Number(process.env.EXPO_PUBLIC_FAKE_LATENCY ?? 0), process.env.EXPO_PUBLIC_FAKE_DUE === 'report', process.env.EXPO_PUBLIC_FAKE_HOME as HomeSim | undefined);
 }
 

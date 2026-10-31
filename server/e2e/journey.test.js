@@ -1,7 +1,5 @@
 // One founder, the whole journey, through the real createApp over HTTP with
-// fakes only. Steps run in order and share state; a step marked `todo` holds an
-// expectation the server does not meet yet (see FINDINGS.md), so the walk
-// records it without patching around it.
+// fakes only. Steps run in order and share state.
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { QUESTION_KEYS } from '../journey/questions.js'

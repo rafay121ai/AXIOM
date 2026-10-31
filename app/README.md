@@ -4,7 +4,7 @@ Screens are built against fixtures by default. To talk to the real Express serve
 
 | Variable | What it is |
 | --- | --- |
-| `EXPO_PUBLIC_API` | `http` uses the server. Anything else (the default) uses the fixtures in `src/api/fake.ts`. |
+| `EXPO_PUBLIC_API` | `http` uses the server. Anything else (the default) uses the fixtures in `src/api/fake.ts`, in development builds only: a release build without `http` refuses to start, because the fixtures are samples. |
 | `EXPO_PUBLIC_API_URL` | Server base URL, for example `http://localhost:3001`. Needed when `EXPO_PUBLIC_API=http`. |
 | `EXPO_PUBLIC_SUPABASE_URL` | Main Supabase project URL. Used for sign-in only. |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Its anon key. Used for sign-in only. |

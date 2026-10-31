@@ -105,3 +105,10 @@ Sample headlines and notes at lines 42, 79, 187-206 ("You are afraid a price wil
 - The Calm/Direct/Hard dial: no server prompt reads it, so every founder gets Direct whatever Settings says.
 - Whether mock-only lines that break the plain rule (wait lines, "No pressure. Some pressure.") stay because Rafay approved the mock, or get rewritten.
 - LLM-written text (Read, Learn, Report replies) not checked line by line, only the fixed lines in prompts. Prompt examples are plain and in voice.
+
+## C. Added in the final review (Oct 31)
+| Where | Text | Note |
+|---|---|---|
+| app/src/copy.ts history.takeDown | "Take it down" | Link on a past page to take a share back. The mock styles the link (.withdraw) but shows no words. |
+| app/src/copy.ts:181 | "This move can no longer be changed." | Not in a mock. Section A suggests "You already started this move." |
+| server/journey/situations.js:224 | "You have started 5 situations today... Pick one of the open ones." | Server text, not approved. The app shows its own copy.dailyLimit, so founders should not see this; listed so it is not missed. |
