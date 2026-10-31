@@ -329,3 +329,16 @@ Order set by Rafay: give-to-get, founder voices, Calm/Direct/Hard prompt, accoun
 - [ ] 3. Account export and delete (real, tested on fakes; never run live).
 - [ ] 4. Google sign-in on phones (native flow).
 - [x] 0. Simulator walkthrough: logo box gone, chat bar slim and capped at 3 lines, care screen no longer dropped mid-transition, wait-screen quote marks a cut with an ellipsis.
+
+## Sign-up intro v2 (Rafay, Oct 31)
+- [x] Fonts for the intro only: Newsreader (words, wordmark) and Manrope (small tagline). The app keeps Source Serif 4 and the system sans.
+- [x] Film: emblem draws under a warm gold rise, AXIOM lands letter by letter (gold, letters close in from wide), the camera zooms through, then "See." "Learn." "Become." each zoom in and out, then pull back to emblem, wordmark and tagline; the button fades in last. Tap skips, reduced motion shows the end.
+- [x] Plays on every open until sign-up (sign-in screen only), never after.
+- [x] Old lines (axiom, year, "Start today.") removed.
+- [x] Test the beat order; watch it in the simulator.
+- [x] Returning founders skip sign-in: the app checks for a saved sign-in on open (api.isSignedIn), so the film never plays after sign-up.
+
+## Sign-up intro v3 (Rafay approved, Oct 31)
+- [x] Skia + Reanimated port of tasks/design/intro-v3.html: light point, streak, emblem drawn from its tip, faint spider web, glow and sweep, settle, tagline in place, Google button rises with one shine.
+- [x] Newsreader removed; Manrope loaded by Skia for the tagline only. Web loads Skia's engine first (src/boot.web.ts, public/canvaskit.wasm).
+- [ ] Check frame rate on a real mid-range Android phone.

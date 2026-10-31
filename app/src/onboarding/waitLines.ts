@@ -14,8 +14,8 @@ export function waitLines(building: string): string[] {
   const quote = clip(building, 60);
   return [
     quote ? `Reading what you wrote about\n“${quote}”` : 'Reading what you wrote.',
-    'Every founder has one thing they keep circling. Finding yours.',
-    'Looking for the gap between what you said and what you did.',
+    'Finding the one thing you keep putting off.',
+    'Comparing what you said you would do with what you did.',
     'Checking what you have already tried, so I do not hand it back to you.',
   ];
 }

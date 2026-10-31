@@ -1,5 +1,5 @@
 import { useFonts } from 'expo-font';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -32,7 +32,7 @@ import { ReadScreen } from './src/screens/ReadScreen';
 import { SignInScreen } from './src/screens/SignInScreen';
 import { SituationScreen } from './src/screens/SituationScreen';
 import { WaitScreen } from './src/screens/WaitScreen';
-import { colors, motion, serifFiles, space } from './src/theme';
+import { colors, motion, fontFiles, space } from './src/theme';
 
 type Stage =
   | { name: 'signin' }
@@ -57,7 +57,7 @@ const QUIET: Stage['name'][] = ['home', 'history', 'past', 'settings', 'answers'
 const run = (anim: Animated.CompositeAnimation) => new Promise<void>((resolve) => anim.start(() => resolve()));
 
 export default function App() {
-  const [fontsReady] = useFonts(serifFiles);
+  const [fontsReady] = useFonts(fontFiles);
   const [stage, setStage] = useState<Stage>({ name: 'signin' });
   const [soft, setSoft] = useState<string | null>(null);
   const stuck = useRef<string | undefined>(undefined);
@@ -144,6 +144,16 @@ export default function App() {
     await openSignup();
   }, [openSignup]);
 
+  // A founder already signed in on this device skips the sign-in screen, so the film only ever plays before sign-up.
+  // Nothing shows until this is known; if the check or the landing fails, the sign-in screen is the safe place to be.
+  const [checked, setChecked] = useState(false);
+  useEffect(() => {
+    api.isSignedIn()
+      .then((yes) => (yes ? openSignup() : undefined))
+      .catch(() => {})
+      .finally(() => setChecked(true));
+  }, [openSignup]);
+
   const homeLoaded = useCallback(async (home: Home) => {
     void push.refresh().catch(() => {});
     const arriving = landing.current;
@@ -181,13 +191,13 @@ export default function App() {
       .then((reading) => goTo({ name: 'reading', reading }), openSignup);
   }, [goTo, openSignup]);
 
-  if (!fontsReady) return <View style={styles.page} />;
+  if (!fontsReady || !checked) return <View style={styles.page} />;
 
   return (
     <SafeAreaProvider>
       <View style={styles.page}>
         <View style={styles.phone}>
-          {stage.name !== 'care' && !QUIET.includes(stage.name) && <Glow />}
+          {stage.name !== 'care' && stage.name !== 'signin' && !QUIET.includes(stage.name) && <Glow />}
           <Animated.View style={[styles.flex, { opacity: fade, transform: [{ translateY: rise }] }]}>
             {stage.name === 'signin' && <SignInScreen onContinue={signIn} error={signInError} />}
             {stage.name === 'questions' && (

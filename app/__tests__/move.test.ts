@@ -6,7 +6,7 @@ import { routeScreened } from '../src/care/route';
 import { copy, failureLine } from '../src/copy';
 import { spokenTime } from '../src/move/format';
 
-const auth: Auth = { signInWithGoogle: async () => {}, signOut: async () => {}, getToken: async () => 'tok' };
+const auth: Auth = { signInWithGoogle: async () => {}, signOut: async () => {}, isSignedIn: async () => true, getToken: async () => 'tok' };
 const json = (status: number, body: unknown) => ({ ok: status < 400, status, json: async () => body }) as Response;
 
 describe('move calls', () => {

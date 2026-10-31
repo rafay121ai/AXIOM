@@ -348,6 +348,8 @@ export type PushPlatform = 'ios' | 'android';
 export interface AxiomApi {
   /** Starts Google sign-in. Resolves when the founder is signed in. */
   signInWithGoogle(): Promise<void>;
+  /** True when this device already has a sign-in saved. */
+  isSignedIn(): Promise<boolean>;
   /** The onboarding questions in order, with the founder's saved answers. */
   getSignup(): Promise<Signup>;
   /** Saves one answer as soon as it is given, so an interrupted founder can resume. Typed answers are screened. */

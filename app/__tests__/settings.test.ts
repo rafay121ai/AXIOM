@@ -5,7 +5,7 @@ import { copy } from '../src/copy';
 import { clockTime } from '../src/move/format';
 import { answerSummary } from '../src/onboarding/flow';
 
-const auth: Auth = { signInWithGoogle: async () => {}, signOut: async () => {}, getToken: async () => 'tok' };
+const auth: Auth = { signInWithGoogle: async () => {}, signOut: async () => {}, isSignedIn: async () => true, getToken: async () => 'tok' };
 const json = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response;
 
 describe('settings calls', () => {
@@ -81,7 +81,7 @@ describe('settings words and helpers', () => {
   it('are the mock\'s', () => {
     expect(copy.settings.confirmTitle).toBe('Delete everything Axiom knows about you?');
     expect(copy.settings.confirmBody).toBe("This removes your situations, check-ins, answers and anything you shared. It can't be undone.");
-    expect(copy.settings.lockNote).toBe('Short: "Axiom: tonight\'s check-in". Full: names your move. Nothing: just "Axiom".');
+    expect(copy.settings.lockNote).toBe('Short: your name and "how did it go?". Full: names your move. Nothing: just "Axiom".');
   });
   it('says the time like the mock', () => {
     expect(clockTime('20:00')).toBe('8:00 pm');

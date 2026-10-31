@@ -25,7 +25,7 @@ export const colors = {
 export const goldGradient = [colors.goldFrom, colors.goldTo] as const;
 
 // One free serif (Source Serif 4, OFL), loaded in App.tsx, so Axiom's words look the same everywhere.
-export const serifFiles = { SourceSerif4_400Regular, SourceSerif4_500Medium };
+export const fontFiles = { SourceSerif4_400Regular, SourceSerif4_500Medium };
 
 export const fonts = {
   serif: 'SourceSerif4_400Regular',

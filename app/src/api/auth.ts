@@ -7,6 +7,8 @@ import { phoneDeps, signInOnPhone, type Deps } from '../auth/oauth';
 export type Auth = {
   signInWithGoogle(): Promise<void>;
   signOut(): Promise<void>;
+  /** True when a sign-in is saved on this device, so a returning founder skips the sign-in screen and its film. */
+  isSignedIn(): Promise<boolean>;
   /** The signed-in founder's access token, sent to the API as a Bearer token. */
   getToken(): Promise<string>;
 };
@@ -22,6 +24,10 @@ export function createAuth(client: SupabaseClient, phone?: Deps): Auth {
     async signOut() {
       const { error } = await client.auth.signOut();
       if (error) throw error;
+    },
+    async isSignedIn() {
+      const { data } = await client.auth.getSession();
+      return data.session !== null;
     },
     async getToken() {
       const { data } = await client.auth.getSession();

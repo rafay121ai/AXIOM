@@ -659,3 +659,10 @@ Idea from Rafay: founder credits, and growth by referral. Not building until giv
 - Built (Oct 31): `founder_lesson_log` (migration 20261101000010, not applied) holds the count; access is derived each request from it, `share_auto` and any 'share' unlock. Wording in tasks/wording_to_approve.md section D. Deliveries made while sharing is on are logged but not counted.
 
 - Calm/Direct/Hard now reaches the model (Oct 31): the Read, Learn replies, Move and Report reply read the saved style live each request (default direct, direct and any care hold add nothing) via one shared module, server/journey/prompts/style.js. Tone only; care, forbidden phrases, citations, Move rules, follow-up cap and fixed copy are never styled. Wording in wording_to_approve.md section E. The sign-up first reading is not styled.
+
+## 2026-10-31: wording approvals and sign-in direction
+- Founder-lessons notice: Rafay chose the "invitation" version, shortened (v2).
+- Section A of wording_to_approve.md applied in full (wait lines, report fallback replies, care line, "Tonight's check-in" title, push, lock note, rate-limit, Learn and Move errors). Home greeting joke stays.
+- Sign-up page: Rafay dislikes the gold light blobs ("old fashioned, like a kids app"). Wants a black sign-up page with an opening motion piece: zoom in, zoom out, animated tagline about Axiom itself, like a motion graphics video. Tagline direction: the spirit of "I think, therefore I am", in the context of founders. Tagline still to choose.
+
+- Sign-up film (Oct 31, Rafay): sign-in is pure black (drifting light off for it only). A ~9 second title sequence plays once per app open, awe then momentum, ending on the emblem and the placeholder tagline "I move, therefore I am." (NEEDS APPROVAL). Animated-only: the blur clear is a fade with a small rise. Lines in copy.intro, timings in app/src/intro/timeline.ts.

@@ -3,7 +3,7 @@ import { createFakeApi } from '../src/api/fake';
 import { createHttpApi } from '../src/api/http';
 import { destinationOf } from '../src/home/flow';
 
-const auth: Auth = { signInWithGoogle: async () => {}, signOut: async () => {}, getToken: async () => 'tok' };
+const auth: Auth = { signInWithGoogle: async () => {}, signOut: async () => {}, isSignedIn: async () => true, getToken: async () => 'tok' };
 const json = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response;
 
 describe('history calls', () => {

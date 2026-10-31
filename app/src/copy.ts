@@ -60,7 +60,7 @@ export const copy = {
   // mock-onboarding-v2.html, the Report (screen 8), word for word. Axiom's own lines come from the server.
   report: {
     // The small label top right, as the mock has it.
-    title: 'Report',
+    title: "Tonight's check-in",
     placeholder: 'What happened?',
     outcome: { done: 'Done', couldnt: "Couldn't", didnt: "Didn't" },
     seeStory: 'Yes, show me',
@@ -123,7 +123,7 @@ export const copy = {
     lockFull: 'Full',
     lockShort: 'Short',
     lockHidden: 'Nothing',
-    lockNote: 'Short: "Axiom: tonight\'s check-in". Full: names your move. Nothing: just "Axiom".',
+    lockNote: 'Short: your name and "how did it go?". Full: names your move. Nothing: just "Axiom".',
     off: 'Reminders are off',
     offSub: "They're switched off in your phone's settings, so I can't remind you. Tonight's check-in will wait on your home screen.",
     openPhone: 'Open phone settings',
@@ -167,6 +167,8 @@ export const copy = {
   couldNotRead: "I couldn't answer that just now.",
   // NEEDS APPROVAL: no mock says what Axiom says at the daily limit (decision E only says "plainly, and offer the open ones").
   // NEEDS APPROVAL: no mock shows a failed Google sign-in. Plain and short, per tasks/voice.md.
+  // The sign-up film (src/intro/timeline.ts): one word per beat, then together as the tagline. Chosen by Rafay, Oct 31.
+  intro: { words: ['See.', 'Learn.', 'Become.'] },
   signInFailed: "Sign-in didn't work. Try again.",
   dailyLimit: 'That is the limit for new situations today. Pick one that is still open.',
 } as const;
@@ -181,7 +183,7 @@ const BY_CODE: Record<string, Line> = {
   move_not_ready: { text: 'Your move is not ready yet. Try again in a moment.', canRetry: true },
   move_changing: { text: 'I am still changing this move. Try again in a moment.', canRetry: true },
   move_not_committable: { text: 'You already started this move.', canRetry: false },
-  move_not_changeable: { text: 'This move can no longer be changed.', canRetry: false },
+  move_not_changeable: { text: 'You already started this move.', canRetry: false },
   turn_busy: { text: 'I am still on your last message. Try again in a moment.', canRetry: true },
   report_saving: { text: 'Your check-in is still saving. Try again in a moment.', canRetry: true },
   report_not_allowed: { text: 'This move cannot be checked in.', canRetry: false },

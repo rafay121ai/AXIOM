@@ -27,7 +27,7 @@ Four rules decide everything:
 | Writing | `rgb(234,236,238)`, a bright mix of white and stone. Lower levels by opacity: 0.9 body, 0.7 secondary, 0.5 labels, 0.35 hints |
 | Highlight (Gold) | gradient from `rgb(205,178,126)` to `rgb(168,142,94)`. Used for the key mark, ticks, the Continue and Send buttons, thin underlines, small dots |
 | Wash | a very faint, smooth gold gradient behind the black: strongest at the bottom (about 20 to 26%), a whisper at the top (about 8 to 10%). Never blobs on the home, drawer, settings or history |
-| Light behind glass | on onboarding screens, slow drifting soft gold light so the glass has something to blur |
+| Light behind glass | on onboarding screens, slow drifting soft gold light so the glass has something to blur. The sign-up page has none: black, a warm glow rising from the bottom and a very faint gold spider web behind the emblem |
 | Delete | a muted red `rgb(222,160,150)`, only for "delete everything" |
 
 Parked: rotating a new highlight per situation (Seafoam `#7FBFAA`, Periwinkle
@@ -133,6 +133,7 @@ a verified passage. No forecasts. No decoration.
   a deeper shadow. Press sinks them.
 - **Logo drawing:** the emblem draws itself in gold and glows softly, looping
   (3.6 to 4.2 seconds). Used on the wait screen and the loading hint.
+- **Sign-up film (about 8 seconds, every open until sign-up):** a point of light at the emblem's tip stretches into a thin gold streak and collapses back; the emblem draws itself outward from its tip with a bright point at each end; a very faint spider web spreads behind it; the emblem glows, a band of light crosses it, and it settles a little higher and smaller; "SEE. LEARN. BECOME." arrives beneath it one word at a time, out of a slight blur; the Google button rises in last and one soft shine crosses it. Fine film grain over everything. Restrained, never playful (no particles, no full-screen words). Drawn with Skia; timings in `app/src/intro/timeline.ts`; approved prototype `tasks/design/intro-v3.html`. A tap skips to the end; reduce motion shows the end at once.
 - **Loading hint:** see below.
 - Respect "reduce motion": no drifting light, no sweeps, no drawing; show the
   logo still.

@@ -145,8 +145,8 @@ const FAKE_DUE: DueReport = {
 };
 const REPORT_REPLIES: Record<Outcome, string> = {
   done: 'That is a real answer. One clinic gave you a time, and one did not reply. I said at least one would not answer. I was right, which helps nobody. You sent it anyway, and that is the part that counts. Your next move: send the clinic that replied a message confirming the time.',
-  couldnt: 'That is fine, things changed. Here is a smaller version: message only the clinic that is easiest to reach, and ask for a 10-minute call.',
-  didnt: 'That happens. What stopped you matters more than the message. Was it not knowing what to write, or not wanting to send it?',
+  couldnt: 'Here is a smaller version: message only the clinic that is easiest to reach, and ask for a 10-minute call.',
+  didnt: 'What stopped you matters more than the message. Was it not knowing what to write, or not wanting to send it?',
 };
 const STORY_OFFER = 'A founder who was in your spot shared what went wrong and what worked. Want to see it?';
 const FAKE_STORY: Story = {
@@ -353,6 +353,9 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
 
   return {
     async signInWithGoogle() {},
+    async isSignedIn() {
+      return homeState !== undefined;
+    },
     async getSignup() {
       const complete = homeState !== undefined;
       return { questions: QUESTIONS, answers: complete ? settings.signup_answers : {}, next: complete ? null : QUESTIONS[0].key, complete };

@@ -45,6 +45,7 @@ export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch
 
   return {
     signInWithGoogle: () => auth.signInWithGoogle(),
+    isSignedIn: () => auth.isSignedIn(),
     async getSignup() {
       const { questions, answers, next, complete } = await request<Signup>('GET', '/api/signup');
       return { questions, answers, next, complete };

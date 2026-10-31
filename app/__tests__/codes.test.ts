@@ -3,7 +3,7 @@ import { createHttpApi } from '../src/api/http';
 import { HttpError } from '../src/api/queue';
 import { copy, failureLine } from '../src/copy';
 
-const auth: Auth = { signInWithGoogle: async () => {}, signOut: async () => {}, getToken: async () => 'tok' };
+const auth: Auth = { signInWithGoogle: async () => {}, signOut: async () => {}, isSignedIn: async () => true, getToken: async () => 'tok' };
 const refuse = (status: number, body: unknown) => jest.fn().mockResolvedValue({ ok: false, status, json: async () => body } as Response);
 
 // Every 409 the server sends carries `code`, and the settings PUT sends `quiet_hours_clash`.

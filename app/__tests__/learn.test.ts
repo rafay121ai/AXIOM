@@ -8,7 +8,7 @@ import type { LearnReply } from '../src/api/types';
 import { applyLearnReply, lessonParagraphs, newLearnChat, sourceLines, suggestionTurn, tappedIndexes } from '../src/learn/chat';
 import { scaled, shares, withUnit } from '../src/learn/picture';
 
-const auth: Auth = { signInWithGoogle: async () => {}, signOut: async () => {}, getToken: async () => 'tok' };
+const auth: Auth = { signInWithGoogle: async () => {}, signOut: async () => {}, isSignedIn: async () => true, getToken: async () => 'tok' };
 const json = (status: number, body: unknown) => ({ ok: status < 400, status, json: async () => body }) as Response;
 
 describe('learn calls', () => {

@@ -7,8 +7,8 @@ import { useReduceMotion } from './useReduceMotion';
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
 // The emblem, from the approved mock. Two strokes that meet at the top.
-const LEFT = 'M 8,84 H 28 C 28,55 35,36 50,26 C 55,23 54,18 50,11 C 45,22 40,27 31,33 C 18,43 13,60 13,84';
-const RIGHT = 'M 92,84 H 72 C 72,55 65,36 50,26 C 45,23 46,18 50,11 C 55,22 60,27 69,33 C 82,43 87,60 87,84';
+export const LEFT = 'M 8,84 H 28 C 28,55 35,36 50,26 C 55,23 54,18 50,11 C 45,22 40,27 31,33 C 18,43 13,60 13,84';
+export const RIGHT = 'M 92,84 H 72 C 72,55 65,36 50,26 C 45,23 46,18 50,11 C 55,22 60,27 69,33 C 82,43 87,60 87,84';
 const PATH_LENGTH = 190; // measured: 188 viewBox units
 
 type Props = { size: number; draw?: boolean };
