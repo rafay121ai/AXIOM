@@ -177,6 +177,9 @@ export type LearnReply = {
   reply?: string;
   move_offer: 'none' | 'first' | 'second';
   move_notice: MoveNotice | null;
+  /** A real founder's approved case, when the server sends one on this answer. No author line: it is not from a book. */
+  founder_case?: FounderCase | null;
+  founder_lessons?: FounderLessons;
 };
 
 /** One move, as the server shows it. `words` is the suggested wording, if the move needs any. */
@@ -252,6 +255,12 @@ export type ReportResult =
 
 /** A founder story that was shared with consent and approved by a person. */
 export type Story = { story: string; lesson: string | null; outcome: string; stage: string | null };
+/** A founder case in the Learn chat. */
+export type FounderCase = { story: string; lesson?: string | null; outcome: string };
+/** Sent once, on the one response that tells the founder founder lessons are closed. The text is the server's. */
+export type FounderLessons = { state: 'closed_notice'; notice: { text: string; wording_version: string } };
+/** `GET /api/reports/:id/story`: the story if one fits, and the closed notice when it is due. */
+export type StoryReply = { story: Story | null; founder_lessons?: FounderLessons };
 
 /** After the founder shares or keeps private: the server's own confirmation line. */
 export type ConsentResult = { consent: ConsentState; reply: string };
@@ -317,13 +326,18 @@ export type Settings = {
   mentor_style: MentorStyle;
   keep_items: boolean;
   privacy: { share_automatically: boolean; text: string };
+  /** A deletion waiting out its grace period, with the server's own sentence. Absent or null when none. */
+  pending_deletion?: { delete_after: string; message: string } | null;
 };
 
 /** Any of these can be saved on their own. The answer is the whole page again. */
 export type SettingsPatch = Partial<Pick<Settings, 'mentor_style' | 'keep_items'> & Settings['reminders']> & { share_automatically?: boolean };
 
-/** What the server says about an export or a delete request. Nothing is deleted yet; `message` is its own line. */
-export type AccountRequest = { status: string; message: string };
+/** The server's answer to a delete or a cancel. `message` is its own sentence (it already names the date); the app adds none. */
+export type AccountRequest = { status: 'recorded' | 'pending_deletion' | 'cancelled' | 'none'; message: string; delete_after?: string };
+
+/** The export: the data file itself. `message` is the server's "ready" line; the rest is shared as it came. */
+export type AccountExport = { message: string } & Record<string, unknown>;
 
 /** The sign-up as it stands: the questions, what the founder has answered, the key of the first unanswered one (null when all are), and whether every one is answered. */
 export type Signup = { questions: Question[]; answers: Record<string, Answer>; next: string | null; complete: boolean };
@@ -377,7 +391,7 @@ export interface AxiomApi {
    */
   sendReport(moveId: string, outcome: Outcome, note: string, turnId: string): Promise<Screened<ReportResult>>;
   /** The founder story offered after a report, or null when none fits. */
-  getStory(reportId: string): Promise<Story | null>;
+  getStory(reportId: string): Promise<StoryReply>;
   /** Share or keep private, with the wording version of the question the founder saw. Sending the same answer again is safe. */
   setConsent(reportId: string, share: boolean, wordingVersion: string): Promise<ConsentResult>;
   /** Takes a shared check-in down. The reply is the server's line, or null when nothing was shared. Safe to repeat. */
@@ -396,10 +410,12 @@ export interface AxiomApi {
   getSettings(): Promise<Settings>;
   /** Saves some settings and returns the page as it now stands. */
   updateSettings(patch: SettingsPatch): Promise<Settings>;
-  /** Asks for an export of everything Axiom holds. Recorded only. */
-  requestExport(): Promise<AccountRequest>;
-  /** Asks to delete everything. Recorded only: nothing is deleted. */
+  /** Everything Axiom holds, as the server's data file. */
+  requestExport(): Promise<AccountExport>;
+  /** Asks to delete everything; sends the confirmation word. The server starts a grace period (or only records it while deletion is off). */
   requestDelete(): Promise<AccountRequest>;
+  /** Cancels a deletion waiting in its grace period. */
+  cancelDelete(): Promise<AccountRequest>;
   /**
    * Sends what was left unsent when the app was last closed. Resolves when it is all sent, or at the first send that
    * has to wait for the connection (the rest keeps going in the background). Safe to call again; sign-out forgets it.

@@ -138,3 +138,14 @@ describe('words filling in', () => {
     expect(splitAt(text, 9)).toEqual([text, '']);
   });
 });
+
+describe('founder case and closed notice', () => {
+  const base = { learn_id: 'l', situation_id: 's', status: 'reply' as const, turn: null, move_offer: 'none' as const, move_notice: null };
+  it('adds a case and a notice only when the reply carries them', () => {
+    const chat = newLearnChat();
+    expect(applyLearnReply(chat, base)).toEqual([]);
+    expect(applyLearnReply(chat, { ...base, founder_case: null })).toEqual([]);
+    const items = applyLearnReply(chat, { ...base, founder_case: { story: 'a', outcome: 'done' }, founder_lessons: { state: 'closed_notice', notice: { text: 'n', wording_version: 'v' } } });
+    expect(items.map((i) => i.who)).toEqual(['case', 'say']);
+  });
+});

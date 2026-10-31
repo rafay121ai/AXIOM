@@ -8,6 +8,7 @@ import { routeScreened } from '../care/route';
 import { Chip } from '../components/Choice';
 import { Composer } from '../components/Composer';
 import { Fade } from '../components/Fade';
+import { FounderCard } from '../components/FounderCard';
 import { Glass } from '../components/Glass';
 import { LoadingHint } from '../components/LoadingHint';
 import { Logo } from '../components/Logo';
@@ -183,6 +184,7 @@ export function LearnScreen({ chat, start, send, tap, loadHint, onOpenMove, onCa
             );
           }
           if (i.who === 'say') return <Fade key={i.key} style={styles.ax}><Text style={type.reading}>{i.text}</Text></Fade>;
+          if (i.who === 'case') return <FounderCard key={i.key} story={i.case.story} lesson={i.case.lesson} />;
           if (i.who === 'card') {
             return (
               <Fade key={i.key} style={styles.ax}>

@@ -3,10 +3,11 @@ import { Animated, KeyboardAvoidingView, Platform, ScrollView, type ScrollViewIn
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { newTurnId, sendUntilDelivered } from '../api/delivery';
-import type { ConsentResult, ConsentState, DueReport, CareHelp, Outcome, ReportResult, Screened, Story } from '../api/types';
+import type { ConsentResult, ConsentState, DueReport, CareHelp, Outcome, ReportResult, Screened, StoryReply } from '../api/types';
 import { routeScreened } from '../care/route';
 import { Composer } from '../components/Composer';
 import { Fade } from '../components/Fade';
+import { FounderCard } from '../components/FounderCard';
 import { LoadingHint } from '../components/LoadingHint';
 import { Logo } from '../components/Logo';
 import { type MarkName, RoundMark } from '../components/RoundMark';
@@ -19,7 +20,7 @@ import { colors, fonts, ink, type } from '../theme';
 type Props = {
   report: DueReport;
   send: (outcome: Outcome, note: string, turnId: string) => Promise<Screened<ReportResult>>;
-  story: (reportId: string) => Promise<Story | null>;
+  story: (reportId: string) => Promise<StoryReply>;
   consent: (reportId: string, share: boolean, wordingVersion: string) => Promise<ConsentResult>;
   /** The check-in is done and Axiom has said its last line. */
   onFinish: () => void;
@@ -30,7 +31,7 @@ type Choice = { key: string; label: string; mark: MarkName };
 type Item =
   | { id: number; kind: 'ax'; text: string }
   | { id: number; kind: 'me'; text: string }
-  | { id: number; kind: 'story'; text: string }
+  | { id: number; kind: 'story'; text: string; lesson: string | null }
   | { id: number; kind: 'ask'; choices: Choice[]; picked: string | null };
 
 type NewItem = Item extends infer T ? (T extends { id: number } ? Omit<T, 'id'> : never) : never;
@@ -133,8 +134,9 @@ export function ReportScreen({ report, send, story, consent, onFinish, onCare }:
     try {
       const got = await sendUntilDelivered(() => story(result.report.id), options());
       if (!live.current) return;
-      if (got) add({ kind: 'story', text: got.story });
-      await askConsent(result.consent, got !== null);
+      if (got.story) add({ kind: 'story', text: got.story.story, lesson: got.story.lesson });
+      if (got.founder_lessons) add({ kind: 'ax', text: got.founder_lessons.notice.text });
+      await askConsent(result.consent, got.story !== null);
     } catch (e) {
       if (live.current) setFailure({ ...failureLine(e), retry: () => void showStory(result) });
     }
@@ -244,12 +246,7 @@ export function ReportScreen({ report, send, story, consent, onFinish, onCare }:
           if (i.kind === 'me') return <Text key={i.id} style={styles.me}>{i.text}</Text>;
           if (i.kind === 'ax') return <Fade key={i.id} style={styles.ax}><Text style={type.reading}>{i.text}</Text></Fade>;
           if (i.kind === 'story') {
-            return (
-              <Fade key={i.id} style={styles.story}>
-                <Text style={styles.storyLabel}>{copy.report.storyLabel}</Text>
-                <Text style={type.readBody}>{i.text}</Text>
-              </Fade>
-            );
+            return <FounderCard key={i.id} story={i.text} lesson={i.lesson} />;
           }
           return (
             <Fade key={i.id} style={styles.choices}>
@@ -299,8 +296,6 @@ const styles = StyleSheet.create({
   marks: { flexDirection: 'row', justifyContent: 'center', gap: 22, marginBottom: 24 },
   ax: { marginBottom: 18 },
   me: { ...type.founder, textAlign: 'right', marginTop: 8, marginBottom: 22, marginLeft: 52 },
-  story: { borderWidth: 1, borderColor: ink(0.16), borderRadius: 20, padding: 18, marginBottom: 22 },
-  storyLabel: { ...type.label, color: ink(0.5), marginBottom: 8 },
   choices: { flexDirection: 'row', gap: 22, marginBottom: 22 },
   saved: { marginTop: 40 },
   centred: { textAlign: 'center' },

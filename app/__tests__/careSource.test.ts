@@ -18,3 +18,15 @@ it('the app source holds no care sentences; the server sends them', () => {
   expect(t).not.toMatch(/tell someone|not a counsellor|have to be okay|keep talking if/i);
   expect(t).not.toMatch(/[.!?]['"`<]/);
 });
+
+it('the app source holds no founder-lessons notice; the server sends it', () => {
+  for (const f of ['src/screens/LearnScreen.tsx', 'src/screens/ReportScreen.tsx', 'src/components/FounderCard.tsx', 'src/learn/chat.ts', 'src/copy.ts']) {
+    expect(read(f)).not.toMatch(/founder lessons?|more open|share what happened/i);
+  }
+});
+
+it('the app source holds no account sentences; the server sends them', () => {
+  const t = read('src/screens/SettingsScreen.tsx');
+  expect(t).not.toMatch(/everything Axiom holds|nothing was deleted|no deletion waiting|type DELETE to confirm|yours to keep|grace/i);
+  expect(t).not.toMatch(/[.!?]['"`<]/);
+});

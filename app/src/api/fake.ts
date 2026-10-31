@@ -1,5 +1,5 @@
 import { HttpError } from './queue';
-import type { AccountRequest, AxiomApi, Commitment, ConsentResult, DueReport, FirstReading, HistoryPage, HistoryRow, Home, HomeItem, LearnReply, LearnTurn, MoveView, Outcome, Question, Read, ReadAnswerResult, ReportResult, Screened, Settings, SituationReply, SituationView, Story, SwapResult } from './types';
+import type { AccountExport, AccountRequest, AxiomApi, Commitment, ConsentResult, DueReport, FirstReading, HistoryPage, HistoryRow, Home, HomeItem, FounderLessons, LearnReply, LearnTurn, MoveView, Outcome, Question, Read, ReadAnswerResult, ReportResult, Screened, Settings, SituationReply, SituationView, Story, StoryReply, SwapResult } from './types';
 
 // Fixture questions, word for word from tasks/design/mock-onboarding-v2.html.
 const QUESTIONS: Question[] = [
@@ -155,6 +155,12 @@ const FAKE_STORY: Story = {
   outcome: 'done',
   stage: null,
 };
+const FAKE_CASE = {
+  story: 'They had two demos booked and kept offering a discount before anyone asked. The third time, they asked what the clinic would need to say yes, and held the price.',
+  lesson: 'Ask what yes needs before you move the number.',
+  outcome: 'done',
+};
+const FAKE_CLOSED: FounderLessons = { state: 'closed_notice', notice: { text: 'That was the second founder lesson. More open when you share what happened on a move.', wording_version: 'fake-closed-v1' } };
 const ASK_ALONE = { text: 'One last thing: can I share what happened, with no name, to help founders behind you?', wording_version: 'share-alone-v1' };
 const ASK_AFTER_STORY = { text: 'They shared theirs so it could help you. Would you share yours the same way, with no name?', wording_version: 'share-after-story-v1' };
 const SHARED_LINE = 'Thank you. That opens more founder stories for you.';
@@ -162,6 +168,7 @@ const KEPT_PRIVATE_LINE = 'Kept private. You can change this any time in setting
 
 // The home screen, from the mock (sample founder). The words are the server's own (server/journey/home/wording.js):
 // the mock's "Tonight: tell me how it went" is "Tell me how it went" there. Which items show follows the mock's states.
+export type FounderSim = 'closed';
 export type HomeSim = 'morning' | 'report' | 'evening' | 'nothing' | 'care';
 
 const FAKE_SITUATION = 'fake-situation-1';
@@ -223,8 +230,16 @@ const FAKE_SETTINGS: Settings = {
   keep_items: false,
   privacy: { share_automatically: false, text: SHARE_TEXT.off },
 };
-const EXPORT_LINE = 'I have your request. Your export is queued.';
-const DELETE_LINE = 'I have your request. Nothing has been deleted. Deleting everything Axiom knows about you needs a plan I have not finished, and I will not guess with your history.';
+export type AccountSim = 'pending' | 'off';
+// The account lines are ACCOUNT_COPY in server/journey/home/wording.js; the server puts the day in {date}.
+const ACCOUNT = {
+  exportReady: 'Here is everything Axiom holds about you. It is yours to keep.',
+  recorded: 'I have your request. Nothing has been deleted. Deleting everything Axiom knows about you is not switched on yet, and I will not guess with your history.',
+  waiting: 'Your deletion is waiting. On {date} I will delete everything Axiom holds about you. Until then you can cancel and nothing changes. After that it cannot be undone.',
+  pending: 'Done. On {date} I will delete everything Axiom holds about you. Until then you can cancel and nothing changes. After that it cannot be undone.',
+  cancelled: 'Cancelled. Nothing was deleted. Everything is still here.',
+  nothing: 'There is no deletion waiting.',
+};
 // The server refuses a check-in time inside quiet hours.
 const inQuiet = (t: string, q: { start: string; end: string }) => (q.start < q.end ? t >= q.start && t < q.end : t >= q.start || t < q.end);
 
@@ -270,7 +285,11 @@ const isEnough = (t: string) => t.split(/\s+/).length >= 8 && /\d|\b(one|two|thr
 // `latencyMs` makes the Learn calls take a while, so the loading hint can be seen.
 // `reportDue` puts the mock's check-in waiting, as it is on the evening of a committed move.
 // `home` makes the fake a founder who has signed up already, landing on that home state.
-export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = false, home?: HomeSim): AxiomApi {
+export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = false, home?: HomeSim, founder?: FounderSim, account?: AccountSim): AxiomApi {
+  // 'pending' starts with a deletion already waiting, as for a founder who closed the app.
+  let deleteAfter: string | null = account === 'pending' ? new Date(Date.now() + 7 * 864e5).toISOString() : null;
+  const day = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  const withPending = (s: Settings): Settings => ({ ...s, pending_deletion: deleteAfter ? { delete_after: deleteAfter, message: ACCOUNT.waiting.replace('{date}', day(deleteAfter)) } : null });
   const homeState: HomeSim | undefined = reportDue ? 'evening' : home;
   let checkedIn = false;
   let settings = FAKE_SETTINGS;
@@ -310,6 +329,13 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
   // Learn, kept in memory so a turn id sent twice gets the same answer, like the server.
   const learnReplies = new Map<string, Screened<LearnReply>>();
   let realReplies = 0;
+  // Closed founder lessons: the notice rides one response, the first of the second Learn reply and the story.
+  let noticeSent = false;
+  const closedNotice = (): Pick<StoryReply, 'founder_lessons'> => {
+    if (founder !== 'closed' || noticeSent) return {};
+    noticeSent = true;
+    return { founder_lessons: FAKE_CLOSED };
+  };
   let nextLearnTurn = 2;
   const learnReply = (extra: Partial<LearnReply>): LearnReply => ({
     learn_id: FAKE_LEARN_ID, situation_id: 'fake-situation-1', status: 'reply', turn: null, move_offer: 'none', move_notice: null, ...extra,
@@ -369,7 +395,7 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
         const offered = realReplies === 2;
         res = learnReply({
           turn: learnTurn('reply', offered ? 'Keep hold of that. The first thing they say after your question will tell you more than the number itself.' : 'That is the position to protect, and the question should serve it: it gets them explaining why 30%, not you defending your price.'),
-          ...(offered ? { move_offer: 'first' as const, move_notice: { kind: 'first' as const, kicker: 'Your move', text: 'Your move is ready.' } } : {}),
+          ...(offered ? { founder_case: founder === 'closed' ? null : FAKE_CASE, ...closedNotice(), move_offer: 'first' as const, move_notice: { kind: 'first' as const, kicker: 'Your move', text: 'Your move is ready.' } } : {}),
         });
       }
       learnReplies.set(turnId, res);
@@ -428,7 +454,7 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
       return reported;
     },
     async getStory() {
-      return FAKE_STORY;
+      return { story: FAKE_STORY, ...closedNotice() };
     },
     async setConsent(_reportId, share): Promise<ConsentResult> {
       return {
@@ -461,7 +487,7 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
       return { ...h.page, id, title: h.row.title, status: h.row.status, status_label: h.row.status_label, action: { kind, label, target: { stage: h.row.status === 'open' ? 'move' : 'learn', situation_id: id } } };
     },
     async getSettings() {
-      return settings;
+      return withPending(settings);
     },
     async updateSettings(patch) {
       const { share_automatically, keep_items, mentor_style, ...reminders } = patch;
@@ -471,13 +497,20 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
       if (mentor_style) next.mentor_style = mentor_style;
       if (share_automatically !== undefined) next.privacy = { share_automatically, text: share_automatically ? SHARE_TEXT.on : SHARE_TEXT.off };
       settings = next;
-      return settings;
+      return withPending(settings);
     },
-    async requestExport(): Promise<AccountRequest> {
-      return { status: 'queued', message: EXPORT_LINE };
+    async requestExport(): Promise<AccountExport> {
+      return { message: ACCOUNT.exportReady, exported_at: new Date().toISOString(), account: { email: FAKE_SETTINGS.you.email, first_name: FAKE_SETTINGS.you.name }, situations: [] };
     },
     async requestDelete(): Promise<AccountRequest> {
-      return { status: 'recorded', message: DELETE_LINE };
+      if (account === 'off') return { status: 'recorded', message: ACCOUNT.recorded };
+      deleteAfter ??= new Date(Date.now() + 7 * 864e5).toISOString();
+      return { status: 'pending_deletion', message: ACCOUNT.pending.replace('{date}', day(deleteAfter)), delete_after: deleteAfter };
+    },
+    async cancelDelete(): Promise<AccountRequest> {
+      if (!deleteAfter) return { status: 'none', message: ACCOUNT.nothing };
+      deleteAfter = null;
+      return { status: 'cancelled', message: ACCOUNT.cancelled };
     },
     async resumeUnsent() {},
     async signOut() {},

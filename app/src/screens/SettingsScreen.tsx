@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { sendUntilDelivered } from '../api/delivery';
-import type { AccountRequest, LockScreen, MentorStyle, Settings, SettingsPatch } from '../api/types';
+import type { AccountExport, AccountRequest, LockScreen, MentorStyle, Settings, SettingsPatch } from '../api/types';
 import { Fade } from '../components/Fade';
 import { LoadingHint } from '../components/LoadingHint';
 import { PageHeader } from '../components/PageHeader';
@@ -17,8 +17,9 @@ import { colors, fonts, ink } from '../theme';
 type Props = {
   load: () => Promise<Settings>;
   save: (patch: SettingsPatch) => Promise<Settings>;
-  requestExport: () => Promise<AccountRequest>;
+  requestExport: () => Promise<AccountExport>;
   requestDelete: () => Promise<AccountRequest>;
+  cancelDelete: () => Promise<AccountRequest>;
   /** The Country row opens the `where` question; the other row opens the whole list. */
   onEditAnswers: (startAt?: string) => void;
   onSignOut: () => Promise<void>;
@@ -56,14 +57,15 @@ function Row({ title, sub, value, chevron, danger, onPress, right, first }: RowP
 }
 
 // Settings: groups divided by thin lines with plain labels. Every change is saved at once; if it does not save, it goes back.
-export function SettingsScreen({ load, save, requestExport, requestDelete, onEditAnswers, onSignOut, onBack }: Props) {
+export function SettingsScreen({ load, save, requestExport, requestDelete, cancelDelete, onEditAnswers, onSignOut, onBack }: Props) {
   const [s, setS] = useState<Settings | null>(null);
   const [failure, setFailure] = useState<{ text: string; canRetry: boolean } | null>(null);
   const [timeOpen, setTimeOpen] = useState(false);
   const [quietOpen, setQuietOpen] = useState(false);
   const [exported, setExported] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
-  const [deleted, setDeleted] = useState<string | null>(null);
+  const [typed, setTyped] = useState('');
+  const [deleted, setDeleted] = useState<AccountRequest | null>(null);
   const live = useRef(true);
   const latest = useRef(load);
   latest.current = load;
@@ -73,7 +75,9 @@ export function SettingsScreen({ load, save, requestExport, requestDelete, onEdi
     setFailure(null);
     try {
       const v = await sendUntilDelivered(() => latest.current(), { cancelled: () => !live.current });
-      if (live.current) setS(v);
+      if (!live.current) return;
+      setS(v);
+      if (v.pending_deletion) setDeleted({ status: 'pending_deletion', ...v.pending_deletion });
     } catch (e) {
       if (live.current) setFailure(failureLine(e, 'read'));
     }
@@ -106,7 +110,10 @@ export function SettingsScreen({ load, save, requestExport, requestDelete, onEdi
   async function askExport() {
     try {
       const r = await sendUntilDelivered(() => requestExport(), { cancelled: () => !live.current });
-      if (live.current) setExported(r.message);
+      if (!live.current) return;
+      setExported(r.message);
+      // The file goes straight to the share sheet and is not kept.
+      await Share.share({ message: JSON.stringify(r, null, 2) });
     } catch (e) {
       if (live.current) setFailure(failureLine(e));
     }
@@ -115,7 +122,16 @@ export function SettingsScreen({ load, save, requestExport, requestDelete, onEdi
   async function askDelete() {
     try {
       const r = await sendUntilDelivered(() => requestDelete(), { cancelled: () => !live.current });
-      if (live.current) setDeleted(r.message);
+      if (live.current) setDeleted(r);
+    } catch (e) {
+      if (live.current) setFailure(failureLine(e));
+    }
+  }
+
+  async function askCancel() {
+    try {
+      const r = await sendUntilDelivered(() => cancelDelete(), { cancelled: () => !live.current });
+      if (live.current) setDeleted(r);
     } catch (e) {
       if (live.current) setFailure(failureLine(e));
     }
@@ -204,7 +220,9 @@ export function SettingsScreen({ load, save, requestExport, requestDelete, onEdi
               <Row first title={copy.settings.export} onPress={() => void askExport()} />
               {exported && <Text style={styles.note}>{exported}</Text>}
               <Row title={copy.settings.signOut} onPress={() => void onSignOut()} />
-              <Row title={copy.settings.delete} danger onPress={() => { setDeleted(null); setConfirming(true); }} />
+              <Row title={copy.settings.delete} danger onPress={() => { setDeleted(null); setTyped(''); setConfirming(true); }} />
+              {deleted && !confirming && <Text accessibilityLiveRegion="polite" style={styles.note}>{deleted.message}</Text>}
+              {deleted?.status === 'pending_deletion' && !confirming && <TextAction label={copy.settings.cancelDeletion} size={14} onPress={() => void askCancel()} />}
             </Section>
           </Fade>
         )}
@@ -215,14 +233,15 @@ export function SettingsScreen({ load, save, requestExport, requestDelete, onEdi
             <Text style={styles.boxTitle}>{copy.settings.confirmTitle}</Text>
             {deleted ? (
               <>
-                <Text style={styles.boxBody}>{deleted}</Text>
+                <Text style={styles.boxBody}>{deleted.message}</Text>
                 <Pressable accessibilityRole="button" onPress={() => setConfirming(false)} style={styles.boxButton}><Text style={styles.boxButtonText}>{copy.settings.keepData}</Text></Pressable>
               </>
             ) : (
               <>
                 <Text style={styles.boxBody}>{copy.settings.confirmBody}</Text>
                 <Pressable accessibilityRole="button" onPress={() => setConfirming(false)} style={styles.boxButton}><Text style={styles.boxButtonText}>{copy.settings.keepData}</Text></Pressable>
-                <Pressable accessibilityRole="button" onPress={() => void askDelete()} style={[styles.boxButton, { borderColor: 'rgba(222,160,150,0.4)' }]}><Text style={[styles.boxButtonText, { color: DANGER }]}>{copy.settings.deleteAll}</Text></Pressable>
+                <TextInput accessibilityLabel="DELETE" placeholder="DELETE" placeholderTextColor={ink(0.3)} value={typed} onChangeText={setTyped} autoCapitalize="characters" autoCorrect={false} style={styles.confirmInput} />
+                <Pressable accessibilityRole="button" disabled={typed !== 'DELETE'} onPress={() => void askDelete()} style={[styles.boxButton, { borderColor: 'rgba(222,160,150,0.4)' }, typed !== 'DELETE' && { opacity: 0.4 }]}><Text style={[styles.boxButtonText, { color: DANGER }]}>{copy.settings.deleteAll}</Text></Pressable>
               </>
             )}
           </View>
@@ -251,6 +270,7 @@ const styles = StyleSheet.create({
   box: { backgroundColor: '#0b0b0b', borderWidth: 1, borderColor: ink(0.2), borderRadius: 22, padding: 20 },
   boxTitle: { fontFamily: fonts.serifMedium, fontSize: 19, lineHeight: 25, color: '#f4f4f2', marginBottom: 10 },
   boxBody: { fontFamily: fonts.sans, fontSize: 14, lineHeight: 21, color: ink(0.7), marginBottom: 18 },
+  confirmInput: { fontFamily: fonts.sans, fontSize: 15, color: colors.ink, borderWidth: 1, borderColor: ink(0.2), borderRadius: 14, minHeight: 48, paddingHorizontal: 14, marginBottom: 2 },
   boxButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 14, borderWidth: 1, borderColor: ink(0.3), marginTop: 10 },
   boxButtonText: { fontFamily: fonts.sans, fontSize: 15, color: colors.ink },
 });

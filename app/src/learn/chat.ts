@@ -1,10 +1,11 @@
-import type { LearnReply, LearnSource, LearnTurn, MoveNotice } from '../api/types';
+import type { FounderCase, LearnReply, LearnSource, LearnTurn, MoveNotice } from '../api/types';
 
 // The conversation on the Learn screen, kept as plain data so its rules can be tested without drawing anything.
 
 export type LearnItem =
   | { key: number; who: 'ax'; turn: LearnTurn }
   | { key: number; who: 'say'; text: string }
+  | { key: number; who: 'case'; case: FounderCase }
   | { key: number; who: 'card'; notice: MoveNotice }
   | { key: number; who: 'me'; text: string; turnId: string; state: 'sent' | 'waiting' | 'failed' };
 
@@ -18,6 +19,8 @@ export function applyLearnReply(chat: LearnChat, reply: LearnReply): LearnItem[]
   const added: LearnItem[] = [];
   if (reply.status === 'say_more' && reply.reply) added.push({ key: chat.nextKey++, who: 'say', text: reply.reply });
   if (reply.turn) added.push({ key: chat.nextKey++, who: 'ax', turn: reply.turn });
+  if (reply.founder_case) added.push({ key: chat.nextKey++, who: 'case', case: reply.founder_case });
+  if (reply.founder_lessons) added.push({ key: chat.nextKey++, who: 'say', text: reply.founder_lessons.notice.text });
   if (reply.move_notice) added.push({ key: chat.nextKey++, who: 'card', notice: reply.move_notice });
   return [...chat.items, ...added];
 }

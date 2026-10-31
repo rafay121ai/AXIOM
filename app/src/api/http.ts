@@ -1,7 +1,7 @@
 import type { Auth } from './auth';
 import { createOutbox, type KeyValueStore, memoryStore } from './outbox';
 import { createSaveQueue, HttpError } from './queue';
-import type { AccountRequest, AxiomApi, Commitment, ConsentResult, ConsentState, DueReport, FirstReading, HistoryPage, HistoryRow, Home, LearnReply, LoadingQuote, MoveView, Read, ReadAnswerResult, ReportResult, Screened, Settings, Signup, SituationReply, SituationView, Story, SwapResult } from './types';
+import type { AccountExport, AccountRequest, AxiomApi, Commitment, ConsentResult, ConsentState, DueReport, FirstReading, HistoryPage, HistoryRow, Home, LearnReply, LoadingQuote, MoveView, Read, ReadAnswerResult, ReportResult, Screened, Settings, Signup, SituationReply, SituationView, StoryReply, SwapResult } from './types';
 
 const CODE_NAME = /^[a-z]+(_[a-z]+)*$/;
 
@@ -87,7 +87,8 @@ export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch
     sendReport: (moveId, outcome, note, turnId) =>
       sendWritten<Screened<ReportResult>>(`turn:${turnId}`, 'POST', `/api/moves/${moveId}/report`, { outcome, note, client_turn_id: turnId }),
     async getStory(reportId) {
-      return (await request<{ story: Story | null }>('GET', `/api/reports/${reportId}/story`)).story;
+      const res = await request<Partial<StoryReply>>('GET', `/api/reports/${reportId}/story`);
+      return { story: res.story ?? null, founder_lessons: res.founder_lessons };
     },
     setConsent: (reportId, share, wordingVersion) =>
       request<ConsentResult>('POST', `/api/reports/${reportId}/consent`, { share, wording_version: wordingVersion }),
@@ -100,8 +101,9 @@ export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch
     getHistoryPage: (id) => request<HistoryPage>('GET', `/api/history/${id}`),
     getSettings: () => request<Settings>('GET', '/api/settings'),
     updateSettings: (patch) => request<Settings>('PUT', '/api/settings', patch),
-    requestExport: () => request<AccountRequest>('POST', '/api/account/export'),
-    requestDelete: () => request<AccountRequest>('DELETE', '/api/account'),
+    requestExport: () => request<AccountExport>('POST', '/api/account/export'),
+    requestDelete: () => request<AccountRequest>('DELETE', '/api/account', { confirm: 'DELETE' }),
+    cancelDelete: () => request<AccountRequest>('DELETE', '/api/account', { cancel: true }),
     resumeUnsent: () => outbox.resume(),
     async signOut() {
       await outbox.clear();

@@ -16,11 +16,13 @@ describe('settings calls', () => {
     await api.updateSettings({ mentor_style: 'hard', quiet_hours: { start: '23:00', end: '06:00' } });
     await api.requestExport();
     await api.requestDelete();
+    await api.cancelDelete();
     expect(f.mock.calls.map(([url, init]) => [init.method, url, init.body])).toEqual([
       ['GET', 'http://x/api/settings', undefined],
       ['PUT', 'http://x/api/settings', JSON.stringify({ mentor_style: 'hard', quiet_hours: { start: '23:00', end: '06:00' } })],
       ['POST', 'http://x/api/account/export', undefined],
-      ['DELETE', 'http://x/api/account', undefined],
+      ['DELETE', 'http://x/api/account', JSON.stringify({ confirm: 'DELETE' })],
+      ['DELETE', 'http://x/api/account', JSON.stringify({ cancel: true })],
     ]);
   });
 
@@ -56,11 +58,22 @@ describe('the fake settings', () => {
     expect((await api.getSettings()).reminders.checkin_time).toBe('20:00');
   });
 
-  it('answer an export or a delete request with the server line, deleting nothing', async () => {
+  it('answer an export with the file and a delete with a dated grace period that can be cancelled', async () => {
     const api = createFakeApi();
-    expect((await api.requestExport()).message).toBe('I have your request. Your export is queued.');
-    expect((await api.requestDelete()).message).toMatch(/Nothing has been deleted/);
+    expect((await api.requestExport()).message).toMatch(/yours to keep/);
+    const d = await api.requestDelete();
+    expect(d).toMatchObject({ status: 'pending_deletion' });
+    expect(d.delete_after).toBeTruthy();
+    expect(d.message).not.toContain('{date}');
+    expect((await api.requestDelete()).delete_after).toBe(d.delete_after);
+    expect((await api.cancelDelete()).status).toBe('cancelled');
+    expect((await api.cancelDelete()).status).toBe('none');
     expect((await api.getHistory('')).length).toBe(5);
+  });
+
+  it('only record the request while deletion is switched off', async () => {
+    const api = createFakeApi('none', 0, false, undefined, undefined, 'off');
+    expect(await api.requestDelete()).toMatchObject({ status: 'recorded', message: expect.stringMatching(/Nothing has been deleted/) });
   });
 });
 

@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { api } from './src/api';
 import type { Answer, DueReport, FirstReading, CareHelp, Home, Question, Screened } from './src/api/types';
+import { SignInCancelled } from './src/auth/oauth';
 import { routeScreened } from './src/care/route';
 import { copy } from './src/copy';
 import { type Destination, destinationOf, type MoveSource } from './src/home/flow';
@@ -94,16 +95,18 @@ export default function App() {
     while (switching.current) await new Promise((resume) => setTimeout(resume, 50));
   }, []);
 
+  // Care is never dropped: a reply that lands mid-transition waits for the screen to settle first.
+  const showCare = useCallback(async (message: string, help: CareHelp) => {
+    await idle();
+    goTo({ name: 'care', message, help, back: stageRef.current }, true);
+  }, [goTo, idle]);
+
   // Every text-sending call lands here: clear distress opens the care screen, unclear gets a soft reply.
   const route = useCallback((res: Screened) => {
     const r = routeScreened(res);
     setSoft(r.kind === 'unclear' ? r.reply : null);
-    if (r.kind === 'care') goTo({ name: 'care', message: r.message, help: r.help, back: stageRef.current }, true);
-  }, [goTo]);
-
-  const showCare = useCallback((message: string, help: CareHelp) => {
-    goTo({ name: 'care', message, help, back: stageRef.current }, true);
-  }, [goTo]);
+    if (r.kind === 'care') void showCare(r.message, r.help);
+  }, [showCare]);
 
   // The first situation offers what the founder said they were stuck on; a later one starts from a blank question.
   const beginSituation = useCallback((fresh: boolean) => {
@@ -128,8 +131,16 @@ export default function App() {
     goTo(signup.complete ? { name: 'home' } : { name: 'questions', questions: signup.questions, answers: signup.answers, startAt: signup.next });
   }, [goTo]);
 
+  // A closed browser leaves the founder on the sign-in screen with nothing said; any other failure says so once.
+  const [signInError, setSignInError] = useState<string>();
   const signIn = useCallback(async () => {
-    await api.signInWithGoogle();
+    setSignInError(undefined);
+    try {
+      await api.signInWithGoogle();
+    } catch (e) {
+      if (!(e instanceof SignInCancelled)) setSignInError(copy.signInFailed);
+      return;
+    }
     await openSignup();
   }, [openSignup]);
 
@@ -178,7 +189,7 @@ export default function App() {
         <View style={styles.phone}>
           {stage.name !== 'care' && !QUIET.includes(stage.name) && <Glow />}
           <Animated.View style={[styles.flex, { opacity: fade, transform: [{ translateY: rise }] }]}>
-            {stage.name === 'signin' && <SignInScreen onContinue={signIn} />}
+            {stage.name === 'signin' && <SignInScreen onContinue={signIn} error={signInError} />}
             {stage.name === 'questions' && (
               <QuestionsScreen
                 questions={stage.questions}
@@ -277,6 +288,7 @@ export default function App() {
                 save={(patch) => api.updateSettings(patch)}
                 requestExport={() => api.requestExport()}
                 requestDelete={() => api.requestDelete()}
+                cancelDelete={() => api.cancelDelete()}
                 onEditAnswers={(startAt) => goTo({ name: 'answers', startAt })}
                 onSignOut={signOut}
                 onBack={() => goTo({ name: 'home' })}

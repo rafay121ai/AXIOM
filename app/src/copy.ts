@@ -147,6 +147,7 @@ export const copy = {
     confirmBody: "This removes your situations, check-ins, answers and anything you shared. It can't be undone.",
     keepData: 'Keep my data',
     deleteAll: 'Delete everything',
+    cancelDeletion: 'Cancel deletion',
     // NEEDS APPROVAL: not in any mock. Quiet hours (Decision 10 lists them; the mock draws no row), the export row,
     // the sign-up answers list's button, and the line when a setting did not save.
     quiet: 'Quiet hours',
@@ -165,6 +166,8 @@ export const copy = {
   // NEEDS APPROVAL: the same line for a Read that would not load, where there is no message to save.
   couldNotRead: "I couldn't answer that just now.",
   // NEEDS APPROVAL: no mock says what Axiom says at the daily limit (decision E only says "plainly, and offer the open ones").
+  // NEEDS APPROVAL: no mock shows a failed Google sign-in. Plain and short, per tasks/voice.md.
+  signInFailed: "Sign-in didn't work. Try again.",
   dailyLimit: 'That is the limit for new situations today. Pick one that is still open.',
 } as const;
 

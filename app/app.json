@@ -2,6 +2,7 @@
   "expo": {
     "name": "Axiom",
     "slug": "axiom",
+    "scheme": "axiom",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -24,7 +25,8 @@
     "plugins": [
       "@react-native-community/datetimepicker",
       "expo-font",
-      "expo-notifications"
+      "expo-notifications",
+      "expo-web-browser"
     ],
     "backgroundColor": "#050505"
   }

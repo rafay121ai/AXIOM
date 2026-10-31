@@ -16,7 +16,7 @@ describe('report calls', () => {
     const api = createHttpApi({ baseUrl: 'http://x', auth, fetch: f });
     expect(await api.getDueReports()).toEqual([]);
     await api.sendReport('m1', 'couldnt', 'They never wrote back', TURN);
-    expect(await api.getStory('r1')).toBeNull();
+    expect((await api.getStory('r1')).story).toBeNull();
     await api.setConsent('r1', false, 'share-alone-v1');
     expect(f.mock.calls.map(([url, init]) => [init.method, url, init.body])).toEqual([
       ['GET', 'http://x/api/reports/due', undefined],

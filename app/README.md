@@ -11,12 +11,16 @@ Screens are built against fixtures by default. To talk to the real Express serve
 | `EXPO_PUBLIC_FAKE_DUE` | Fixtures only: `report` puts the evening check-in waiting, so sign-in lands on the Report. |
 | `EXPO_PUBLIC_FAKE_HOME` | Fixtures only: `morning`, `report`, `evening`, `nothing` or `care` makes the fake a returning founder, and sign-in lands on that home state. |
 | `EXPO_PUBLIC_FAKE_PUSH` | Fixtures only: `refuse` makes the pretend phone refuse reminders when asked. By default it allows them. |
+| `EXPO_PUBLIC_FAKE_FOUNDER` | Fixtures only: `closed` makes the fake send the closed founder-lessons notice (once, on the second real Learn reply or the Report story) instead of a founder case. By default the second real Learn reply carries a sample founder case. |
+| `EXPO_PUBLIC_FAKE_ACCOUNT` | Fixtures only: `pending` (default) makes Delete start the 7-day grace period, with a date and a Cancel deletion action; `off` makes the server's "recorded, nothing deleted" answer. Export shares a small sample file either way. |
 | `EXPO_PUBLIC_FAKE_CARE` | Fixtures only: `clear` or `unclear` makes every typed text take that care route. |
 
 The app never reads or writes Supabase tables. Supabase gives the app a sign-in token, sent to the API as a Bearer token.
 
 Reminders: after Commit the app asks "Want a reminder tonight?" and asks the phone only when the founder says yes (`src/push`). Real device tokens need `expo.extra.eas.projectId` in `app.json`.
 
-Not done yet: Google sign-in on phones (the web redirect works once the keys exist; phones need the native flow), and keeping unsent answers across an app restart (the retry queue is in memory).
+Google sign-in on phones is built (`src/auth/oauth.ts`) but not yet tried with real keys: see `AUTH_SETUP.md`.
+
+Not done yet: keeping unsent answers across an app restart (the retry queue is in memory).
 
 Commands: `npm test`, `npm run typecheck`, `npx expo export --platform web`.

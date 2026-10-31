@@ -1,4 +1,7 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { Platform } from 'react-native';
+import { phoneDeps, signInOnPhone, type Deps } from '../auth/oauth';
 
 // Supabase is used here for sign-in and nothing else. Every read and write goes through the Express API.
 export type Auth = {
@@ -8,9 +11,11 @@ export type Auth = {
   getToken(): Promise<string>;
 };
 
-export function createAuth(client: SupabaseClient): Auth {
+// On the web the page itself goes to Google and comes back; on a phone the browser opens over the app (src/auth/oauth.ts).
+export function createAuth(client: SupabaseClient, phone?: Deps): Auth {
   return {
     async signInWithGoogle() {
+      if (phone) return signInOnPhone(client.auth, phone);
       const { error } = await client.auth.signInWithOAuth({ provider: 'google' });
       if (error) throw error;
     },
@@ -31,5 +36,7 @@ export function authFromEnv(): Auth {
   const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
   const key = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) throw new Error('Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY (see app/README.md)');
-  return createAuth(createClient(url, key));
+  const web = Platform.OS === 'web';
+  const client = createClient(url, key, { auth: { flowType: 'pkce', storage: AsyncStorage, detectSessionInUrl: web } });
+  return createAuth(client, web ? undefined : phoneDeps());
 }
