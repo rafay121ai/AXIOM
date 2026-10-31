@@ -39,7 +39,7 @@ export const PUSH_WORDING = Object.freeze({
     full: ({ name, subject, title }) => (subject
       ? lead(name, `did you get to ${subject}?`) // (new)
       : `${sentence(title)}. ${ask('Did you get to it', name)}`), // (new)
-    short: ({ name }) => lead(name, 'did you get to your move?'), // (new)
+    short: ({ name }) => lead(name, 'did you get to it?'), // (new)
   },
   morning: {
     full: ({ name, title }) => `${morning(name)} Today: ${lowerFirst(sentence(title))}.`, // (new)

@@ -229,7 +229,7 @@ export function createMoves({ supabase, callStructured, clock, log = () => {} })
   async function commit({ userId, moveId, timeZone = null }) {
     const move = await ownMove(userId, moveId)
     if (ACTIVE_STATUSES.includes(move.status)) return committedView(move)
-    if (move.status !== 'draft') throw new HttpError(409, { error: 'This move can no longer be committed.', code: 'move_not_committable' })
+    if (move.status !== 'draft') throw new HttpError(409, { error: 'You already started this move.', code: 'move_not_committable' })
     if (!validateExperimentQuality(experimentOf({ ...move, success: move.success_condition })).ok) throw failed()
 
     await settle(userId)
@@ -249,7 +249,7 @@ export function createMoves({ supabase, callStructured, clock, log = () => {} })
       // Someone else changed it first (a double tap): answer from what is stored.
       const now = await ownMove(userId, move.id)
       if (ACTIVE_STATUSES.includes(now.status)) return committedView(now)
-      throw new HttpError(409, { error: 'This move can no longer be committed.', code: 'move_not_committable' })
+      throw new HttpError(409, { error: 'You already started this move.', code: 'move_not_committable' })
     }
     throw noRoom(await activeMoves({ supabase, userId, nowMs }))
   }
@@ -264,7 +264,7 @@ export function createMoves({ supabase, callStructured, clock, log = () => {} })
       if (!replacement) throw new HttpError(409, { error: 'This move is still being changed. Try again in a moment.', code: 'move_changing' })
       return { status: 'swapped', replaced_id: move.id, move: moveView(replacement) }
     }
-    if (!SWAPPABLE.has(move.status)) throw new HttpError(409, { error: 'This move can no longer be changed.', code: 'move_not_changeable' })
+    if (!SWAPPABLE.has(move.status)) throw new HttpError(409, { error: 'You already started this move.', code: 'move_not_changeable' })
     if ((move.swap_count ?? 0) >= MAX_SWAPS) throw new HttpError(409, { error: 'swap_used', code: 'swap_used', message: 'You have changed this move once already.' })
     if (!isRealSwapReason(reason)) return { status: 'need_reason', reply: NEED_REASON }
 

@@ -177,7 +177,7 @@ export function createLearn({ supabase, knowledgeSupabase = null, embed = null, 
   async function start({ userId, situationId }) {
     const situation = await ownSituation(userId, situationId)
     const read = await readOf(situation.id)
-    if (!read || !read.answered_at) throw new HttpError(409, { error: 'Answer or skip the question on the Read first.', code: 'read_unanswered' })
+    if (!read || !read.answered_at) throw new HttpError(409, { error: 'Answer or skip the question first.', code: 'read_unanswered' })
 
     let conversation = await conversationOf(situation.id)
     if (!conversation) {

@@ -165,7 +165,7 @@ export function createApp({
     // throttling normal Axiom turns.
     max: 120,
     keyGenerator: (req) => req.user.id,
-    message: { error: 'Too many requests, please slow down.' },
+    message: { error: 'That is too many at once. Wait a minute.' },
     standardHeaders: true,
     legacyHeaders: false,
   })
@@ -174,7 +174,7 @@ export function createApp({
     windowMs: 60 * 1000,
     max: 180,
     keyGenerator: (req) => req.user.id,
-    message: { error: 'Too many requests, please slow down.' },
+    message: { error: 'That is too many at once. Wait a minute.' },
     standardHeaders: true,
     legacyHeaders: false,
   })
@@ -201,7 +201,7 @@ export function createApp({
     windowMs: 60 * 1000,
     max: 10,
     keyGenerator: (req) => req.user.id,
-    message: { error: 'Too many requests, please slow down.' },
+    message: { error: 'That is too many at once. Wait a minute.' },
     standardHeaders: true,
     legacyHeaders: false,
   })
@@ -211,7 +211,7 @@ export function createApp({
     windowMs: 60 * 1000,
     max: 120,
     keyGenerator: (req) => req.user.id,
-    message: { error: 'Too many requests, please slow down.' },
+    message: { error: 'That is too many at once. Wait a minute.' },
     standardHeaders: true,
     legacyHeaders: false,
   })
@@ -221,7 +221,7 @@ export function createApp({
     windowMs: 60 * 1000,
     max: 300,
     keyGenerator: (req) => req.user.id,
-    message: { error: 'Too many requests, please slow down.' },
+    message: { error: 'That is too many at once. Wait a minute.' },
     standardHeaders: true,
     legacyHeaders: false,
   })
@@ -230,7 +230,7 @@ export function createApp({
     windowMs: 60 * 1000,
     max: 30,
     keyGenerator: (req) => req.user.id,
-    message: { error: 'Too many requests, please slow down.' },
+    message: { error: 'That is too many at once. Wait a minute.' },
     standardHeaders: true,
     legacyHeaders: false,
   })
@@ -241,7 +241,7 @@ export function createApp({
   const ipRateLimit = rateLimit({
     windowMs: 60 * 1000,
     max: 2000,
-    message: { error: 'Too many requests, please slow down.' },
+    message: { error: 'That is too many at once. Wait a minute.' },
     standardHeaders: true,
     legacyHeaders: false,
   })
@@ -303,7 +303,7 @@ export function createApp({
     windowMs: 60 * 1000,
     max: 120,
     keyGenerator: (req) => req.user.id,
-    message: { error: 'Too many requests, please slow down.' },
+    message: { error: 'That is too many at once. Wait a minute.' },
     standardHeaders: true,
     legacyHeaders: false,
   })

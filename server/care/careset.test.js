@@ -430,5 +430,5 @@ test('clear message is a heading plus body paragraphs, in the approved order', (
   assert.equal(paras[0], 'What you just wrote matters more than the business.')
   assert.equal(paras[1], NO_LESSON_LINE)
   assert.ok(paras[3].startsWith('If you can, tell someone near you'))
-  assert.equal(paras[4], "I'm an assistant, not a counsellor. But I'm here if you want to keep talking.")
+  assert.equal(paras[4], "I'm an assistant, not a counsellor. I'm here if you want to keep talking.")
 })

@@ -15,7 +15,7 @@ export function mountJourneyRoutes(app, { supabase, knowledgeSupabase = null, em
     windowMs: 60 * 1000,
     max,
     keyGenerator: (req) => req.user.id,
-    message: { error: 'Too many requests, please slow down.' },
+    message: { error: 'That is too many at once. Wait a minute.' },
     standardHeaders: true,
     legacyHeaders: false,
   })

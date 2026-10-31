@@ -12,7 +12,7 @@ export const CARE_COPY = Object.freeze({
     "I'm not going to give you a lesson or a move right now.",
     "If you might hurt yourself, or you're in danger, please call your local emergency number now.",
     "If you can, tell someone near you how you're feeling. You don't have to be okay for me to be here.",
-    "I'm an assistant, not a counsellor. But I'm here if you want to keep talking.",
+    "I'm an assistant, not a counsellor. I'm here if you want to keep talking.",
   ].join('\n\n'),
 
   // Unclear: one soft question. No lesson, no move, no model-written text.

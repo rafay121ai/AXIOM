@@ -3,6 +3,7 @@
 Checked against tasks/voice.md, PRODUCT.md voice, CLAUDE.md, tasks/lessons.md and the mocks (onboarding-v2, states-v1, loading-v1, report-buttons, plus minimal-v5 for Learn). "Mock" means the exact text is in an approved mock.
 
 ## A. Violations or likely violations
+**APPLIED 2026-10-31 (approved by Rafay):** every suggested fix in this table, except the home greeting joke, which stays. The old web app's two knowledge/experiment rate-limit lines were left alone. The care-line fix also updated the approved mock (tasks/design/mock-onboarding-v2.html) so the drift test still guards it.
 | Where | Text | Rule | Suggested fix |
 |---|---|---|---|
 | app/src/onboarding/waitLines.ts:17 | "Every founder has one thing they keep circling. Finding yours." | Metaphor ("circling"); true of any founder, so not specific. (In the mock, but breaks plain/specific rules.) | "Finding the one thing you keep putting off." |
@@ -115,7 +116,7 @@ Sample headlines and notes at lines 42, 79, 187-206 ("You are afraid a price wil
 ## D. Give to get: founder lessons closed (Oct 31)
 | Where | Text | Note |
 |---|---|---|
-| server/journey/report/wording.js FOUNDER_LESSONS_CLOSED_TEXT (founder-lessons-closed-v1) | "You have seen 2 founder lessons and have not shared yet, so I will not show more. To get them back, turn on "Share with other founders" in Settings. They open as soon as it is on." | New. Said once, in place of the third founder lesson, only when an approved story fits. The Settings switch name matches the mock. |
+| server/journey/report/wording.js FOUNDER_LESSONS_CLOSED_TEXT (founder-lessons-closed-v1) | "I would like to keep showing you what worked for founders a step ahead of you. Share one of your check-ins, or turn on "Share with other founders" in Settings, and they open straight away." (v2, approved by Rafay 2026-10-31 as a short invitation) | New. Said once, in place of the third founder lesson, only when an approved story fits. The Settings switch name matches the mock. |
 
 ## E. Calm / Direct / Hard: the three style instructions (Oct 31)
 They shape every Read, Learn reply, Move and Report reply, so please read them. Direct adds nothing (it is the voice already in every prompt). Defined once in server/journey/prompts/style.js. Flag: "Hard" must not collide with voice.md "never confrontational": it says hard on the situation, never on the person, never cruel, shaming or cold. Is that enough, or should "pushing" be softer? The first reading at sign-up is not styled (no setting exists yet).

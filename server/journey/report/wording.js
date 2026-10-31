@@ -29,8 +29,8 @@ export const openingLine = ({ title, prediction }) =>
 export function fallbackReply({ outcome, title }) {
   const move = moveLine(title)
   if (outcome === 'done') return `${move} You did it. What do you want to move next?`
-  if (outcome === 'couldnt') return `That is fine, things changed. ${move} What is the smallest part of it you could still do?`
-  return `That happens. ${move} What would make it easier to start next time?`
+  if (outcome === 'couldnt') return `${move} What is the smallest part of it you could still do?`
+  return `${move} What would make it easier to start next time?`
 }
 
 // Offered before anything is asked of the founder, only when an approved
@@ -62,6 +62,6 @@ export const SHARE_AUTO_TEXT = Object.freeze({
 
 // Said once, in place of the third founder lesson, when the founder has used
 // the 2 free ones and has not shared. The version names these words. (new)
-export const FOUNDER_LESSONS_CLOSED_VERSION = 'founder-lessons-closed-v1'
+export const FOUNDER_LESSONS_CLOSED_VERSION = 'founder-lessons-closed-v2'
 export const FOUNDER_LESSONS_CLOSED_TEXT =
-  'You have seen 2 founder lessons and have not shared yet, so I will not show more. To get them back, turn on "Share with other founders" in Settings. They open as soon as it is on.'
+  'I would like to keep showing you what worked for founders a step ahead of you. Share one of your check-ins, or turn on "Share with other founders" in Settings, and they open straight away.'
