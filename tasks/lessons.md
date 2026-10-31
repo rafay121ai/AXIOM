@@ -14,3 +14,4 @@
 - Labels and buttons must say what the founder should DO in plain words. Internal terms (move, report, situation) are not self-explanatory. (Rafay, home screen.)
 - Never assume anyone's gender in copy, samples or examples. Use they/them or rewrite. (Walkthrough, founder story sample.)
 - Before writing a file, check whether it already exists (and read it). tasks/todo.md held 217 lines of earlier completed plans; I overwrote it and had to restore it from git. Append new plans instead. (Caught at commit time.)
+- A change to the app's API surface (src/api/types.ts, http.ts) must run the SERVER tests too: server/e2e/shapes.test.js holds a contract for every app call. I added isSignedIn, ran only the app tests, and committed a red server suite.

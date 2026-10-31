@@ -17,7 +17,7 @@ const CHUNK = 100
 
 // Old-stack tables keyed by session, then by user. Deprecated, but they still
 // hold what the founder said.
-const BY_SESSION = ['messages', 'weekly_reads', 'personal_wiki_edges', 'personal_wiki_nodes']
+const BY_SESSION = ['messages'] // weekly_reads and personal_wiki_* are dropped by 20260930000000
 const BY_USER_LATE = ['founder_lesson_log', 'care_events', 'push_tokens', 'user_settings',
   'app_sessions', 'conversation_threads', 'experiments', 'personal_memories', 'model_usage_logs', 'product_events', 'sessions']
 

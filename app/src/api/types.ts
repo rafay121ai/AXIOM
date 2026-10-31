@@ -81,17 +81,8 @@ export type TextAnswer = string;
 
 export type Answer = SingleAnswer | WhereAnswer | GoalAnswer | TwoAnswer | MultiAnswer | TextAnswer;
 
-/**
- * Real help for the founder's country, exactly as the server's care check sends it. Only verified lines are
- * listed; until a country is verified, `lines` is empty and `fallback` is the line to show. The app holds no numbers.
- */
-export type CareHelp = {
-  country: string | null;
-  emergency: string | null;
-  lines: { name: string; contact: string | null }[];
-  fallback: string;
-  needs_verification: boolean;
-};
+/** Help as the server's care check sends it: one line and the website that lists helplines for every country. No phone numbers. */
+export type CareHelp = { line: string; url: string };
 
 /** Clear distress: show the care screen. No lesson, no move. */
 export type CareClear = { care: 'clear'; message: string; help: CareHelp };

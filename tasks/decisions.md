@@ -663,6 +663,13 @@ Idea from Rafay: founder credits, and growth by referral. Not building until giv
 ## 2026-10-31: wording approvals and sign-in direction
 - Founder-lessons notice: Rafay chose the "invitation" version, shortened (v2).
 - Section A of wording_to_approve.md applied in full (wait lines, report fallback replies, care line, "Tonight's check-in" title, push, lock note, rate-limit, Learn and Move errors). Home greeting joke stays.
-- Sign-up page: Rafay dislikes the gold light blobs ("old fashioned, like a kids app"). Wants a black sign-up page with an opening motion piece: zoom in, zoom out, animated tagline about Axiom itself, like a motion graphics video. Tagline direction: the spirit of "I think, therefore I am", in the context of founders. Tagline still to choose.
+- Sign-up page: Rafay dislikes the gold light blobs ("old fashioned, like a kids app"). Wants a black sign-up page with an opening motion piece: zoom in, zoom out, animated tagline about Axiom itself, like a motion graphics video. Tagline direction: the spirit of "I think, therefore I am", in the context of founders. Tagline chosen later: "See. Learn. Become."
 
-- Sign-up film (Oct 31, Rafay): sign-in is pure black (drifting light off for it only). A ~9 second title sequence plays once per app open, awe then momentum, ending on the emblem and the placeholder tagline "I move, therefore I am." (NEEDS APPROVAL). Animated-only: the blur clear is a fade with a small rise. Lines in copy.intro, timings in app/src/intro/timeline.ts.
+- Sign-up film (Oct 31, Rafay): sign-in is pure black (drifting light off for it only). A ~9 second title sequence plays once per app open, awe then momentum, ending on the emblem and the placeholder tagline "I move, therefore I am." (superseded the same day by intro v3 and "See. Learn. Become."). Animated-only: the blur clear is a fade with a small rise. Lines in copy.intro, timings in app/src/intro/timeline.ts.
+
+## Rafay's calls (Oct 31)
+- All pending wording is approved (wording_to_approve.md A to F, push wording, account lines); the NEEDS APPROVAL markers are removed.
+- Care help shows no phone numbers: one tappable link to https://findahelpline.com (all countries). The help table and country lookup are deleted.
+- The founder's name is read-only in Settings (it comes from Google); the server no longer accepts a name change.
+- The morning push stays a fixed 8 am local time, not a setting (no change).
+- The stray packageManager line in the root package.json is reverted.

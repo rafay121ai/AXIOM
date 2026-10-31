@@ -1,5 +1,5 @@
 // Every word the founder can see from the care check lives in this file, so it
-// can be reviewed in one place. DRAFT: not approved. Voice rules: plain words,
+// can be reviewed in one place. Approved by Rafay, Oct 31 2026. Voice rules: plain words,
 // no filler, no mentor tone, no moves, no lessons, no performance framing.
 // Before launch a person (ideally with a mental-health background) reviews it.
 
@@ -19,11 +19,12 @@ export const CARE_COPY = Object.freeze({
   unclearReply:
     'That sounded heavy. What is going on?',
 
-  // Help block. Used when no verified line exists for the founder's country.
+  // Help block: one website that lists helplines for every country. No phone numbers are ever sent.
   fallbackLine:
     'More help near you: findahelpline.com',
+  helpUrl: 'https://findahelpline.com',
 
-  // NOT in the approved mocks. Needs Rafay's approval before it is shown.
+  // Not in the mocks; approved by Rafay, Oct 31 2026.
   // Opening line on the next visit after a care event.
   returnCheckIn: 'How are you doing today?',
 })

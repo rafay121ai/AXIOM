@@ -2,7 +2,7 @@ import { HttpError } from './api/queue';
 
 // The words the app itself says in the Situation, Read, Learn, Move and Report screens. Everything else Axiom says comes
 // from the server. Source for each line: tasks/design/mock-onboarding-v2.html, mock-states-v1.html,
-// or (marked NEEDS APPROVAL) a line no mock has yet.
+// or a line no mock has yet.
 
 export const copy = {
   situation: {
@@ -22,7 +22,7 @@ export const copy = {
     // mock-minimal-v5.html, the label over a picture built from the founder's own numbers
     pictureLabel: 'From your numbers',
     calculated: 'Calculated',
-    // NEEDS APPROVAL: row labels in the before/after bars picture; no mock shows them.
+    // row labels in the before/after bars picture; no mock shows them.
     before: 'Before',
     after: 'After',
   },
@@ -52,9 +52,9 @@ export const copy = {
     // mock-states-v1.html, section 4: said once, after the phone's own permission box was refused.
     remindersOff: "Reminders are off on your phone. I'll keep tonight's check-in waiting on your home screen.",
     phoneSettings: 'Turn on in phone settings',
-    // NEEDS APPROVAL: used only if the server sends no line of its own with "no room" (it sends NO_ROOM_LINE, which names the limit).
+    // used only if the server sends no line of its own with "no room" (it sends NO_ROOM_LINE, which names the limit).
     noRoom: 'You have no room for another move. Tell me how one of them went first, then I will give you the next.',
-    // NEEDS APPROVAL: the server's own line when the one change is used up (moveService.js), shown as it is.
+    // the server's own line when the one change is used up (moveService.js), shown as it is.
     swapUsed: 'You have changed this move once already.',
   },
   // mock-onboarding-v2.html, the Report (screen 8), word for word. Axiom's own lines come from the server.
@@ -83,9 +83,9 @@ export const copy = {
     history: 'History',
     seeAll: 'See all history ›',
     paused: 'Paused',
-    // NEEDS APPROVAL: a situation the server sent without a title; no mock shows one.
+    // a situation the server sent without a title; no mock shows one.
     untitled: 'No title yet',
-    // NEEDS APPROVAL: opening a home item or a menu row failed; no mock says what Axiom says.
+    // opening a home item or a menu row failed; no mock says what Axiom says.
     couldNotOpen: "I couldn't open that just now.",
   },
   // mock-onboarding-v2.html, screens 12 and 13 (History and a past situation).
@@ -100,7 +100,7 @@ export const copy = {
     how: 'How it went',
     shared: 'Shared without your name',
     private: 'Kept private',
-    // NEEDS APPROVAL: the mock styles a withdraw link (.withdraw) but shows no words for it.
+    // the mock styles a withdraw link (.withdraw) but shows no words for it.
     takeDown: 'Take it down',
   },
   // mock-onboarding-v2.html, screen 11 (Settings) and mock-states-v1.html section 4, word for word.
@@ -148,7 +148,7 @@ export const copy = {
     keepData: 'Keep my data',
     deleteAll: 'Delete everything',
     cancelDeletion: 'Cancel deletion',
-    // NEEDS APPROVAL: not in any mock. Quiet hours (Decision 10 lists them; the mock draws no row), the export row,
+    // not in any mock. Quiet hours (Decision 10 lists them; the mock draws no row), the export row,
     // the sign-up answers list's button, and the line when a setting did not save.
     quiet: 'Quiet hours',
     quietFrom: 'From',
@@ -163,10 +163,10 @@ export const copy = {
   waitingToSend: 'Waiting to send',
   // mock-states-v1.html, the error state
   couldNotAnswer: "I couldn't answer that just now. Your message is saved.",
-  // NEEDS APPROVAL: the same line for a Read that would not load, where there is no message to save.
+  // the same line for a Read that would not load, where there is no message to save.
   couldNotRead: "I couldn't answer that just now.",
-  // NEEDS APPROVAL: no mock says what Axiom says at the daily limit (decision E only says "plainly, and offer the open ones").
-  // NEEDS APPROVAL: no mock shows a failed Google sign-in. Plain and short, per tasks/voice.md.
+  // no mock says what Axiom says at the daily limit (decision E only says "plainly, and offer the open ones").
+  // no mock shows a failed Google sign-in. Plain and short, per tasks/voice.md.
   // The sign-up film (src/intro/timeline.ts): one word per beat, then together as the tagline. Chosen by Rafay, Oct 31.
   intro: { words: ['See.', 'Learn.', 'Become.'] },
   signInFailed: "Sign-in didn't work. Try again.",
@@ -175,7 +175,7 @@ export const copy = {
 
 type Line = { text: string; canRetry: boolean };
 
-// NEEDS APPROVAL: every line below is new (no mock has them). One per stable error code the server sends. A "moment"
+// every line below is new (no mock has them). One per stable error code the server sends. A "moment"
 // line is for a step the server is still finishing, so trying again can work; the rest will not change by waiting.
 const BY_CODE: Record<string, Line> = {
   daily_limit: { text: copy.dailyLimit, canRetry: false },

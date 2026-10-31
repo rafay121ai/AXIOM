@@ -158,10 +158,7 @@ export const CONTRACT = Object.freeze({
   cancelDelete: { status: 'string', message: 'string' },
   // Screened<T> when the care check stops a step (types.ts CareClear, CareUnclear).
   careUnclear: { care: ['unclear'], reply: 'string' },
-  careClear: { care: ['clear'], message: 'string', help: {
-    country: 'string|null', emergency: 'string|null', lines: { $array: { name: 'string', contact: 'string|null' } }, fallback: 'string',
-    needs_verification: 'boolean',
-  } },
+  careClear: { care: ['clear'], message: 'string', help: { line: 'string', url: 'string' } },
   // Any non-2xx: http.ts shows body.error when it is a string.
   error: { error: 'string' },
 })
@@ -268,7 +265,7 @@ test('every call in the app\'s http client has a contract here', () => {
   // Methods of the object createHttpApi returns, by name.
   const api = http.slice(http.indexOf('\n  return {'))
   const methods = [...api.matchAll(/^ {4}(?:async )?(\w+)(?:: |\()/gm)].map((m) => m[1])
-  const local = new Set(['signInWithGoogle', 'signOut', 'resumeUnsent']) // sign-in and the phone's own outbox, not the API
+  const local = new Set(['signInWithGoogle', 'signOut', 'isSignedIn', 'resumeUnsent']) // sign-in and the phone's own outbox, not the API
   const covered = new Set(Object.keys(CONTRACT).map((k) => k.replace(/\(.*\)$/, '')))
   covered.add('registerPushToken').add('removePushToken') // http.ts ignores the answer
   const missing = methods.filter((m) => !local.has(m) && !covered.has(m))

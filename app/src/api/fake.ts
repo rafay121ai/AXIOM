@@ -63,7 +63,7 @@ const CLEAR: Screened = {
     'Placeholder: a line inviting the founder to tell someone near them.',
     'Placeholder: a line saying Axiom is an assistant, and is here if they want to keep talking.',
   ].join('\n\n'),
-  help: { country: null, emergency: null, lines: [], fallback: 'More help near you: findahelpline.com', needs_verification: true },
+  help: { line: 'More help near you: findahelpline.com', url: 'https://findahelpline.com' },
 };
 const UNCLEAR: Screened = { care: 'unclear', reply: 'That sounded heavy. What is going on?' };
 

@@ -468,9 +468,9 @@ test('a founder walks the whole journey', async (t) => {
     await t.test('settings: saved and read back the same', async () => {
       const first = await founder('GET', '/api/settings')
       assert.deepEqual([first.body.mentor_style, first.body.keep_items, first.body.reminders.checkin_time, first.body.reminders.push_registered, first.body.privacy.share_automatically], ['direct', false, '20:00', true, false])
-      const saved = await founder('PUT', '/api/settings', { mentor_style: 'calm', keep_items: true, checkin_time: '19:30', timezone: ZONE, name: 'Amina', morning_on: false })
+      const saved = await founder('PUT', '/api/settings', { mentor_style: 'calm', keep_items: true, checkin_time: '19:30', timezone: ZONE, morning_on: false })
       assert.equal(saved.status, 200)
-      assert.deepEqual([saved.body.mentor_style, saved.body.keep_items, saved.body.reminders.checkin_time, saved.body.reminders.morning_on, saved.body.you.timezone, saved.body.you.name], ['calm', true, '19:30', false, ZONE, 'Amina'])
+      assert.deepEqual([saved.body.mentor_style, saved.body.keep_items, saved.body.reminders.checkin_time, saved.body.reminders.morning_on, saved.body.you.timezone], ['calm', true, '19:30', false, ZONE])
       assert.deepEqual((await founder('GET', '/api/settings')).body, saved.body)
 
       const on = await founder('PUT', '/api/settings', { share_automatically: true })

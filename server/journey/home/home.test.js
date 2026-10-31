@@ -339,20 +339,20 @@ test('account: with the switch off, delete asks for DELETE, records the request 
   } finally { await close() }
 })
 
-test('settings: name, time zone, sign-up answers and links', async () => {
+test('settings: time zone, sign-up answers and links', async () => {
   const { call, rows, close } = await setup()
   try {
     const got = (await call('GET', '/api/settings')).body
     assert.equal(got.you.timezone, 'Asia/Karachi')
     assert.deepEqual(got.signup_answers.stage, FULL_ANSWERS.stage)
     assert.deepEqual(got.links, { privacy: null, terms: null })
-    const put = await call('PUT', '/api/settings', { name: ' Samira ', timezone: 'Europe/London' })
-    assert.deepEqual([put.status, put.body.you.name, put.body.you.timezone], [200, 'Samira', 'Europe/London'])
-    assert.equal(rows('users')[0].first_name, 'Samira')
-    for (const bad of [{ name: '' }, { name: 5 }, { timezone: 'Mars/Base' }, { timezone: 7 }]) {
+    const put = await call('PUT', '/api/settings', { timezone: 'Europe/London' })
+    assert.deepEqual([put.status, put.body.you.timezone], [200, 'Europe/London'])
+    // the name comes from Google and cannot be changed here
+    for (const bad of [{ name: 'Samira' }, { timezone: 'Mars/Base' }, { timezone: 7 }]) {
       assert.equal((await call('PUT', '/api/settings', bad)).status, 400, JSON.stringify(bad))
     }
-    assert.equal(rows('users')[0].first_name, 'Samira')
+    assert.equal(rows('users')[0].first_name, 'Sam')
   } finally { await close() }
 })
 

@@ -12,7 +12,8 @@ describe('screening routes', () => {
     const r = routeScreened(await createFakeApi('clear').startSituation('x', 'turn-2'));
     expect(r.kind).toBe('care');
     if (r.kind === 'care') {
-      expect(r.help.fallback).toBeTruthy();
+      expect(r.help).toEqual({ line: 'More help near you: findahelpline.com', url: 'https://findahelpline.com' });
+      expect(JSON.stringify(r.help)).not.toMatch(/\d{3}|tel:/);
       expect(r.message.length).toBeGreaterThan(0);
     }
   });

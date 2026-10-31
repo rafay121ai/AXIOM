@@ -3,7 +3,6 @@
 // routes (push/settings.js, report/sharing.js); this reads and saves them
 // together. Everything is validated before anything is written.
 import { cleanReminderSettings, createReminderSettings, writeSettingsPlan } from '../../push/settings.js'
-import { cleanFirstName } from '../../writeValidation.js'
 import { validTimeZone } from '../move/schedule.js'
 import { createSignupStore } from '../signup.js'
 import { createSharing } from '../report/sharing.js'
@@ -12,7 +11,7 @@ import { SHARE_AUTO_TEXT } from '../report/wording.js'
 export const MENTOR_STYLES = Object.freeze(['calm', 'direct', 'hard'])
 export const DEFAULT_MENTOR_STYLE = 'direct'
 
-const OWN_KEYS = ['mentor_style', 'keep_items', 'share_automatically', 'name', 'timezone']
+const OWN_KEYS = ['mentor_style', 'keep_items', 'share_automatically', 'timezone']
 const fail = (error, code) => (code ? { error, code } : { error })
 
 const one = async (query) => {
@@ -32,7 +31,6 @@ export function cleanSettings(body) {
   for (const k of ['keep_items', 'share_automatically']) {
     if (k in own && typeof own[k] !== 'boolean') return fail(`${k} must be true or false`)
   }
-  if ('name' in own && !(typeof own.name === 'string' && cleanFirstName(own.name))) return fail('name must be text')
   if ('timezone' in own && !(typeof own.timezone === 'string' && validTimeZone(own.timezone))) return fail('timezone must be a time zone name')
   if (Object.keys(reminders).length === 0) return { value: { own, reminders: null } }
   const cleaned = cleanReminderSettings(reminders)
@@ -83,11 +81,6 @@ export function createSettings({ supabase, clock, links = {}, pendingDeletion = 
     if ('mentor_style' in own) planned.settings.mentor_style = own.mentor_style
     if ('keep_items' in own) planned.settings.keep_items = own.keep_items
     await writeSettingsPlan(supabase, user.id, planned, iso())
-    if ('name' in own) {
-      const first_name = cleanFirstName(own.name)
-      const done = await one(supabase.from('users').update({ first_name }).eq('id', user.id).select('id'))
-      if (done.length === 0 && user.email) await one(supabase.from('users').upsert({ id: user.id, email: user.email, first_name }, { onConflict: 'id' }).select('id'))
-    }
     if ('share_automatically' in own) await sharing.setShareAuto(user.id, own.share_automatically)
     return { value: await get({ user }) }
   }

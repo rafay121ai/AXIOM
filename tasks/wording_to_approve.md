@@ -1,5 +1,7 @@
 # Wording to approve (draft, not committed)
 
+All approved by Rafay, Oct 31 2026.
+
 Checked against tasks/voice.md, PRODUCT.md voice, CLAUDE.md, tasks/lessons.md and the mocks (onboarding-v2, states-v1, loading-v1, report-buttons, plus minimal-v5 for Learn). "Mock" means the exact text is in an approved mock.
 
 ## A. Violations or likely violations
@@ -69,7 +71,7 @@ Draft lines (early:b, midday:b, evening:b, late:b) are shortened mock lines mark
 | Line | Text |
 |---|---|
 | 28 | "How are you doing today?" (return after a care event; code says not approved) |
-| whole file | Header says DRAFT, needs review by a person with a mental-health background before launch. server/care/help.js has PLACEHOLDER crisis lines (contact: null), unverified |
+| whole file | Header says DRAFT, needs review by a person with a mental-health background before launch. help is the findahelpline.com link only (no phone numbers) |
 
 ### server/push/compose.js (all "new" except the first)
 | Line | Text |

@@ -4,7 +4,6 @@
 // founder wrote is stored: a care event holds only who, how serious, when.
 import { classifyCare } from './classify.js'
 import { escalateCare } from './escalation.js'
-import { helpFor } from './help.js'
 import { CARE_COPY } from './copy.js'
 import { hasExperimentBlock, isUuid } from '../writeValidation.js'
 
@@ -67,12 +66,6 @@ export function createCare({ supabase, callStructured, clock = { now: () => Date
       resolved_at: null,
     })
     if (error) throw error
-  }
-
-  async function countryOf(userId) {
-    if (!supabase) return null
-    const { data } = await supabase.from('founder_profiles').select('country').eq('user_id', userId).maybeSingle()
-    return data?.country ?? null
   }
 
   // True while a clear care event is unresolved. Throws when the lookup fails.
@@ -149,9 +142,7 @@ export function createCare({ supabase, callStructured, clock = { now: () => Date
   }
 
   async function sendClear(userId, res) {
-    let country = null
-    try { country = await countryOf(userId) } catch (err) { log('country read failed', err) }
-    return res.json({ care: 'clear', message: CARE_COPY.clearMessage, help: helpFor(country) })
+    return res.json({ care: 'clear', message: CARE_COPY.clearMessage, help: { line: CARE_COPY.fallbackLine, url: CARE_COPY.helpUrl } })
   }
 
   // Distress stops the journey until the founder is checked in on (home):

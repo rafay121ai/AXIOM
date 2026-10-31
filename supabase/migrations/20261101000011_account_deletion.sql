@@ -64,9 +64,6 @@ begin
 
   -- Old stack (deprecated, still holds what the founder said).
   delete from public.messages where session_id in (select id from public.sessions where user_id = p_user_id);
-  delete from public.weekly_reads where session_id in (select id from public.sessions where user_id = p_user_id);
-  delete from public.personal_wiki_edges where session_id in (select id from public.sessions where user_id = p_user_id);
-  delete from public.personal_wiki_nodes where session_id in (select id from public.sessions where user_id = p_user_id);
   delete from public.app_sessions where user_id = p_user_id;
   delete from public.conversation_threads where user_id = p_user_id;
   delete from public.experiments where user_id = p_user_id;

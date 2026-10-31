@@ -6,7 +6,6 @@ import test from 'node:test'
 import { classifyCare, ruleCheck } from './classify.js'
 import { escalateCare } from './escalation.js'
 import { CARE_COPY } from './copy.js'
-import { HELP_TABLE, helpFor } from './help.js'
 
 const modelSays = (level) => async () => ({ data: { level, reason: 'fake' } })
 const modelFails = async () => { throw new Error('fake model down') }
@@ -384,7 +383,7 @@ test('sequence: unclear in a different thread does not escalate (scope rule)', (
 
 // ── Copy and help: no numbers, no banned phrases ─────────────────────────────
 const BANNED = ['great question', 'certainly', 'i understand', "that's interesting", 'that’s interesting', 'absolutely', 'of course', "i'd be happy to", 'i’d be happy to', 'great']
-const allCopy = () => JSON.stringify([CARE_COPY, HELP_TABLE.map(({ code, names, lines }) => ({ code, names, lines })), helpFor('xx')])
+const allCopy = () => JSON.stringify(CARE_COPY)
 
 test('care copy has no phone numbers', () => {
   for (const [key, value] of Object.entries(CARE_COPY)) {
@@ -393,11 +392,6 @@ test('care copy has no phone numbers', () => {
     assert.ok(!/\b\d[\d\s().-]{5,}\d\b/.test(value), `${key} looks like a phone number`)
   }
   assert.ok(!/\d{3}/.test(allCopy().replace(/2026/g, '')), 'help data has a digit run')
-  for (const e of HELP_TABLE) {
-    assert.equal(e.verified, false, `${e.code} must stay unverified until a person checks it`)
-    assert.equal(e.emergency, null)
-    for (const l of e.lines) assert.equal(l.contact, null)
-  }
 })
 
 test('care copy has no forbidden voice phrases', () => {
