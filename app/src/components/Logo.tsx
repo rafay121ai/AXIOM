@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef } from 'react';
 import { Animated, Easing, View } from 'react-native';
-import Svg, { Circle, Defs, G, LinearGradient, Path, RadialGradient, Stop } from 'react-native-svg';
-import { gold, motion } from '../theme';
+import Svg, { Defs, G, LinearGradient, Path, Stop } from 'react-native-svg';
+import { motion } from '../theme';
 import { useReduceMotion } from './useReduceMotion';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
@@ -11,9 +11,9 @@ const LEFT = 'M 8,84 H 28 C 28,55 35,36 50,26 C 55,23 54,18 50,11 C 45,22 40,27 
 const RIGHT = 'M 92,84 H 72 C 72,55 65,36 50,26 C 45,23 46,18 50,11 C 55,22 60,27 69,33 C 82,43 87,60 87,84';
 const PATH_LENGTH = 190; // measured: 188 viewBox units
 
-type Props = { size: number; draw?: boolean; glow?: boolean };
+type Props = { size: number; draw?: boolean };
 
-export function Logo({ size, draw = false, glow = true }: Props) {
+export function Logo({ size, draw = false }: Props) {
   const gradId = useId().replace(/:/g, '');
   const reduce = useReduceMotion();
   const t = useRef(new Animated.Value(0)).current;
@@ -48,12 +48,7 @@ export function Logo({ size, draw = false, glow = true }: Props) {
             <Stop offset="0.8" stopColor="#642B35" />
             <Stop offset="1" stopColor="#EDE4D6" />
           </LinearGradient>
-          <RadialGradient id={`${gradId}glow`} cx="50%" cy="50%" r="50%">
-            <Stop offset="0" stopColor={gold(1)} stopOpacity={0.22} />
-            <Stop offset="1" stopColor={gold(1)} stopOpacity={0} />
-          </RadialGradient>
         </Defs>
-        {glow && <Circle cx={50} cy={52} r={78} fill={`url(#${gradId}glow)`} />}
         {drawing ? (
           <G>
             <AnimatedPath d={LEFT} {...common} strokeDasharray={[PATH_LENGTH, PATH_LENGTH]} strokeDashoffset={offset(0)} opacity={opacity} />

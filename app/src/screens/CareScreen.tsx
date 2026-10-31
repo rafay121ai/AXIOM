@@ -18,7 +18,7 @@ export function CareScreen({ message, help, onKeepTalking }: Props) {
       contentContainerStyle={[styles.body, { paddingTop: 64 + insets.top, paddingBottom: 40 + insets.bottom }]}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.logo}><Logo size={26} glow={false} /></View>
+      <View style={styles.logo}><Logo size={26} /></View>
       <Text accessibilityRole="header" style={[type.careHead, styles.heading]}>{heading}</Text>
       {/* As in the mock: the help block follows the third paragraph (the heading is the first). */}
       {body.slice(0, 2).map((p) => <Text key={p} style={[type.care, styles.p]}>{p}</Text>)}

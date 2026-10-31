@@ -43,7 +43,7 @@ export function HomeDrawer({ rows, onStartNew, onRow, onSeeAll, onSettings }: Pr
   return (
     <View style={[styles.drawer, { paddingTop: insets.top + 54 }]}>
       <Wash corner />
-      <View style={styles.top}><View style={styles.emblem}><Logo size={28} glow={false} /></View></View>
+      <View style={styles.top}><View style={styles.emblem}><Logo size={28} /></View></View>
       <Pressable accessibilityRole="button" onPress={onStartNew} style={styles.startNew}>
         <View style={styles.plus}><Text style={styles.plusMark}>+</Text></View>
         <Text style={styles.startText}>{copy.home.startNew}</Text>

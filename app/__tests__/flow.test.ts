@@ -135,4 +135,7 @@ describe('wait lines', () => {
   it('cuts a long sentence at a comma', () => {
     expect(clip('A scheduling tool for small dental clinics in Karachi, which they can use on any phone and pay monthly.', 60)).toBe('A scheduling tool for small dental clinics in Karachi');
   });
+  it('marks a cut with no comma to cut at', () => {
+    expect(clip('I am building a scheduling tool for independent physiotherapists in Lahore who lose a fifth of bookings.', 60)).toBe('I am building a scheduling tool for independent…');
+  });
 });

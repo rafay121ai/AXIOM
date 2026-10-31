@@ -7,7 +7,7 @@ export function clip(text: string, max: number): string {
   const first = (t.match(/^.*?[.!?](\s|$)/) ?? [t])[0].trim().replace(/[.!?]+$/, '');
   if (first.length <= max) return first;
   const comma = first.lastIndexOf(',', max);
-  return comma > 20 ? first.slice(0, comma) : first.slice(0, max).replace(/\s+\S*$/, '');
+  return comma > 20 ? first.slice(0, comma) : `${first.slice(0, max).replace(/\s+\S*$/, '')}…`;
 }
 
 export function waitLines(building: string): string[] {
