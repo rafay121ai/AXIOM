@@ -20,7 +20,8 @@ export function CareScreen({ message, help, onKeepTalking }: Props) {
     >
       <View style={styles.logo}><Logo size={26} glow={false} /></View>
       <Text accessibilityRole="header" style={[type.careHead, styles.heading]}>{heading}</Text>
-      {body.map((p) => <Text key={p} style={[type.care, styles.p]}>{p}</Text>)}
+      {/* As in the mock: the help block follows the third paragraph (the heading is the first). */}
+      {body.slice(0, 2).map((p) => <Text key={p} style={[type.care, styles.p]}>{p}</Text>)}
       <View style={styles.help}>
         {help.emergency && (
           <View style={styles.row}><Text selectable style={styles.value}>{help.emergency}</Text></View>
@@ -33,6 +34,7 @@ export function CareScreen({ message, help, onKeepTalking }: Props) {
         ))}
         <View style={styles.row}><Text selectable style={styles.value}>{help.fallback}</Text></View>
       </View>
+      {body.slice(2).map((p) => <Text key={p} style={[type.care, styles.p]}>{p}</Text>)}
       <Pressable accessibilityRole="button" onPress={onKeepTalking} style={styles.keep}>
         <Text style={styles.keepText}>Keep talking</Text>
       </Pressable>
