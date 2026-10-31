@@ -711,7 +711,11 @@ test('a care stop whose event and care_flag both fail to write still closes shar
     const stopped = await report(call, M1, { outcome: 'didnt', note: 'I want to kill myself' })
     assert.equal(stopped.body.care, 'clear')
     assert.deepEqual(rows('care_events').map((e) => e.scope_id), [SIT], 'the fallback event names the situation')
-    const later = await report(call, M2, { outcome: 'done', note: NOTE, client_turn_id: uuid(901) })
+    // Care is open: the next report is held until the founder checks in on home.
+    const held = await report(call, M2, { outcome: 'done', note: NOTE, client_turn_id: uuid(901) })
+    assert.equal(held.body.care, 'clear')
+    assert.deepEqual((await call('POST', '/api/home/checkin', { text: 'All fine, back to the clinics.' })).body, { ok: true })
+    const later = await report(call, M2, { outcome: 'done', note: NOTE, client_turn_id: uuid(902) })
     assert.equal(later.body.consent.state, 'not_offered')
     assert.equal(rows('peer_outcomes').length, 0)
   } finally { await close() }

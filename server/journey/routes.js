@@ -31,8 +31,9 @@ export function mountJourneyRoutes(app, { supabase, knowledgeSupabase = null, em
   app.get('/api/signup', limiter(60), signup.get)
   app.put('/api/signup/answers/:key', limiter(60), care.careGate(signupFreeText), signup.put)
 
-  // Reads the stored answers; the founder sends no text here, so no care gate.
-  app.post('/api/first-reading', limiter(5), async (req, res) => {
+  // Reads the stored answers; the founder sends no text here, so no care gate,
+  // but no reading while care is open.
+  app.post('/api/first-reading', limiter(5), care.careHold, async (req, res) => {
     if (!supabase) return res.status(503).json({ error: 'Service not configured' })
     try {
       const { answers, next } = await signup.view(req.user.id)

@@ -36,6 +36,8 @@ export function mountReportRoutes(app, { supabase, care, callStructured, clock }
   // when writing its care event fails. So whenever it stops a report note, the
   // move's situation is also marked (care_flag): sharing fails closed there
   // even with no event on record.
+  // No report while care is open; a held report still marks care like a stopped one.
+  const holdThen = (gate) => (req, res, next) => care.careHold(req, res, (err) => (err ? next(err) : gate(req, res, next)))
   const reportCareGate = (gate) => (req, res, next) => {
     const send = res.json.bind(res)
     res.json = (body) => {
@@ -59,7 +61,7 @@ export function mountReportRoutes(app, { supabase, care, callStructured, clock }
   app.get('/api/reports/due', limiter(60),
     handle((req) => service.due({ userId: req.user.id })))
 
-  app.post('/api/moves/:id/report', limiter(10), reportCareGate(care.careGate(bodyFields('note'))),
+  app.post('/api/moves/:id/report', limiter(10), reportCareGate(holdThen(care.careGate(bodyFields('note')))),
     handle((req) => {
       const { outcome, note, client_turn_id: clientTurnId } = req.body ?? {}
       if (!OUTCOMES.includes(outcome)) bad(`outcome must be one of ${OUTCOMES.join(', ')}`)
