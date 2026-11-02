@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef } from 'react';
 import { Animated, Easing, View } from 'react-native';
 import Svg, { Defs, G, LinearGradient, Path, Stop } from 'react-native-svg';
-import { motion } from '../theme';
+import { ink, motion } from '../theme';
 import { useReduceMotion } from './useReduceMotion';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
@@ -11,9 +11,10 @@ export const LEFT = 'M 8,84 H 28 C 28,55 35,36 50,26 C 55,23 54,18 50,11 C 45,22
 export const RIGHT = 'M 92,84 H 72 C 72,55 65,36 50,26 C 45,23 46,18 50,11 C 55,22 60,27 69,33 C 82,43 87,60 87,84';
 const PATH_LENGTH = 190; // measured: 188 viewBox units
 
-type Props = { size: number; draw?: boolean };
+/** `line`: the emblem as one thin soft-white outline, no gold (the menu button, MenuMark). */
+type Props = { size: number; draw?: boolean; line?: boolean };
 
-export function Logo({ size, draw = false }: Props) {
+export function Logo({ size, draw = false, line = false }: Props) {
   const gradId = useId().replace(/:/g, '');
   const reduce = useReduceMotion();
   const t = useRef(new Animated.Value(0)).current;
@@ -33,8 +34,8 @@ export function Logo({ size, draw = false }: Props) {
     t.interpolate({ inputRange: [0, delay, 0.5 + delay, 1], outputRange: [PATH_LENGTH, PATH_LENGTH, 0, 0] });
   const opacity = t.interpolate({ inputRange: [0, 0.82, 1], outputRange: [1, 1, 0] });
 
-  const stroke = `url(#${gradId})`;
-  const common = { fill: 'none', stroke, strokeWidth: 3.5, strokeLinejoin: 'miter' as const };
+  const stroke = line ? ink(0.82) : `url(#${gradId})`;
+  const common = { fill: 'none', stroke, strokeWidth: line ? 4.5 : 3.5, strokeLinejoin: 'miter' as const };
 
   return (
     <View accessibilityLabel="Axiom" accessibilityRole="image" style={{ width: size, height: size }}>

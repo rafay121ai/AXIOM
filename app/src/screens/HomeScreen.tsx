@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, BackHandler, Easing, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, type TextInputInstance, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Path } from 'react-native-svg';
 import { sendUntilDelivered } from '../api/delivery';
 import type { CareHelp, Home, HomeItem, Screened, Target } from '../api/types';
 import { routeScreened } from '../care/route';
@@ -9,6 +8,7 @@ import { Composer } from '../components/Composer';
 import { Fade } from '../components/Fade';
 import { LeftOff } from '../components/LeftOff';
 import { LoadingHint } from '../components/LoadingHint';
+import { MenuMark } from '../components/MenuMark';
 import { TextAction } from '../components/TextAction';
 import { useReduceMotion } from '../components/useReduceMotion';
 import { Wash } from '../components/Wash';
@@ -31,6 +31,8 @@ type Props = {
   onHistory: () => void;
   onSettings: () => void;
   onCare: (message: string, help: CareHelp) => void;
+  /** Arrived from a journey screen's menu button: the menu opens once home has loaded. */
+  menuOpen?: boolean;
 };
 
 const DRAWER_SHARE = 0.84;
@@ -39,7 +41,7 @@ const SLIDE_MS = 500;
 // The returning founder's home: Axiom's greeting in serif, a chat bar, up to 2 small items for what was left off,
 // and a menu that slides in from the left. Typing in the bar starts something new. While a care check-in is open,
 // only the gentle line and the bar are here.
-export function HomeScreen({ load, checkIn, onLoaded, onStart, onOpen, onPast, onHistory, onSettings, onCare }: Props) {
+export function HomeScreen({ load, checkIn, onLoaded, onStart, onOpen, onPast, onHistory, onSettings, onCare, menuOpen = false }: Props) {
   const insets = useSafeAreaInsets();
   const reduce = useReduceMotion();
   const [home, setHome] = useState<Home | null>(null);
@@ -76,6 +78,13 @@ export function HomeScreen({ load, checkIn, onLoaded, onStart, onOpen, onPast, o
     setDrawer(open);
     Animated.timing(slide, { toValue: open ? 1 : 0, duration: reduce ? 0 : SLIDE_MS, easing: Easing.bezier(0.2, 0.8, 0.2, 1), useNativeDriver: true }).start();
   }, [slide, reduce]);
+
+  const menuShown = useRef(false);
+  useEffect(() => {
+    if (!menuOpen || !home || menuShown.current) return;
+    menuShown.current = true;
+    setDrawerOpen(true);
+  }, [menuOpen, home, setDrawerOpen]);
 
   useEffect(() => {
     if (!drawer) return;
@@ -149,11 +158,7 @@ export function HomeScreen({ load, checkIn, onLoaded, onStart, onOpen, onPast, o
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
           <View style={[styles.top, { paddingTop: insets.top + 54 }]}>
             {!checking && (
-              <Pressable accessibilityRole="button" accessibilityLabel={copy.home.menu} onPress={() => setDrawerOpen(true)} style={styles.menu}>
-                <Svg width={22} height={22} viewBox="0 0 24 24">
-                  <Path d="M5 8h14M5 16h9" stroke={ink(0.8)} strokeWidth={1.6} strokeLinecap="round" fill="none" />
-                </Svg>
-              </Pressable>
+              <MenuMark onPress={() => setDrawerOpen(true)} />
             )}
           </View>
           <View style={styles.body}>
@@ -190,7 +195,6 @@ const styles = StyleSheet.create({
   main: { ...StyleSheet.absoluteFill, overflow: 'hidden' },
   mainPushed: { borderRadius: 28, shadowColor: '#000', shadowOffset: { width: -20, height: 0 }, shadowOpacity: 0.6, shadowRadius: 50 },
   top: { paddingHorizontal: 18, minHeight: 92 },
-  menu: { width: 44, height: 44, marginLeft: -3, alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 34, paddingBottom: 150 },
   greeting: { fontFamily: type.big.fontFamily, fontSize: 28, lineHeight: 36, color: '#f4f4f2', textAlign: 'center', letterSpacing: -0.14 },
   soft: { fontSize: 22, lineHeight: 31 },

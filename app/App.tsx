@@ -43,7 +43,7 @@ type Stage =
   | { name: 'read'; situationId: string }
   | { name: 'learn'; situationId: string; chat: LearnChat }
   | { name: 'move'; source: MoveSource; back: Stage }
-  | { name: 'home' }
+  | { name: 'home'; menu?: boolean }
   | { name: 'history' }
   | { name: 'past'; id: string }
   | { name: 'settings' }
@@ -222,6 +222,7 @@ export default function App() {
                 send={(id, text, turnId) => (id ? api.sendTurn(id, text, turnId) : api.startSituation(text, turnId))}
                 onReady={(situationId) => goTo({ name: 'read', situationId })}
                 onCare={showCare}
+                onMenu={() => goTo({ name: 'home', menu: true })}
               />
             )}
             {stage.name === 'read' && (
@@ -231,6 +232,7 @@ export default function App() {
                 onAnswered={() => goTo({ name: 'learn', situationId: stage.situationId, chat: newLearnChat() })}
                 onSomethingElse={() => beginSituation(true)}
                 onCare={showCare}
+                onMenu={() => goTo({ name: 'home', menu: true })}
               />
             )}
             {stage.name === 'learn' && (
@@ -242,6 +244,7 @@ export default function App() {
                 loadHint={(seed) => api.getLoadingHint(seed)}
                 onOpenMove={(learnId) => goTo({ name: 'move', source: { learnId }, back: stageRef.current })}
                 onCare={showCare}
+                onMenu={() => goTo({ name: 'home', menu: true })}
               />
             )}
             {stage.name === 'move' && (
@@ -278,6 +281,7 @@ export default function App() {
                 onHistory={() => goTo({ name: 'history' })}
                 onSettings={() => goTo({ name: 'settings' })}
                 onCare={showCare}
+                menuOpen={stage.menu}
               />
             )}
             {stage.name === 'history' && (

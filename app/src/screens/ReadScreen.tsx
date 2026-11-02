@@ -8,7 +8,7 @@ import { routeScreened } from '../care/route';
 import { Composer } from '../components/Composer';
 import { Fade } from '../components/Fade';
 import { LoadingHint } from '../components/LoadingHint';
-import { Logo } from '../components/Logo';
+import { MENU_BAR, MenuBar } from '../components/MenuMark';
 import { TextAction } from '../components/TextAction';
 import { copy, failureLine } from '../copy';
 import { paragraphs } from '../situation/read';
@@ -22,6 +22,8 @@ type Props = {
   /** "Something else on my mind": a new situation. */
   onSomethingElse: () => void;
   onCare: (message: string, help: CareHelp) => void;
+  /** The menu button: home, with the menu open. The situation stays open. */
+  onMenu: () => void;
 };
 
 const FIRST = 500;
@@ -32,7 +34,7 @@ type Line = { id: number; who: 'me' | 'ax'; text: string };
 
 // The Read: the finding as a headline, two short paragraphs, then one question set apart by a hairline.
 // No Continue: answering the question, or skipping it, is what moves on.
-export function ReadScreen({ loadRead, answer, onAnswered, onSomethingElse, onCare }: Props) {
+export function ReadScreen({ loadRead, answer, onAnswered, onSomethingElse, onCare, onMenu }: Props) {
   const insets = useSafeAreaInsets();
   const [read, setRead] = useState<Read | null>(null);
   const [lines, setLines] = useState<Line[]>([]);
@@ -118,9 +120,8 @@ export function ReadScreen({ loadRead, answer, onAnswered, onSomethingElse, onCa
         onContentSizeChange={() => scroller.current?.scrollToEnd({ animated: true })}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.content, { paddingTop: insets.top + 66 }]}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + MENU_BAR }]}
       >
-        <View style={styles.emblem}><Logo size={30} /></View>
         {!read && !failure && <LoadingHint />}
         {read && (
           <>
@@ -163,6 +164,7 @@ export function ReadScreen({ loadRead, answer, onAnswered, onSomethingElse, onCa
           </View>
         </Fade>
       )}
+      <MenuBar onPress={onMenu} />
     </KeyboardAvoidingView>
   );
 }
@@ -170,7 +172,6 @@ export function ReadScreen({ loadRead, answer, onAnswered, onSomethingElse, onCa
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { paddingHorizontal: 28, paddingBottom: 260 },
-  emblem: { marginBottom: 22, opacity: 0.9 },
   head: { marginBottom: 20 },
   para: { marginBottom: 13 },
   next: { borderTopWidth: 1, borderTopColor: ink(0.16), paddingTop: 16, marginTop: 22 },

@@ -11,7 +11,7 @@ import { Fade } from '../components/Fade';
 import { FounderCard } from '../components/FounderCard';
 import { Glass } from '../components/Glass';
 import { LoadingHint } from '../components/LoadingHint';
-import { Logo } from '../components/Logo';
+import { MENU_BAR, MenuBar } from '../components/MenuMark';
 import { Picture } from '../components/Picture';
 import { Words } from '../components/Words';
 import { TextAction } from '../components/TextAction';
@@ -28,6 +28,8 @@ type Props = {
   /** The move card was tapped: on to the Move step. */
   onOpenMove: (learnId: string) => void;
   onCare: (message: string, help: CareHelp) => void;
+  /** The menu button: home, with the menu open. The situation stays open. */
+  onMenu: () => void;
 };
 
 type Chips = { done: number[]; pressed: string | null; onTap: (index: number) => void };
@@ -61,7 +63,7 @@ function TurnView({ turn, fresh, chips }: { turn: LearnTurn; fresh: boolean; chi
 
 // Learn: Axiom's lesson with author and book named, a picture when it helps, tappable follow-ups,
 // and a move card once the server says the move is ready. Taps never post a founder message.
-export function LearnScreen({ chat, start, send, tap, loadHint, onOpenMove, onCare }: Props) {
+export function LearnScreen({ chat, start, send, tap, loadHint, onOpenMove, onCare, onMenu }: Props) {
   const insets = useSafeAreaInsets();
   const [items, setItems] = useState<LearnItem[]>(chat.items);
   const [text, setText] = useState('');
@@ -171,9 +173,8 @@ export function LearnScreen({ chat, start, send, tap, loadHint, onOpenMove, onCa
         onContentSizeChange={() => scroller.current?.scrollToEnd({ animated: true })}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.chat, { paddingTop: insets.top + 62 }]}
+        contentContainerStyle={[styles.chat, { paddingTop: insets.top + MENU_BAR }]}
       >
-        <View style={styles.emblem}><Logo size={28} /></View>
         {items.map((i) => {
           if (i.who === 'me') {
             return (
@@ -217,6 +218,7 @@ export function LearnScreen({ chat, start, send, tap, loadHint, onOpenMove, onCa
         <LinearGradient pointerEvents="none" colors={['rgba(5,5,5,0)', colors.base]} locations={[0, 0.4]} style={StyleSheet.absoluteFill} />
         <Composer value={text} onChangeText={setText} onSend={submit} placeholder={copy.learn.placeholder} offline={offline} busy={busy} />
       </View>
+      <MenuBar onPress={onMenu} />
     </KeyboardAvoidingView>
   );
 }
@@ -224,7 +226,6 @@ export function LearnScreen({ chat, start, send, tap, loadHint, onOpenMove, onCa
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   chat: { paddingHorizontal: 28, paddingBottom: 200 },
-  emblem: { marginBottom: 22, opacity: 0.9 },
   ax: { marginBottom: 18 },
   para: { marginBottom: 14 },
   src: { ...type.label, textTransform: 'none', letterSpacing: 0.5, fontSize: 11.5, color: ink(0.45), marginBottom: 20 },

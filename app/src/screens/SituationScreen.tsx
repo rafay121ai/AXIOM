@@ -9,7 +9,7 @@ import { Composer } from '../components/Composer';
 import { Fade } from '../components/Fade';
 import { Glass } from '../components/Glass';
 import { LoadingHint } from '../components/LoadingHint';
-import { Logo } from '../components/Logo';
+import { MENU_BAR, MenuBar } from '../components/MenuMark';
 import { TextAction } from '../components/TextAction';
 import { copy, failureLine } from '../copy';
 import { applyReply, type Chat, type ChatItem, HAND_OFF_MS, type SendTurn } from '../situation/chat';
@@ -25,13 +25,15 @@ type Props = {
   /** Axiom has what it needs: on to the Read. */
   onReady: (situationId: string) => void;
   onCare: (message: string, help: CareHelp) => void;
+  /** The menu button: home, with the menu open. The situation stays open. */
+  onMenu: () => void;
 };
 
 const BAR_DELAY = 1400;
 
 // The situation: Axiom asks one plain question, the founder answers in their own words.
 // At most 2 follow-ups (the server counts), then the Read follows by itself.
-export function SituationScreen({ chat, opening, suggestion, send, onReady, onCare }: Props) {
+export function SituationScreen({ chat, opening, suggestion, send, onReady, onCare, onMenu }: Props) {
   const insets = useSafeAreaInsets();
   const [items, setItems] = useState<ChatItem[]>(() => {
     if (chat.items.length === 0 && !chat.pending) chat.items = [{ id: chat.nextId++, who: 'ax', text: opening }];
@@ -117,15 +119,12 @@ export function SituationScreen({ chat, opening, suggestion, send, onReady, onCa
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
-      <View style={[styles.head, { paddingTop: insets.top + 62 }]}>
-        <View style={styles.emblem}><Logo size={28} /></View>
-      </View>
       <ScrollView
         ref={scroller}
         onContentSizeChange={() => scroller.current?.scrollToEnd({ animated: true })}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.chat}
+        contentContainerStyle={[styles.chat, { paddingTop: insets.top + MENU_BAR }]}
       >
         {items.map((i, n) =>
           i.who === 'ax' ? (
@@ -159,15 +158,14 @@ export function SituationScreen({ chat, opening, suggestion, send, onReady, onCa
         )}
         <Composer inputRef={box} value={text} onChangeText={setText} onSend={submit} placeholder={copy.situation.placeholder} offline={offline} busy={busy} />
       </Fade>
+      <MenuBar onPress={onMenu} />
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  head: { alignItems: 'center' },
-  emblem: { opacity: 0.9 },
-  chat: { paddingHorizontal: 28, paddingTop: 26, paddingBottom: 230 },
+  chat: { paddingHorizontal: 28, paddingBottom: 230 },
   ax: { marginBottom: 18 },
   me: { marginTop: 24, marginBottom: 24, marginLeft: 52, alignItems: 'flex-end' },
   meText: { ...type.founder, textAlign: 'right' },

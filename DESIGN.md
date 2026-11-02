@@ -97,7 +97,10 @@ The care screen has **no wash, no glow, no gradient**.
   first reading wait, the care screen, the home greeting).
 - **Home:** the greeting in serif in the middle, the chat bar at the bottom,
   at most 2 small items above the bar (gold dot plus plain words) that fade
-  after about 8 seconds and stay while touched. A menu icon top left.
+  after about 8 seconds and stay while touched. The menu button top left.
+- **Menu button:** the emblem as one thin soft-white line (no gold), top left on
+  Home, Situation, Read and Learn. On Home it opens the drawer; on the others it
+  goes home with the drawer open, and the situation stays open (Rafay, Nov 2).
 - **Drawer:** slides in from the left, about 84% wide, pushing the home aside.
   Sections divided by thin lines: Start something new, What's open, History,
   Paused, and the founder's name with Settings. No day headings.
