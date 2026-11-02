@@ -20,7 +20,7 @@ notifications. The old Vite web app stays only until replaced.
 ## Stack (current)
 - App: Expo (React Native), iOS and Android, with push notifications.
   Old web app: Vite + React on Vercel, kept until replaced.
-- Backend: Express (Node.js), on Railway
+- Backend: Express (Node.js), on Render (Railway account banned, Nov 2026)
 - Database and Auth: Supabase, two projects (main and axiom-knowledge)
 - AI: OpenAI. Model IDs live in server config.
 

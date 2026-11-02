@@ -23,12 +23,12 @@ API stack. That stack does not exist. Ignore any older references to it.
 | Layer     | Current                                      | Target |
 |-----------|----------------------------------------------|--------|
 | Client    | Vite + React SPA on Vercel                   | **Native app (Expo, React Native) for iOS and Android**, with push notifications. The Vite app stays only as the old product until replaced. **DECISION NEEDED:** CLAUDE.md says web first, native later. Rafay now says "directly an app". |
-| Backend   | Express (Node.js) on Railway                 | Same. One API serves the app. |
+| Backend   | Express (Node.js) on Render                  | Same. One API serves the app. |
 | Database  | Supabase, two projects                       | Same, plus the new tables below. |
 | Auth      | Supabase Auth (Google OAuth)                 | Same (Google sign-in, native flow on the app). |
 | AI        | OpenAI (chat models + text-embedding-3-small)| Same. Model IDs live in server config, one setting per step. Do not hardcode. |
 | Push      | None                                         | Expo push (APNs and FCM) sent by the server. |
-| Scheduler | None                                         | A server-side scheduler (Railway cron or a queue) for reminders. |
+| Scheduler | None                                         | A scheduler inside the API process (push/scheduler.js); the host must stay on. |
 
 ### Supabase projects
 - **Main (Axiom):** users, founder profile and theory, situations, reads,
@@ -44,7 +44,7 @@ App (Expo, iOS and Android)
    |  Supabase Auth only (sign in, session token)
    |  HTTPS + bearer token
    v
-Express API (Railway)
+Express API (Render)
    |-- Care screen (runs first on every founder message)
    |-- OpenAI (chat, embeddings, transcription later)
    |-- Main Supabase (service client, server side writes)
@@ -240,7 +240,7 @@ counters, removal and reapplication fields, learning map state.
   API.
 - Server only writes: lessons, reads, peer outcomes, unlocks, theory,
   notification and care tables.
-- The service role key exists only on Railway. Never in the app.
+- The service role key exists only on Render. Never in the app.
 
 ---
 
@@ -360,7 +360,7 @@ level (author and title, no quote). The library holds about 15,700 lessons from
 ## Security
 - Supabase JWT checked on every API request.
 - CORS limited to the production frontend and localhost (web) and the app.
-- Secrets only in Railway and Vercel environment settings. Only public keys in
+- Secrets only in Render and Vercel environment settings. Only public keys in
   the client.
 - User message content is never sent to external logging services. Logs hold
   metadata only.
@@ -402,7 +402,7 @@ replacement screen works.
 ## Deployment
 - App: built with Expo, distributed through the app stores (TestFlight and
   internal tracks first).
-- Backend: Railway, deploys from the main branch.
+- Backend: Render (render.yaml), deploys from feature/journey-v1 until it is merged. Free plan while testing; Starter (always on) before pushes go on.
 - Old web app: Vercel, until it is retired.
 - Migrations: committed to the repo, applied through the Supabase CLI.
 - Deployment details beyond this are VERIFY from the live configuration.
