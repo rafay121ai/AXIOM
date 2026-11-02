@@ -196,12 +196,13 @@ before(async () => {
   await keep('answerRead(say_more)', call('POST', `/api/situations/${sit}/read/answer`, { text: 'ok' }))
   await keep('answerRead(stored)', call('POST', `/api/situations/${sit}/read/answer`, { text: READ_ANSWER }))
 
-  openai.script('learn_reply', { ...LESSON, citations: LESSON.citations.slice(0, 1) }, FOLLOWUP_ANSWER, LEARN_REPLY_1, LEARN_OFFER)
+  // A tapped suggestion counts as a reply (Rafay, Nov 2), so the tap comes after the first card here.
+  openai.script('learn_reply', { ...LESSON, citations: LESSON.citations.slice(0, 1) }, LEARN_REPLY_1, LEARN_OFFER, FOLLOWUP_ANSWER)
   const learn = await keep('startLearn', call('POST', `/api/situations/${sit}/learn`))
-  await keep('tapFollowUp', call('POST', `/api/learn/${learn.learn_id}/followup/1`, { turn_id: learn.turn.id }))
   await keep('sendLearnTurn(say_more)', call('POST', `/api/learn/${learn.learn_id}/turn`, { text: 'ok', client_turn_id: uuid(10) }))
   await keep('sendLearnTurn(reply)', call('POST', `/api/learn/${learn.learn_id}/turn`, { text: REAL_1, client_turn_id: uuid(11) }))
   await keep('sendLearnTurn(offer)', call('POST', `/api/learn/${learn.learn_id}/turn`, { text: REAL_2, client_turn_id: uuid(12) }))
+  await keep('tapFollowUp', call('POST', `/api/learn/${learn.learn_id}/followup/1`, { turn_id: learn.turn.id }))
 
   openai.script('move', MOVE, SWAPPED_MOVE)
   const first = (await keep('openMove', call('POST', `/api/learn/${learn.learn_id}/move`))).move

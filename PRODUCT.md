@@ -265,7 +265,8 @@ pillars. A personal struggle is never framed as a performance problem.
 - Not right away. It appears after **two real replies** from the founder, once
   Axiom has refined it with them, **or at once if they ask** what to do next
   in any wording.
-- One-word and filler replies never count.
+- One-word and filler replies never count. A tap on a suggestion chip counts as
+  a reply (Rafay, Nov 2), so the founder never has to ask for the move.
 - It arrives as a **card inside the chat**, no buttons (the whole card is
   tappable). At most two cards in total. The first says the move is ready.
   The second is more urgent and uses only real facts (for example "It takes

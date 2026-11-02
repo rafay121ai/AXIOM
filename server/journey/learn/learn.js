@@ -263,14 +263,39 @@ export function createLearn({ supabase, knowledgeSupabase = null, embed = null, 
     }
   }
 
+  // What the founder said back, oldest first: typed messages and tapped suggestions (a tap counts as a reply,
+  // Rafay, Nov 2). A tapped suggestion is its label, read off the turn it was tapped under.
+  const repliesOf = (turns) => turns.flatMap((t) => {
+    if (t.role === 'founder') return [t.text]
+    if (t.kind !== 'followup') return []
+    const label = turns.find((p) => p.id === t.parent_turn_id)?.follow_ups?.[t.followup_index]
+    return label ? [label] : []
+  })
+
+  // The offer for this reply: none while the founder already has 2 moves open (the offer is not used up).
+  async function decide({ userId, conversation, offers, turns }) {
+    const decision = decideMoveOffer({ replies: repliesOf(turns), offers })
+    if (decision.offer !== 'none' && !(await hasMoveRoom({ supabase, userId, nowMs: clock.now(), exceptLearnId: conversation.id }))) {
+      return { ...decision, offer: 'none', reason: 'no_room' }
+    }
+    return decision
+  }
+
+  // Puts the move card under `row` and records the offer. Returns { row, made, notice }.
+  async function attachOffer({ conversation, offers, decision, row, subject, fact, name }) {
+    if (decision.offer === 'none') return { row, made: offers, notice: null }
+    const notice = decision.offer === 'first'
+      ? { kind: 'first', kicker: MOVE_NOTICE.first.kicker, text: MOVE_NOTICE.first.text({ subject }) }
+      : { kind: 'second', kicker: MOVE_NOTICE.second.kicker, text: MOVE_NOTICE.second.text({ name, fact }) }
+    const made = [...offers, decision.realReplyCount]
+    await one(supabase.from('learn_conversations').update({ offers: made, updated_at: iso() }).eq('id', conversation.id).select('id'))
+    const updated = (await one(supabase.from('learn_turns').update({ move_offer: decision.offer, move_notice: notice }).eq('id', row.id).select()))[0]
+    return { row: updated, made, notice }
+  }
+
   async function answer({ userId, conversation, offers, turns, text, name }) {
     const situation = await ownSituation(userId, conversation.situation_id)
-    const replies = turns.filter((t) => t.role === 'founder').map((t) => t.text)
-    let decision = decideMoveOffer({ replies, offers })
-    // No card while the founder already has 2 moves open; the offer is not used up.
-    if (decision.offer !== 'none' && !(await hasMoveRoom({ supabase, userId, nowMs: clock.now(), exceptLearnId: conversation.id }))) {
-      decision = { ...decision, offer: 'none', reason: 'no_room' }
-    }
+    const decision = await decide({ userId, conversation, offers, turns })
     const capped = decision.reason === 'cap'
 
     // A fixed line from the approved mock: no model call.
@@ -301,17 +326,8 @@ export function createLearn({ supabase, knowledgeSupabase = null, embed = null, 
       }
     }
 
-    let notice = null
-    let made = offers
-    if (decision.offer !== 'none') {
-      notice = decision.offer === 'first'
-        ? { kind: 'first', kicker: MOVE_NOTICE.first.kicker, text: MOVE_NOTICE.first.text({ subject }) }
-        : { kind: 'second', kicker: MOVE_NOTICE.second.kicker, text: MOVE_NOTICE.second.text({ name, fact }) }
-      made = [...offers, decision.realReplyCount]
-      await one(supabase.from('learn_conversations').update({ offers: made, updated_at: iso() }).eq('id', conversation.id).select('id'))
-      row = (await one(supabase.from('learn_turns').update({ move_offer: decision.offer, move_notice: notice }).eq('id', row.id).select()))[0]
-    }
-    return response(conversation, made, { status: 'reply', turn: turnView(row), move_offer: decision.offer, move_notice: notice })
+    const offered = await attachOffer({ conversation, offers, decision, row, subject, fact, name })
+    return response(conversation, offered.made, { status: 'reply', turn: turnView(offered.row), move_offer: decision.offer, move_notice: offered.notice })
   }
 
   // ── A tapped follow-up suggestion ──────────────────────────────────────────
@@ -336,12 +352,17 @@ export function createLearn({ supabase, knowledgeSupabase = null, embed = null, 
       const raced = answered(now)
       if (raced) return response(conversation, offersOf(conversation), { status: 'reply', turn: turnView(raced), move_offer: 'none', move_notice: null })
       const situation = await ownSituation(userId, conversation.situation_id)
-      const { row } = await makeTurn({
+      const { row, subject, fact } = await makeTurn({
         userId, situation, conversation, mode: 'followup', step: 'followup', learnTurns: now,
         evidence: Array.isArray(target.evidence) ? target.evidence : [], tapped,
         extra: { parent_turn_id: target.id, followup_index: index },
       })
-      return response(conversation, offersOf(conversation), { status: 'reply', turn: turnView(row), move_offer: 'none', move_notice: null })
+      // The tap counts as a reply, so it can bring the move card too.
+      const fresh = await ownConversation(userId, learnId)
+      const offers = offersOf(fresh)
+      const decision = await decide({ userId, conversation: fresh, offers, turns: [...now, row] })
+      const offered = await attachOffer({ conversation: fresh, offers, decision, row, subject, fact })
+      return response(fresh, offered.made, { status: 'reply', turn: turnView(offered.row), move_offer: decision.offer, move_notice: offered.notice })
     })
   }
 

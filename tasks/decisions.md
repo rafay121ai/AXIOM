@@ -678,3 +678,4 @@ Idea from Rafay: founder credits, and growth by referral. Not building until giv
 - Hosting (Rafay, Nov 2): the API moves from Railway (account banned) to Render, Singapore. Free plan while testing; Starter (always on) before pushes go on, because the push scheduler runs in the process. Setup in render.yaml. Live at https://axiom-api-gu9h.onrender.com since Nov 2; CLAUDE.md and ARCHITECTURE.md updated.
 - App ID (Rafay, Nov 2): iOS bundle id and Android package are com.getaxiom.app.
 - Situation (Rafay, Nov 2): when Axiom has enough, it says "Got it. Here's what I see." and holds 1.5 s before the Read, instead of moving on silently.
+- Learn (Rafay, Nov 2): a tapped suggestion chip counts as a real reply toward the move card (still two in total, or at once on asking). PRODUCT.md updated.

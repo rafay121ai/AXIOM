@@ -12,7 +12,7 @@ import { MODELS, STEPS } from '../config.js'
 import { FOUNDER, OTHER, createWorld, keysIn, routesOf } from './harness.js'
 import {
   CHECK_IN_ANSWER, DISTRESS, FABRICATED_QUOTE, FIRST_READING, FOLLOWUP_ANSWER, FULL_ANSWERS, LEARN_AFTER_CARE, LEARN_OFFER,
-  LEARN_REPLY_1, LESSON, MOVE, PEER_STORY, PEER_STORY_ID, Q1, Q2, Q3_REFUSED, READ, READ_ANSWER, REAL_1, REAL_2,
+  LESSON, MOVE, PEER_STORY, PEER_STORY_ID, Q1, Q2, Q3_REFUSED, READ, READ_ANSWER, REAL_1,
   REPORT_NOTE, REPORT_REPLY, SITUATION_TEXT, SWAP_REASON, TURN_2, TURN_3, VERIFIED_QUOTE_SHOWN, WHAT_NEXT, situationVerdict, uuid,
 } from './script.js'
 
@@ -161,15 +161,13 @@ test('a founder walks the whole journey', async (t) => {
       assert.equal(rows('learn_turns').filter((r) => r.role === 'founder').length, 0)
     })
 
-    await t.test('learn: 2 real replies bring the first move card', async () => {
-      openai.script('learn_reply', LEARN_REPLY_1, LEARN_OFFER)
+    // Rafay, Nov 2: a tapped suggestion counts as a reply, so the tap above and one typed reply bring the card.
+    await t.test('learn: a tapped suggestion and 1 real reply bring the first move card', async () => {
+      openai.script('learn_reply', LEARN_OFFER)
       const r1 = await founder('POST', `/api/learn/${ids.learn}/turn`, { text: REAL_1, client_turn_id: uuid(11) })
-      assert.equal(r1.body.move_offer, 'none')
-      assert.ok(r1.body.turn.text.endsWith('?'))
-      const r2 = await founder('POST', `/api/learn/${ids.learn}/turn`, { text: REAL_2, client_turn_id: uuid(12) })
-      assert.equal(r2.body.move_offer, 'first')
-      assert.deepEqual(r2.body.move_notice, { kind: 'first', kicker: 'Your move', text: 'Your move for the two clinics is ready.' })
-      assert.ok(!r2.body.turn.text.includes('?'))
+      assert.equal(r1.body.move_offer, 'first')
+      assert.deepEqual(r1.body.move_notice, { kind: 'first', kicker: 'Your move', text: 'Your move for the two clinics is ready.' })
+      assert.ok(!r1.body.turn.text.includes('?'))
     })
 
     await t.test('learn: "what should I do next" brings the move at once, with no model call', async () => {

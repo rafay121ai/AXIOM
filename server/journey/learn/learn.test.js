@@ -478,3 +478,17 @@ test('Learn without an approved story: no founder_case content, nothing counted,
     assert.equal(rows('founder_lesson_log').length, 0)
   } finally { await close() }
 })
+
+// Rafay, Nov 2: Learn went on until the founder asked; a tapped suggestion now counts as a reply.
+test('a typed reply and then a tapped suggestion bring the first move card on the tap', async () => {
+  const followup = JSON.stringify({ reply: 'If the first clinic says no, ask what would have to change for a yes. A no from the owner is still a real answer after three weeks.', citations: [{ handle: 'E1', quote: '' }], picture_json: '', follow_ups: [], move_subject: '', move_fact: '' })
+  const { call, id, close } = await started([learnReply(), turnReply(), followup])
+  try {
+    const r1 = await sendTurn(call, id, REAL1, 21)
+    assert.equal(r1.body.move_offer, 'none')
+    const tap = await call('POST', `/api/learn/${id}/followup/0`)
+    assert.equal(tap.status, 200)
+    assert.equal(tap.body.move_offer, 'first')
+    assert.equal(tap.body.move_notice.kind, 'first')
+  } finally { await close() }
+})
