@@ -42,3 +42,12 @@ test('a sentence naming an author it did not cite is dropped', () => {
   assert.ok(problems.includes('names an author or book it did not cite'))
   assert.doesNotMatch(reply.text, /Hoffman/)
 })
+
+// Rafay, Nov 2: "How I Built This" is Guy Raz's show; the words were Brian Chesky's. The guest gets the credit.
+test('the guest named in an interview title may be credited', () => {
+  const show = [{ handle: 'E1', chunk_id: 'c3', author: 'Guy Raz', source_title: 'How I Built This — Airbnb Brian Chesky', text: 'The final thing was payments.', similarity: 0.4 }]
+  const data = { reply: 'You have a prototype and no customers yet. Brian Chesky says the final thing they built was payments. Who will you ask first?', citations: [{ handle: 'E1' }] }
+  const { reply, problems } = checkReply({ data, mode: 'lesson', evidence: show, founderTexts: founder })
+  assert.ok(!problems.some((p) => p.includes('author')), problems.join('; '))
+  assert.match(reply.text, /Brian Chesky/)
+})

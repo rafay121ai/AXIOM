@@ -31,6 +31,11 @@ const titleMatches = (found, title) => {
   return f.length >= 3 && t.length >= 3 && (t.includes(f) || f.includes(t))
 }
 
+const inTitle = (found, title) => {
+  const f = sameText(found)
+  return f.split(' ').length >= 2 && ` ${sameText(title)} `.includes(` ${f} `)
+}
+
 const sentencesOf = (text) => String(text ?? '').split(/(?<=[.!?])\s+/).filter((s) => s.trim())
 
 // Names of authors and books claimed in a sentence.
@@ -107,7 +112,8 @@ export function cleanProse({ text, sources = [], handles = new Map() }) {
     if (unknown.length) { flags.push({ type: 'unknown_handle', detail: unknown.join(',') }); continue }
 
     const { authors, books } = claimsIn(sentence)
-    const badAuthor = authors.find((a) => !sources.some((s) => nameMatches(a, s.author)))
+    // A guest named in an interview's title ("How I Built This — Airbnb Brian Chesky") counts as that source's author.
+    const badAuthor = authors.find((a) => !sources.some((s) => nameMatches(a, s.author) || inTitle(a, s.book)))
     const badBook = books.find((b) => !sources.some((s) => titleMatches(b, s.book)))
     if (badAuthor) { flags.push({ type: 'author_not_in_evidence', detail: badAuthor }); continue }
     if (badBook) { flags.push({ type: 'book_not_in_evidence', detail: badBook }); continue }

@@ -69,6 +69,7 @@ export const LEARN_PROMPT = [
   'Sources:',
   '- evidence holds passages from books and talks, each with a handle (E1, E2 ...), its author and its title. Use at most two.',
   '- Teach the way a mentor quotes a book: in the sentence that uses a passage, name its author, and its title where it reads naturally (for example "Paul Graham\'s point in Do Things That Don\'t Scale is that ..."). Use only the author and title given with that passage, and cite its handle.',
+  '- For an interview or podcast the title names the guest (for example "How I Built This — Airbnb Brian Chesky"): credit the guest who said it, never the host.',
   '- Never call the passages "the evidence", "the passage", "the research" or "the sources", and never name an author, book or person that is not given with a passage you cite.',
   '- To use a passage, put its handle in citations. quote is either empty or 3 to 25 words copied exactly, word for word, from that passage. Never change a word.',
   '- In reply, never write a handle and never use quotation marks of any kind. A short exact quote goes in quote, and the app shows it set apart with the author.',

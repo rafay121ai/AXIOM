@@ -12,7 +12,7 @@ const sha = (s) => createHash('sha256').update(s).digest('hex')
 // Snapshot of the prompts as they were before styles existed.
 const OLD = {
   read: 'd45de31dad59877283d530982409b61c3889b1e35d2e32a9fa25a1996d00e514',
-  learn: 'd7e5f563635f2f6158c05609e3adf7f6df1d5c86eebad58d4031219e3787898f', // Nov 2: cited authors named in the text, follow-ups built on a passage
+  learn: '5816b023d6c269a69185db005f9354366fe39e069f71ca8ac656c194bb8316eb', // Nov 2: cited authors (interview guests, not hosts) named in the text, follow-ups built on a passage
   move: '156608d1bf36f1cd7830794f19a1bf727f5d9c1efe9ae2a110ccad8207d52f60',
   report: '6ce24f154ae001da47b70fddb78b7365b1d79fd8f9ecb8dea1622566694127a7',
 }

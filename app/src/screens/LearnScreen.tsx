@@ -17,8 +17,8 @@ import { Picture } from '../components/Picture';
 import { Words } from '../components/Words';
 import { TextAction } from '../components/TextAction';
 import { copy, failureLine } from '../copy';
-import { applyLearnReply, type LearnChat, type LearnItem, lessonParagraphs, sourceLines, suggestionTurn, tappedIndexes, verifiedQuotes } from '../learn/chat';
-import { colors, gold, ink, type } from '../theme';
+import { applyLearnReply, type LearnChat, type LearnItem, lessonParagraphs, sourceLines, suggestionTurn, tappedIndexes } from '../learn/chat';
+import { colors, ink, type } from '../theme';
 
 type Props = {
   chat: LearnChat;
@@ -47,12 +47,6 @@ function TurnView({ turn, fresh, chips }: { turn: LearnTurn; fresh: boolean; chi
       ))}
       {complete && (
         <Fade duration={500}>
-          {verifiedQuotes(turn.sources).map((q) => (
-            <View key={q.quote} style={styles.quote}>
-              <Text style={styles.quoteText}>{`\u201C${q.quote}\u201D`}</Text>
-              <Text style={styles.quoteBy}>{q.author}</Text>
-            </View>
-          ))}
           {sourceLines(turn.sources).map((line) => <Text key={line} style={styles.src}>{line}</Text>)}
           {turn.picture && <Picture picture={turn.picture} />}
           {chips && (
@@ -241,10 +235,6 @@ const styles = StyleSheet.create({
   ax: { marginBottom: 18 },
   para: { marginBottom: 14 },
   src: { ...type.label, textTransform: 'none', letterSpacing: 0.5, fontSize: 11.5, color: ink(0.45), marginBottom: 20 },
-  // A verified quote, set apart by a thin gold rule.
-  quote: { borderLeftWidth: 1, borderLeftColor: gold(0.55), paddingLeft: 14, marginTop: 2, marginBottom: 22 },
-  quoteText: { ...type.readSay, fontStyle: 'italic', color: ink(0.92) },
-  quoteBy: { ...type.label, textTransform: 'none', letterSpacing: 0.5, fontSize: 11.5, color: ink(0.5), marginTop: 8 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   me: { marginTop: 24, marginBottom: 24, marginLeft: 52, alignItems: 'flex-end' },
   meText: { ...type.founder, textAlign: 'right' },
