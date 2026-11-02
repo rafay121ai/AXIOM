@@ -13,7 +13,7 @@ const sha = (s) => createHash('sha256').update(s).digest('hex')
 const OLD = {
   read: '0ea00075bd83b2a8fdaa31bd70249bba5ca7a3a1da6ec57814ffe86b04c33069', // Nov 2: picked options said plainly, never quoted
   learn: '5816b023d6c269a69185db005f9354366fe39e069f71ca8ac656c194bb8316eb', // Nov 2: cited authors (interview guests, not hosts) named in the text, follow-ups built on a passage
-  move: '156608d1bf36f1cd7830794f19a1bf727f5d9c1efe9ae2a110ccad8207d52f60',
+  move: '5bc5dd8f50ac0b9a5b879d1ec42935c0b9b37fcbd8545670037991ed4171ca2a', // Nov 2: words written for the reader; no "see if" success
   report: '6ce24f154ae001da47b70fddb78b7365b1d79fd8f9ecb8dea1622566694127a7',
 }
 const base = { signUp: [], conversation: [], situation: [], read: null, learn: [], evidence: [], subject: 's', fact: 'f', move: {}, outcome: 'done', note: 'n' }

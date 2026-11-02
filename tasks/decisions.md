@@ -680,3 +680,4 @@ Idea from Rafay: founder credits, and growth by referral. Not building until giv
 - Situation (Rafay, Nov 2): when Axiom has enough, it says "Got it. Here's what I see." and holds 1.5 s before the Read, instead of moving on silently.
 - Learn (Rafay, Nov 2): a tapped suggestion chip counts as a real reply toward the move card (still two in total, or at once on asking). PRODUCT.md updated.
 - Testing (Rafay, Nov 2): accounts in ADMIN_USER_IDS skip the 5-a-day limit on new situations; real founders keep it.
+- Move (Rafay, Nov 2): success may not be a "see if / check whether" line (never a yes or no); the effect goes in the prediction. Words are written for the reader, never about the founder's effort. Checklist label is "Before you start". experimentQuality.js unchanged.

@@ -35,7 +35,8 @@ export const copy = {
     success: 'It worked if',
     words: 'The words to use',
     wordsNote: 'Suggested wording',
-    checklist: 'Before you send',
+    // A move may be a post or a call, not only a message (Rafay, Nov 2).
+    checklist: 'Before you start',
     commit: 'Commit to this move',
     committed: 'Committed.',
     change: 'Change this move',

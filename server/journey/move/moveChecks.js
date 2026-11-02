@@ -28,6 +28,10 @@ const DEADLINE_TERMS = /\b(?:tomorrow|next (?:week|month|year)|this (?:week|week
 // Steps that hand the start of the move to someone else, or make it wait.
 const DEPENDS_ON_OTHERS = /\b(?:wait (?:for|until)|once (?:they|he|she|someone|the \w+) (?:reply|replies|respond|responds|answer|answers|get back)|after (?:they|he|she|someone) (?:reply|replies|respond|responds|answer|answers)|(?:get|have|ask) (?:your|a|an|someone|somebody) (?:co-?founder|team|partner|developer|designer|assistant|friend|colleague|employee|contractor|freelancer|agency)?\s?to\b|hire|outsource|delegate)/
 
+// "see if", "check whether": always true, so never a yes or no (live Move, Nov 2: "...and you can see if it
+// reduced repeat DMs"). The effect belongs in the prediction.
+const NOT_BINARY = /\b(?:see|check|know|find out|tell|notice|learn) (?:if|whether)\b/
+
 // Reasons that are not reasons ("I'm busy"). What is left after removing them
 // must still say something.
 const NON_REASONS = [
@@ -93,6 +97,10 @@ export function checkMove({ data, founderTexts }) {
   if (deadline) problems.push(`a deadline the founder never gave: ${deadline}`)
   if (threadKinds(`${move.title} ${move.mission}`, founderTexts).length === 0) {
     problems.push("nothing from this founder in the title or mission: use their own words, a number or a date they gave")
+  }
+
+  if (NOT_BINARY.test(norm(move.success))) {
+    problems.push('success must be a plain yes or no about what is done tonight: no "see if" or "check whether"; put the hoped-for effect in prediction')
   }
 
   // The founder is the only variable.

@@ -361,3 +361,11 @@ test('Learn offers no card while 2 moves are open, and says so when asked', asyn
     assert.equal(chatCalls().length, 0)
   } finally { await close() }
 })
+
+// Rafay, Nov 2: a live Move's success read "...and you can see if it reduced repeat DMs": never a yes or no.
+test('a success that only says "see if" or "check whether" is sent back; a plain yes or no passes', () => {
+  const problemsOf = (success) => checkMove({ data: { ...MOVE, success }, founderTexts: FOUNDER_TEXTS }).problems.join(' | ')
+  assert.match(problemsOf(`${MOVE.success.replace(/\.$/, '')}, and you can see if they answer faster.`), /plain yes or no/)
+  assert.match(problemsOf('You check whether both clinics replied.'), /plain yes or no/)
+  assert.doesNotMatch(problemsOf(MOVE.success), /plain yes or no/)
+})
