@@ -42,7 +42,7 @@ const MODES = Object.freeze({
   lesson: [
     'This is the first reply in Learn: the lesson. About 100 to 150 words.',
     'Start from the founder\'s situation. Build on their answer to the Read question without repeating it back to them; if they skipped it, use what they already told you.',
-    'Bring in what one or two passages teach and tie it straight back to their situation.',
+    'Bring in what one or two passages teach, naming the author in the sentence that uses each one, and tie it straight back to their situation.',
     'End with one plain question about what they are trying to do here. Not a quiz, not "in your own words". Do not give the move yet.',
   ],
   reply: [

@@ -37,6 +37,12 @@ function namesSource(sentence, evidence) {
   })
 }
 
+// An interview guest named in the title ("How I Built This — Airbnb Brian Chesky") appears in the text.
+function guestIn(text, title) {
+  const guest = String(title ?? '').split(/\s[—–-]\s/)[1]?.split(' ').slice(-2).join(' ')
+  return !!guest && guest.split(' ').length === 2 && sameText(text).includes(sameText(guest))
+}
+
 // Cuts at a sentence boundary so the text has at most `cap` words. Keeps the
 // last sentence when it carries the closing question.
 export function capWords(text, cap = WORD_CAP, { keepLast = false } = {}) {
@@ -108,12 +114,18 @@ export function checkReply({ data, mode, evidence, founderTexts }) {
     else if (f.type === 'author_not_in_evidence' || f.type === 'book_not_in_evidence') problems.push('names an author or book in the reply')
   }
   const sources = verdict.status === 'ok' ? verdict.sources : []
+  // A lesson that cites a passage names its author in the text (Rafay, Nov 2: an unnamed lesson reads like a chatbot
+  // with sources pinned below). Interview guests count, as in the citation check.
+  if (mode === 'lesson' && sources.length && !sources.some((s) => namesSource(data.reply ?? '', [{ author: s.author, source_title: s.book }]) || guestIn(data.reply ?? '', s.book))) {
+    problems.push('name the author of the passage you cite in the sentence that uses it')
+  }
   // A follow-up given passages but citing none came out generic on live (Rafay, Nov 2): ask once more.
   if (mode === 'followup' && evidence.length && sources.length === 0) problems.push('build the answer on the passage that fits it best: put its handle in citations')
   let text = verdict.status === 'ok' ? verdict.text : cleanProse({ text: data.reply, sources: [], handles }).text
 
   // Sentence by sentence: what may never reach the founder goes. A cited author or book may be named; any other may not.
-  const uncited = evidence.filter((e) => !sources.some((s) => s.handle === e.handle))
+  // Another passage from a cited author or work is not "uncited": two passages from one book are common.
+  const uncited = evidence.filter((e) => !sources.some((s) => s.handle === e.handle || sameText(s.author) === sameText(e.author) || sameText(s.book) === sameText(e.source_title)))
   const passageNumbers = new Set(evidence.filter((e) => sources.some((s) => s.handle === e.handle)).flatMap((e) => digitsIn(e.text)))
   const ownNumbers = new Set(founderTexts.flatMap(digitsIn))
   const kept = []

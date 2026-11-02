@@ -50,7 +50,7 @@ export const FABRICATED_QUOTE = 'Always split the difference with a buyer'
 // server asks again once, then shows the cleaned reply: both sources, only
 // the verified quote.
 export const LESSON = {
-  reply: 'It has been three weeks since either clinic heard from you. Two clinics saw the demo and nothing has been asked of them since. A maybe from them tells you nothing; it only counts when they give up time or money. What would a real yes from one of those clinics be?',
+  reply: 'It has been three weeks since either clinic heard from you. Two clinics saw the demo and nothing has been asked of them since. Rob Fitzpatrick\'s point in The Mom Test is that a maybe tells you nothing; it only counts when they give up time or money. What would a real yes from one of those clinics be?',
   citations: [{ handle: 'E1', quote: VERIFIED_QUOTE }, { handle: 'E3', quote: FABRICATED_QUOTE }],
   picture_json: JSON.stringify({ type: 'timeline', data: { events: [{ when: 'three weeks ago', label: 'Clinics asked for pricing' }, { when: 'Today', label: 'No price sent yet' }] } }),
   follow_ups: ['What if they say no?', 'Give me the exact words to use'],

@@ -107,7 +107,7 @@ async function setup(script = [], { rows = ROWS, answered = true, delayMs = 0, t
 }
 
 const learnReply = (over = {}) => JSON.stringify({
-  reply: 'It has been three weeks since either clinic heard from you. Two clinics saw the demo and nothing has been asked of them since. A maybe from them tells you nothing; it only counts when they give up time or money. What would a real yes from one of those clinics be?',
+  reply: "It has been three weeks since either clinic heard from you. Two clinics saw the demo and nothing has been asked of them since. Rob Fitzpatrick's point in The Mom Test is that a maybe tells you nothing; it only counts when they give up time or money. What would a real yes from one of those clinics be?",
   citations: [{ handle: 'E1', quote: 'you have learned nothing' }],
   picture_json: JSON.stringify({ type: 'timeline', data: { events: [{ when: 'three weeks ago', label: 'Clinics asked for pricing' }, { when: 'Today', label: 'No price sent yet' }] } }),
   follow_ups: ['What if they say no?', 'Give me the exact words to use'],
@@ -293,13 +293,15 @@ test('a fabricated quote is stripped, in the citation and in the prose', async (
   } finally { await close() }
 })
 
-test('an author named in the prose is removed; the source line still comes from the row', async () => {
+// Rafay, Nov 2: the lesson names the author it cites; a name it did not cite is removed.
+test('a cited author named in the prose stays, an uncited one is removed; the source line comes from the row', async () => {
   const named = learnReply({
-    reply: 'It has been three weeks since either clinic heard from you. Fitzpatrick says a maybe from a customer is worth nothing. What would a real yes from one of those clinics be?',
+    reply: 'It has been three weeks since either clinic heard from you. Fitzpatrick says a maybe from a customer is worth nothing. Chris Voss says no is where it starts. What would a real yes from one of those clinics be?',
   })
   const { start, close } = await started([named, named])
   try {
-    assert.ok(!/Fitzpatrick/.test(start.body.turn.text))
+    assert.match(start.body.turn.text, /Fitzpatrick says/)
+    assert.ok(!/Voss/.test(start.body.turn.text))
     assert.equal(start.body.turn.sources[0].author, 'Rob Fitzpatrick')
     assert.equal(start.body.turn.sources[0].book, 'The Mom Test')
   } finally { await close() }

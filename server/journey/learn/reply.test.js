@@ -51,3 +51,18 @@ test('the guest named in an interview title may be credited', () => {
   assert.ok(!problems.some((p) => p.includes('author')), problems.join('; '))
   assert.match(reply.text, /Brian Chesky/)
 })
+
+// Rafay, Nov 2: a live lesson cited Eric Ries but never named him in the text.
+test('a lesson that cites a passage but never names its author is sent back', () => {
+  const data = { reply: 'You have a prototype and no customers yet. Do the slow work by hand first. Who will you call today?', citations: [{ handle: 'E2' }] }
+  const { problems } = checkReply({ data, mode: 'lesson', evidence: two, founderTexts: founder })
+  assert.ok(problems.includes('name the author of the passage you cite in the sentence that uses it'))
+})
+
+test('naming the author of a cited passage stays when another passage from the same book was not cited', () => {
+  const sameBook = [...two, { handle: 'E3', chunk_id: 'c4', author: 'Paul Graham', source_title: "Do Things That Don't Scale", text: 'Recruit users by hand.', similarity: 0.39 }]
+  const data = { reply: "You have a prototype and no customers yet. Paul Graham's point is to recruit them by hand. Who will you call today?", citations: [{ handle: 'E2' }] }
+  const { reply, problems } = checkReply({ data, mode: 'lesson', evidence: sameBook, founderTexts: founder })
+  assert.ok(!problems.some((p) => p.includes('did not cite')), problems.join('; '))
+  assert.match(reply.text, /Paul Graham/)
+})
