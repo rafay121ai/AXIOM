@@ -158,7 +158,7 @@ export function SituationScreen({ chat, opening, suggestion, send, onReady, onCa
         )}
         <Composer inputRef={box} value={text} onChangeText={setText} onSend={submit} placeholder={copy.situation.placeholder} offline={offline} busy={busy} />
       </Fade>
-      <MenuBar onPress={onMenu} />
+      <MenuBar onPress={onMenu} step="situation" />
     </KeyboardAvoidingView>
   );
 }

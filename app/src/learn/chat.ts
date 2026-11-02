@@ -44,5 +44,11 @@ export function sourceLines(sources: LearnSource[]): string[] {
   return [...new Set(sources.map((s) => `${s.author} · ${s.book}`))];
 }
 
+/** The quotes the server verified word for word, each with its author, shown set apart under the lesson. */
+export function verifiedQuotes(sources: LearnSource[]): { quote: string; author: string }[] {
+  const seen = new Set<string>();
+  return sources.flatMap((s) => (s.quote && !seen.has(s.quote) && seen.add(s.quote) ? [{ quote: s.quote, author: s.author }] : []));
+}
+
 /** A lesson's text as paragraphs. */
 export const lessonParagraphs = (text: string): string[] => text.split(/\n+/).map((p) => p.trim()).filter(Boolean);

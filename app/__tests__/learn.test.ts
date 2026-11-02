@@ -5,7 +5,7 @@ import { createFakeApi } from '../src/api/fake';
 import { createHttpApi } from '../src/api/http';
 import { HttpError } from '../src/api/queue';
 import type { LearnReply } from '../src/api/types';
-import { applyLearnReply, lessonParagraphs, newLearnChat, sourceLines, suggestionTurn, tappedIndexes } from '../src/learn/chat';
+import { applyLearnReply, lessonParagraphs, newLearnChat, sourceLines, suggestionTurn, tappedIndexes, verifiedQuotes } from '../src/learn/chat';
 import { scaled, shares, withUnit } from '../src/learn/picture';
 
 const auth: Auth = { signInWithGoogle: async () => {}, signOut: async () => {}, isSignedIn: async () => true, getToken: async () => 'tok' };
@@ -147,5 +147,11 @@ describe('founder case and closed notice', () => {
     expect(applyLearnReply(chat, { ...base, founder_case: null })).toEqual([]);
     const items = applyLearnReply(chat, { ...base, founder_case: { story: 'a', outcome: 'done' }, founder_lessons: { state: 'closed_notice', notice: { text: 'n', wording_version: 'v' } } });
     expect(items.map((i) => i.who)).toEqual(['case', 'say']);
+  });
+});
+
+describe('verified quotes', () => {
+  it('shows only quotes the server verified, once each, with their author', () => {
+    expect(verifiedQuotes([{ author: 'A', book: 'B', quote: 'q1' }, { author: 'A', book: 'B', quote: 'q1' }, { author: 'C', book: 'D' }])).toEqual([{ quote: 'q1', author: 'A' }]);
   });
 });

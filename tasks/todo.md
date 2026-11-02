@@ -342,3 +342,9 @@ Order set by Rafay: give-to-get, founder voices, Calm/Direct/Hard prompt, accoun
 - [x] Skia + Reanimated port of tasks/design/intro-v3.html: light point, streak, emblem drawn from its tip, faint spider web, glow and sweep, settle, tagline in place, Google button rises with one shine.
 - [x] Newsreader removed; Manrope loaded by Skia for the tagline only. Web loads Skia's engine first (src/boot.web.ts, public/canvaskit.wasm).
 - [ ] Check frame rate on a real mid-range Android phone.
+
+## Live test fixes, round 2 (Rafay, Nov 2)
+- [x] Step change is visible: a short title card (SITUATION / READ / LEARN, small spaced caps) on entering each step, then the step name stays beside the menu logo. Skipped with reduce motion.
+- [x] Learn names the author (and work) of a passage it cites, in the sentence that uses it. The model sees author and title; the server keeps a name only if it belongs to a cited passage, and drops any sentence naming an uncited author or book.
+- [x] A verified exact quote shows set apart, with the author. Unverified quotes never show.
+- [x] The first line of a screen is not dimmed by the top fade when the screen opens.

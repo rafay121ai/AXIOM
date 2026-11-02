@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, type ScrollViewInstance, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { sendUntilDelivered } from '../api/delivery';
@@ -9,6 +9,7 @@ import { Composer } from '../components/Composer';
 import { Fade } from '../components/Fade';
 import { LoadingHint } from '../components/LoadingHint';
 import { MENU_BAR, MenuBar } from '../components/MenuMark';
+import { useFollowScroll } from '../components/useFollowScroll';
 import { TextAction } from '../components/TextAction';
 import { copy, failureLine } from '../copy';
 import { paragraphs } from '../situation/read';
@@ -48,7 +49,7 @@ export function ReadScreen({ loadRead, answer, onAnswered, onSomethingElse, onCa
   const latest = useRef({ loadRead, onAnswered });
   latest.current = { loadRead, onAnswered };
   const nextId = useRef(1);
-  const scroller = useRef<ScrollViewInstance>(null);
+  const follow = useFollowScroll(insets.top + MENU_BAR);
   useEffect(() => () => { live.current = false; }, []);
 
   const options = useCallback(() => ({
@@ -116,15 +117,16 @@ export function ReadScreen({ loadRead, answer, onAnswered, onSomethingElse, onCa
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
       <ScrollView
-        ref={scroller}
-        onContentSizeChange={() => scroller.current?.scrollToEnd({ animated: true })}
+        ref={follow.ref}
+        onLayout={follow.onLayout}
+        onContentSizeChange={follow.onContentSizeChange}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + MENU_BAR }]}
       >
         {!read && !failure && <LoadingHint />}
         {read && (
-          <>
+          <View onLayout={lines.length === 0 ? follow.newest(true) : undefined}>
             <Fade delay={at(0)} style={styles.head}>
               <Text accessibilityRole="header" style={type.readingHead}>{read.headline}</Text>
             </Fade>
@@ -136,15 +138,17 @@ export function ReadScreen({ loadRead, answer, onAnswered, onSomethingElse, onCa
             <Fade delay={at(parts - 1)} style={styles.next}>
               <Text style={type.readNext}>{read.closing_question}</Text>
             </Fade>
-          </>
+          </View>
         )}
-        {lines.map((l) =>
-          l.who === 'me' ? (
-            <Text key={l.id} style={styles.me}>{l.text}</Text>
-          ) : (
-            <Fade key={l.id} style={styles.sayWrap}><Text style={type.readSay}>{l.text}</Text></Fade>
-          ),
-        )}
+        {lines.map((l, n) => (
+          <View key={l.id} onLayout={n === lines.length - 1 ? follow.newest(l.who === 'ax') : undefined}>
+            {l.who === 'me' ? (
+              <Text style={styles.me}>{l.text}</Text>
+            ) : (
+              <Fade style={styles.sayWrap}><Text style={type.readSay}>{l.text}</Text></Fade>
+            )}
+          </View>
+        ))}
         {busy && !offline && <LoadingHint />}
         {failure && (
           <Fade style={styles.sayWrap}>
@@ -164,7 +168,7 @@ export function ReadScreen({ loadRead, answer, onAnswered, onSomethingElse, onCa
           </View>
         </Fade>
       )}
-      <MenuBar onPress={onMenu} />
+      <MenuBar onPress={onMenu} step="read" />
     </KeyboardAvoidingView>
   );
 }

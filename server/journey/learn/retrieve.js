@@ -1,8 +1,8 @@
 // Retrieval for Learn, on the server. The same search the old browser code
 // used (match_wiki_chunks on the Knowledge project), through an injected
 // knowledgeSupabase and an injected embedder. Returns an evidence pack whose
-// rows carry opaque handles (E1..En); the model sees only handle and text,
-// never a database id, author or title.
+// rows carry opaque handles (E1..En); the model sees handle, author, title and text,
+// never a database id.
 //
 // Attribution is book level until the lesson tables exist: a passage carries
 // author and title from its row, and never a quote, chapter or page of ours.

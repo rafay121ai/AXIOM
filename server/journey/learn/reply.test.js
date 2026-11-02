@@ -24,3 +24,21 @@ test('a follow-up with no passages to use is not asked to cite', () => {
   const { problems } = checkReply({ data, mode: 'followup', evidence: [], founderTexts: ['I have a prototype and no customers yet'] })
   assert.ok(!problems.some((p) => p.includes('citations')))
 })
+
+// Rafay, Nov 2: lessons read like a chatbot with sources pinned below. A cited author may be named; others may not.
+const two = [...evidence, { handle: 'E2', chunk_id: 'c2', author: 'Paul Graham', source_title: "Do Things That Don't Scale", text: 'Do things that do not scale at the start.', similarity: 0.4 }]
+const founder = ['I have a prototype and no customers yet']
+
+test('a sentence naming the author it cites stays', () => {
+  const data = { reply: "You have a prototype and no customers yet. Paul Graham's point in Do Things That Don't Scale is to do the slow work by hand first. Who will you call today?", citations: [{ handle: 'E2' }] }
+  const { reply, problems } = checkReply({ data, mode: 'lesson', evidence: two, founderTexts: founder })
+  assert.ok(!problems.some((p) => p.includes('did not cite')), problems.join('; '))
+  assert.match(reply.text, /Paul Graham/)
+})
+
+test('a sentence naming an author it did not cite is dropped', () => {
+  const data = { reply: 'You have a prototype and no customers yet. Reid Hoffman thinks distribution is the core link. Who will you call today?', citations: [{ handle: 'E2' }] }
+  const { reply, problems } = checkReply({ data, mode: 'lesson', evidence: two, founderTexts: founder })
+  assert.ok(problems.includes('names an author or book it did not cite'))
+  assert.doesNotMatch(reply.text, /Hoffman/)
+})

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, type ScrollViewInstance, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { newTurnId, sendUntilDelivered } from '../api/delivery';
@@ -12,12 +12,13 @@ import { FounderCard } from '../components/FounderCard';
 import { Glass } from '../components/Glass';
 import { LoadingHint } from '../components/LoadingHint';
 import { MENU_BAR, MenuBar } from '../components/MenuMark';
+import { useFollowScroll } from '../components/useFollowScroll';
 import { Picture } from '../components/Picture';
 import { Words } from '../components/Words';
 import { TextAction } from '../components/TextAction';
 import { copy, failureLine } from '../copy';
-import { applyLearnReply, type LearnChat, type LearnItem, lessonParagraphs, sourceLines, suggestionTurn, tappedIndexes } from '../learn/chat';
-import { colors, ink, type } from '../theme';
+import { applyLearnReply, type LearnChat, type LearnItem, lessonParagraphs, sourceLines, suggestionTurn, tappedIndexes, verifiedQuotes } from '../learn/chat';
+import { colors, gold, ink, type } from '../theme';
 
 type Props = {
   chat: LearnChat;
@@ -46,6 +47,12 @@ function TurnView({ turn, fresh, chips }: { turn: LearnTurn; fresh: boolean; chi
       ))}
       {complete && (
         <Fade duration={500}>
+          {verifiedQuotes(turn.sources).map((q) => (
+            <View key={q.quote} style={styles.quote}>
+              <Text style={styles.quoteText}>{`\u201C${q.quote}\u201D`}</Text>
+              <Text style={styles.quoteBy}>{q.author}</Text>
+            </View>
+          ))}
           {sourceLines(turn.sources).map((line) => <Text key={line} style={styles.src}>{line}</Text>)}
           {turn.picture && <Picture picture={turn.picture} />}
           {chips && (
@@ -75,7 +82,7 @@ export function LearnScreen({ chat, start, send, tap, loadHint, onOpenMove, onCa
   const live = useRef(true);
   // Axiom's words fill in only for turns that arrive while the screen is open.
   const seen = useRef(new Set(chat.items.map((i) => i.key)));
-  const scroller = useRef<ScrollViewInstance>(null);
+  const follow = useFollowScroll(insets.top + MENU_BAR);
   // The screen asks for the lesson once, however often its parent redraws.
   const latest = useRef({ start, loadHint });
   latest.current = { start, loadHint };
@@ -163,19 +170,24 @@ export function LearnScreen({ chat, start, send, tap, loadHint, onOpenMove, onCa
     }
   }
 
+  // The newest item reports where it starts, so a long reply is read from its first line.
+  const newest = (n: number, i: LearnItem, node: React.ReactNode) =>
+    n === items.length - 1 ? <View key={i.key} onLayout={follow.newest(i.who !== 'me')}>{node}</View> : node;
+
   const chips = suggestionTurn(items);
   const done = chips ? tappedIndexes(items, chips.id) : [];
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
       <ScrollView
-        ref={scroller}
-        onContentSizeChange={() => scroller.current?.scrollToEnd({ animated: true })}
+        ref={follow.ref}
+        onLayout={follow.onLayout}
+        onContentSizeChange={follow.onContentSizeChange}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.chat, { paddingTop: insets.top + MENU_BAR }]}
       >
-        {items.map((i) => {
+        {items.map((i, n) => newest(n, i, (() => {
           if (i.who === 'me') {
             return (
               <View key={i.key} style={styles.me}>
@@ -205,7 +217,7 @@ export function LearnScreen({ chat, start, send, tap, loadHint, onOpenMove, onCa
               />
             </Fade>
           );
-        })}
+        })()))}
         {busy && !offline && <LoadingHint hint={hint} />}
         {failure && (
           <Fade style={styles.ax}>
@@ -218,7 +230,7 @@ export function LearnScreen({ chat, start, send, tap, loadHint, onOpenMove, onCa
         <LinearGradient pointerEvents="none" colors={['rgba(5,5,5,0)', colors.base]} locations={[0, 0.4]} style={StyleSheet.absoluteFill} />
         <Composer value={text} onChangeText={setText} onSend={submit} placeholder={copy.learn.placeholder} offline={offline} busy={busy} />
       </View>
-      <MenuBar onPress={onMenu} />
+      <MenuBar onPress={onMenu} step="learn" />
     </KeyboardAvoidingView>
   );
 }
@@ -229,6 +241,10 @@ const styles = StyleSheet.create({
   ax: { marginBottom: 18 },
   para: { marginBottom: 14 },
   src: { ...type.label, textTransform: 'none', letterSpacing: 0.5, fontSize: 11.5, color: ink(0.45), marginBottom: 20 },
+  // A verified quote, set apart by a thin gold rule.
+  quote: { borderLeftWidth: 1, borderLeftColor: gold(0.55), paddingLeft: 14, marginTop: 2, marginBottom: 22 },
+  quoteText: { ...type.readSay, fontStyle: 'italic', color: ink(0.92) },
+  quoteBy: { ...type.label, textTransform: 'none', letterSpacing: 0.5, fontSize: 11.5, color: ink(0.5), marginTop: 8 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   me: { marginTop: 24, marginBottom: 24, marginLeft: 52, alignItems: 'flex-end' },
   meText: { ...type.founder, textAlign: 'right' },

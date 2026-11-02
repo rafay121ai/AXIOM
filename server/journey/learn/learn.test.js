@@ -167,9 +167,9 @@ test('full flow: lesson, two real replies, then the first move card', async () =
     assert.equal(start.body.move_offer, 'none')
     assert.equal(start.body.offers_left, 2)
 
-    // The model never sees ids, authors or titles; the app never sees evidence.
+    // The model sees author and title (to name who taught it) but never an id; the app never sees evidence.
     const prompt = JSON.stringify(chatCalls()[0].payload.messages)
-    assert.ok(!prompt.includes(uuid(901)) && !prompt.includes('Fitzpatrick') && !prompt.includes('Mom Test'))
+    assert.ok(!prompt.includes(uuid(901)) && prompt.includes('Fitzpatrick') && prompt.includes('Mom Test'))
     assert.ok(prompt.includes('gone back to either since the demo'))
     assert.ok(!JSON.stringify(start.body).match(/chunk|handle|evidence|E1/))
     assert.equal(knowledge.calls[0].name, 'match_wiki_chunks')

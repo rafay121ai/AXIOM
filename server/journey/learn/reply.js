@@ -112,12 +112,13 @@ export function checkReply({ data, mode, evidence, founderTexts }) {
   if (mode === 'followup' && evidence.length && sources.length === 0) problems.push('build the answer on the passage that fits it best: put its handle in citations')
   let text = verdict.status === 'ok' ? verdict.text : cleanProse({ text: data.reply, sources: [], handles }).text
 
-  // Sentence by sentence: what may never reach the founder goes.
+  // Sentence by sentence: what may never reach the founder goes. A cited author or book may be named; any other may not.
+  const uncited = evidence.filter((e) => !sources.some((s) => s.handle === e.handle))
   const passageNumbers = new Set(evidence.filter((e) => sources.some((s) => s.handle === e.handle)).flatMap((e) => digitsIn(e.text)))
   const ownNumbers = new Set(founderTexts.flatMap(digitsIn))
   const kept = []
   for (const sentence of sentencesOf(text)) {
-    if (namesSource(sentence, evidence)) { problems.push('names an author or book in the reply'); continue }
+    if (namesSource(sentence, uncited)) { problems.push('names an author or book it did not cite'); continue }
     if (QUOTE_MARKS.test(sentence)) { problems.push('quotation marks in the reply'); continue }
     if (hasBanned(sentence)) { problems.push('a banned phrase'); continue }
     if (TEASER.test(norm(sentence))) { problems.push('a teaser'); continue }
@@ -165,7 +166,8 @@ export function checkReply({ data, mode, evidence, founderTexts }) {
 // Read answer, Learn replies). deps: { callStructured, userId, log }.
 // Throws only when no usable reply exists after two attempts.
 export async function composeReply({ mode, step, context, evidence, founderTexts, usageContext, deps }) {
-  const shown = evidence.map((e) => ({ handle: e.handle, text: e.text }))
+  // Author and title are shown so the lesson can name who taught it (Rafay, Nov 2); the server still checks every name.
+  const shown = evidence.map((e) => ({ handle: e.handle, author: e.author, title: e.source_title, text: e.text }))
   let problems = null
   let fallback = null
   for (let attempt = 1; attempt <= 2; attempt += 1) {

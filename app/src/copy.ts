@@ -74,6 +74,8 @@ export const copy = {
     willSend: "I'll send it as soon as you're back online. You can close the app.",
   },
   // mock-onboarding-v2.html, screen 9 (home) and its menu drawer.
+  // The step names: a short title card on entering each step, then beside the menu logo (Rafay, Nov 2).
+  steps: { situation: 'Situation', read: 'Read', learn: 'Learn' },
   home: {
     placeholder: "What's going on?",
     menu: 'Menu',

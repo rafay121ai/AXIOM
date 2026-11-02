@@ -147,7 +147,8 @@ test('a founder walks the whole journey', async (t) => {
       assert.deepEqual(citations.map((c) => c.chunk_ids), [[uuid(901)], [uuid(904)]])
       // The model never sees an author, a title or a database id.
       const prompt = JSON.stringify(tries[0].payload.messages)
-      assert.ok(!prompt.includes('Fitzpatrick') && !prompt.includes('Mom Test') && !prompt.includes(uuid(901)))
+      // The model is given author and title to name who taught it, never a database id.
+      assert.ok(prompt.includes('Fitzpatrick') && !prompt.includes(uuid(901)))
     })
 
     await t.test('learn: a tapped follow-up is answered in place, with no founder message', async () => {
