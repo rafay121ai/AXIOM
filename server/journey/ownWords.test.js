@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { checkFirstReading, norm, quotedPhrases } from './ownWords.js'
+import { checkFirstReading, norm, quotedPhrases, unquoteUnknown } from './ownWords.js'
 import { fallbackReading } from './firstReading.js'
 import { FULL_ANSWERS } from './fixtures.js'
 import { buildEvidence } from './firstReading.js'
@@ -111,4 +111,23 @@ test('fallback states only what was picked, never infers, and reads naturally fo
   for (const need of [/End the body on one plain question/, /No exclamation marks, no emoji, no jokes/, /I have what I need/]) {
     assert.match(FIRST_READING_PROMPT, need)
   }
+})
+
+// Live Read fell back on Nov 2: it quoted the answers as it was shown them, joined, and once reworded them.
+test('a quote of the answers exactly as the model was shown them is accepted', () => {
+  const { answerTexts } = buildEvidence({ goal: { goal: 'My first customer', when: 'This month' }, tried: ['Talked to customers', 'Launched it'] })
+  const reading = { headline: 'You want "my first customer, this month".', body: 'You have "talked to customers, launched it" and still have no one paying, which is what to change first.', underlines: [] }
+  const { problems } = checkFirstReading({ reading, answerTexts })
+  assert.ok(!problems.some((p) => p.startsWith('quoted words')), problems.join('; '))
+})
+
+test('a reworded quote loses its quotation marks; an exact one keeps them', () => {
+  const answerTexts = ['Talked to customers', 'Launched it']
+  assert.equal(unquoteUnknown('You tried "talking to customers, launching" so far.', answerTexts), 'You tried talking to customers, launching so far.')
+  assert.equal(unquoteUnknown('You "talked to customers".', answerTexts), 'You "talked to customers".')
+  assert.equal(unquoteUnknown('You \u201Ctalked to customers\u201D.', answerTexts), 'You \u201Ctalked to customers\u201D.')
+})
+
+test('a quote with a word they never used keeps its marks, so the check still sends it back', () => {
+  assert.equal(unquoteUnknown('You wrote "the clinics love my demo".', ['I have a demo ready for the clinics']), 'You wrote "the clinics love my demo".')
 })

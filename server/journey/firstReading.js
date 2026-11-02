@@ -21,7 +21,9 @@ export function buildEvidence(answers) {
   const asked = QUESTIONS.filter((q) => Object.hasOwn(answers, q.key))
   return {
     evidence: asked.map((q) => ({ question: q.title, answer: readable(q, answers[q.key]) })),
-    answerTexts: asked.flatMap((q) => answerStrings(q, answers[q.key])),
+    // Each answer as the model sees it (choices joined, as in "My first customer, This month") and each part alone,
+    // so quoting exactly what it was shown is never rejected (live Read fell back on this, Nov 2).
+    answerTexts: asked.flatMap((q) => [...answerStrings(q, answers[q.key]), readable(q, answers[q.key])]),
   }
 }
 

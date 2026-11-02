@@ -2,7 +2,7 @@
 // ownWords.js and hooks.js check it; one retry names the problems; a plain
 // read composed from the founder's own words replaces it if that fails.
 import { buildEvidence } from './firstReading.js'
-import { checkFirstReading } from './ownWords.js'
+import { checkFirstReading, unquoteUnknown } from './ownWords.js'
 import { checkHook } from './hooks.js'
 import { stripFiller } from './filler.js'
 import { READ_SCHEMA, readMessages } from './prompts/read.js'
@@ -53,6 +53,13 @@ export function checkRead({ read, answerTexts }) {
   return { ok: problems.length === 0, problems }
 }
 
+const unquoted = (read, answerTexts) => ({
+  ...read,
+  headline: unquoteUnknown(read.headline, answerTexts),
+  body: unquoteUnknown(read.body, answerTexts),
+  closing_question: unquoteUnknown(read.closing_question, answerTexts),
+})
+
 // deps: { callStructured, userId, log }. Never throws: any model failure ends
 // in the fallback. Returns { read, source }.
 export async function createRead({ signUpAnswers, conversation, deps, situationId, style }) {
@@ -71,7 +78,7 @@ export async function createRead({ signUpAnswers, conversation, deps, situationI
         usageContext: { step: 'read', kind: 'read', situation_id: situationId },
         messages: readMessages({ signUp: evidence, conversation, style }, problems),
       })
-      const read = clean(data)
+      const read = unquoted(clean(data), answerTexts)
       const verdict = checkRead({ read, answerTexts })
       if (verdict.ok) return { read, source: 'model' }
       problems = verdict.problems

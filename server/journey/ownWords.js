@@ -41,15 +41,35 @@ export function quotedPhrases(text) {
 const numbersIn = (text) =>
   [...norm(text).matchAll(/\d[\d,]*(?:\.\d+)?/g)].map((m) => m[0].replace(/,/g, '').replace(/\.$/, ''))
 
+// True when `phrase` appears in what the founder typed or chose.
+function inAnswersOf(answerTexts) {
+  const corpus = answerTexts.map(norm).filter(Boolean)
+  return (phrase) => {
+    const p = trimEdges(norm(phrase))
+    return p.length > 0 && corpus.some((a) => a.includes(p))
+  }
+}
+
+// A quote that rewords the founder's answers ("talking to customers" for "Talked to customers") loses its quotation
+// marks and stays as plain words, so it no longer claims to be exact. Used before the check, so one reworded quote
+// does not cost the whole Read. A quote of words they never used keeps its marks, and the check sends it back.
+const stems = (text) => (norm(text).match(/[a-z]{4,}/g) ?? []).map((w) => w.slice(0, 4))
+export function unquoteUnknown(text, answerTexts) {
+  const inAnswers = inAnswersOf(answerTexts)
+  const theirs = new Set(answerTexts.flatMap(stems))
+  const reworded = (inner) => {
+    const words = stems(inner)
+    return words.length > 0 && words.every((w) => theirs.has(w))
+  }
+  return String(text ?? '').replace(/["\u201C]([^"\u201C\u201D]+)["\u201D]/g, (whole, inner) => (inAnswers(inner) || !reworded(inner) ? whole : inner))
+}
+
 // reading: { headline, body, underlines }. answerTexts: every string the
 // founder typed or chose, one array item per answer. Returns { ok, problems }.
 export function checkFirstReading({ reading, answerTexts }) {
   const problems = []
   const corpus = answerTexts.map(norm).filter(Boolean)
-  const inAnswers = (phrase) => {
-    const p = trimEdges(norm(phrase))
-    return p.length > 0 && corpus.some((a) => a.includes(p))
-  }
+  const inAnswers = inAnswersOf(answerTexts)
 
   if (!reading || typeof reading.headline !== 'string' || typeof reading.body !== 'string' || !Array.isArray(reading.underlines)) {
     return { ok: false, problems: ['reading has the wrong shape'] }
