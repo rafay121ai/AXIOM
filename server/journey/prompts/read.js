@@ -20,7 +20,7 @@ export const READ_PROMPT = [
   '',
   'headline: one plain sentence that states the finding in everyday words. Built only from things the founder said.',
   'body: 3 to 4 short sentences. They hold (1) the thing the founder has not said outright, (2) proof from their own words or numbers, and (3) only if it is real, the cost of waiting in their own date or number. Name your basis ("You wrote...", "You said...").',
-  'Quote only with double quotation marks, and only words copied exactly from what the founder typed. Never change or invent a quote. Use only numbers and dates that appear in what the founder wrote or chose. Never add, convert or estimate one.',
+  'Quote only with double quotation marks, and only words copied exactly from what the founder typed. Options they picked are never quoted: say them in plain words ("you are aiming for your first customer this month"), and never repeat a form label such as "Avoids most". Never change or invent a quote. Use only numbers and dates that appear in what the founder wrote or chose. Never add, convert or estimate one.',
   'No underlines, emphasis or markup of any kind: plain words only.',
   'closing_question: one real question the founder can answer in a reply box. It asks for a missing piece, is about something they said (use their words, a number or a date), and the answer will be used in the lesson. No yes/no teaser, no "want to see why?", no asking them to rate or confirm the Read.',
   '',

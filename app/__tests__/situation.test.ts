@@ -104,9 +104,10 @@ describe('the conversation', () => {
     expect(items.map((i) => i.who)).toEqual(['me', 'ax']);
     expect(chat.situationId).toBe('s1');
   });
-  it('adds nothing when Axiom is ready: it moves on without a closing line', () => {
+  // Rafay, Nov 2: with no questions the step was invisible, so Axiom closes it with one line before the Read.
+  it('closes with one fixed line when Axiom is ready', () => {
     const chat = { ...newChat(), items: [me], nextId: 2 };
-    expect(applyReply(chat, reply({ status: 'ready', reply: null }), me)).toEqual([me]);
+    expect(applyReply(chat, reply({ status: 'ready', reply: null }), me)).toEqual([me, { id: 2, who: 'ax', text: copy.situation.ready }]);
   });
   it('starts a fresh conversation for a new topic', () => {
     const old = { id: 0, who: 'ax', text: 'old question' } as const;

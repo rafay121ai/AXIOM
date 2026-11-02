@@ -1,7 +1,7 @@
 // First reading: built only from the founder's own sign-up answers. The model
 // writes it; ownWords.js checks it; a plain reading composed from the answers
 // replaces it if the model cannot get it right.
-import { QUESTIONS, answerStrings } from './questions.js'
+import { QUESTIONS, answerStrings, typedStrings } from './questions.js'
 import { checkFirstReading } from './ownWords.js'
 import { FIRST_READING_SCHEMA, firstReadingMessages } from './prompts/firstReading.js'
 
@@ -16,14 +16,19 @@ const readable = (question, answer) => {
   }
 }
 
+// Answer types whose shown form is only the founder's picks, joined; the others add our labels.
+const JOINED = new Set(['goal', 'multi'])
+
 // Evidence for the model, and the strings the checker compares against.
 export function buildEvidence(answers) {
   const asked = QUESTIONS.filter((q) => Object.hasOwn(answers, q.key))
   return {
     evidence: asked.map((q) => ({ question: q.title, answer: readable(q, answers[q.key]) })),
-    // Each answer as the model sees it (choices joined, as in "My first customer, This month") and each part alone,
-    // so quoting exactly what it was shown is never rejected (live Read fell back on this, Nov 2).
-    answerTexts: asked.flatMap((q) => [...answerStrings(q, answers[q.key]), readable(q, answers[q.key])]),
+    // Each answer alone, plus picked choices joined as the model sees them ("My first customer, This month"), so a
+    // faithful quote is not rejected (Read fell back on this, Nov 2). Never our own labels ("Avoids most:").
+    answerTexts: asked.flatMap((q) => [...answerStrings(q, answers[q.key]), ...(JOINED.has(q.type) ? [readable(q, answers[q.key])] : [])]),
+    // Only what the founder typed: the Read may quote these and nothing else.
+    typedTexts: asked.flatMap((q) => typedStrings(q, answers[q.key])),
   }
 }
 

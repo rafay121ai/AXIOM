@@ -131,3 +131,13 @@ test('a reworded quote loses its quotation marks; an exact one keeps them', () =
 test('a quote with a word they never used keeps its marks, so the check still sends it back', () => {
   assert.equal(unquoteUnknown('You wrote "the clinics love my demo".', ['I have a demo ready for the clinics']), 'You wrote "the clinics love my demo".')
 })
+
+// Rafay, Nov 2: the Read quoted "Avoids most: Talking to customers, Launching", our form label, as the founder's words.
+test('the Read quotes only typed words: a picked option loses its marks, our labels are never theirs', () => {
+  const { answerTexts, typedTexts } = buildEvidence({ goal: { goal: 'My first customer', when: 'This month' }, strengths: { a: ['Building'], b: ['Talking to customers'] }, stuck: 'Nobody opens the beta' })
+  assert.ok(!answerTexts.some((t) => t.includes('Avoids most')))
+  assert.deepEqual(typedTexts, ['Nobody opens the beta'])
+  assert.equal(unquoteUnknown('You want "my first customer, this month".', typedTexts, answerTexts), 'You want my first customer, this month.')
+  assert.equal(unquoteUnknown('You said "nobody opens the beta".', typedTexts, answerTexts), 'You said "nobody opens the beta".')
+  assert.equal(unquoteUnknown('You "avoids most: talking to customers".', typedTexts, answerTexts), 'You "avoids most: talking to customers".')
+})

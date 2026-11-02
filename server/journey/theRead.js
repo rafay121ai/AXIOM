@@ -40,32 +40,35 @@ const clean = (data) => {
 // Problems with a read. answerTexts: sign-up strings plus what the founder
 // wrote in this situation. The closing question is held to the same
 // own-words rules as the body, and must be a real hook.
-export function checkRead({ read, answerTexts }) {
+export function checkRead({ read, answerTexts, quoteTexts = answerTexts }) {
   const problems = []
   if (read.body.length < 40) problems.push('body is too short')
   if (read.underlines !== undefined) problems.push('the Read has no underlines')
   const own = checkFirstReading({
     reading: { headline: read.headline, body: `${read.body} ${read.closing_question}`, underlines: [] },
     answerTexts,
+    quoteTexts,
   })
   problems.push(...own.problems)
   problems.push(...checkHook({ text: read.closing_question, sources: answerTexts }).problems)
   return { ok: problems.length === 0, problems }
 }
 
-const unquoted = (read, answerTexts) => ({
+const unquoted = (read, quoteTexts, answerTexts) => ({
   ...read,
-  headline: unquoteUnknown(read.headline, answerTexts),
-  body: unquoteUnknown(read.body, answerTexts),
-  closing_question: unquoteUnknown(read.closing_question, answerTexts),
+  headline: unquoteUnknown(read.headline, quoteTexts, answerTexts),
+  body: unquoteUnknown(read.body, quoteTexts, answerTexts),
+  closing_question: unquoteUnknown(read.closing_question, quoteTexts, answerTexts),
 })
 
 // deps: { callStructured, userId, log }. Never throws: any model failure ends
 // in the fallback. Returns { read, source }.
 export async function createRead({ signUpAnswers, conversation, deps, situationId, style }) {
-  const { evidence, answerTexts: signUpTexts } = buildEvidence(signUpAnswers)
+  const { evidence, answerTexts: signUpTexts, typedTexts } = buildEvidence(signUpAnswers)
   const founderTexts = conversation.filter((t) => t.role === 'founder').map((t) => t.text)
   const answerTexts = [...signUpTexts, ...founderTexts]
+  // Quotes only of what they typed; a picked option is said in plain words (Rafay, Nov 2).
+  const quoteTexts = [...typedTexts, ...founderTexts]
   let problems = null
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
@@ -78,8 +81,8 @@ export async function createRead({ signUpAnswers, conversation, deps, situationI
         usageContext: { step: 'read', kind: 'read', situation_id: situationId },
         messages: readMessages({ signUp: evidence, conversation, style }, problems),
       })
-      const read = unquoted(clean(data), answerTexts)
-      const verdict = checkRead({ read, answerTexts })
+      const read = unquoted(clean(data), quoteTexts, answerTexts)
+      const verdict = checkRead({ read, answerTexts, quoteTexts })
       if (verdict.ok) return { read, source: 'model' }
       problems = verdict.problems
     } catch (err) {

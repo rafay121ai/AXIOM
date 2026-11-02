@@ -54,8 +54,9 @@ function inAnswersOf(answerTexts) {
 // marks and stays as plain words, so it no longer claims to be exact. Used before the check, so one reworded quote
 // does not cost the whole Read. A quote of words they never used keeps its marks, and the check sends it back.
 const stems = (text) => (norm(text).match(/[a-z]{4,}/g) ?? []).map((w) => w.slice(0, 4))
-export function unquoteUnknown(text, answerTexts) {
-  const inAnswers = inAnswersOf(answerTexts)
+// quoteTexts: what may be quoted. answerTexts: everything they typed or picked (for spotting a reworded answer).
+export function unquoteUnknown(text, quoteTexts, answerTexts = quoteTexts) {
+  const inAnswers = inAnswersOf(quoteTexts)
   const theirs = new Set(answerTexts.flatMap(stems))
   const reworded = (inner) => {
     const words = stems(inner)
@@ -66,10 +67,12 @@ export function unquoteUnknown(text, answerTexts) {
 
 // reading: { headline, body, underlines }. answerTexts: every string the
 // founder typed or chose, one array item per answer. Returns { ok, problems }.
-export function checkFirstReading({ reading, answerTexts }) {
+// quoteTexts: what may be quoted (default: every answer); the Read passes only what the founder typed.
+export function checkFirstReading({ reading, answerTexts, quoteTexts = answerTexts }) {
   const problems = []
   const corpus = answerTexts.map(norm).filter(Boolean)
   const inAnswers = inAnswersOf(answerTexts)
+  const quotable = inAnswersOf(quoteTexts)
 
   if (!reading || typeof reading.headline !== 'string' || typeof reading.body !== 'string' || !Array.isArray(reading.underlines)) {
     return { ok: false, problems: ['reading has the wrong shape'] }
@@ -81,7 +84,7 @@ export function checkFirstReading({ reading, answerTexts }) {
   const { phrases, unbalanced } = quotedPhrases(text)
   if (unbalanced) problems.push('unbalanced quote mark')
   for (const phrase of phrases) {
-    if (!inAnswers(phrase)) problems.push(`quoted words are not in the answers: "${phrase}"`)
+    if (!quotable(phrase)) problems.push(`quoted words are not in the answers: "${phrase}"`)
   }
 
   // Underlines

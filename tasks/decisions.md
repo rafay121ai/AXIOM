@@ -677,3 +677,4 @@ Idea from Rafay: founder credits, and growth by referral. Not building until giv
 - Migrations applied to main on Oct 31 2026: 20260930000001 through 20261101000011 (15 files; 20260930000000 was already live). Verified: RLS on every table, no anon/authenticated grants on new tables, peer_outcomes holds no author link.
 - Hosting (Rafay, Nov 2): the API moves from Railway (account banned) to Render, Singapore. Free plan while testing; Starter (always on) before pushes go on, because the push scheduler runs in the process. Setup in render.yaml. Live at https://axiom-api-gu9h.onrender.com since Nov 2; CLAUDE.md and ARCHITECTURE.md updated.
 - App ID (Rafay, Nov 2): iOS bundle id and Android package are com.getaxiom.app.
+- Situation (Rafay, Nov 2): when Axiom has enough, it says "Got it. Here's what I see." and holds 1.5 s before the Read, instead of moving on silently.

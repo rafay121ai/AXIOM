@@ -10,6 +10,8 @@ export const copy = {
     openingFresh: 'What is on your mind?',
     placeholder: 'What is going on?',
     suggestion: 'Use what you wrote earlier',
+    // Said when Axiom has enough, so the founder sees the step end before the Read (Rafay, Nov 2).
+    ready: "Got it. Here's what I see.",
   },
   read: {
     placeholder: 'Your answer',

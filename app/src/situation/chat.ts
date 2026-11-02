@@ -1,5 +1,6 @@
 import { newTurnId } from '../api/delivery';
 import type { Screened, SituationReply, SituationTurn } from '../api/types';
+import { copy } from '../copy';
 
 // The conversation on the Situation screen. It lives outside the screen so it survives a trip to
 // the care screen and back, and so the rules of a turn can be tested without drawing anything.
@@ -28,8 +29,8 @@ export function chatFromTurns(situationId: string, turns: SituationTurn[]): Chat
 /** Sends one founder text: the first starts a situation, later ones continue it. */
 export type SendTurn = (situationId: string | null, text: string, turnId: string) => Promise<Screened<SituationReply>>;
 
-/** A pause after "ready" so the screen does not jump; Axiom says nothing in between. */
-export const HAND_OFF_MS = 1200;
+/** A pause after "ready", on Axiom's closing line, so the founder sees the step end before the Read. */
+export const HAND_OFF_MS = 1500;
 
 /**
  * Applies Axiom's reply to the chat and returns the new items, with the founder's text now marked sent.
@@ -38,6 +39,6 @@ export const HAND_OFF_MS = 1200;
 export function applyReply(chat: Chat, reply: SituationReply, sent: ChatItem): ChatItem[] {
   chat.situationId = reply.situation_id;
   const base = reply.started_new ? [sent] : chat.items.map((i) => (i.id === sent.id ? sent : i));
-  if (reply.reply === null) return base;
+  if (reply.reply === null) return reply.status === 'ready' ? [...base, { id: chat.nextId++, who: 'ax', text: copy.situation.ready }] : base;
   return [...base, { id: chat.nextId++, who: 'ax', text: reply.reply }];
 }
