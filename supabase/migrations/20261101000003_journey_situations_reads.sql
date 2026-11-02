@@ -1,7 +1,7 @@
 -- Journey 3 of 9: situations, situation_turns, reads, take_follow_up().
 --
--- NOT APPLIED. Read supabase/MIGRATION_PLAN.md first. Verify against a fresh
--- read-only dump of the live main schema before pushing.
+-- Applied to main (zmzrrmqqxqzmmfovpqjt) on Oct 31 2026, after a fresh
+-- read-only check of live (audit/schema_live_2026-10-31.md).
 --
 -- Shapes: server/journey/schema_needs.md (B4, plus situations.care_flag from B7).
 -- Server only: RLS on, no policies, no anon/authenticated grants. All reads and

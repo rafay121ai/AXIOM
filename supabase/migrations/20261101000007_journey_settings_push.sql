@@ -1,7 +1,7 @@
 -- Journey 7 of 9: user_settings, push_tokens, notification_log.
 --
--- NOT APPLIED. Read supabase/MIGRATION_PLAN.md first. Verify against a fresh
--- read-only dump of the live main schema before pushing.
+-- Applied to main (zmzrrmqqxqzmmfovpqjt) on Oct 31 2026, after a fresh
+-- read-only check of live (audit/schema_live_2026-10-31.md).
 --
 -- Shapes: server/journey/schema_needs.md (B7 share_auto, B8 reminders and
 -- pushes, B9 home and settings). Depends on 20261101000003 and 20261101000005.

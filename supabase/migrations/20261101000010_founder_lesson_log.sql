@@ -1,7 +1,7 @@
 -- Journey 10 of 10: founder_lesson_log (give to get: which founder lessons a
 -- founder has been shown).
 --
--- NOT APPLIED. Read supabase/MIGRATION_PLAN.md first. Verify against a fresh
+-- Applied to main (zmzrrmqqxqzmmfovpqjt) on Oct 31 2026, after a fresh
 -- read-only dump of the live main schema before pushing. Touches the give-to-get
 -- rule (CLAUDE.md: consent and peer outcome logic): it needs Rafay's approval.
 --

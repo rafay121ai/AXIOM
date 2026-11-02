@@ -1,7 +1,7 @@
 -- Journey 9 of 9: model_usage_logs.call_type accepts the journey steps.
 --
--- NOT APPLIED. Read supabase/MIGRATION_PLAN.md first. Verify against a fresh
--- read-only dump of the live main schema before pushing.
+-- Applied to main (zmzrrmqqxqzmmfovpqjt) on Oct 31 2026, after a fresh
+-- read-only check of live (audit/schema_live_2026-10-31.md).
 --
 -- Widens the CHECK from 20260930000001 with the journey step names
 -- (server/config.js STEP_DEFAULTS: read, learn, followup, move, care, report,

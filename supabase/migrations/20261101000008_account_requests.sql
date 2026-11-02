@@ -1,7 +1,7 @@
 -- Journey 8 of 9: account_requests (export and delete requests, B9).
 --
--- NOT APPLIED. Read supabase/MIGRATION_PLAN.md first. Verify against a fresh
--- read-only dump of the live main schema before pushing.
+-- Applied to main (zmzrrmqqxqzmmfovpqjt) on Oct 31 2026, after a fresh
+-- read-only check of live (audit/schema_live_2026-10-31.md).
 --
 -- POST /api/account/export and DELETE /api/account only insert a waiting row
 -- here. Nothing removes founder data; a deletion plan must be written from a

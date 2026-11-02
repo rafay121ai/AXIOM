@@ -1,7 +1,7 @@
 -- Journey 6 of 9: reports, consent_log, peer_outcomes, outcome_author_links,
 -- peer_unlocks, share_outcome(), unshare_outcome().
 --
--- NOT APPLIED. Read supabase/MIGRATION_PLAN.md first. Verify against a fresh
+-- Applied to main (zmzrrmqqxqzmmfovpqjt) on Oct 31 2026, after a fresh
 -- read-only dump of the live main schema before pushing. This file holds
 -- consent and peer outcome privacy objects (CLAUDE.md: never touch without
 -- explicit instruction): it needs Rafay's approval.
