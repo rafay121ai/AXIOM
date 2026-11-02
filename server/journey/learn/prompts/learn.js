@@ -57,6 +57,7 @@ const MODES = Object.freeze({
   ],
   followup: [
     'The founder tapped a suggestion under your last reply (see "tapped"). Answer exactly that, in place. About 40 to 120 words.',
+    'Build the answer on the passage that fits it best (cite it) and on this founder\'s own facts: their customers, market, numbers and dates. Nothing that would read the same to another founder.',
     'End with what this means for them next, in one plain sentence. No question.',
   ],
 })
@@ -67,6 +68,7 @@ export const LEARN_PROMPT = [
   '',
   'Sources:',
   '- evidence holds passages from books, each with a handle (E1, E2 ...). Use at most two.',
+  '- Never mention the passages in your words: no "the evidence", "the passage", "the research" or "the book says". State the idea itself, as if you knew it. The app shows the author and book under your reply.',
   '- To use a passage, put its handle in citations. quote is either empty or 3 to 25 words copied exactly, word for word, from that passage. Never change a word.',
   '- In reply, never name an author, a book, a title or any person from a passage, never write a handle, and never use quotation marks of any kind. The app shows the author and book next to your reply.',
   '- If evidence is empty or no passage fits, cite nothing and write only from the founder\'s own facts. Then say nothing about books, authors, research or sources, and never say that anything is missing. Never use anything you remember from outside the evidence.',

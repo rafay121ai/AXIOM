@@ -459,6 +459,7 @@ test('a founder walks the whole journey', async (t) => {
       assert.deepEqual(page.body.what_you_learned.sources, [
         { author: 'Rob Fitzpatrick', book: 'The Mom Test', quote: VERIFIED_QUOTE_SHOWN },
         { author: 'Chris Voss', book: 'Never Split the Difference' },
+        { author: 'Rob Fitzpatrick', book: 'The Mom Test' }, // the follow-up builds on E1 too
       ])
       assert.equal(page.body.your_move.title, MOVE.title)
       assert.deepEqual([page.body.how_it_went.outcome, page.body.how_it_went.sharing], ['done', 'private'])

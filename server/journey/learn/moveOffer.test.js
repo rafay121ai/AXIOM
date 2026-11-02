@@ -5,10 +5,11 @@ import { asksWhatNext, decideMoveOffer, isRealReply, MOVE_NOTICE, AXIOM_LINES } 
 const ASKS = [
   'what should I do next', 'So what now?', 'ok but what do i do', 'What do I do?', "what's next", 'What is next', 'next step?',
   'give me the move', 'Tell me what to do', 'where do I start', 'how should I begin?', "what's my move", 'what now', 'what should we do now',
+  'Ok so when does this convo end now?', 'when does this end', 'are we done?', 'how do I finish this',
 ]
 const NOT_ASKS = [
   'ok', 'makes sense', 'I will do it next week', 'the clinics did nothing next', 'what do clinics pay', 'I started the pricing page',
-  'What does the book say about price', 'next to the door', '',
+  'What does the book say about price', 'next to the door', 'when does the trial end for them', 'the deal ended badly', '',
 ]
 
 test('intent matcher: asking what to do next, in many wordings', () => {

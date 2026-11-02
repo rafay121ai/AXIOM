@@ -15,6 +15,9 @@ const ASKS_NEXT = [
   /\bwhat (is|s) (my|the) (move|step|task)\b|\bwhats (my|the) (move|step|task)\b/,
   /\b(give|show|tell) me (my|the|a|your) (move|step|task|plan)\b/,
   /\btell me what to do\b/,
+  // Asking for the conversation to end is asking for the move (Rafay, Nov 2: "when does this convo end now?").
+  /\bwhen (does|will|do) (this|it|we) (convo |conversation |chat )?(end|finish|stop|wrap up)\b/,
+  /\bare we (done|finished)\b|\bhow (do|does|can) (i|we|this|it) (end|finish|wrap up)\b/,
   /\bwhere (do|should|can) (i|we) (start|begin)\b|\bhow (do|should) (i|we) (start|begin)\b/,
 ]
 

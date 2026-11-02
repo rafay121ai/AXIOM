@@ -58,7 +58,8 @@ export const LESSON = {
   move_fact: 'The two clinics have heard nothing from you for three weeks.',
 }
 const plainReply = (reply) => ({ reply, citations: [], picture_json: '', follow_ups: [], move_subject: '', move_fact: '' })
-export const FOLLOWUP_ANSWER = plainReply('A no from the clinics is still an answer, and it ends three weeks of waiting. Send the price to both clinics and ask each for a call.')
+// A follow-up builds on a passage the lesson was given (checkReply sends an uncited one back).
+export const FOLLOWUP_ANSWER = { ...plainReply('A no from the clinics is still an answer, and it ends three weeks of waiting. Send the price to both clinics and ask each for a call.'), citations: [{ handle: 'E1', quote: '' }] }
 export const LEARN_REPLY_1 = plainReply('The owner decides, so the ask goes to the owner of the first clinic. Both clinics have waited three weeks for a price. What would you ask that owner for?')
 export const LEARN_OFFER = plainReply('A paid pilot is a real yes from the first clinic, and the owner can give it. Your move is ready.')
 export const LEARN_AFTER_CARE = plainReply('The first clinic has waited three weeks for the price. Send it to the owner of the first clinic. What will you ask that owner for?')

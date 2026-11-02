@@ -6,6 +6,8 @@ export const BANNED_PHRASES = Object.freeze([
   'great question', 'certainly', 'i understand', "that's interesting", 'absolutely',
   'of course', "i'd be happy to", 'great',
   "that's right", 'not quite',
+  // Internal name for the passages the model is given; a founder hears the author's name instead.
+  'the evidence',
 ])
 
 // Teasers withhold something to create curiosity.

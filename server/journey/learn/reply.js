@@ -108,6 +108,8 @@ export function checkReply({ data, mode, evidence, founderTexts }) {
     else if (f.type === 'author_not_in_evidence' || f.type === 'book_not_in_evidence') problems.push('names an author or book in the reply')
   }
   const sources = verdict.status === 'ok' ? verdict.sources : []
+  // A follow-up given passages but citing none came out generic on live (Rafay, Nov 2): ask once more.
+  if (mode === 'followup' && evidence.length && sources.length === 0) problems.push('build the answer on the passage that fits it best: put its handle in citations')
   let text = verdict.status === 'ok' ? verdict.text : cleanProse({ text: data.reply, sources: [], handles }).text
 
   // Sentence by sentence: what may never reach the founder goes.
