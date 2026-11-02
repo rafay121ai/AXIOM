@@ -1,0 +1,43 @@
+# Render Blueprint for the Axiom API (replaces Railway).
+# One always-on web service: the push scheduler ticks inside the process, so the
+# plan must never sleep (Starter or above, not Free). Singapore sits next to the
+# main Supabase project (ap-southeast-1).
+# Secrets are `sync: false`: Render asks for them when the Blueprint is created,
+# and they are typed into Render's dashboard, never stored in this repo.
+services:
+  - type: web
+    name: axiom-api
+    runtime: node
+    region: singapore
+    plan: starter
+    branch: feature/journey-v1
+    rootDir: server
+    buildCommand: npm ci
+    startCommand: node index.js
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: VITE_SUPABASE_URL
+        value: https://zmzrrmqqxqzmmfovpqjt.supabase.co
+      - key: VITE_KNOWLEDGE_SUPABASE_URL
+        value: https://ecbcwyjvswgvbiicnynw.supabase.co
+      # Off until the phone build exists (milestone 5), then set to "on".
+      - key: EXPO_PUSH
+        value: "off"
+      # Off: delete requests are recorded, nothing is removed. Turn on once tested.
+      - key: ACCOUNT_DELETE
+        value: "off"
+      - key: FRONTEND_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: KNOWLEDGE_SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: EXPO_ACCESS_TOKEN
+        sync: false
