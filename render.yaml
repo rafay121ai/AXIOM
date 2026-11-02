@@ -1,7 +1,8 @@
 # Render Blueprint for the Axiom API (replaces Railway).
-# One always-on web service: the push scheduler ticks inside the process, so the
-# plan must never sleep (Starter or above, not Free). Singapore sits next to the
-# main Supabase project (ap-southeast-1).
+# One web service. Free plan for testing (Rafay, Nov 2): it sleeps after 15
+# minutes without requests and takes about a minute to wake. The push scheduler
+# ticks inside the process, so before EXPO_PUSH goes on, move to Starter (always
+# on). Singapore sits next to the main Supabase project (ap-southeast-1).
 # Secrets are `sync: false`: Render asks for them when the Blueprint is created,
 # and they are typed into Render's dashboard, never stored in this repo.
 services:
@@ -9,7 +10,7 @@ services:
     name: axiom-api
     runtime: node
     region: singapore
-    plan: starter
+    plan: free
     branch: feature/journey-v1
     rootDir: server
     buildCommand: npm ci
