@@ -1351,6 +1351,8 @@ export function createApp({
     callStructured: callStructuredForApp,
     clock,
     deleteOn: env.ACCOUNT_DELETE === 'on',
+    // Test accounts (ADMIN_USER_IDS / ADMIN_EMAILS) skip the daily limit on new situations (Rafay, Nov 2).
+    noDailyLimit: isAdminUser,
     links: { privacy: env.PRIVACY_URL?.trim() || null, terms: env.TERMS_URL?.trim() || null },
   })
   mountPushRoutes(app, { supabase: supabaseAdmin, clock })

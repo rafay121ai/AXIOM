@@ -34,6 +34,9 @@ services:
         value: "off"
       - key: FRONTEND_URL
         sync: false
+      # Comma-separated user ids (or confirmed emails) of test accounts: they skip the daily situation limit.
+      - key: ADMIN_USER_IDS
+        sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
       - key: KNOWLEDGE_SUPABASE_SERVICE_ROLE_KEY

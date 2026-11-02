@@ -211,14 +211,15 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
 
   // ── Public operations ──────────────────────────────────────────────────────
 
-  async function create({ userId, text, clientTurnId }) {
+  // unlimited: a test account, which skips the daily limit.
+  async function create({ userId, text, clientTurnId, unlimited = false }) {
     const existing = await one(supabase.from('situations').select().eq('user_id', userId).eq('create_turn_id', clientTurnId).maybeSingle())
     if (existing) return replayOf(existing.id, clientTurnId)
 
     if (isFillerReply(text, { minWords: MIN_SITUATION_WORDS })) {
       return { situation_id: null, status: 'say_more', reply: SAY_MORE, follow_up_count: 0, follow_ups_left: LIMITS.MAX_FOLLOW_UPS }
     }
-    if ((await newToday(userId)) >= MAX_NEW_SITUATIONS_PER_DAY) {
+    if (!unlimited && (await newToday(userId)) >= MAX_NEW_SITUATIONS_PER_DAY) {
       throw new HttpError(429, {
         error: 'daily_limit',
         message: `You have started ${MAX_NEW_SITUATIONS_PER_DAY} situations today. That is the limit for one day. Pick one of the open ones.`,

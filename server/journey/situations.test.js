@@ -43,14 +43,14 @@ function withUniqueKeys(supabase) {
   }
 }
 
-async function setup(script = [], { signedUp = true } = {}) {
+async function setup(script = [], { signedUp = true, env = ENV } = {}) {
   const base = createFakeSupabase({
     users: { tok: USER, tok2: OTHER },
     tables: signedUp ? { founder_profiles: [{ user_id: USER.id, signup_answers: FULL_ANSWERS }] } : {},
   })
   const supabase = withUniqueKeys(base)
   const openai = createFakeOpenAI(script)
-  const app = createApp({ env: ENV, supabase, openai, clock: createFakeClock(NOW) })
+  const app = createApp({ env, supabase, openai, clock: createFakeClock(NOW) })
   const server = app.listen(0)
   await new Promise((r) => server.once('listening', r))
   const url = `http://127.0.0.1:${server.address().port}`
@@ -458,5 +458,13 @@ test('skipping the closing question is stored as a skip', async () => {
     assert.equal(res.body.skipped, true)
     assert.equal(rows('reads')[0].closing_answer, null)
     assert.equal(rows('reads')[0].skipped, true)
+  } finally { await close() }
+})
+
+// Rafay, Nov 2: testing hit the limit. Accounts in ADMIN_USER_IDS skip it; everyone else keeps it.
+test('a test account in ADMIN_USER_IDS is not held to the daily limit', async () => {
+  const { call, close } = await setup(Array.from({ length: MAX_NEW_SITUATIONS_PER_DAY + 1 }, () => enough()), { env: { ...ENV, ADMIN_USER_IDS: USER.id } })
+  try {
+    for (let i = 1; i <= MAX_NEW_SITUATIONS_PER_DAY + 1; i += 1) assert.equal((await create(call, i)).status, 200)
   } finally { await close() }
 })

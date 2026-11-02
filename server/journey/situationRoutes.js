@@ -11,7 +11,7 @@ import { bodyFields } from '../care/middleware.js'
 import { isUuid } from '../writeValidation.js'
 import { createSituations, HttpError, TEXT_MAX } from './situations.js'
 
-export function mountSituationRoutes(app, { supabase, care, callStructured, clock }) {
+export function mountSituationRoutes(app, { supabase, care, callStructured, clock, noDailyLimit = () => false }) {
   const limiter = (max) => rateLimit({
     windowMs: 60 * 1000,
     max,
@@ -50,7 +50,7 @@ export function mountSituationRoutes(app, { supabase, care, callStructured, cloc
   app.get('/api/situations/open', limiter(60), handle((req) => service.list(req.user.id)))
 
   app.post('/api/situations', limiter(10), care.careHold, care.careGate(bodyFields('text')),
-    handle((req) => service.create({ userId: req.user.id, text: textOf(req), clientTurnId: clientTurnId(req) })))
+    handle((req) => service.create({ userId: req.user.id, text: textOf(req), clientTurnId: clientTurnId(req), unlimited: noDailyLimit(req.user) })))
 
   app.get('/api/situations/:id', limiter(60), handle((req) => service.get(req.user.id, idParam(req))))
 

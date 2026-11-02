@@ -10,7 +10,7 @@ import { mountReportRoutes } from './report/reportRoutes.js'
 import { mountSharingRoutes } from './report/sharingRoutes.js'
 import { mountHomeRoutes } from './home/homeRoutes.js'
 
-export function mountJourneyRoutes(app, { supabase, knowledgeSupabase = null, embed = null, care, callStructured, clock, links = {}, deleteOn = false }) {
+export function mountJourneyRoutes(app, { supabase, knowledgeSupabase = null, embed = null, care, callStructured, clock, links = {}, deleteOn = false, noDailyLimit = () => false }) {
   const limiter = (max) => rateLimit({
     windowMs: 60 * 1000,
     max,
@@ -21,7 +21,7 @@ export function mountJourneyRoutes(app, { supabase, knowledgeSupabase = null, em
   })
   const signup = createSignupHandlers({ supabase, clock })
 
-  mountSituationRoutes(app, { supabase, care, callStructured, clock })
+  mountSituationRoutes(app, { supabase, care, callStructured, clock, noDailyLimit })
   mountLearnRoutes(app, { supabase, knowledgeSupabase, embed, care, callStructured, clock })
   mountMoveRoutes(app, { supabase, care, callStructured, clock })
   mountReportRoutes(app, { supabase, care, callStructured, clock })

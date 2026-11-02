@@ -679,3 +679,4 @@ Idea from Rafay: founder credits, and growth by referral. Not building until giv
 - App ID (Rafay, Nov 2): iOS bundle id and Android package are com.getaxiom.app.
 - Situation (Rafay, Nov 2): when Axiom has enough, it says "Got it. Here's what I see." and holds 1.5 s before the Read, instead of moving on silently.
 - Learn (Rafay, Nov 2): a tapped suggestion chip counts as a real reply toward the move card (still two in total, or at once on asking). PRODUCT.md updated.
+- Testing (Rafay, Nov 2): accounts in ADMIN_USER_IDS skip the 5-a-day limit on new situations; real founders keep it.
