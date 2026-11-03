@@ -125,7 +125,7 @@ export function createFakeSupabase({ tables = {}, users = {}, idFactory = random
         case 'lt': return v < val
         case 'lte': return v <= val
         case 'in': return val.includes(v)
-        case 'is': return v === val
+        case 'is': return val === null ? v == null : v === val
         case 'not': return !negated(v, val)
         case 'ilike': return typeof v === 'string' && likeRx(val).test(v)
         default: return true

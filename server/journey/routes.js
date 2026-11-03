@@ -31,6 +31,13 @@ export function mountJourneyRoutes(app, { supabase, knowledgeSupabase = null, em
   app.get('/api/signup', limiter(60), signup.get)
   app.put('/api/signup/answers/:key', limiter(60), care.careGate(signupFreeText), signup.put)
 
+  const building = new Map()
+  const storedReading = async (userId) => {
+    const { data, error } = await supabase.from('founder_profiles').select('first_reading').eq('user_id', userId).maybeSingle()
+    if (error) throw error
+    return data?.first_reading ?? null
+  }
+
   // Reads the stored answers; the founder sends no text here, so no care gate,
   // but no reading while care is open.
   app.post('/api/first-reading', limiter(5), care.careHold, async (req, res) => {
@@ -38,15 +45,28 @@ export function mountJourneyRoutes(app, { supabase, knowledgeSupabase = null, em
     try {
       const { answers, next } = await signup.view(req.user.id)
       if (next) return res.status(409).json({ error: 'Sign-up is not finished', code: 'signup_unfinished', next })
-      const { reading } = await createFirstReading({
-        answers,
-        deps: {
-          callStructured,
-          userId: req.user.id,
-          log: (what, detail) => console.error(`[FirstReading] ${what}`, detail?.message || detail?.problems || ''),
-        },
-      })
-      return res.json(reading)
+      const stored = await storedReading(req.user.id)
+      if (stored) return res.json(stored)
+      // One build per founder at a time, so two taps never show two readings.
+      if (!building.has(req.user.id)) {
+        const build = (async () => {
+          const { reading } = await createFirstReading({
+            answers,
+            deps: {
+              callStructured,
+              userId: req.user.id,
+              log: (what, detail) => console.error(`[FirstReading] ${what}`, detail?.message || detail?.problems || ''),
+            },
+          })
+          // Only the first writer wins; whoever reads back gets the stored one.
+          const { error } = await supabase.from('founder_profiles')
+            .update({ first_reading: reading }).eq('user_id', req.user.id).is('first_reading', null)
+          if (error) throw error
+          return (await storedReading(req.user.id)) ?? reading
+        })().finally(() => building.delete(req.user.id))
+        building.set(req.user.id, build)
+      }
+      return res.json(await building.get(req.user.id))
     } catch (error) {
       console.error('[FirstReading] failed', error?.message || error)
       return res.status(500).json({ error: 'Failed to build the first reading' })

@@ -200,6 +200,20 @@ test('first reading needs all 13 answers', async () => {
   } finally { await close() }
 })
 
+test('first reading: built once, stored, and the same reading comes back on every later call', async () => {
+  const { call, put, openai, supabase, close } = await setup([reading()])
+  try {
+    await saveAll(put)
+    const [a, b] = await Promise.all([call('POST', '/api/first-reading'), call('POST', '/api/first-reading')])
+    const c = await call('POST', '/api/first-reading')
+    assert.equal(a.status, 200)
+    assert.deepEqual(b.body, a.body)
+    assert.deepEqual(c.body, a.body)
+    assert.equal(openai.calls.length, 1)
+    assert.deepEqual(supabase.rows('founder_profiles')[0].first_reading, a.body)
+  } finally { await close() }
+})
+
 test('first reading: model output that passes the checker is returned, with a usage row and no rating field', async () => {
   const { call, put, openai, supabase, close } = await setup([reading()])
   try {
