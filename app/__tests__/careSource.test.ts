@@ -36,3 +36,9 @@ it('keep talking opens the home check-in, never the journey step the care screen
   expect(t).toMatch(/onKeepTalking=\{\(\) => \{ setSoft\(null\); goTo\(\{ name: 'home' \}, true\); \}\}/);
   expect(t).not.toMatch(/name: 'care'[^}]*back/);
 });
+
+it('the journey backdrop is the construction grid; the spider web stays on the sign-in intro', () => {
+  expect(read('App.tsx')).not.toMatch(/components\/Web'/);
+  expect(read('src/components/Construction.tsx')).not.toMatch(/WebLines/);
+  expect(read('src/screens/IntroSequence.tsx')).toMatch(/WebLines/);
+});

@@ -14,7 +14,7 @@ import { deviceTimeZone } from './src/move/format';
 import { push } from './src/push';
 import { chatFromTurns, newChat, type Chat } from './src/situation/chat';
 import { AxiomMessage } from './src/components/AxiomMessage';
-import { Glow } from './src/components/Glow';
+import { Construction } from './src/components/Construction';
 import { loadReading } from './src/onboarding/reading';
 import { LINE_EVERY, waitLines, waitMinMs } from './src/onboarding/waitLines';
 import { CareScreen } from './src/screens/CareScreen';
@@ -197,7 +197,7 @@ export default function App() {
     <SafeAreaProvider>
       <View style={styles.page}>
         <View style={styles.phone}>
-          {stage.name !== 'care' && stage.name !== 'signin' && !QUIET.includes(stage.name) && <Glow />}
+          {stage.name !== 'care' && stage.name !== 'signin' && !QUIET.includes(stage.name) && <Construction />}
           <Animated.View style={[styles.flex, { opacity: fade, transform: [{ translateY: rise }] }]}>
             {stage.name === 'signin' && <SignInScreen onContinue={signIn} error={signInError} />}
             {stage.name === 'questions' && (

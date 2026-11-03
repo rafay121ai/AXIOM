@@ -8,6 +8,7 @@ import { Pressable, StyleSheet, useWindowDimensions } from 'react-native';
 import Animated, { cancelAnimation, Easing, useAnimatedStyle, useDerivedValue, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { LEFT, RIGHT } from '../components/Logo';
+import { WebLines } from '../components/Web';
 import { useReduceMotion } from '../components/useReduceMotion';
 import { copy } from '../copy';
 import { bell, clamp, inOut, INTRO as I, out3, seg, session, startAt } from '../intro/timeline';
@@ -38,26 +39,6 @@ function measure(d: string): Stroke {
     if (pos.y < pts[tip * 2 + 1]) tip = k;
   }
   return { path, tip: tip / (SAMPLES - 1), pts };
-}
-
-// A spider web around (0, 0): uneven spokes, rings that sag between them. Fixed seed, so it is the same every time.
-function makeWeb(): SkPath {
-  let seed = 7;
-  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-  const spokes = Array.from({ length: 16 }, (_, i) => (i / 16) * Math.PI * 2 + (rnd() - 0.5) * 0.22);
-  const p = Skia.PathBuilder.Make();
-  spokes.forEach((a) => { p.moveTo(0, 0); p.lineTo(Math.cos(a) * 560, Math.sin(a) * 560); });
-  for (let k = 0; k < 11; k++) {
-    const r = 46 * Math.pow(1.3, k);
-    const jit = spokes.map(() => 0.9 + rnd() * 0.2);
-    spokes.forEach((a, i) => {
-      const j = (i + 1) % spokes.length, b = spokes[j] + (j === 0 ? Math.PI * 2 : 0);
-      const r1 = r * jit[i], r2 = r * jit[j], mid = (a + b) / 2, sag = ((r1 + r2) / 2) * 0.9;
-      p.moveTo(Math.cos(a) * r1, Math.sin(a) * r1);
-      p.quadTo(Math.cos(mid) * sag, Math.sin(mid) * sag, Math.cos(b) * r2, Math.sin(b) * r2);
-    });
-  }
-  return p.detach();
 }
 
 const Clock = createContext<SharedValue<number> | null>(null);
@@ -91,7 +72,6 @@ export function IntroSequence({ children }: { children: ReactNode }) {
   }, [reduce]);
 
   const strokes = useMemo(() => [measure(LEFT), measure(RIGHT)], []);
-  const web = useMemo(makeWeb, []);
   const font = useFont(require('@expo-google-fonts/manrope/500Medium/Manrope_500Medium.ttf'), 12.5);
 
   const cx = W / 2, fromY = H * FROM.y, toY = H * TO.y;
@@ -133,9 +113,7 @@ export function IntroSequence({ children }: { children: ReactNode }) {
         </Rect>
 
         <Group transform={webTurn} clip={webClip}>
-          <Path path={web} style="stroke" strokeWidth={0.5}>
-            <RadialGradient c={vec(0, 0)} r={560} colors={[gold(0), gold(0), gold(0.13), gold(0.08), gold(0)]} positions={[0, 0.1, 0.24, 0.55, 1]} />
-          </Path>
+          <WebLines />
         </Group>
 
         <Circle cx={ax} cy={ay} r={42} opacity={point}>
