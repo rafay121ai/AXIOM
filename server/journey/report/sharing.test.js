@@ -318,3 +318,38 @@ test('care that begins after a share takes every share of the founder down, with
   assert.equal(w.live().length, 0)
   assert.deepEqual(w.log(), ['share'])
 })
+
+test('withdraw whose take-down removes a racing re-share does not leave "shared" with nothing live', async () => {
+  const w = world()
+  await w.sharing.share({ userId: USER, report: stored(w), move, automatic: false, wordingVersion: 'v' })
+  let injected = false
+  const racing = {
+    ...w.base,
+    from(table) {
+      const b = w.base.from(table)
+      if (table !== 'outcome_author_links' || injected || w.state() !== 'withdrawn') return b
+      injected = true
+      const then = b.then.bind(b)
+      // The founder re-shares between the withdraw's claim and its take-down read.
+      b.then = (resolve, reject) => w.sharing.share({ userId: USER, report: { ...stored(w), share_state: 'withdrawn' }, move, automatic: false, wordingVersion: 'v' })
+        .then(() => then(resolve, reject), reject)
+      return b
+    },
+  }
+  const sharing = createSharing({ supabase: racing, clock: createFakeClock(NOW) })
+  await sharing.unshare({ userId: USER, report: stored(w), to: 'withdrawn', wordingVersion: 'v' })
+  assert.ok(injected)
+  assert.equal(w.live().length, 0)
+  assert.equal(w.state(), 'withdrawn', 'state matches what is live')
+})
+
+test('a missing or mismatched SQL function (PGRST202) is an error, not a silent step-by-step fallback', async () => {
+  const w = world()
+  const supabase = { ...w.base, rpc: async () => ({ data: null, error: { code: 'PGRST202', message: 'no function' } }) }
+  const sharing = createSharing({ supabase, clock: createFakeClock(NOW) })
+  await assert.rejects(() => sharing.share({ userId: USER, report: stored(w), move, automatic: false, wordingVersion: 'v' }), (e) => e.code === 'PGRST202')
+  await assert.rejects(() => sharing.unshare({ userId: USER, report: stored(w), to: 'private', wordingVersion: 'v' }), (e) => e.code === 'PGRST202')
+  assert.equal(w.state(), 'asked')
+  assert.equal(w.live().length, 0)
+  assert.equal(w.base.rows('consent_log').length, 0)
+})

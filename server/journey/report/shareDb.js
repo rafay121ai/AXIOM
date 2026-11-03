@@ -5,9 +5,10 @@
 // Production path: the SQL functions `share_outcome` and `unshare_outcome`
 // (../schema_needs.md), one transaction each: lock the report row, compare the
 // state, write consent_log, publish or take down, set the state. supabase-js
-// cannot run several statements in one transaction, so while the functions do
-// not exist yet (PostgREST answers PGRST202) the same contract runs as steps in
-// a safe order:
+// cannot run several statements in one transaction. A client without rpc (the
+// test fakes) runs the same contract as steps in a safe order. A real client
+// whose function is missing or mismatched (PostgREST PGRST202) is an error,
+// not a fallback:
 // - share: consent row, then the peer outcome and its private link, then the
 //   compare-and-swap claim on reports.share_state, then a re-check. A lost
 //   claim, or a state that moved on, takes its own outcome down. Any error
@@ -19,8 +20,6 @@
 //   published in between.
 // Both return the report row after the change, or null when the state was no
 // longer `from` (the caller reads the row again).
-
-const NO_FUNCTION = 'PGRST202'
 
 export const consentRow = ({ userId, reportId = null, action, wordingVersion, decidedAt }) =>
   ({ user_id: userId, report_id: reportId, action, wording_version: wordingVersion, decided_at: decidedAt })
@@ -35,12 +34,11 @@ export function createShareDb({ supabase, clock }) {
     return data
   }
 
-  // { missing: true } when the SQL function does not exist yet.
+  // { missing: true } only when the client has no rpc at all (test fakes).
   async function viaFunction(name, params) {
     if (typeof supabase.rpc !== 'function') return { missing: true }
     const { data, error } = await supabase.rpc(name, params)
-    if (error?.code === NO_FUNCTION) return { missing: true }
-    if (error) throw error
+    if (error) throw error // incl. PGRST202: a missing or mismatched function is an error, never a silent fallback
     return { row: (Array.isArray(data) ? data[0] : data) ?? null }
   }
 
@@ -136,7 +134,11 @@ export function createShareDb({ supabase, clock }) {
     if (!won) return null
     await takeDownAll({ userId, reportId })
     if (action) await one(supabase.from('consent_log').insert(consentRow({ userId, reportId, action, wordingVersion, decidedAt: iso() })).select('id'))
-    if ((await stateOf(userId, reportId)) !== 'shared') await takeDownAll({ userId, reportId })
+    const now = await stateOf(userId, reportId)
+    if (now !== 'shared') await takeDownAll({ userId, reportId })
+    // A re-share published in between and the take-down above removed it: the
+    // state must not say 'shared' with nothing live.
+    else if (!(await anyLive(userId, reportId))) await claim({ userId, reportId, from: 'shared', fields: { share_state: to, share_automatic: false } })
     return won
   }
 
