@@ -30,3 +30,9 @@ it('the app source holds no account sentences; the server sends them', () => {
   expect(t).not.toMatch(/everything Axiom holds|nothing was deleted|no deletion waiting|type DELETE to confirm|yours to keep|grace/i);
   expect(t).not.toMatch(/[.!?]['"`<]/);
 });
+
+it('keep talking opens the home check-in, never the journey step the care screen interrupted', () => {
+  const t = read('App.tsx');
+  expect(t).toMatch(/onKeepTalking=\{\(\) => \{ setSoft\(null\); goTo\(\{ name: 'home' \}, true\); \}\}/);
+  expect(t).not.toMatch(/name: 'care'[^}]*back/);
+});

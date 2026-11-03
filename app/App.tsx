@@ -49,7 +49,7 @@ type Stage =
   | { name: 'settings' }
   | { name: 'answers'; startAt?: string }
   | { name: 'report'; report: DueReport; next: DueReport[] }
-  | { name: 'care'; message: string; help: CareHelp; back: Stage };
+  | { name: 'care'; message: string; help: CareHelp };
 
 // Screens with the faint gold wash instead of the drifting light.
 const QUIET: Stage['name'][] = ['home', 'history', 'past', 'settings', 'answers'];
@@ -98,7 +98,7 @@ export default function App() {
   // Care is never dropped: a reply that lands mid-transition waits for the screen to settle first.
   const showCare = useCallback(async (message: string, help: CareHelp) => {
     await idle();
-    goTo({ name: 'care', message, help, back: stageRef.current }, true);
+    goTo({ name: 'care', message, help }, true);
   }, [goTo, idle]);
 
   // Every text-sending call lands here: clear distress opens the care screen, unclear gets a soft reply.
@@ -209,8 +209,9 @@ export default function App() {
                 onFinish={finish}
               />
             )}
+            {/* Keep talking opens the home check-in: while care is open, every journey step answers with this screen again. */}
             {stage.name === 'care' && (
-              <CareScreen message={stage.message} help={stage.help} onKeepTalking={() => { setSoft(null); goTo(stage.back, true); }} />
+              <CareScreen message={stage.message} help={stage.help} onKeepTalking={() => { setSoft(null); goTo({ name: 'home' }, true); }} />
             )}
             {soft && stage.name !== 'care' && <View style={styles.soft}><AxiomMessage text={soft} /></View>}
             {stage.name === 'wait' && <WaitScreen lines={stage.lines} />}
