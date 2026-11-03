@@ -98,8 +98,8 @@ test('fallback states only what was picked, never infers, and reads naturally fo
   const goals = QUESTIONS.find((q) => q.key === 'goal').goals
   for (const goal of goals) {
     const r = fallbackReading({ ...FULL_ANSWERS, goal: { goal, when: 'This month' } })
-    assert.match(r.body, /You are aiming (for|to) [a-z0-9 ]+, this month\./, r.body)
-    assert.ok(!/most stuck on\.$/.test(r.body) || /Next we work on/.test(r.body))
+    assert.match(r.body, /You are aiming (for|to) [a-z0-9 ]+ this month\./, r.body)
+    assert.ok(!/have not/.test(r.body) && /Next: what you wrote you are most stuck on\.$/.test(r.body))
     assert.ok(!/also told me/.test(r.body))
   }
   const idea = fallbackReading({ ...FULL_ANSWERS, stage: { value: 'Just an idea' } })
@@ -140,4 +140,19 @@ test('the Read quotes only typed words: a picked option loses its marks, our lab
   assert.equal(unquoteUnknown('You want "my first customer, this month".', typedTexts, answerTexts), 'You want my first customer, this month.')
   assert.equal(unquoteUnknown('You said "nobody opens the beta".', typedTexts, answerTexts), 'You said "nobody opens the beta".')
   assert.equal(unquoteUnknown('You "avoids most: talking to customers".', typedTexts, answerTexts), 'You "avoids most: talking to customers".')
+})
+
+// A quoted single number must be a whole number the founder typed: "40" is not inside "400".
+test('a quoted bare number: typed is fine; never typed, or only inside a bigger number, is caught; a picked one loses its marks', () => {
+  const typed = ['I have 400 users and $3k in the bank']
+  const quote = (n) => ({ headline: 'h', body: `You wrote "${n}". Send the price today.`, underlines: [] })
+  const run = (n, texts = typed) => checkFirstReading({ reading: quote(n), answerTexts: texts }).problems.filter((p) => p.startsWith('quoted words'))
+  assert.deepEqual(run('400'), [])
+  assert.deepEqual(run('$3k'), [])
+  assert.equal(run('40').length, 1)
+  assert.equal(run('4').length, 1)
+  assert.equal(run('3').length, 1)
+  assert.equal(run('900').length, 1)
+  assert.equal(unquoteUnknown('Only "12" weeks.', ['Nobody opens the beta'], ['Nobody opens the beta', '12 weeks']), 'Only 12 weeks.')
+  assert.equal(unquoteUnknown('Only "13" weeks.', ['Nobody'], ['Nobody', '12 weeks']), 'Only "13" weeks.')
 })

@@ -401,7 +401,7 @@ test('the Read: two failures give the plain fallback, which quotes the founder a
     const res = await call('POST', `/api/situations/${id}/read`)
     assert.equal(res.status, 200)
     assert.equal(openai.calls.length, 3)
-    assert.match(res.body.body, /You wrote: "I have a demo ready but I have not emailed the clinics that asked for pricing three weeks ago"/)
+    assert.match(res.body.body, /Here is what I have, in your words: "I have a demo ready but I have not emailed the clinics that asked for pricing three weeks ago"\./)
     assert.equal(rows('reads')[0].source, 'fallback')
     assert.equal(rows('model_usage_logs').length, 3)
     const answerTexts = [...buildEvidence(FULL_ANSWERS).answerTexts, FIRST]

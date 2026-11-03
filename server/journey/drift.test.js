@@ -7,7 +7,10 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { CARE_COPY } from '../care/copy.js'
-import { fallbackRead } from './theRead.js'
+import { fallbackRead, checkRead } from './theRead.js'
+import { buildEvidence, fallbackReading } from './firstReading.js'
+import { checkFirstReading } from './ownWords.js'
+import { FULL_ANSWERS } from './fixtures.js'
 import { READ_SCHEMA } from './prompts/read.js'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
@@ -51,6 +54,39 @@ test('fallback read with an empty founder text does not crash or invent', () => 
   assert.doesNotMatch(`${r.body} ${r.closing_question}`, /undefined|null/)
 })
 
+const readOk = (texts) => checkRead({ read: fallbackRead(texts), answerTexts: [...buildEvidence(FULL_ANSWERS).answerTexts, ...texts] })
+
+test('fallback read: a long opening gives a whole question that passes checkRead', () => {
+  const long = 'I have a demo ready for the clinics and they all asked for pricing three weeks ago but I keep putting off the email because I am afraid of the answer and so on and on'
+  const r = fallbackRead([long])
+  assert.ok(r.closing_question.length < 170 && /^On ".+": what is the next step, as you see it\?$/.test(r.closing_question), r.closing_question)
+  assert.doesNotMatch(r.closing_question, /"[^"]*\b(and|but|so|or)"/)
+  assert.deepEqual(readOk([long]), { ok: true, problems: [] })
+})
+
+test('fallback read: the follow-up clause appears only when there is a follow-up', () => {
+  const a = 'Clinics asked for pricing and I stalled.'
+  assert.equal(fallbackRead([a]).body, 'Here is what I have, in your words: "Clinics asked for pricing and I stalled".\nNext is what authors have said about it, then one move you can start today.')
+  const w = fallbackRead([a, 'Two clinics.', 'I am afraid of the answer, but']).body
+  assert.match(w, /"Clinics asked for pricing and I stalled", and "I am afraid of the answer"\.\n/)
+  assert.deepEqual(readOk([a, 'Two clinics.', 'I am afraid of the answer, but']), { ok: true, problems: [] })
+})
+
+test('fallback read: an empty quote drops the quoted sentence and asks the plain question', () => {
+  const r = fallbackRead(['...'])
+  assert.equal(r.body, 'Next is what authors have said about it, then one move you can start today.')
+  assert.equal(r.closing_question, 'What is the next step, as you see it?')
+})
+
+test('first reading fallback never says "have not", has no comma before the deadline, and passes its checker', () => {
+  for (const tried of [[], ['Launched it']]) {
+    const reading = fallbackReading({ ...FULL_ANSWERS, tried })
+    assert.doesNotMatch(reading.body, /have not/)
+    assert.match(reading.body, /You are aiming for your first 10 customers in 3 months\./)
+    assert.deepEqual(checkFirstReading({ reading, answerTexts: buildEvidence({ ...FULL_ANSWERS, tried }).answerTexts }), { ok: true, problems: [] })
+  }
+})
+
 test('the Read has no underlines in its schema or prompt', () => {
   assert.doesNotMatch(JSON.stringify(READ_SCHEMA), /underline/i)
   const prompt = readFileSync(join(ROOT, 'server/journey/prompts/read.js'), 'utf8')
@@ -69,4 +105,20 @@ test('no source file hard-codes the build office ports (8765, 8791)', () => {
   }
   walk(join(ROOT, 'server')); walk(join(ROOT, 'app'))
   assert.deepEqual(hits, [])
+})
+
+test('fallback read: the closing question carries a shorter quote than the body', () => {
+  const long = 'I have a demo ready for the clinics and they all asked for pricing three weeks ago but I keep putting off the email'
+  const r = fallbackRead([long])
+  const q = r.closing_question.match(/^On "(.+)": /)[1]
+  assert.ok(q.length <= 60 && long.startsWith(q), q)
+  assert.ok(r.body.includes(long))
+  assert.deepEqual(readOk([long]), { ok: true, problems: [] })
+})
+
+test('fallback read: a greeting is skipped for the first sentence with three words or more', () => {
+  const r = fallbackRead(['Hi! Our churn doubled last month.'])
+  assert.match(r.body, /"Our churn doubled last month"/)
+  assert.match(r.closing_question, /^On "Our churn doubled last month": /)
+  assert.deepEqual(readOk(['Hi! Our churn doubled last month.']), { ok: true, problems: [] })
 })

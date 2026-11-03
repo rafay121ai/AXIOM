@@ -75,11 +75,9 @@ export function fallbackReading(answers) {
 
   const sentences = [
     time || week ? `You have been on it${time ? ` ${time}` : ''}${week ? `, ${week}` : ''}.` : null,
-    tried.length
-      ? `So far you have ${joinList(tried)}.`
-      : 'So far you have not talked to customers, built a prototype, launched, or tried to sell.',
-    aim && whenPhrase ? `${aim}, ${whenPhrase}.` : null,
-    'Next we work on the thing you said you are most stuck on.',
+    tried.length ? `So far you have ${joinList(tried)}.` : null,
+    aim && whenPhrase ? `${aim} ${whenPhrase}.` : null,
+    'I could not read more into your answers than that just now, so I will not guess. Next: what you wrote you are most stuck on.',
   ].filter(Boolean)
   return { headline, body: sentences.join(' '), underlines: [] }
 }

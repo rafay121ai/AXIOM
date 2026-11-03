@@ -144,3 +144,18 @@ All in server/journey/home/wording.js ACCOUNT_COPY. The app shows server text on
 | deleteRecordedCare | "I have your request. Nothing has been deleted yet." | Same, care open. |
 | DELETION_PLAN.shared_outcomes | "Outcomes you shared hold no name. Stories already published stay, with nothing that links them to you. Anything still waiting for review is removed." | Shown with the recorded answer. Depends on the shared-outcomes decision in supabase/DELETION_PLAN.md. |
 There is no "deleted" sentence: once deletion runs, the sign-in account is gone and nobody is left to read it.
+
+## Fallback wording (approved by Rafay, Nov 3 2026: S2 and F1)
+Shown when the model's Read fails validation twice or the call fails. Stored rows keep their old wording.
+
+### server/journey/theRead.js fallbackRead (S2)
+| Part | Text |
+|---|---|
+| headline | "I cannot give you a proper Read on this yet." |
+| body | "Here is what I have, in your words: \"{quote}\"[, and \"{followup}\"].\nNext is what authors have said about it, then one move you can start today." (follow-up clause only when there is a follow-up; no quote: only the second sentence) |
+| question | "On \"{quote}\": what is the next step, as you see it?" (no quote: "What is the next step, as you see it?") |
+
+### server/journey/firstReading.js fallbackReading (F1)
+| Part | Text |
+|---|---|
+| body | "You have been on it {time}, {week}." "So far you have {tried}." (only if they ticked something) "You are aiming for {aim} {when}." "I could not read more into your answers than that just now, so I will not guess. Next: what you wrote you are most stuck on." |

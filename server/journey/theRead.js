@@ -8,25 +8,31 @@ import { stripFiller } from './filler.js'
 import { READ_SCHEMA, readMessages } from './prompts/read.js'
 
 const SNIPPET_MAX = 120
+// The closing question repeats the quote, so it carries a shorter one.
+const QUESTION_SNIPPET_MAX = 60
 
-// First sentence of what the founder wrote, cut at a word, with quote marks
-// removed so it can sit inside quotes of ours.
-function snippetOf(text) {
-  const first = String(text).replace(/["“”„‟]/g, '').trim().split(/(?<=[.!?])\s+/)[0] ?? ''
-  if (first.length <= SNIPPET_MAX) return first.replace(/[.!?]+$/, '')
-  return first.slice(0, SNIPPET_MAX).replace(/\s+\S*$/, '')
+// First sentence of three words or more of what the founder wrote (so "Hi!"
+// is skipped), cut at a word, with quote marks removed so it can sit inside
+// quotes of ours, and no trailing joiner word (and/but/so/or) or punctuation.
+function snippetOf(text, max = SNIPPET_MAX) {
+  const sentences = String(text).replace(/["“”„‟]/g, '').trim().split(/(?<=[.!?])\s+/)
+  const first = sentences.find((s) => s.split(/\s+/).filter((w) => /\w/.test(w)).length >= 3) ?? ''
+  const cut = first.length <= max ? first : first.slice(0, max).replace(/\s+\S*$/, '')
+  return cut.replace(/(?:[\s,;:.!?\-–—]+|\s(?:and|but|so|or))+$/i, '')
 }
 
 // A safe read: exact quotes of the founder, nothing else of ours that could
-// be wrong. The closing question quotes their first words so it is a real
-// thread, and passes the same hook gate as a model-written one.
+// be wrong. The closing question quotes their opening so it is a real
+// thread, and passes the same hook gate as a model-written one. Wording
+// approved by Rafay, Nov 3 (S2). founderTexts: opening, then follow-up answers.
 export function fallbackRead(founderTexts) {
-  const snippet = snippetOf(founderTexts[0] ?? '')
-  const opening = snippet.split(/\s+/).slice(0, 6).join(' ')
+  const quote = snippetOf(founderTexts[0] ?? '')
+  const followup = founderTexts.length > 1 ? snippetOf(founderTexts.at(-1)) : ''
+  const next = 'Next is what authors have said about it, then one move you can start today.'
   return {
-    headline: 'Here is what you told me today.',
-    body: `You wrote: "${snippet}". That is where we start. Next I will bring in what authors have said about it, and give you one small step to take today.`,
-    closing_question: `What have you already tried on "${opening}"?`,
+    headline: 'I cannot give you a proper Read on this yet.',
+    body: quote ? `Here is what I have, in your words: "${quote}"${followup ? `, and "${followup}"` : ''}.\n${next}` : next,
+    closing_question: quote ? `On "${snippetOf(founderTexts[0], QUESTION_SNIPPET_MAX)}": what is the next step, as you see it?` : 'What is the next step, as you see it?',
   }
 }
 

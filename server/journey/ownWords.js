@@ -46,7 +46,9 @@ function inAnswersOf(answerTexts) {
   const corpus = answerTexts.map(norm).filter(Boolean)
   return (phrase) => {
     const p = trimEdges(norm(phrase))
-    return p.length > 0 && corpus.some((a) => a.includes(p))
+    if (!p) return false
+    // A number must match whole ("40" is not inside "400" or "2040"); words keep the looser match.
+    return /^[$€£]?\d[\d,.]*[a-z%]{0,2}$/.test(p) ? corpus.some((a) => wordRx(p).test(a)) : corpus.some((a) => a.includes(p))
   }
 }
 
@@ -57,10 +59,13 @@ const stems = (text) => (norm(text).match(/[a-z]{4,}/g) ?? []).map((w) => w.slic
 // quoteTexts: what may be quoted. answerTexts: everything they typed or picked (for spotting a reworded answer).
 export function unquoteUnknown(text, quoteTexts, answerTexts = quoteTexts) {
   const inAnswers = inAnswersOf(quoteTexts)
+  const inAnyAnswer = inAnswersOf(answerTexts)
   const theirs = new Set(answerTexts.flatMap(stems))
   const reworded = (inner) => {
     const words = stems(inner)
-    return words.length > 0 && words.every((w) => theirs.has(w))
+    // A bare number they picked (not typed) is not theirs to quote: it loses its marks.
+    if (words.length === 0) return /\d/.test(inner) && inAnyAnswer(inner)
+    return words.every((w) => theirs.has(w))
   }
   return String(text ?? '').replace(/["\u201C]([^"\u201C\u201D]+)["\u201D]/g, (whole, inner) => (inAnswers(inner) || !reworded(inner) ? whole : inner))
 }
