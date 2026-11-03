@@ -50,7 +50,7 @@ export function mountJourneyRoutes(app, { supabase, knowledgeSupabase = null, em
       // One build per founder at a time, so two taps never show two readings.
       if (!building.has(req.user.id)) {
         const build = (async () => {
-          const { reading } = await createFirstReading({
+          const { reading, source } = await createFirstReading({
             answers,
             deps: {
               callStructured,
@@ -58,6 +58,8 @@ export function mountJourneyRoutes(app, { supabase, knowledgeSupabase = null, em
               log: (what, detail) => console.error(`[FirstReading] ${what}`, detail?.message || detail?.problems || ''),
             },
           })
+          // A fallback is shown but not kept, so the next open tries for a real reading.
+          if (source === 'fallback') return reading
           // Only the first writer wins; whoever reads back gets the stored one.
           const { error } = await supabase.from('founder_profiles')
             .update({ first_reading: reading }).eq('user_id', req.user.id).is('first_reading', null)

@@ -263,6 +263,21 @@ test('first reading: two failures give the plain fallback, with no quote and no 
   } finally { await close() }
 })
 
+test('first reading: a fallback is shown but not stored, so the next open tries the model again', async () => {
+  const bad = reading({ body: 'You wrote "the clinics love my demo" and want 40 customers. That is not what you wrote. Send the price today.' })
+  const { call, put, openai, supabase, close } = await setup([bad, bad, reading()])
+  try {
+    await saveAll(put)
+    const first = await call('POST', '/api/first-reading')
+    assert.equal(first.status, 200)
+    assert.equal(supabase.rows('founder_profiles')[0].first_reading ?? null, null)
+    const second = await call('POST', '/api/first-reading')
+    assert.equal(openai.calls.length, 3)
+    assert.notDeepEqual(second.body, first.body)
+    assert.deepEqual(supabase.rows('founder_profiles')[0].first_reading, second.body)
+  } finally { await close() }
+})
+
 test('first reading: model errors and unparseable replies also end in the fallback', async () => {
   const { call, put, close } = await setup([new Error('boom'), 'not json', 'still not json'])
   try {
