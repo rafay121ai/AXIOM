@@ -123,6 +123,11 @@ existing migration.
     on a copy of the database first, and the server switch `ACCOUNT_DELETE=on`
     stays off until then. The migrations test lets this one file contain
     `delete from`, and checks every delete is filtered to the founder.
+12. `20261103103416_founder_profiles_server_only.sql`
+    Revokes the table-level `select` on `founder_profiles` from
+    `authenticated` and drops the `founder_profiles_select_own` policy that
+    only served it. The table is now server only (service role). Approved by
+    Rafay and applied to main on Nov 3 2026 (version taken from live).
 
 ## Access rules in every file
 
@@ -154,6 +159,8 @@ grant select on a named column list instead (or revoke it entirely, since the
 new app reads nothing directly). That changes an existing grant, so it is left
 for Rafay's decision. Exposure: owner only, own answers only; no other
 founder's row is readable.
+
+Resolved on Nov 3 2026: Rafay chose to revoke it entirely (file 12 above).
 
 ## What is destructive
 
