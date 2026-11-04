@@ -551,6 +551,7 @@ test('a founder walks the whole journey', async (t) => {
       assert.ok(routes.length > 40)
       for (const { method, path } of routes) {
         if (path === '/health') continue
+        if (/^(\/api)?\/review\b/.test(path)) continue // reviewer-only, 404 to everyone else: tested in review/review.test.js
         assert.ok(path.startsWith('/api/'), `${method} ${path} is outside /api`)
         const concrete = path.replace(/:n\b/g, '0').replace(/:[a-z_]+/gi, uuid(99))
         const res = await anon(method, concrete, method === 'GET' ? undefined : {})

@@ -10,6 +10,7 @@ import { ALLOWED_CLIENT_MODELS, MODELS } from './config.js'
 import { callStructured } from './llm.js'
 import { mountJourneyRoutes } from './journey/routes.js'
 import { mountPushRoutes } from './push/routes.js'
+import { mountReviewRoutes } from './review/reviewRoutes.js'
 import { createSharing } from './journey/report/sharing.js'
 import { createEmbedder } from './journey/learn/retrieve.js'
 import { createCare, bodyFields, lastUserMessage, founderMessageContent, onboardingAnswers, profileFreeText } from './care/middleware.js'
@@ -1356,6 +1357,7 @@ export function createApp({
     links: { privacy: env.PRIVACY_URL?.trim() || null, terms: env.TERMS_URL?.trim() || null },
   })
   mountPushRoutes(app, { supabase: supabaseAdmin, clock })
+  mountReviewRoutes(app, { supabase: supabaseAdmin, callStructured: callStructuredForApp, clock, env, requireAuth })
 
   app.post('/api/app-sessions', sessionWriteRateLimit, async (req, res) => {
     if (!supabaseAdmin) return res.status(503).json({ error: 'Service not configured' })

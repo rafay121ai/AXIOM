@@ -212,6 +212,8 @@ const NOT_HELD = {
   'DELETE /api/push/token': 'device removal',
   'POST /api/account/export': 'the founder can always ask for their data',
   'DELETE /api/account': 'the founder can always ask to leave',
+  'POST /api/review/outcomes/:id/draft': 'reviewer tool, not a founder action; reviewers only',
+  'POST /api/review/outcomes/:id': 'reviewer tool, not a founder action; reviewers only',
   'POST /api/events': OLD_WEB_APP,
   'POST /api/knowledge/concept-states': OLD_WEB_APP,
   'POST /api/personal-memories': OLD_WEB_APP,
