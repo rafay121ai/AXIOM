@@ -1,16 +1,15 @@
 # Axiom: Architecture Document
 
-Updated October 2026 to match PRODUCT.md and `tasks/decisions.md`.
+Updated November 2026 to match PRODUCT.md, `tasks/decisions.md` and the code on branch `feature/journey-v1`.
 
 ## Status of This Document
-This document describes the real codebase as found by the September 2026
-audit, plus the target architecture for the new product (see PRODUCT.md).
+This document describes the code as it is on `feature/journey-v1`, plus what
+is still to come (see PRODUCT.md).
 
 - **Current** means it exists in the code today.
 - **Target** means it is planned and not built yet.
 - **VERIFY** means the repo does not prove it. Check the live system before
   relying on it.
-- **DECISION NEEDED** means Rafay has to confirm before it is built.
 
 The previous version of this document described a Next.js, FastAPI and Claude
 API stack. That stack does not exist. Ignore any older references to it.
@@ -22,23 +21,24 @@ API stack. That stack does not exist. Ignore any older references to it.
 ### Stack
 | Layer     | Current                                      | Target |
 |-----------|----------------------------------------------|--------|
-| Client    | Vite + React SPA on Vercel                   | **Native app (Expo, React Native) for iOS and Android**, with push notifications. The Vite app stays only as the old product until replaced. **DECISION NEEDED:** CLAUDE.md says web first, native later. Rafay now says "directly an app". |
-| Backend   | Express (Node.js) on Render                  | Same. One API serves the app. |
-| Database  | Supabase, two projects                       | Same, plus the new tables below. |
+| Client    | Vite + React SPA on Vercel (old product)     | **Native app (Expo, React Native) for iOS and Android**, with push notifications. The Vite app stays only until the app replaces it. |
+| Backend   | Express (Node.js) on Render (`render.yaml`, deploys from `main`) | Same. One API serves the app. |
+| Database  | Supabase, two projects                       | Same. |
 | Auth      | Supabase Auth (Google OAuth)                 | Same (Google sign-in, native flow on the app). |
-| AI        | OpenAI (chat models + text-embedding-3-small)| Same. Model IDs live in server config, one setting per step. Do not hardcode. |
-| Push      | None                                         | Expo push (APNs and FCM) sent by the server. |
-| Scheduler | None                                         | A scheduler inside the API process (push/scheduler.js); the host must stay on. |
+| AI        | OpenAI (chat models + text-embedding-3-small)| Same. Model IDs live in `server/config.js`, one setting per step. Do not hardcode. |
+| Push      | Expo push sender (`server/push/`), off until `EXPO_PUSH=on` | Same. Needs the phone build. |
+| Scheduler | Inside the API process (`push/scheduler.js`), ticks every minute; the host must stay on | Same. |
 
 ### Supabase projects
-- **Main (Axiom):** users, founder profile and theory, situations, reads,
-  learn turns, moves, reports, consents, settings, notifications, model usage.
-- **Knowledge (axiom-knowledge):** sources, chunks, embeddings, and the
-  verified lesson library. Shrunk in October 2026 (vectors stored as
-  `halfvec(1536)`, search function `match_wiki_chunks`). Writes to this
-  project are gated: see "Gated changes".
+- **Main (Axiom):** users, founder profiles, situations, reads, learn turns,
+  moves, reports, consents, settings, push tokens, notification log, model
+  usage, plus the old product's tables until it is retired.
+- **Knowledge (axiom-knowledge):** sources, chunks and embeddings. The server
+  reads it through `match_wiki_chunks` (vectors stored as `halfvec(1536)`).
+  The verified lesson tables are not there yet. Writes to this project are
+  gated: see "Gated changes".
 
-### Infrastructure map (target)
+### Infrastructure map
 ```
 App (Expo, iOS and Android)
    |  Supabase Auth only (sign in, session token)
@@ -49,90 +49,124 @@ Express API (Render)
    |-- OpenAI (chat, embeddings, transcription later)
    |-- Main Supabase (service client, server side writes)
    |-- Knowledge Supabase (service client, retrieval, quote picking)
-   |-- Scheduler (reminders, 14-day pause, daily caps)
+   |-- Scheduler (reminders, quiet check, 14-day pause)
    `-- Expo push service (reminders)
 ```
 
 ### Core principle
 **All writes go through the Express API.** The client uses Supabase only for
-authentication. The audit found sessions, messages and some state still
-written from the browser; the new journey never does this, and a test fails
+authentication. The old web app still writes some state from the browser (it
+goes away with that app). The new journey never does this, and a test fails
 the build if the new client code calls `supabase.from` or `rpc`.
 
 ---
 
-## The Founder Journey: Request Flow (target)
+## The Founder Journey: Request Flow (current)
 
-Every endpoint is authenticated, rate limited, checks that the founder owns
-the row (404 otherwise) and returns generic errors. **Every endpoint that
-accepts founder text runs the care check first (see Care).**
+Every endpoint below is authenticated, rate limited per user, checks that the
+founder owns the row (404 otherwise) and returns generic errors. **Every
+endpoint that accepts founder text runs the care check first (see Care).**
 
 ```
 Sign-up (once)
-  POST /api/onboarding            -> save answers 1..13 (resumable, saved
-                                     per answer) into founder_profiles
-  POST /api/read/initial          -> 1 structured call: first reading + hook.
-                                     No feedback endpoint exists.
+  GET  /api/signup                 -> saved answers and the next question
+  PUT  /api/signup/answers/:key    -> save one answer (resumable, 13 questions)
+  POST /api/first-reading          -> 1 structured call: first reading + hook.
+                                      Stored in founder_profiles.first_reading;
+                                      a repeat returns the stored one. The first
+                                      reading may carry up to 2 underlined
+                                      phrases. No feedback endpoint exists.
+  GET  /api/loading-hint           -> one verified quote, book name only. No
+                                      model call. Empty (null) until the
+                                      verified lesson library is loaded.
 
 Home
-  GET  /api/home                  -> greeting kind, pending items (move to
-                                     do, check-in due, next step), reminder
-                                     state. Deterministic, no model call.
+  GET  /api/home                   -> greeting, pending items, reminder state.
+                                      Deterministic, no model call.
+  POST /api/home/checkin           -> the founder's reply to the greeting
 
 Situation
-  POST /api/situations            -> create (text)
-  POST /api/situations/:id/turn   -> one structured call per founder answer
-                                     returns follow_up | ready. The server
-                                     counts follow-ups (max 2) and ignores
-                                     filler replies.
+  GET  /api/situations/open        -> open situations
+  POST /api/situations             -> create (text); daily limit of 5 new
+                                      situations (test accounts skip it)
+  GET  /api/situations/:id
+  POST /api/situations/:id/turn    -> one structured call per founder answer,
+                                      returns follow_up | ready. The server
+                                      counts follow-ups (max 2) and ignores
+                                      filler replies.
 
 Read
-  POST /api/situations/:id/read   -> 1 structured call: headline, 3 to 4
-                                     sentences, evidence, one closing
-                                     question, max 2 underlined phrases
+  POST /api/situations/:id/read    -> 1 structured call: headline, body, one
+                                      closing question. No underlines.
   POST /api/situations/:id/read/answer
-                                  -> stores the answer (or "skipped") so
-                                     Learn can use it
+                                   -> stores the answer (or "skipped")
 
 Learn (a conversation)
-  POST /api/situations/:id/learn/turn
-                                  -> retrieval + 1 structured call; returns
-                                     the reply, optional picture, optional
-                                     tappable follow-ups, and
-                                     move_offered: none | first | second.
-                                     The server decides move_offered: after
-                                     two real replies, or when the intent
-                                     check says the founder asked what to do
-                                     next. At most 2 offers in total.
-  POST /api/lessons/:id/followup  -> 1 call, answer appears in place
-  POST /api/hint                  -> loading hint: one verified quote (book
-                                     name only) picked from the library by
-                                     the situation. No model call, fast.
+  POST /api/situations/:id/learn   -> start; retrieval + 1 structured call
+  GET  /api/learn/:id
+  POST /api/learn/:id/turn         -> retrieval + 1 structured reply call;
+                                      returns the reply, optional picture,
+                                      tappable follow-ups and a move offer
+                                      (none | first | second), at most 2
+                                      offers in total, decided by the server
+  POST /api/learn/:id/followup/:n  -> answers a tapped follow-up, once
 
 Move
-  POST /api/situations/:id/move   -> generate draft, run the deterministic
-                                     validator, return mission, success
-                                     condition, words, checklist, prediction
-  POST /api/moves/:id/commit      -> committed; schedule the evening check-in
-  POST /api/moves/:id/swap        -> one swap, real reason required
-  POST /api/push/register         -> save the device push token and whether
-                                     the phone granted permission
+  POST /api/learn/:id/move         -> draft, deterministic validator, return
+                                      mission, success condition, words,
+                                      checklist, prediction
+  GET  /api/moves/active
+  GET  /api/moves/:id
+  POST /api/moves/:id/commit       -> committed; schedules the evening report
+  POST /api/moves/:id/swap         -> one swap, real reason required
 
 Report
-  POST /api/moves/:id/report      -> Done | Couldn't | Didn't + note
-                                     -> deterministic write, update theory,
-                                     check the prediction, offer next step
-  GET  /api/reports/:id/story     -> one approved, consented founder story
-                                     that fits (or none; then nothing is said)
-  POST /api/reports/:id/consent   -> Share | Keep private (asked every time)
+  GET  /api/reports/due            -> moves waiting for a report
+  POST /api/moves/:id/report       -> Done | Couldn't | Didn't + note;
+                                      deterministic write, prediction check,
+                                      reply, unlock for founder cases
+  GET  /api/reports/:id
+  GET  /api/reports/:id/story      -> one approved, consented founder story
+                                      that fits (or none; then nothing is said)
+  POST /api/reports/:id/consent    -> Share | Keep private (asked every time)
+  POST /api/reports/:id/withdraw   -> take a shared story back
 
 Settings and history
-  GET/PATCH /api/settings         -> check-in time, morning and evening on or
-                                     off, lock-screen mode, mentor style, keep
-                                     items on screen, share automatically
-  GET  /api/history, /api/history/:id (read only)
-  POST /api/account/delete        -> needs its own plan first (see Gated)
+  GET  /api/history, GET /api/history/:id        (read only)
+  GET/PUT /api/settings            -> mentor style, lock-screen mode, keep
+                                      items on screen, and the other settings
+  GET/PUT /api/settings/reminders  -> check-in time, morning and evening on
+                                      or off, quiet hours
+  GET/PUT /api/settings/sharing    -> "share automatically" (default off)
+  POST   /api/push/token           -> save the device push token
+  DELETE /api/push/token
+  POST   /api/account/export       -> one JSON file of what is stored about
+                                      the founder; reads only their rows, and
+                                      leaves out evidence, model usage, push
+                                      tokens and anything about other founders
+  DELETE /api/account              -> delete request (see Account deletion)
+
+Review queue (reviewers only)
+  GET  /review                     -> the review page (404 unless
+                                      REVIEWER_USER_IDS is set and the signed-in
+                                      user is on it)
+  GET  /api/review/outcomes        -> stories waiting (pending_review), with no
+                                      user id, report id or author link
+  POST /api/review/outcomes/:id/draft
+                                   -> the model drafts story and lesson
+                                      (step report); a person edits it
+  POST /api/review/outcomes/:id    -> approve (story + lesson) or reject
+
+Old web app (until it is retired)
+  /api/openai/chat, /api/openai/embeddings, /api/onboarding/complete,
+  /api/founder-profile (GET, PUT), /api/app-sessions (+ ping, close,
+  messages-sent), /api/session/:id/touch and /memory, /api/threads,
+  /api/messages, /api/experiments (+ status), /api/personal-memories (+
+  mark-used), /api/knowledge/concept-states, /api/events,
+  /api/admin/diagnostics.
 ```
+
+Also: `GET /health` (no sign-in) for the host's health check.
 
 Voice input is later. When it exists, the app uploads audio, the server
 transcribes it, and the transcript follows the same path as text.
@@ -160,13 +194,13 @@ transcribes it, and the transcript follows the same path as text.
 - Rules plus a model, tuned to catch rather than miss. False alarms
   ("kill the feature", "burn rate") are handled by a test set that is part of
   the build.
-- While a care event is open: all pushes for that founder are paused, nothing
+- While a care event is open: pushes for that founder are paused, nothing
   mentions moves or reports, and the next open starts with a gentle check-in.
 - Care text is private. It is never used in founder stories, sharing,
   analytics or later prompts for motivation.
-- Help numbers come from a table verified by a person and reviewed yearly
-  (country from sign-up). Fallback: a worldwide directory. **No number is
-  written in code until a person verifies it.**
+- Help block: one website for now, findahelpline.com (`care/copy.js`). Numbers
+  per country, verified by a person and reviewed yearly, are still to come.
+  **No phone number is written in code until a person verifies it.**
 
 ---
 
@@ -178,39 +212,40 @@ project is unknown. **Dump both live schemas read only before writing any
 migration.** Never run raw SQL in production. All changes go through
 migration files in the repo, applied only with Rafay's explicit approval.
 
-### Keep (current)
-- Auth users
-- `sessions`, `messages`: kept only during the transition
-- `experiments`: kept, states change (see below)
-- Personal memories
-- Knowledge sources, chunks, embeddings
-- Model usage logging (fix cost calculation, see AI Layer)
+### Old product tables (kept until it is retired)
+`sessions`, `messages`, `conversation_threads`, `app_sessions`, `experiments`,
+`personal_memories`, `users`, `model_usage_logs`. The new journey does not use
+`experiments`: moves live in their own table (`experiments.session_id` points
+at the old `sessions`). Knowledge sources, chunks and embeddings stay in the
+Knowledge project.
 
-### Change
-- **experiments** states become:
-  `draft -> committed -> report_due -> reported | closed_no_report`, with a
-  `swap_count` (max 1) and a `prediction` field. Maximum 2 active per founder.
-
-### New tables (target)
+### Current tables (main project, migrations in `supabase/migrations/`)
 | Table              | Purpose | Key fields |
 |--------------------|---------|------------|
-| founder_profiles   | One row per founder, from the 13 answers | user_id, stage, months_in, commitment, business_model, country, customer_market (own country / abroad / both), team, goal, goal_when, background, why, strengths[], avoid[], tried[], building_text, stuck_text, onboarding_step (for resuming) |
-| founder_theory     | Private theory behind Reads | user_id, contradictions, blind_spots, say_do_gaps, patterns, version, updated_at |
-| situations         | One per situation | id, user_id, title, status (open, paused, closed), follow_up_count (CHECK <= 2), last_activity_at, linked_situation_id, started_by (founder, axiom later) |
-| situation_turns    | Founder and Axiom messages | id, situation_id, turn_seq (unique), role, text, filler (bool), created_at |
-| reads              | Axiom's read | id, situation_id, headline, body[], underlines[] (max 2), closing_question, closing_answer, skipped |
-| learn_turns        | Lesson conversation | id, situation_id, seq, reply, picture jsonb, taps[], real_reply_count, move_offered |
-| lesson_citations   | What the checker verified | id, learn_turn_id, source_id, chunk_ids[], author, book_title, quote (nullable, verified), validation_report |
-| move_reports       | Evening report | id, experiment_id, outcome (done, couldnt, didnt), note, prediction_matched, created_at |
-| consents           | Each share choice | id, user_id, report_id, shared (bool), decided_at |
-| user_settings      | Settings | user_id, checkin_time_local, timezone, morning_on, evening_on, lock_screen (full, short, nothing), quiet_hours, mentor_style (calm, direct, hard), keep_items, share_auto (default false) |
-| push_tokens        | Devices | id, user_id, token, platform, permission_granted, updated_at |
-| notification_log   | The 2 a day cap | id, user_id, kind, sent_at (the cap is counted from this) |
-| care_events        | Private | id, user_id, level (unclear, clear), created_at, resolved_at (minimal, no message text unless needed for review) |
-| usage_daily        | Daily caps | user_id, day, new_situations, model_calls, cost_estimate |
-| peer_outcomes      | Anonymized founder stories | id, stage, customer_market, business_model, topic, story, outcome, lesson, status (draft, approved, rejected), reviewed_by, reviewed_at |
-| peer_unlocks       | Give to get | id, user_id, granted_by_report_id, used_on_situation_id |
-| intro_requests     | Double opt in intros (later) | id, from_user_id, to_user_id, reason, from_accepted, to_accepted, status |
+| founder_profiles   | One row per founder | user_id, signup_answers jsonb (all 13 answers), open_answers jsonb, first_reading jsonb, stage, business_model, customer_markets[], country, goal, deadline, report_time_local, timezone |
+| situations         | One per situation | id, user_id, title, status (open, paused, closed), follow_up_count (CHECK 0 to 2), create_turn_id, care_flag, last_activity_at |
+| situation_turns    | Founder and Axiom messages | id, seq, situation_id, role, text, filler, client_turn_id (repeat-safe), result |
+| reads              | Axiom's read | id, situation_id (unique), headline, body (one text), closing_question, source (model, fallback), closing_answer, skipped, answered_at |
+| learn_conversations | One per situation | id, situation_id (unique), user_id, offers int[] (CHECK at most 2), move_subject, move_fact, lock_token |
+| learn_turns        | Lesson conversation | id, seq, conversation_id, role, kind (lesson, reply, followup), text, filler, evidence and validation (server only), sources, picture, follow_ups, move_offer (none, first, second), parent_turn_id, followup_index |
+| lesson_citations   | What the checker verified | id, learn_turn_id, chunk_ids[], author, book_title, quote (nullable, verified word for word) |
+| moves              | The move | id, user_id, situation_id, learn_id, status (draft, committed, report_due, reported, closed_no_report, swapped), title, mission, success_condition, words, checklist, prediction, hypothesis, start_minutes (1 to 10), swap_count (CHECK 0 to 1), swapped_from, active_slot (1 or 2; unique per founder, so at most 2 active), committed_at, report_due_at, closes_at |
+| reports            | Evening report | id, user_id, move_id (unique), situation_id, outcome (done, couldnt, didnt), note, prediction, prediction_check, reply, share_state (asked, shared, private, withdrawn, not_offered), share_automatic, share_decided_at, consent_wording_version |
+| consent_log        | Each consent decision | id, user_id, report_id (null for the settings switch), action (asked, share, auto_share, keep_private, withdraw, auto_share_on, auto_share_off), wording_version, decided_at |
+| peer_outcomes      | Anonymized founder stories | id, status (pending_review, approved, rejected, withdrawn), stage, customer_market, business_model, outcome, draft jsonb, story, lesson, reviewed_by, reviewed_at. No user_id. A trigger clears `draft` on approve or reject and rounds `created_at` to the day. |
+| outcome_author_links | Private, server only | peer_outcome_id, user_id, report_id, withdrawn_at |
+| peer_unlocks       | Give to get | id, user_id, granted_by_report_id, kind (report, share), used_on_situation_id |
+| founder_lesson_log | Author lessons already shown | id, user_id, source_key (unique per founder), slot (1 or 2) |
+| user_settings      | Settings | user_id, share_auto (default false), morning_on, evening_on, lock_screen (full, short, hidden), quiet_start, quiet_end, mentor_style (calm, direct, hard), keep_items, last_greeting |
+| push_tokens        | Devices | id, user_id, token (unique), platform (ios, android), timezone |
+| notification_log   | The push cap and dedupe | id, user_id, kind (morning, quiet_check, evening, reminder), slot (morning, evening), local_day, status (sending, sent, failed), attempts, dedupe_key. Unique per founder, day and slot: at most 2 a day. |
+| care_events        | Private | id, user_id, level (unclear, clear), scope_id, created_at, resolved_at. No message text. |
+| account_requests   | Export and delete requests | id, user_id, kind (export, delete), status, delete_after |
+| product_events     | Counters for the old and new flow | id, user_id, event, properties, created_at |
+
+Not built: a separate theory table, a daily usage table (the new-situation
+limit counts `situations.created_at` for the day), and introduction requests
+(introductions are a later plan).
 
 ### Privacy boundary
 - `peer_outcomes` never stores a user_id. Founders can read only approved
@@ -234,12 +269,12 @@ migration files in the repo, applied only with Rafay's explicit approval.
 Weekly reads, personal wiki graph tables, node and edge data, warning
 counters, removal and reapplication fields, learning map state.
 
-### Row Level Security
-- RLS on every table.
-- Founder owned rows: owner SELECT only from the client. Writes go through the
-  API.
-- Server only writes: lessons, reads, peer outcomes, unlocks, theory,
-  notification and care tables.
+### Row Level Security and access
+- RLS is on for every founder table, with no client policies. The app has no
+  direct read or write on them; everything goes through the Express API with
+  the service role.
+- `founder_profiles` is server only too (migration `20261103103416` removed
+  its owner SELECT). The app uses Supabase for sign-in only.
 - The service role key exists only on Render. Never in the app.
 
 ---
@@ -247,17 +282,34 @@ counters, removal and reapplication fields, learning map state.
 ## AI Layer
 
 ### Principles
-- Every step makes **one structured call** where possible. The audit found 4
-  to 7 model operations per ordinary chat turn. Target is 1 to 2 per step.
+- Every step makes **one structured call** where possible.
 - All outputs that drive the product are JSON, validated on the server. On
   invalid JSON: retry once with the schema appended, then fail gracefully.
 - The model can never invent: author and book come from the database row,
   quotes are checked as exact pieces of retrieved text, numbers in pictures are
   from the founder or from our code.
 - The Read and first reading may only quote the founder's own words; the
-  checker verifies each quote and underlined phrase against what they wrote.
+  checker verifies each quote against what they wrote. The Read has no
+  underlined phrases; only the first reading has them (max 2).
 
-### Target calls
+### Models per step (`server/config.js`)
+Each step reads `MODEL_<STEP>` from the environment and falls back to the
+default. The server picks the model, never the request.
+
+| Step     | Default model | Used for |
+|----------|---------------|----------|
+| read     | gpt-5.2-2025-12-11 | the Read |
+| learn    | gpt-5.4-mini-2026-03-17 | Learn replies |
+| followup | gpt-4.1-mini | tapped follow-ups |
+| move     | gpt-5.4-mini-2026-03-17 | the words of the move |
+| care     | gpt-5.4-mini-2026-03-17 | care classifier |
+| report   | gpt-5.4-mini-2026-03-17 | report reply, and the reviewer's draft of a shared story |
+| memory   | gpt-4.1-mini | old product memory updates |
+
+Embeddings: `text-embedding-3-small`. Limits in code: 2 follow-ups, 2 active
+moves, 2 pushes a day.
+
+### Calls per step
 | Step        | Calls |
 |-------------|-------|
 | First reading | 1 structured call |
@@ -265,9 +317,10 @@ counters, removal and reapplication fields, learning map state.
 | Read        | 1 structured call |
 | Learn       | 1 retrieval + 1 structured reply call per turn |
 | Lesson tap  | 1 call per follow up |
-| Loading hint | None (picked from the library by tags; fast) |
-| Move        | Deterministic transform + validator; a model only to write the words |
-| Report      | Deterministic write + optional cheap call for the reply text, theory update, anonymization draft |
+| Loading hint | None (picked from the library; fast) |
+| Move        | Deterministic validator; a model writes the words |
+| Report      | Deterministic write + a call for the reply text |
+| Review draft | 1 call when a reviewer asks for a draft of a shared story |
 | Care        | A fast classifier plus rules, before everything |
 
 ### Learn reply JSON (target)
@@ -286,11 +339,13 @@ reply reaches the founder. With fewer than 2 verifiable sources the reply is
 built from the founder's own facts only, with no source line and no mention
 that anything is missing. It never uses the model's memory for sources.
 
-### Retrieval (Version C, from the library work)
-The existing search picks passages. Verified lessons attach through a
-precomputed passage-to-lesson table. Passages with no lesson stay at book
-level (author and title, no quote). The library holds about 15,700 lessons from
-66 books, each with a verified short quote, author, book and page.
+### Retrieval
+Learn embeds the founder's text and calls `match_wiki_chunks` on the Knowledge
+project (`server/journey/learn/retrieve.js`). Attribution is book level today:
+author and title from the chunk row, and never a quote, chapter or page of
+ours. The verified lesson tables are not built, so the loading hint provider
+is empty and `GET /api/loading-hint` returns nothing until the library is
+loaded.
 
 ### Prompt rules that must be enforced in code, not only in prompts
 - Max 2 follow-ups in Situation (persisted count with a database CHECK).
@@ -302,15 +357,15 @@ level (author and title, no quote). The library holds about 15,700 lessons from
 - Citation validation and quote verification.
 - Swap limit of 1. Max 2 active moves.
 - At most 2 underlined phrases; at most one picture; reply length cap.
-- Push cap of 2 a day.
-- Daily cap on new situations per founder.
+- Push cap of 2 a day (one per slot, enforced by a unique index).
+- Daily cap of 5 new situations per founder (test accounts skip it).
 
 ### Cost
-- The current logger applies wrong prices to some model IDs. Fix this before
-  real users arrive.
-- Log cost per call, per step and per active founder.
-- Daily cap on situations and calls per founder to protect a free product.
-- Cheaper models for non critical calls; the loading hint costs nothing.
+- Every call is logged to `model_usage_logs` with its step as the call type
+  (migrations `20260930000001` and `20261101000009`). VERIFY the prices applied
+  to each model ID before real users arrive.
+- A daily cap protects a free product (new situations, and chat calls on the
+  old route).
 
 ---
 
@@ -321,13 +376,13 @@ level (author and title, no quote). The library holds about 15,700 lessons from
 - Source level title, author and pillar metadata.
 - Stored passage text is retrievable.
 
-### Verified lesson library (built in October 2026, not yet in the live DB)
+### Verified lesson library (not in the live DB, not read by the code)
 - About 15,700 lessons from 66 books, produced in `knowledge_pilot/`, each
   with a verified short quote, author, book, chapter and page.
 - Planned tables in the Knowledge project (gated, see below):
-  `library_lessons`, `chunk_lessons`, `source_crosswalk`.
-- The same library is the source of the loading hint quotes (the stored short
-  quote, verified word for word, shown with the book name only).
+  `library_lessons`, `chunk_lessons`, `source_crosswalk`. None exist in the
+  code or migrations yet. Until they do, Learn cites at book level and the
+  loading hint is empty.
 
 ### Needed for the new product
 - Source and chunk IDs passed through retrieval to the reply call.
@@ -338,28 +393,26 @@ level (author and title, no quote). The library holds about 15,700 lessons from
 
 ---
 
-## Scheduling and Notifications (target)
-- **Push** (Expo push to iOS and Android). The morning move and the evening
-  check-in. **At most 2 a day** per founder, counted from `notification_log`.
-  If nothing is due, nothing is sent. The "quiet for 3 days" check replaces the
-  morning one.
-- Fires at the founder's chosen local time (default 8 pm for the check-in).
-  Quiet hours. Timezone stored per founder; test around daylight saving.
-- The lock-screen text follows the founder's setting (Full names the move,
-  Short is generic, Nothing is just "Axiom").
-- One reminder per move if there is no report, then the situation closes
-  quietly. No warnings.
+## Scheduling and Notifications (current, off until EXPO_PUSH=on)
+- **Push** (Expo push to iOS and Android) from `server/push/`. The morning move
+  and the evening check-in. **At most 2 a day** per founder, one per slot,
+  recorded in `notification_log`. If nothing is due, nothing is sent. The
+  "quiet for 3 days" check replaces the morning one.
+- Fires at the founder's local time (timezone stored per founder) and respects
+  quiet hours. Failed sends are retried up to 3 attempts.
+- The lock-screen text follows the founder's setting (full names the move,
+  short is generic, hidden is just "Axiom").
 - A situation with no activity for 14 days is paused by the scheduler. Nothing
   is deleted.
-- If the phone denies notification permission the server records it. The
-  app then keeps the evening item on the home screen until they report.
-- Pushes pause for a founder while a care event is open.
+- Pushes pause for a founder while a care event is open, and while a delete
+  request is pending.
+- Phone permission is not stored (push_tokens holds only tokens that exist).
 
 ---
 
 ## Security
 - Supabase JWT checked on every API request.
-- CORS limited to the production frontend and localhost (web) and the app.
+- CORS limited to the allowed frontends (`FRONTEND_URL`, `FRONTEND_URLS`).
 - Secrets only in Render and Vercel environment settings. Only public keys in
   the client.
 - User message content is never sent to external logging services. Logs hold
@@ -369,13 +422,44 @@ level (author and title, no quote). The library holds about 15,700 lessons from
 
 ---
 
+## Account deletion
+Plan: `supabase/DELETION_PLAN.md`. The founder types `DELETE` in Settings.
+With `ACCOUNT_DELETE` off (today), the request is recorded and nothing is
+removed. With it on, the account is marked pending with a 7-day grace period
+(the founder can cancel). An hourly check on the server then bans the sign-in,
+runs the SQL function `delete_account` (all founder tables in one
+transaction), and removes the sign-in. If any step fails, the request stays and
+the next hourly run repeats it. Shared outcomes that were approved stay, with
+no link to the founder.
+
+---
+
+## Environment variables
+Names only; values live in Render (`render.yaml`) and a local `.env`.
+- `NODE_VERSION`, `NODE_ENV`, `PORT`: runtime.
+- `VITE_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`: main project URL and server key.
+- `VITE_KNOWLEDGE_SUPABASE_URL`, `KNOWLEDGE_SUPABASE_SERVICE_ROLE_KEY`: Knowledge project.
+- `VITE_SUPABASE_ANON_KEY`: public key for the review page sign-in.
+- `OPENAI_API_KEY`: model calls.
+- `MODEL_<STEP>`: optional model override per step (READ, LEARN, FOLLOWUP, MOVE, CARE, REPORT, MEMORY).
+- `FRONTEND_URL` (required; the server stops without it), `FRONTEND_URLS`: allowed origins.
+- `ADMIN_USER_IDS`, `ADMIN_EMAILS`: test accounts that skip the daily situation limit.
+- `REVIEWER_USER_IDS`: who may use `/review`; empty turns the page off.
+- `EXPO_PUSH`: `on` starts the push scheduler (off today).
+- `EXPO_ACCESS_TOKEN`: Expo push sender token.
+- `ACCOUNT_DELETE`: `on` makes account deletion real (off today).
+- `PRIVACY_URL`, `TERMS_URL`: links shown in Settings.
+
+---
+
 ## Gated changes (never run without Rafay's explicit approval)
 - Read-only dump of both live schemas (G0).
-- Applying the main project migration for the new tables (G1).
+- The main project migrations for the journey tables (G1): applied.
 - Creating the Knowledge lesson tables (G2), reading live chunks to build the
   chunk-to-lesson mapping (G3), uploading lessons (G4). A backup runs first
-  (`knowledge_pilot/backup_knowledge.py`).
-- The account deletion flow needs its own deletion plan before it is built.
+  (`knowledge_pilot/backup_knowledge.py`). Not done.
+- Turning account deletion on: the plan exists and `delete_account` is live;
+  only the `ACCOUNT_DELETE` switch remains.
 - Any OpenAI spend beyond tests.
 - Connected accounts (Stripe, Shopify, Gmail, Notion, CRM, calendar) are
   parked; see PRODUCT.md and `tasks/decisions.md`.
@@ -402,7 +486,10 @@ replacement screen works.
 ## Deployment
 - App: built with Expo, distributed through the app stores (TestFlight and
   internal tracks first).
-- Backend: Render (render.yaml), deploys from feature/journey-v1 until it is merged. Free plan while testing; Starter (always on) before pushes go on.
+- Backend: Render (`render.yaml`), deploys from `main`, region Singapore, free
+  plan while testing (it sleeps after 15 minutes idle). Move to Starter (always
+  on) before `EXPO_PUSH` goes on, because the scheduler runs inside the process.
+  Railway is no longer used.
 - Old web app: Vercel, until it is retired.
 - Migrations: committed to the repo, applied through the Supabase CLI.
 - Deployment details beyond this are VERIFY from the live configuration.
