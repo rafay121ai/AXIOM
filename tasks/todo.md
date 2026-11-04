@@ -394,3 +394,70 @@ Order set by Rafay: give-to-get, founder voices, Calm/Direct/Hard prompt, accoun
 - [ ] Record completion or exact remaining access/deployment blockers and learning-loop review.
 
 Resume evidence: server suite in journey/server passes 535/535 after allowing local loopback (initial sandbox listen EPERM was environmental). Supabase connector is not available in Codex; CLI reports no access token. User connection requested. No live database changes performed by Codex. Last Claude log reports 6/15 applied; re-read live history before resuming. Migration 11 requires copy test before live application; ACCOUNT_DELETE stays off. Migration 7 needs deployed scheduler compatibility evidence.
+
+---
+
+# Plan: proactive Axiom, stage 1 (Nov 4 2026, branch feature/proactive-1)
+
+Decided by Rafay (tasks/decisions.md): two triggers, goal date near and two
+misses in a row. Shown on Home plus the morning push. At most one opener every
+3 days. The engine is built so a later connector (Stripe first) only adds
+triggers. No model call: openers are fixed sentences filled with the founder's
+own words, so they cost nothing and cannot invent.
+
+## How it works
+1. Triggers (pure code, `server/proactive/triggers.js`). Each returns
+   `{ source, key, facts }` or nothing. `source` names where the facts came
+   from (`signup`, `reports`; later `stripe`...).
+   - goal_near: `founder_profiles.deadline` is 14 days away, then 3 days away.
+     Facts: the goal in the founder's words, the date, days left.
+     Keys `goal:<deadline>:14` and `goal:<deadline>:3`, so each fires once.
+   - two_misses: the founder's last two reports are both Couldn't or Didn't.
+     Facts: both move titles. Key `misses:<second report id>`.
+2. Gate (`server/proactive/run.js`), one opener per founder at most:
+   nothing while a care event is open, while a deletion is waiting, while an
+   Axiom-started situation is still unanswered, or within 3 days of the last
+   opener. Never twice for the same key (unique in the database).
+3. Opener: Axiom creates the situation itself. One row in `situations`
+   (`started_by = 'axiom'`, `trigger_key`) and Axiom's line as its first turn.
+   From the founder's first reply it is an ordinary situation: follow-ups (max
+   2), Read, Learn, Move, Report. The Read sees Axiom's opener as context.
+4. Home: the opener is the first item ("Axiom asked: ..."), and it does not
+   fade until answered. Tapping it opens the situation with Axiom's line.
+5. Push: on the opener's day the morning slot sends the opener instead of the
+   morning push (new push kind `proactive`). Still at most 2 pushes a day;
+   quiet hours, the morning switch and the lock-screen setting apply.
+6. Runs from its own hourly job, behind `PROACTIVE=on` (off by default),
+   independent of `EXPO_PUSH`, so Home openers work before pushes are on.
+
+## Migration (needs Rafay's approval; based on a fresh read of live first)
+- `situations`: add `started_by text not null default 'founder'`
+  (check founder | axiom) and `trigger_key text`; unique
+  `(user_id, trigger_key)` where trigger_key is not null.
+- `notification_log.kind`: add `proactive` to the allowed kinds.
+- `delete_account` and the export: no change needed (situations are already
+  covered); the copy test is re-run to prove it.
+
+## New wording (needs Rafay's approval; goes in tasks/wording_to_approve.md)
+- goal_near, 14 days: "You said {goal} by {date}. That is {n} days away. Where is it now?"
+- goal_near, 3 days: "{n} days to {date}, and you said {goal}. What is left?"
+- two_misses: "Your last two moves did not happen: {move 1} and {move 2}. What got in the way?"
+- Home item: "Axiom asked: {opener}"
+- Push full: the opener. Push short: "{name}, I have a question about your goal." / "{name}, about your last two moves." Hidden: "Axiom".
+
+## Steps
+- [ ] Read live `situations` and `notification_log` (read only); write the migration and its MIGRATION_PLAN.md entry.
+- [ ] Rafay approves the migration and the wording.
+- [ ] Triggers and gate, with unit tests (dates across time zones, the 3-day gap, care, deletion, unanswered opener, same key twice).
+- [ ] Opener creation (one situation, no duplicates under concurrent runs) and the Read using the opener as context.
+- [ ] Home item and the app: Axiom's line opens the situation; tests.
+- [ ] Push kind `proactive` in the morning slot; scheduler tests.
+- [ ] `PROACTIVE` switch in index.js and render.yaml (off).
+- [ ] Apply the migration on live (Rafay's yes); re-run the deletion copy test.
+- [ ] Walkthrough test from trigger to Report; voice-checker on the new wording; learning-loop.
+- [ ] Rafay tries it in the simulator with a test founder before PROACTIVE=on.
+
+## Not in stage 1
+Typed numbers (stage 2), connectors (stage 3: Stripe first, then Calendar or
+Notion, Gmail after verification), a Connections screen, dates the founder
+mentions inside a situation.
