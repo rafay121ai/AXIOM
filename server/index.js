@@ -7,6 +7,7 @@ import { createApp, systemClock } from './app.js'
 import { createExpoSender } from './push/expoSender.js'
 import { createAccount, startDeletionLoop } from './journey/home/accountService.js'
 import { createNameLookup, startPushScheduler } from './push/scheduler.js'
+import { createProactive, startProactiveLoop } from './proactive/run.js'
 
 dotenv.config({ path: resolve(dirname(fileURLToPath(import.meta.url)), '../.env') })
 
@@ -60,6 +61,16 @@ if (env.ACCOUNT_DELETE === 'on' && supabase) {
   console.log('[Axiom API] Account deletion on')
 } else {
   console.log('[Axiom API] Account deletion off (ACCOUNT_DELETE is not on)')
+}
+
+// Axiom's openers only when PROACTIVE=on and the database is configured.
+// Independent of EXPO_PUSH: Home shows the opener even with pushes off.
+if (env.PROACTIVE === 'on' && supabase) {
+  // Checks once now, like the deletion loop, then every hour.
+  startProactiveLoop({ proactive: createProactive({ supabase, clock: systemClock, isCareOpen: app.locals.isCareOpen }) }).run()
+  console.log('[Axiom API] Proactive openers on')
+} else {
+  console.log('[Axiom API] Proactive openers off (PROACTIVE is not on)')
 }
 
 process.on('unhandledRejection', (reason) => {

@@ -1,8 +1,8 @@
 // Whether a push may go out now. Pure: no I/O, no clock of its own. Rules
 // enforced here, not in any prompt:
 // - at most 2 pushes per local day (LIMITS.MAX_PUSH_PER_DAY), counted from
-//   notification_log; one morning slot (the move, or the quiet check that
-//   replaces it) and one evening slot (the check-in, or its one reminder);
+//   notification_log; one morning slot (the move, or the quiet check or Axiom's
+//   opener that replaces it) and one evening slot (the check-in, or its one reminder);
 // - never while a care event is open, or when that is unknown;
 // - quiet hours in the founder's time zone;
 // - nothing after 14 days without activity (the situation is paused);
@@ -16,7 +16,7 @@ import { LIMITS } from '../config.js'
 import { localParts, localToUtc, validTimeZone } from '../journey/move/schedule.js'
 import { normalizeReportTime } from '../writeValidation.js'
 
-export const PUSH_KINDS = Object.freeze(['morning', 'quiet_check', 'evening', 'reminder'])
+export const PUSH_KINDS = Object.freeze(['morning', 'quiet_check', 'evening', 'reminder', 'proactive'])
 export const DAY_MS = 24 * 60 * 60 * 1000
 export const PAUSE_AFTER_MS = 14 * DAY_MS
 export const QUIET_AFTER_MS = 3 * DAY_MS
@@ -31,8 +31,8 @@ export const COUNTING_STATUSES = Object.freeze(['sending', 'sent'])
 
 // The day's two places. notification_log keeps one counting row per founder,
 // local day and slot (a partial unique index), so the cap holds in the database.
-export const SLOT = Object.freeze({ morning: 'morning', quiet_check: 'morning', evening: 'evening', reminder: 'evening' })
-const SWITCH = Object.freeze({ morning: 'morning_on', quiet_check: 'morning_on', evening: 'evening_on', reminder: 'evening_on' })
+export const SLOT = Object.freeze({ morning: 'morning', quiet_check: 'morning', proactive: 'morning', evening: 'evening', reminder: 'evening' })
+const SWITCH = Object.freeze({ morning: 'morning_on', quiet_check: 'morning_on', proactive: 'morning_on', evening: 'evening_on', reminder: 'evening_on' })
 const MOVE_KINDS = new Set(['morning', 'evening', 'reminder'])
 
 export const zoneOf = (zone) => (validTimeZone(zone) ? zone : 'UTC')

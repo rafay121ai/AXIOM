@@ -5,6 +5,9 @@
 //   still ahead (no morning nudge after the check-in push).
 // - quiet_check: replaces the morning push after 3 days with no activity,
 //   naming the newest open situation. Once per quiet stretch.
+// - proactive: Axiom's opener of today (founder-local), in the morning slot.
+//   It replaces the morning and quiet_check pushes; if the slot has passed
+//   there is no push at all.
 // - evening: at the move's report_due_at (the founder's check-in time).
 // - reminder: one, a day after the check-in time, or an hour before the move
 //   closes if that is sooner. Nothing after it.
@@ -16,7 +19,8 @@ const ms = (iso) => Date.parse(iso ?? '')
 
 // moves: this founder's active moves { id, situation_id, title, subject,
 // committed_at, report_due_at, closes_at }. quietSituation: { id, title } or null.
-export function duePushes({ now, timeZone, moves = [], quietSituation = null, lastActivityAt = null }) {
+// opener: { id, title, text, trigger } for an unanswered opener made today, or null.
+export function duePushes({ now, timeZone, moves = [], quietSituation = null, lastActivityAt = null, opener = null }) {
   const zone = zoneOf(timeZone)
   const morningAt = localTimeOn(now, zone, MORNING_TIME)
   const morning = { dueAt: morningAt, expiresAt: morningAt + MORNING_WINDOW_MS }
@@ -24,7 +28,12 @@ export function duePushes({ now, timeZone, moves = [], quietSituation = null, la
   const pushes = []
 
   const last = ms(lastActivityAt)
-  if (quietSituation && Number.isFinite(last) && now - last >= QUIET_AFTER_MS) {
+  if (opener) {
+    pushes.push({
+      kind: 'proactive',
+      item: { key: `proactive:${opener.id}`, ...morning, situationId: opener.id, situationTitle: opener.title, opener: opener.text, trigger: opener.trigger },
+    })
+  } else if (quietSituation && Number.isFinite(last) && now - last >= QUIET_AFTER_MS) {
     pushes.push({
       kind: 'quiet_check',
       item: { key: `quiet:${quietSituation.id}:${lastActivityAt}`, ...morning, situationId: quietSituation.id, situationTitle: quietSituation.title },

@@ -32,6 +32,9 @@ services:
       # Off: delete requests are recorded, nothing is removed. Turn on once tested.
       - key: ACCOUNT_DELETE
         value: "off"
+      # Off: Axiom never opens a situation on its own. Turn on once tried in the simulator.
+      - key: PROACTIVE
+        value: "off"
       - key: FRONTEND_URL
         sync: false
       # Comma-separated user ids (or confirmed emails) of test accounts: they skip the daily situation limit.

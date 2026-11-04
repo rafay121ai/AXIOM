@@ -136,7 +136,9 @@ export function createFakeSupabase({ tables = {}, users = {}, idFactory = random
     function run() {
       const rows = rowsOf(table)
       if (action === 'insert' || action === 'upsert') {
-        const inserted = [].concat(payload).map((r) => ({ id: idFactory(), ...r }))
+        // Column defaults the database fills in.
+        const defaults = table === 'situations' ? { started_by: 'founder', trigger_key: null } : {}
+        const inserted = [].concat(payload).map((r) => ({ id: idFactory(), ...defaults, ...r }))
         if (action === 'insert' && breaksUnique(table, [...rows, ...inserted])) return { error: duplicate }
         rows.push(...inserted)
         return inserted

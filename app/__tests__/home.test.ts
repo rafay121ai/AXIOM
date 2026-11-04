@@ -56,6 +56,19 @@ describe('the fake home', () => {
     expect(home.drawer.recent.length).toBeGreaterThan(0);
   });
 
+  it('puts Axiom\'s own question first; it stays, opens the situation with Axiom\'s line, and the reply continues it', async () => {
+    const api = createFakeApi('none', 0, false, 'opener');
+    const [item] = (await api.getHome('UTC')).items;
+    expect(item).toMatchObject({ kind: 'situation', stays: true });
+    expect(item.label).toMatch(/^Axiom asked: You said your first 10 customers by /);
+    const d = await destinationOf(api, item.target);
+    expect(d).toMatchObject({ kind: 'situation', situationId: 'fake-opener-1' });
+    if (d.kind !== 'situation') throw new Error('not a situation');
+    expect(d.turns.map((x) => x.role)).toEqual(['axiom']);
+    const reply = await api.sendTurn('fake-opener-1', 'Three clinics said maybe, none have paid yet.', 'turn-1');
+    expect(reply).toMatchObject({ situation_id: 'fake-opener-1' });
+  });
+
   it('is only the gentle line while a care check-in is open, until it is answered', async () => {
     const api = createFakeApi('none', 0, false, 'care');
     const first = await api.getHome('UTC');

@@ -38,6 +38,7 @@ export const ITEM_LABELS = Object.freeze({
   moveStill: 'Still to do: {title}', // (mock)
   report: 'Tell me how it went', // (mock)
   situation: 'Pick up: {title}', // (new)
+  opener: 'Axiom asked: {opener}', // (approved Nov 4)
   situationNoTitle: 'Pick up where you left off', // (new)
 })
 

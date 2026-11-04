@@ -18,7 +18,7 @@ const COUNTING = (r) => r.status === 'sending' || r.status === 'sent'
 export const UNIQUE = Object.freeze({
   founder_profiles: [{ cols: ['user_id'] }],
   user_settings: [{ cols: ['user_id'] }],
-  situations: [{ cols: ['user_id', 'create_turn_id'] }],
+  situations: [{ cols: ['user_id', 'create_turn_id'] }, { cols: ['user_id', 'trigger_key'] }],
   situation_turns: [{ cols: ['situation_id', 'client_turn_id'] }],
   reads: [{ cols: ['situation_id'] }],
   learn_conversations: [{ cols: ['situation_id'] }],

@@ -14,7 +14,7 @@ const CHUNK = 100
 // What the founder wrote or was told, per table. Never `*`. Rows are cut down
 // to these fields here as well as in the query.
 const COLUMNS = Object.freeze({
-  situations: ['id', 'title', 'status', 'follow_up_count', 'created_at', 'last_activity_at'],
+  situations: ['id', 'title', 'status', 'follow_up_count', 'started_by', 'created_at', 'last_activity_at'],
   situation_turns: ['id', 'situation_id', 'role', 'text', 'created_at'],
   reads: ['id', 'situation_id', 'headline', 'body', 'closing_question', 'closing_answer', 'skipped', 'answered_at', 'created_at'],
   learn_conversations: ['id', 'situation_id', 'created_at'],

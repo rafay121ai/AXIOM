@@ -8,7 +8,7 @@ import type { AxiomApi } from './types';
 // EXPO_PUBLIC_API=http uses the Express server at EXPO_PUBLIC_API_URL; anything else uses the fixtures.
 // EXPO_PUBLIC_FAKE_CARE=clear|unclear makes the fake screen every text that way.
 // EXPO_PUBLIC_FAKE_DUE=report puts the mock's evening check-in waiting after sign-in.
-// EXPO_PUBLIC_FAKE_HOME=morning|report|evening|nothing|care makes the fake a returning founder on that home state.
+// EXPO_PUBLIC_FAKE_HOME=morning|report|evening|nothing|care|opener makes the fake a returning founder on that home state.
 // EXPO_PUBLIC_FAKE_FOUNDER=closed makes the fake send the closed founder-lessons notice instead of a case.
 // EXPO_PUBLIC_FAKE_ACCOUNT=pending|off makes a deletion already wait when Settings opens (pending) or delete only be recorded (off). Unset: delete starts a grace period.
 // EXPO_PUBLIC_FAKE_LATENCY=<ms> makes the fake's Learn answers slow, to see the loading hint.

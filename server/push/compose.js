@@ -16,7 +16,7 @@ export const DEFAULT_LOCK_SCREEN = 'short'
 export const HIDDEN_BODY = 'Axiom'
 export const MAX_BODY = 160
 
-const OPENS = Object.freeze({ morning: 'move', evening: 'report', reminder: 'report', quiet_check: 'situation' })
+const OPENS = Object.freeze({ morning: 'move', evening: 'report', reminder: 'report', quiet_check: 'situation', proactive: 'situation' })
 
 const clean = (s) => String(s ?? '').replace(/\s+/g, ' ').trim()
 const sentence = (s) => clean(s).replace(/[.!?\s]+$/, '')
@@ -49,6 +49,10 @@ export const PUSH_WORDING = Object.freeze({
     full: ({ name, situationTitle }) => lead(name, `where are you with ${lowerFirst(sentence(situationTitle))}?`), // (new)
     short: ({ name }) => lead(name, 'where are you with what we talked about?'), // (new)
   },
+  proactive: {
+    full: ({ opener }) => opener, // (approved Nov 4)
+    short: ({ name, trigger }) => lead(name, trigger === 'two_misses' ? 'about your last two moves.' : 'I have a question about your goal.'), // (approved Nov 4)
+  },
 })
 
 // Problems that keep a line off a lock screen.
@@ -71,13 +75,15 @@ export function composePush({ kind, item, name = null, lockScreen = DEFAULT_LOCK
     title: clean(item.title),
     subject: item.subject ? sentence(item.subject) : null,
     situationTitle: clean(item.situationTitle),
+    opener: clean(item.opener),
+    trigger: item.trigger,
   }
   let body = HIDDEN_BODY
   if (mode !== 'hidden') {
     const short = wording.short(fields)
     const full = mode === 'full' ? wording.full(fields) : null
     body = full && voiceProblems(full).length === 0 ? full : short
-    if (voiceProblems(body).length > 0) body = wording.short({ name: null })
+    if (voiceProblems(body).length > 0) body = wording.short({ ...fields, name: null })
   }
   const data = { kind, open: OPENS[kind] }
   if (item.moveId) data.move_id = item.moveId

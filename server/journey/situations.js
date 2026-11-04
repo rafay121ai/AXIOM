@@ -40,6 +40,7 @@ const titleOk = (title, founderTexts) => {
   const known = new Set(founderTexts.flatMap(numbersIn))
   return t.length >= 3 && !BANNED_PHRASES.some((b) => wordRx(b).test(t)) && numbersIn(t).every((n) => known.has(n))
 }
+const OPENER_NOTE = 'Axiom opened this situation with this question. These are not the founder\'s words.'
 const busy = () => new HttpError(409, { error: 'This turn is still being processed. Try again in a moment.', code: 'turn_busy' })
 
 export function createSituations({ supabase, callStructured, clock, log = () => {} }) {
@@ -65,6 +66,15 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
   const readOf = (situationId) =>
     one(supabase.from('reads').select().eq('situation_id', situationId).maybeSingle())
 
+  // The conversation as the model sees it. Axiom's own opening question is
+  // labelled, so it is context and never the founder's words (quote checks
+  // read founder turns only).
+  const modelTurns = (turns) => turns.filter((t) => !t.filler).map((t, i) => ({
+    role: t.role,
+    text: t.text,
+    ...(i === 0 && t.role === 'axiom' ? { note: OPENER_NOTE } : {}),
+  }))
+
   const founderTextsOf = (turns) => turns.filter((t) => t.role === 'founder' && !t.filler).map((t) => t.text)
 
   // ── Counting: the follow-up cap and the daily limit ────────────────────────
@@ -87,7 +97,8 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
 
   async function newToday(userId) {
     const day = new Date(clock.now()).toISOString().slice(0, 10)
-    const rows = await one(supabase.from('situations').select('id').eq('user_id', userId).gte('created_at', `${day}T00:00:00.000Z`))
+    // Only situations the founder started count: Axiom's openers are not theirs.
+    const rows = await one(supabase.from('situations').select('id').eq('user_id', userId).neq('started_by', 'axiom').gte('created_at', `${day}T00:00:00.000Z`))
     return rows.length
   }
 
@@ -103,7 +114,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
   // call or a question that will not pass ends in "enough", never in a stall.
   async function assess({ userId, situation, signUpAnswers, turns, followUpsLeft }) {
     const { evidence, answerTexts } = buildEvidence(signUpAnswers)
-    const conversation = turns.filter((t) => !t.filler).map((t) => ({ role: t.role, text: t.text }))
+    const conversation = modelTurns(turns)
     const sources = [...founderTextsOf(turns), ...answerTexts]
     let problems = null
     for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -279,7 +290,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     const { read: made, source } = await createRead({
       signUpAnswers: answers,
       situationId: situation.id,
-      conversation: turns.filter((t) => !t.filler).map((t) => ({ role: t.role, text: t.text })),
+      conversation: modelTurns(turns),
       style: await styleOf(supabase, userId),
       deps: { callStructured, userId, log },
     })

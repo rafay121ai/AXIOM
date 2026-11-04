@@ -19,7 +19,7 @@
 import { ACTIVE_STATUSES } from '../journey/move/room.js'
 import { founderFirstName } from '../journey/home/name.js'
 import { loadStates, statusOf } from '../journey/home/state.js'
-import { decidePush, PAUSE_AFTER_MS, QUIET_AFTER_MS } from './policy.js'
+import { decidePush, localDay, PAUSE_AFTER_MS, QUIET_AFTER_MS } from './policy.js'
 import { duePushes } from './due.js'
 import { composePush } from './compose.js'
 import { reminderSettingsOf } from './settings.js'
@@ -123,7 +123,22 @@ export function createPushScheduler({ supabase, sender, clock, isCareOpen, nameO
     return { delivered, unknown, error }
   }
 
-  async function forFounder({ userId, now, moves, quietSituations, summary }) {
+  // Today's opener Axiom made for this founder that they have not answered, or null.
+  async function openerOf(openers, timeZone, now) {
+    const today = openers.filter((s) => localDay(Date.parse(s.created_at), timeZone) === localDay(now, timeZone))
+    if (today.length === 0) return null
+    const turns = await one(supabase.from('situation_turns').select('situation_id, role, text, seq').in('situation_id', today.map((s) => s.id)).order('seq', { ascending: true }))
+    for (const s of today.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))) {
+      const own = turns.filter((t) => t.situation_id === s.id)
+      const text = own.find((t) => t.role === 'axiom')?.text
+      if (text && !own.some((t) => t.role === 'founder')) {
+        return { id: s.id, title: s.title, text, trigger: s.trigger_key?.startsWith('misses:') ? 'two_misses' : 'goal_near' }
+      }
+    }
+    return null
+  }
+
+  async function forFounder({ userId, now, moves, quietSituations, openers, summary }) {
     const [devices, profileRow, latest] = await Promise.all([
       tokens.forUser(userId),
       one(supabase.from('founder_profiles').select('timezone').eq('user_id', userId).maybeSingle()),
@@ -145,7 +160,8 @@ export function createPushScheduler({ supabase, sender, clock, isCareOpen, nameO
       .sort((a, b) => Date.parse(b.last_activity_at) - Date.parse(a.last_activity_at))[0] ?? null
     // Only what is due right now goes on; the morning push depends on the
     // founder's zone, so this cannot be filtered in the query.
-    const pushes = duePushes({ now, timeZone, lastActivityAt, quietSituation, moves })
+    const opener = await openerOf(openers, timeZone, now)
+    const pushes = duePushes({ now, timeZone, lastActivityAt, quietSituation, moves, opener })
       .filter(({ item }) => now >= item.dueAt && now < item.expiresAt)
     if (pushes.length === 0) return
 
@@ -205,19 +221,23 @@ export function createPushScheduler({ supabase, sender, clock, isCareOpen, nameO
   async function tick() {
     const now = clock.now()
     const summary = { sent: 0, failed: 0, unknown: 0, paused_for_care: 0, founders: 0 }
-    const [moves, quiet, leaving] = await Promise.all([
+    const [moves, quiet, opened, leaving] = await Promise.all([
       everyRow(() => supabase.from('moves').select('id, user_id, situation_id, learn_id, title, status, committed_at, report_due_at, closes_at, time_zone')
         .in('status', ACTIVE_STATUSES).gt('closes_at', iso(now))),
       everyRow(() => supabase.from('situations').select('id, user_id, title, status, last_activity_at')
         .eq('status', 'open').lte('last_activity_at', iso(now - QUIET_AFTER_MS)).gt('last_activity_at', iso(now - PAUSE_AFTER_MS))),
+      // Openers Axiom made in the last day and a half (the founder's "today" is decided per founder).
+      everyRow(() => supabase.from('situations').select('id, user_id, title, trigger_key, created_at')
+        .eq('started_by', 'axiom').eq('status', 'open').gte('created_at', iso(now - 36 * 60 * 60 * 1000))),
       // A founder who asked for deletion gets no more pushes.
       everyRow(() => supabase.from('account_requests').select('id, user_id').eq('kind', 'delete').in('status', ['queued', 'pending', 'deleting'])),
     ])
     const deleting = new Set(leaving.map((r) => r.user_id))
     const byFounder = new Map()
-    const of = (userId) => byFounder.get(userId) ?? byFounder.set(userId, { moves: [], quietSituations: [] }).get(userId)
+    const of = (userId) => byFounder.get(userId) ?? byFounder.set(userId, { moves: [], quietSituations: [], openers: [] }).get(userId)
     for (const m of moves) of(m.user_id).moves.push(m)
     for (const s of quiet) of(s.user_id).quietSituations.push(s)
+    for (const s of opened) of(s.user_id).openers.push(s)
     for (const [userId, rows] of byFounder) {
       if (deleting.has(userId)) continue
       summary.founders += 1

@@ -18,7 +18,7 @@ const one = async (query) => {
   return data
 }
 
-const day = (iso) => new Date(iso).toLocaleDateString('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' })
+export const day = (iso) => new Date(iso).toLocaleDateString('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' })
 
 export function createAccount({ supabase, clock, deleteOn = false, log = () => {} }) {
   const iso = (ms = clock.now()) => new Date(ms).toISOString()

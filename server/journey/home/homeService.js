@@ -42,6 +42,18 @@ export function createHome({ supabase, care, callStructured, clock, log = () => 
     last_activity_at: s.last_activity_at,
   })
 
+  // The newest open Axiom-started situation with no founder turn yet: { id, title, text }, or null.
+  async function unansweredOpener(candidates) {
+    if (candidates.length === 0) return null
+    const turns = await one(supabase.from('situation_turns').select('situation_id, role, text, seq').in('situation_id', candidates.map((s) => s.id)).order('seq', { ascending: true }))
+    for (const s of candidates) { // newest activity first
+      const own = turns.filter((t) => t.situation_id === s.id)
+      const text = own.find((t) => t.role === 'axiom')?.text
+      if (text && !own.some((t) => t.role === 'founder')) return { id: s.id, title: s.title, text }
+    }
+    return null
+  }
+
   // timeZone: the phone's zone, used when the founder has none saved.
   async function home({ user, timeZone = null }) {
     const userId = user.id
@@ -77,8 +89,13 @@ export function createHome({ supabase, care, callStructured, clock, log = () => 
       ...dueMoves.map((m) => ({ kind: 'report', label: ITEM_LABELS.report, title: m.title, stays: keepAll || pushOff, target: { stage: 'report', situation_id: m.situation_id, move_id: m.id } })),
       ...waiting.map((m) => ({ kind: 'move', label: label(todayOf(m), m.title), title: m.title, stays: keepAll, target: { stage: 'move', situation_id: m.situation_id, move_id: m.id } })),
     ]
+    // Axiom's own question, not yet answered: first in the list, and it stays until answered.
+    const asked = await unansweredOpener(situations.filter((s) => s.started_by === 'axiom' && s.status === 'open'))
+    if (asked) {
+      toDo.unshift({ kind: 'situation', label: ITEM_LABELS.opener.replace('{opener}', () => asked.text), title: asked.title ?? null, stays: true, target: { stage: 'situation', situation_id: asked.id } })
+    }
     const covered = new Set(open.map((m) => m.situation_id))
-    const unfinished = rows.find((r) => r.status === 'open' && r.stage && !covered.has(r.id))
+    const unfinished = rows.find((r) => r.status === 'open' && r.stage && !covered.has(r.id) && r.id !== asked?.id)
     if (unfinished) {
       toDo.push({
         kind: 'situation',

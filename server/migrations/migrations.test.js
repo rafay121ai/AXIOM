@@ -429,7 +429,9 @@ const checkList = (sql, column) => {
 }
 
 test('migrations: CHECK lists match the values the server code uses', () => {
-  assert.deepEqual(checkList(schema.notification_log.body, 'kind')?.sort(), [...PUSH_KINDS].sort())
+  // The kinds list was last changed by the newest migration that names its constraint.
+  const kindSql = all.map((f) => stripSqlComments(f.sql)).filter((sql) => sql.includes('notification_log_kind_check')).at(-1)
+  assert.deepEqual(checkList(kindSql, 'kind')?.sort(), [...PUSH_KINDS].sort())
   assert.deepEqual(checkList(schema.notification_log.body, 'slot')?.sort(), ['evening', 'morning'])
   assert.deepEqual(checkList(journeySql, 'lock_screen')?.sort(), [...LOCK_SCREEN_MODES].sort())
   assert.deepEqual(checkList(journeySql, 'mentor_style')?.sort(), [...MENTOR_STYLES].sort())

@@ -169,9 +169,12 @@ const KEPT_PRIVATE_LINE = 'Kept private. You can change this any time in setting
 // The home screen, from the mock (sample founder). The words are the server's own (server/journey/home/wording.js):
 // the mock's "Tonight: tell me how it went" is "Tell me how it went" there. Which items show follows the mock's states.
 export type FounderSim = 'closed';
-export type HomeSim = 'morning' | 'report' | 'evening' | 'nothing' | 'care';
+export type HomeSim = 'morning' | 'report' | 'evening' | 'nothing' | 'care' | 'opener';
 
 const FAKE_SITUATION = 'fake-situation-1';
+// Proactive stage 1: Axiom opened a situation itself (server/proactive/wording.js; approved Nov 4).
+const FAKE_OPENER = { id: 'fake-opener-1', text: 'You said your first 10 customers by 30 November 2026. That is 12 days away. Where is it now?' };
+const OPENER_ITEM: HomeItem = { kind: 'situation', label: `Axiom asked: ${FAKE_OPENER.text}`, title: 'My first 10 customers', stays: true, target: { stage: 'situation', situation_id: FAKE_OPENER.id } };
 const TODAY_ITEM: HomeItem = { kind: 'move', label: 'Today: ask the clinics for a call', title: FAKE_DUE.title, stays: false, target: { stage: 'move', situation_id: FAKE_SITUATION, move_id: FAKE_MOVE.id } };
 const STILL_ITEM: HomeItem = { ...TODAY_ITEM, label: 'Still to do: ask the clinics for a call' };
 const REPORT_ITEM: HomeItem = { kind: 'report', label: 'Tell me how it went', title: FAKE_DUE.title, stays: false, target: { stage: 'report', situation_id: FAKE_SITUATION, move_id: FAKE_DUE.move_id } };
@@ -270,7 +273,7 @@ function fakeHome(state: HomeSim, now: Date): Home {
   if (state === 'care') {
     return { greeting: { kind: 'care_check_in', text: 'How are you doing today?' }, care_check_in: true, items: [], fade_after_ms: 8000, drawer: { to_do: [], open: [], paused: [], recent: [] }, due_reports: [] };
   }
-  const to_do = { morning: [TODAY_ITEM], report: [REPORT_ITEM], evening: [STILL_ITEM, REPORT_ITEM], nothing: [] }[state];
+  const to_do = { morning: [TODAY_ITEM], report: [REPORT_ITEM], evening: [STILL_ITEM, REPORT_ITEM], nothing: [], opener: [OPENER_ITEM] }[state];
   return {
     greeting: fakeGreeting(now),
     care_check_in: false,
@@ -305,6 +308,7 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
   let nextId = 1;
   const situations = new Map<string, { asked: number; said: string[]; turns: SituationView['turns'] }>();
   const replies = new Map<string, SituationReply>();
+  if (home === 'opener') situations.set(FAKE_OPENER.id, { asked: 0, said: [], turns: [{ role: 'axiom', text: FAKE_OPENER.text, created_at: new Date().toISOString() }] });
   const turn = async (situationId: string | null, text: string, turnId: string): Promise<Screened<SituationReply>> => {
     const flagged = await screen();
     if (flagged.care) return flagged;

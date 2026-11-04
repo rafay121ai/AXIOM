@@ -136,6 +136,11 @@ existing migration.
     Found by the copy test on Nov 4 2026. Behaviour otherwise unchanged.
     Approved by Rafay and applied to main on Nov 4 2026 (version taken from
     live).
+14. `20261104200000_proactive_openers.sql`
+    `situations.started_by` (founder | axiom) and `trigger_key` (unique per
+    founder when set), and `proactive` as a `notification_log` kind. For
+    proactive Axiom stage 1 (tasks/todo.md). Approved by Rafay Nov 4 2026. Not
+    yet applied; applied only after the server code that writes it is ready.
 
 ## Access rules in every file
 
