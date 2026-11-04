@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>All Axiom screens</title>
+<style>
+  body { margin: 0; background: #0b0b0c; color: #e8e6e1; font: 13px/1.4 -apple-system, system-ui, sans-serif; }
+  h1 { font-size: 15px; font-weight: 500; margin: 18px 20px 4px; }
+  p.sub { margin: 0 20px 14px; color: #8a8a8a; }
+  .grid { display: flex; flex-wrap: wrap; gap: 18px 14px; padding: 0 16px 40px; }
+  .cell { width: 180px; }
+  .cell .lab { margin: 0 0 6px 4px; color: #b9b6ae; }
+  .cell .lab b { color: #e8e6e1; font-weight: 500; }
+  .box { width: 180px; height: 387px; overflow: hidden; border-radius: 22px; }
+  iframe { width: 392px; height: 842px; border: 0; transform: scale(.459); transform-origin: 0 0; background: #050505; }
+</style>
+</head>
+<body>
+<h1>All approved screens</h1>
+<p class="sub">Straight from the approved mock (mock-onboarding-v2.html), one phone per screen, with the mock's own sample answers.</p>
+<div class="grid" id="g"></div>
+<script>
+const SCREENS = [
+  ['signin', '1 · Sign in', ''],
+  ['qview', '2 · The 13 questions', 'go(1)'],
+  ['reading', '3 · Wait', 'show("reading")'],
+  ['firstread', '4 · First reading', 'showRead()'],
+  ['situation', '5 · Situation', 'openSituation()'],
+  ['readv', '6 · The Read', 'showReadScreen()'],
+  ['learn', '7 · Learn and the move', 'openLearn()'],
+  ['report', '8 · Report', 'openReport()'],
+  ['home', '9 · Home', 'openHome()'],
+  ['settings', '10 · Settings', 'openSettings()'],
+  ['history', '11 · History', 'openHistory()'],
+  ['hdetail', '12 · A past situation', 'openPast(0)'],
+  ['care', '13 · Care', 'showCare()'],
+];
+const g = document.getElementById('g');
+SCREENS.forEach(([id, label, call], i) => {
+  const c = document.createElement('div'); c.className = 'cell';
+  c.innerHTML = '<p class="lab"><b>' + label + '</b></p><div class="box"><iframe src="mock-onboarding-v2.html" title="' + label + '"></iframe></div>';
+  g.appendChild(c);
+  const f = c.querySelector('iframe');
+  f.addEventListener('load', () => setTimeout(() => {
+    try {
+      const w = f.contentWindow, d = f.contentDocument;
+      const st = d.createElement('style');
+      st.textContent = 'body{margin:0!important;padding:0!important;background:#050505!important;display:block!important} .side{display:none!important} .wrap{display:block!important;padding:0!important;margin:0!important;min-height:0!important} .phone{margin:0!important;box-shadow:none!important;border-radius:0!important}';
+      d.head.appendChild(st);
+      const fill = d.getElementById('fill'); if (fill && id !== 'signin') fill.click();
+      setTimeout(() => { try { if (call) w.eval(call); } catch (e) { console.warn(id, e); } }, 200);
+    } catch (e) { console.warn(id, e); }
+  }, 300 + i * 120));
+});
+</script>
+</body>
+</html>

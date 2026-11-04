@@ -329,3 +329,44 @@ Spend baseline $1.8994; hard cap $6.90 (ask before exceeding). Judge = gpt-4.1, 
 - Needs Rafay's OK (copy not in mocks): `returnCheckIn` "How are you doing today?"; server validation and API error lines ("Pick one of the options", "Failed to build the first reading", ...) must be mapped to plain app copy in B11 (app never shows raw server errors).
 - App leftovers (do in B11): resume half-way through questions using GET /api/signup `next`; persist the offline queue (AsyncStorage) so unsent answers survive a restart; handle a rejected save in onSave (no unhandled rejection); `sendMessage` on the interface throws today because the server has no free-message route: either build the route (Situation turns, B4) and implement it, or remove it; real Google sign-in not run against real keys.
 - Open (B9, home): while a care event is open, Learn start/taps and moves must be refused and the next open starts with the gentle check-in; `resolveCare` is called after it. Cap of 2 active moves is enforced in B6 and must be checked when a move is offered in Learn. Filler in Learn gets "Say a bit more." (mock rephrases the question: Rafay's call).
+- tasks/ exists in two places now (this checkout on the pilot branch, and the journey worktree). When the build ends, make journey the one copy: bring lessons, decisions and todo across.
+- Needs Rafay's OK (new wording): daily-limit line "That is the limit for new situations today. Pick one that is still open."; Read-failed line "I couldn't answer that just now."; suggestion chip fills the chat bar instead of sending in one tap (follows his rule that a tap never writes the founder's message).
+- Integration check (B12): the server Read body must separate paragraphs with a blank line (the app splits on newlines); "Still open" list on Situation needs GET /api/situations/open wired when Home/drawer are built (B11).
+- Move sheet leftovers: the mock's "Want a reminder tonight? Yes / No thanks" push-permission ask is not built (comes with push setup in B8/B11); after Commit the mock goes home after a short delay (needs the home screen); server 409 `move_not_ready` is a plain message, give it a code so the app can map it; `copy.move.noRoom` hard-codes "2".
+- Needs Rafay's OK: "Before" / "After" labels, the move wording above.
+- Report screen leftovers: "You can close the app." omitted from the offline state because the queue is in memory only (true after B11 persists the queue: decide then); header label "Report" is an internal term, Rafay may want a plainer word; due-reports fetch failure at sign-in is not handled (handle in Home); push tap while app is open not wired (B11 with push setup); withdraw and sharing settings calls land with Settings.
+
+## Report re-audit leftovers (fix after the push/home audit fixes finish, same files)
+- MEDIUM: in the step-by-step fallback (used until the SQL functions exist), if the claim or re-read throws after publish, a pending_review outcome and its link stay while the report is only 'asked'. Root fix: any error after publish takes the outcome down (try/finally) and the share fails closed.
+- LOW: set STALE_MS above the worst-case model time (60s x 2 attempts x retry); a stale writer's paid reply should not be thrown away.
+- LOW: care that begins AFTER a share should take that situation's shares down (today it only blocks future sharing).
+- LOW: withdraw/re-share interleave can say 'shared' with nothing live (fails closed); number check misses plurals like 'hundreds' and ordinals; markCare fails open when the care_flag column is missing (migration adds it).
+
+## B10 follow-ups
+- modelUsage.js records journey calls as call_type 'chat' because the code passes `step`, not `call_type`: cost per step is not recorded yet (the call is recorded). Root fix: pass call_type from callStructured so the widened CHECK is used (do before the first real-model run).
+- ARCHITECTURE.md must be updated to match the code (table names moves/reports/consent_log/learn_conversations, situation_turns seq, reads.body text, no underlines, signup_answers jsonb, user_settings columns, push routes, hidden lock-screen value). List of disagreements is in the B10 report and supabase/MIGRATION_PLAN.md.
+- Migration 7 (notification_log.slot NOT NULL) must not be applied before the new push scheduler code is deployed.
+- Founder-data tables have no cascade from auth.users on purpose: deleting a user is blocked until a deletion plan exists.
+- After the report builder finishes: `shareDb.js` must treat a PGRST202 signature mismatch as an ERROR once the SQL functions are applied (today any PGRST202 silently falls back to the non-transactional steps). Do with a config flag `SHARE_DB_FUNCTIONS=on` set after migration 6 is applied.
+- Before applying anything: fresh read-only live dump; confirm none of the 18 new tables/3 functions exist; confirm 20261013000001 and 20261013000003 are applied; `supabase db push --dry-run` from a linked checkout; Rafay approves file 6 (consent and privacy logic); resolve the ARCHITECTURE.md differences (docs updated to match the code).
+- Needs Rafay's decision before applying migrations: `founder_profiles` has a table-level SELECT grant to `authenticated` (from 20261013000003), so the new `signup_answers` and `first_reading` columns would be readable by their owner directly through Supabase. Postgres cannot narrow it by revoking two columns; the real fix is to replace the table-level grant with a column list (or remove it, since the app uses the API only). Recommendation: remove it. This changes an existing grant, so it needs your yes.
+- `shareDb.js` fallback (used only until the SQL functions exist) has no care check under a lock; the SQL function does.
+
+## App leftovers after Home/History/Settings (B11 integration)
+- Server must add a code for `move_not_ready` (and `quiet_hours` clash on settings PUT) so the app can show specific lines; `move_id` in history action targets; a call to fetch earlier turns when resuming a situation.
+- Reminders-off row shows for founders never asked (wording slightly off). Notification-tap while open not wired; app.json needs expo.extra.eas.projectId for real push tokens (needs Rafay's Expo account).
+- New wording needing OK: "No title yet", "I couldn't open that just now.", "Quiet hours", "From", "Until", "Export my data", "I couldn't save that just now."
+- Settings name editing is read-only in the app (mock), the server allows editing: Rafay decides.
+- Settings has a Calm / Direct / Hard setting that no server prompt reads (every founder gets Direct). Rafay decides: wire it into the prompts or remove it from Settings.
+- Voice check: mock-approved lines that break the plain rule ("Every founder has one thing they keep circling", "No pressure. Some pressure.", "That is fine, things changed") stay unless Rafay says; the Settings lock-screen note ('Axiom: tonight's check-in') must match the real short push; server error texts must never be shown by the app (the app maps codes).
+
+
+## Resume Claude migration deployment (Codex, 2026-10-31)
+
+- [ ] Confirm authenticated access to main Supabase and re-read live migration history/schema.
+- [x] Review remaining approved migration prerequisites in /Users/rafayessani/AXIOM-wt/journey (audit complete; deletion copy-test and deployed scheduler compatibility remain to verify).
+- [ ] Apply only outstanding migrations in order, recording file versions.
+- [ ] Verify live tables, permissions, constraints and RPCs; run server regression tests.
+- [ ] Record completion or exact remaining access/deployment blockers and learning-loop review.
+
+Resume evidence: server suite in journey/server passes 535/535 after allowing local loopback (initial sandbox listen EPERM was environmental). Supabase connector is not available in Codex; CLI reports no access token. User connection requested. No live database changes performed by Codex. Last Claude log reports 6/15 applied; re-read live history before resuming. Migration 11 requires copy test before live application; ACCOUNT_DELETE stays off. Migration 7 needs deployed scheduler compatibility evidence.

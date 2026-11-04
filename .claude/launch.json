@@ -4,8 +4,20 @@
     {
       "name": "axiom-office",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8765", "--bind", "127.0.0.1", "--directory", "tasks"],
-      "port": 8765
+      "runtimeArgs": ["-m", "http.server", "8791", "--bind", "127.0.0.1", "--directory", "tasks"],
+      "port": 8791
+    },
+    {
+      "name": "axiom-app-new-founder",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd /Users/rafayessani/AXIOM-wt/journey/app && env -u EXPO_PUBLIC_FAKE_HOME npx expo start --port 8082 -c"],
+      "port": 8082
+    },
+    {
+      "name": "axiom-app-live",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd /Users/rafayessani/AXIOM-wt/journey/app && npx expo start --dev-client --port 8081"],
+      "port": 8081
     }
   ]
 }

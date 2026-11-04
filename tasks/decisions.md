@@ -651,3 +651,40 @@ Groups, each divided by thin lines, plain labels:
 - The lesson prompt forbids naming any author or book in prose and forbids quote marks in prose: authors, books and quotes appear only as structured citations whose names come from the database row.
 - Chapter and page are kept in the data but never shown in the app (PRODUCT.md).
 - The tappable checklist-with-meter in the mock belongs to the Move sheet, not the five picture types.
+
+## B6 decisions (conductor, Oct 26)
+- Moves live in a new `moves` table, not the old `experiments` table (that one is tied to old sessions and the old web app). Rafay can overrule; reasoning in server/journey/schema_needs.md.
+- Drafts do not count toward the 2-active cap; only committed and report-due moves do. The validator runs again at commit.
+- Needs Rafay's OK (new wording): "You have 2 moves open. Tell me how one of them went first, then I will give you the next."; "You have changed this move once already."; "The move is not ready yet."; "This move can no longer be committed/changed."
+- Report step must clear `active_slot` when a move becomes reported.
+
+## B7 decisions (conductor, Oct 26)
+- Tables are `reports` and `consent_log` (not `move_reports` / `consents` from ARCHITECTURE.md); ARCHITECTURE.md to be updated at the end.
+- Withdrawing a share clears the shared content and keeps the row and private link marked withdrawn (takedown without losing the audit trail).
+- Any care event since a situation started blocks sharing and stories for that situation (wide on purpose: catch rather than miss).
+- Needs Rafay's OK (new wording, all in server/journey/report/wording.js): "What happened when you did it?"; the report opening template; the share question (mock line without "No problem."); "Taken down. Nothing from this check-in is shared."; the three fixed replies for Done, Couldn't, Didn't.
+- Open product questions: should Axiom say each time when an automatic share happens? Where does withdrawing a past share live in Settings (not designed)? Stories are matched by stage then market then model; "one stage ahead" matching is later work.
+
+## B8 decisions (conductor, Oct 26)
+- Needs Rafay's OK (new push wording, all in server/push/compose.js): Evening Short "Rafay, how did it go?"; reminder lines; morning lines ("Morning, Rafay. Your move for today is waiting."); quiet check lines; hidden mode shows "Axiom". Only "Rafay, how did the two clinics go?" is approved.
+- Morning push time is a fixed 8 am local (not in any document): Rafay to confirm or make it a setting.
+- Settings routes are /api/push/token and /api/settings/reminders (ARCHITECTURE.md lists /api/push/register and /api/settings): update the document to match at the end; lock-screen value is `hidden` (document says `nothing`).
+- 14-day pause only stops pushes; marking situations paused needs writes to stored situations, done by the Home step.
+- Voice-guide conflict: the guide says the name never comes first, the approved push starts with the name. The approved push wins for pushes.
+
+## B9 decisions (conductor, Oct 30)
+- Needs Rafay's OK (new wording in server/journey/home/wording.js): greetings "Morning, {name}. What's the move?" and "{hour} am, {name}. What's the move today?"; item labels "Pick up: {title}", "Pick up where you left off"; account lines (export queued, delete "Nothing has been deleted..." and the plan lines, shared outcomes line).
+- Account delete is a recorded request only; deletion plan must come from a live schema dump and be approved first.
+- Name is editable in Settings (Decision 10 said read-only from Google): Rafay to confirm. Weekend greeting applies 7 am to 10 pm only.
+- Decision (Oct 30): after a delete request is queued, the scheduler sends no pushes to that founder. Token takeover (anyone with a device token can move it) is low risk; fix with a per-install secret when the app registers tokens (B11 follow-up).
+- Care signals take down ALL of a founder's shares, not one situation's (fail closed, wide on purpose). Rafay can narrow it later.
+
+## Intro and background (Rafay, Oct 31)
+- The opening animation plays on every launch until the founder signs up, then never again. It is real motion graphics: the logo builds, the letters animate in, zoom in and out, gold from the logo allowed.
+- The gold blobs go everywhere. They are replaced by the Construction direction: a faint, slowly moving gold grid of thin lines and points.
+- "I move, therefore I am." is not the final line. The tagline is still open (BRAND.md).
+- Fonts: Rafay is choosing from three free pairs (tasks/design/font-options.html). DESIGN.md is updated once he picks.
+- Intro fonts (Rafay, Oct 31): Newsreader for the words, Manrope for small text. Only the intro animation uses them. The app's fonts stay as they are.
+- Tagline brief (Rafay, Oct 31): talks to the founder ("you"), sounds like a rule, keeps the structure of "I move, therefore I am" but not its meaning. The feeling: a productive day, being understood, seeing your own story reflected back, learning what you need now from books and founders ahead, and changing because of it.
+- Tagline brief update (Rafay, Oct 31): short, plain, human, not "AI sounding". A stranger must understand the promise at once: you become a better founder and make better decisions. Rejected: every multi-clause line ("Know your story. Learn theirs. Then move." and the rest).
+- Intro v3 (Rafay, Oct 31): keep the logo film (light point, streak, emblem drawing from its tip, glow, light sweep). Add a very faint spider web behind it. No full-screen words, no dust: once the emblem settles, "See. Learn. Become." animates in its final place under it.

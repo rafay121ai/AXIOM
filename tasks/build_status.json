@@ -1,0 +1,285 @@
+{
+  "updated": "2026-10-31T17:08:23+05:00",
+  "headline": "Build complete: every screen and the server, on fakes. Nothing applied, pushed or spent",
+  "phase": "Server",
+  "now": {
+    "what": "Done. Waiting for Rafay",
+    "since": "2026-10-31T10:35:22+05:00",
+    "why": "B0 to B12 finished",
+    "how": "See tasks/build_report.md"
+  },
+  "steps": [
+    {
+      "id": "B0",
+      "title": "Set up the new branch and check what exists",
+      "state": "done",
+      "note": "Branch ready. Server builds and 91 tests pass. index.js is 1,780 lines and starts listening on import (cannot be tested), so B1 splits it"
+    },
+    {
+      "id": "B1",
+      "title": "Server foundation and test fakes",
+      "state": "done",
+      "note": "createApp, config, structured call, fakes. 105 tests pass"
+    },
+    {
+      "id": "B2",
+      "title": "Care check (distress) and its tests",
+      "state": "done",
+      "note": "Care check built, independent test set found 9 bugs, all fixed. 157 tests pass"
+    },
+    {
+      "id": "B3",
+      "title": "Sign-up answers and first reading",
+      "state": "done",
+      "note": "13 answers save and resume, first reading with own-words checker. 189 tests pass"
+    },
+    {
+      "id": "B4",
+      "title": "Situation and Read",
+      "state": "done",
+      "note": "Situations (max 2 follow-ups, proven with 8 concurrent turns), the Read, hook gate. 227 tests pass"
+    },
+    {
+      "id": "B5",
+      "title": "Learn, citations, pictures, move card",
+      "state": "done",
+      "note": "Learn: retrieval, citation checking, pictures, move offers, follow-up taps, loading hint. 285 tests pass"
+    },
+    {
+      "id": "B6",
+      "title": "Move",
+      "state": "done",
+      "note": "Move: validator first, max 2 active (3 simultaneous commits give 200, 200, 409), one swap with a real reason, quiet close. 307 tests pass"
+    },
+    {
+      "id": "B7",
+      "title": "Report, stories, sharing",
+      "state": "done",
+      "note": "Report fixed after the privacy audit: share and withdraw can no longer race, consent logged first, care re-checked. 386 tests, re-audit running"
+    },
+    {
+      "id": "B8",
+      "title": "Pushes and scheduler",
+      "state": "done",
+      "note": "Push rules (max 2 a day, quiet hours, care pause, no double send), scheduler, token and reminder settings. No real push sent. 356 tests pass"
+    },
+    {
+      "id": "B9",
+      "title": "Home, History, Settings",
+      "state": "done",
+      "note": "Home, History, Settings, account (delete is a safe stub). 376 tests pass"
+    },
+    {
+      "id": "B10",
+      "title": "Database migrations (written, not applied)",
+      "state": "done",
+      "note": "Nine migration files and a plain-English plan, written and statically checked, NOT applied. Independent migration check running"
+    },
+    {
+      "id": "B11",
+      "title": "The Expo app, screen by screen",
+      "state": "done",
+      "note": "All screens built on the fake API, 164 app tests, care help matches the server. Not seen in the simulator: the preview server was declined"
+    },
+    {
+      "id": "B12",
+      "title": "Review, walkthrough, final report",
+      "state": "done",
+      "note": "Walkthrough, contract test, 5 findings fixed, care hold tested by a second agent, branch review, dead code, learning loop. Report: tasks/build_report.md"
+    }
+  ],
+  "helpers": [],
+  "spend": {
+    "capUsd": 6.0,
+    "usedUsd": 0.0,
+    "runs": 0,
+    "maxRuns": 3
+  },
+  "tests": {
+    "passing": 535,
+    "failing": 0,
+    "last": "journey/server npm test (local loopback allowed; fakes only)"
+  },
+  "next_stop": {
+    "name": "B4 Situation and Read",
+    "note": "Starts when B3 is checked"
+  },
+  "needs_you": [
+    "Apply the 9 migrations after a fresh live schema dump (migration 9 before the new server goes live)",
+    "Approve the real-model runs (up to 3, max $6, first max $2)",
+    "Care wording review and real, verified help numbers per country",
+    "Approve the new wording: tasks/wording_to_approve.md",
+    "Review Home, History and Settings, and see the app (not seen in a simulator this run)",
+    "Decide when to build give-to-get unlocks, founder voices in Learn and the Calm/Direct/Hard setting"
+  ],
+  "blockers": [
+    "Supabase deployment waiting for authenticated main-project connection in Codex; CLI has no access token"
+  ],
+  "events": [
+    {
+      "t": "2026-10-30T15:14:46+05:00",
+      "text": "B10 is done: Nine migration files and a plain-English plan, written and statically checked, NOT applied. Independent migration check running"
+    },
+    {
+      "t": "2026-10-30T15:14:46+05:00",
+      "text": "helper builder: reported (files only, 19 static checks, b67e94e)"
+    },
+    {
+      "t": "2026-10-30T15:14:46+05:00",
+      "text": "helper migration-checker: running"
+    },
+    {
+      "t": "2026-10-30T15:15:26+05:00",
+      "text": "Push and home audit fixes done (5ced8ea), 420 tests"
+    },
+    {
+      "t": "2026-10-30T15:16:53+05:00",
+      "text": "helper migration-checker: reported (no destructive statements; 3 medium issues in the sharing functions, fixing)"
+    },
+    {
+      "t": "2026-10-30T15:23:24+05:00",
+      "text": "Report re-audit leftovers fixed (52415ca), 435 tests"
+    },
+    {
+      "t": "2026-10-30T15:23:24+05:00",
+      "text": "B12 is doing: End-to-end server walkthrough test (Opus); app screens still finishing"
+    },
+    {
+      "t": "2026-10-30T15:23:24+05:00",
+      "text": "helper builder: running"
+    },
+    {
+      "t": "2026-10-30T15:25:45+05:00",
+      "text": "helper app-builder: reported (127 tests, 3 commits)"
+    },
+    {
+      "t": "2026-10-30T15:25:59+05:00",
+      "text": "B11 is doing: Screens: sign-in, 13 questions, wait, first reading, care, Situation, Read, Learn, Move, Report, Home, drawer, History, Settings. Integration leftovers"
+    },
+    {
+      "t": "2026-10-30T15:25:59+05:00",
+      "text": "helper builder: running"
+    },
+    {
+      "t": "2026-10-30T15:25:59+05:00",
+      "text": "helper voice-checker: running"
+    },
+    {
+      "t": "2026-10-30T15:27:28+05:00",
+      "text": "helper app-builder: running"
+    },
+    {
+      "t": "2026-10-30T15:27:42+05:00",
+      "text": "helper voice-checker: reported (no banned phrases; table of new wording ready)"
+    },
+    {
+      "t": "2026-10-30T21:24:08+05:00",
+      "text": "usage limit over: resumed"
+    },
+    {
+      "t": "2026-10-31T02:11:20+05:00",
+      "text": "helper builder: failed (cut off by usage limit; resumed and finished by the watcher)"
+    },
+    {
+      "t": "2026-10-31T02:11:21+05:00",
+      "text": "helper app-builder: failed (cut off by usage limit; leftovers committed by the watcher)"
+    },
+    {
+      "t": "2026-10-31T02:11:21+05:00",
+      "text": "Watcher resumed after usage limit: walkthrough test finished; care screen help, care hold and share take-down fixed"
+    },
+    {
+      "t": "2026-10-31T05:26:51+05:00",
+      "text": "B11 is done: All screens built on the fake API, 164 app tests, care help matches the server. Not seen in the simulator: the preview server was declined"
+    },
+    {
+      "t": "2026-10-31T05:42:47+05:00",
+      "text": "helper care-tester: running"
+    },
+    {
+      "t": "2026-10-31T05:42:47+05:00",
+      "text": "helper axiom-reviewer: running"
+    },
+    {
+      "t": "2026-10-31T05:42:47+05:00",
+      "text": "helper dead-code-hunter: running"
+    },
+    {
+      "t": "2026-10-31T07:18:54+05:00",
+      "text": "helper care-tester: reported (7 cases pass; 2 gaps (first reading, report) fixed)"
+    },
+    {
+      "t": "2026-10-31T08:33:20+05:00",
+      "text": "helper axiom-reviewer: reported (1 must-fix (samples in builds) fixed; give-to-get unlock not built)"
+    },
+    {
+      "t": "2026-10-31T08:33:20+05:00",
+      "text": "helper dead-code-hunter: reported (3 dead functions and a stale comment removed)"
+    },
+    {
+      "t": "2026-10-31T10:35:21+05:00",
+      "text": "B12 is done: Walkthrough, contract test, 5 findings fixed, care hold tested by a second agent, branch review, dead code, learning loop. Report: tasks/build_report.md"
+    },
+    {
+      "t": "2026-10-31T10:35:21+05:00",
+      "text": "helper care-tester: remove"
+    },
+    {
+      "t": "2026-10-31T10:35:21+05:00",
+      "text": "helper axiom-reviewer: remove"
+    },
+    {
+      "t": "2026-10-31T10:35:21+05:00",
+      "text": "helper dead-code-hunter: remove"
+    },
+    {
+      "t": "2026-10-31T10:35:21+05:00",
+      "text": "helper builder: remove"
+    },
+    {
+      "t": "2026-10-31T10:35:21+05:00",
+      "text": "helper app-builder: remove"
+    },
+    {
+      "t": "2026-10-31T10:35:22+05:00",
+      "text": "helper voice-checker: remove"
+    },
+    {
+      "t": "2026-10-31T10:35:22+05:00",
+      "text": "helper learning-loop: remove"
+    },
+    {
+      "t": "2026-10-31T10:35:22+05:00",
+      "text": "helper migration-checker: remove"
+    },
+    {
+      "t": "2026-10-31T10:35:22+05:00",
+      "text": "helper backend-auditor: remove"
+    },
+    {
+      "t": "2026-10-31T10:35:22+05:00",
+      "text": "B12 done; build report written"
+    },
+    {
+      "t": "2026-10-31T10:35:22+05:00",
+      "text": "build mode: complete"
+    },
+    {
+      "t": "2026-10-31T17:06:56+05:00",
+      "text": "Codex taking over Claude migration deployment; checking authentication and prerequisites"
+    },
+    {
+      "t": "2026-10-31T17:08:02+05:00",
+      "text": "Read-only review complete: migration 11 needs copy test; migration 7 needs deployed scheduler compatibility check"
+    },
+    {
+      "t": "2026-10-31T17:08:23+05:00",
+      "text": "Server verification passed 535/535; live migrations remain pending authenticated access"
+    }
+  ],
+  "rate_limit": {
+    "state": "ok",
+    "resumes_at": null
+  },
+  "mode": "complete"
+}
