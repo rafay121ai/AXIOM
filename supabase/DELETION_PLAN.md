@@ -4,8 +4,21 @@ Status: the SQL function `public.delete_account` IS applied on live (checked
 read-only on Nov 3 2026: same body as migration `20261101000011`; only
 `service_role` can execute it, `anon` and `authenticated` cannot; 0 delete
 requests exist). Deletion is still OFF (`ACCOUNT_DELETE` not `on`). The server
-code is tested against in-memory fakes only. The copy test below is still
-required before `ACCOUNT_DELETE=on`.
+code is tested against in-memory fakes, and the function against a copy.
+
+Copy test, Nov 4 2026: the live main structure (read-only queries) loaded into
+a local in-memory Postgres (PGlite; no Docker on this Mac), two made-up
+founders with a row in every founder table. It FAILED first: deleting an old
+app message fired `sync_conversation_thread_from_message`, which names its
+tables without `public.` and could not find them under the function's empty
+search path. Nothing was removed (the whole call rolls back), but deletion
+would fail for the 8 founders on live with threaded messages. Fix:
+migration `20261104130402`, applied on live Nov 4 2026. With it, the copy test
+passes: all 36 rows of founder A go across 28 tables, founder B's 37 rows are
+unchanged, A's approved story stays with no link, the pending, rejected and
+withdrawn stories go, a second run changes nothing, removing the sign-in is
+not blocked, and a run that fails part way leaves everything as it was.
+Step 6 (the server against a copy) was not run.
 
 ## What a founder sees
 

@@ -128,6 +128,14 @@ existing migration.
     `authenticated` and drops the `founder_profiles_select_own` policy that
     only served it. The table is now server only (service role). Approved by
     Rafay and applied to main on Nov 3 2026 (version taken from live).
+13. `20261104130402_message_trigger_search_path.sql`
+    Pins `sync_conversation_thread_from_message` (old app, trigger on
+    `messages`) to `search_path = public`. Without it `delete_account` fails
+    for any founder with a threaded message, because the function runs with an
+    empty search path and the trigger names its tables without `public.`.
+    Found by the copy test on Nov 4 2026. Behaviour otherwise unchanged.
+    Approved by Rafay and applied to main on Nov 4 2026 (version taken from
+    live).
 
 ## Access rules in every file
 
