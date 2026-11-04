@@ -647,6 +647,7 @@ Groups, each divided by thin lines, plain labels:
 - If the founder still has not shared after the 2nd, no more founder lessons. Axiom says so once, plainly, and says that turning on sharing in Settings brings them back.
 - Turning sharing on in Settings unlocks founder lessons immediately. Reason: sharing is the return for what they receive, and the way back in must be one switch they can find.
 - Replaces the open question on how "unlock" works. PRODUCT.md "Give to get" and CLAUDE.md "Hard Rules" to be updated to match.
+- Rafay (Oct 26): run B2 to B12 straight through with no checkpoints. Still held for after B12 and his specific yes: applying migrations, any real-model (OpenAI) run, pushes and merges. Home, History, Settings, care wording and the final report are reviewed at the end.
 
 ## 2026-10-31: founder credits and referrals (PARKED, open question)
 Idea from Rafay: founder credits, and growth by referral. Not building until give-to-get has landed and Rafay says go.
@@ -655,17 +656,40 @@ Idea from Rafay: founder credits, and growth by referral. Not building until giv
 - Needs Rafay's explicit yes first: CLAUDE.md says no gating or payment code until instructed, and credits are a currency.
 - Constraints: referral links must not reveal who referred whom (server-only link, like peer outcomes); credits never expire or get taken away (no strikes, no removal).
 - Founder-lessons access is built as a pure function of stored facts, so a credit balance can become one more term later.
+- Models per agent (Oct 26): haiku for mechanical checks (test-runner, dead-code-hunter); sonnet for building and copy (builder, app-builder, voice-checker, learning-loop); opus for safety, security and review (care-tester, backend-auditor, migration-checker, axiom-reviewer) and I pass model opus to the builder on the hardest steps (Learn conversation, Move validator, consent and privacy).
 
 - Built (Oct 31): `founder_lesson_log` (migration 20261101000010, not applied) holds the count; access is derived each request from it, `share_auto` and any 'share' unlock. Wording in tasks/wording_to_approve.md section D. Deliveries made while sharing is on are logged but not counted.
+## B5a decisions (builder questions, answered by the conductor, Oct 26)
+- "I don't know what to do" is a statement, not an ask for the move: only explicit asks ("what should I do next", "so what now") trigger the move early. Rafay can change this.
+- The lesson prompt forbids naming any author or book in prose and forbids quote marks in prose: authors, books and quotes appear only as structured citations whose names come from the database row.
+- Chapter and page are kept in the data but never shown in the app (PRODUCT.md).
+- The tappable checklist-with-meter in the mock belongs to the Move sheet, not the five picture types.
 
 - Calm/Direct/Hard now reaches the model (Oct 31): the Read, Learn replies, Move and Report reply read the saved style live each request (default direct, direct and any care hold add nothing) via one shared module, server/journey/prompts/style.js. Tone only; care, forbidden phrases, citations, Move rules, follow-up cap and fixed copy are never styled. Wording in wording_to_approve.md section E. The sign-up first reading is not styled.
+## B6 decisions (conductor, Oct 26)
+- Moves live in a new `moves` table, not the old `experiments` table (that one is tied to old sessions and the old web app). Rafay can overrule; reasoning in server/journey/schema_needs.md.
+- Drafts do not count toward the 2-active cap; only committed and report-due moves do. The validator runs again at commit.
+- Needs Rafay's OK (new wording): "You have 2 moves open. Tell me how one of them went first, then I will give you the next."; "You have changed this move once already."; "The move is not ready yet."; "This move can no longer be committed/changed."
+- Report step must clear `active_slot` when a move becomes reported.
 
 ## 2026-10-31: wording approvals and sign-in direction
 - Founder-lessons notice: Rafay chose the "invitation" version, shortened (v2).
 - Section A of wording_to_approve.md applied in full (wait lines, report fallback replies, care line, "Tonight's check-in" title, push, lock note, rate-limit, Learn and Move errors). Home greeting joke stays.
 - Sign-up page: Rafay dislikes the gold light blobs ("old fashioned, like a kids app"). Wants a black sign-up page with an opening motion piece: zoom in, zoom out, animated tagline about Axiom itself, like a motion graphics video. Tagline direction: the spirit of "I think, therefore I am", in the context of founders. Tagline chosen later: "See. Learn. Become."
+## B7 decisions (conductor, Oct 26)
+- Tables are `reports` and `consent_log` (not `move_reports` / `consents` from ARCHITECTURE.md); ARCHITECTURE.md to be updated at the end.
+- Withdrawing a share clears the shared content and keeps the row and private link marked withdrawn (takedown without losing the audit trail).
+- Any care event since a situation started blocks sharing and stories for that situation (wide on purpose: catch rather than miss).
+- Needs Rafay's OK (new wording, all in server/journey/report/wording.js): "What happened when you did it?"; the report opening template; the share question (mock line without "No problem."); "Taken down. Nothing from this check-in is shared."; the three fixed replies for Done, Couldn't, Didn't.
+- Open product questions: should Axiom say each time when an automatic share happens? Where does withdrawing a past share live in Settings (not designed)? Stories are matched by stage then market then model; "one stage ahead" matching is later work.
 
 - Sign-up film (Oct 31, Rafay): sign-in is pure black (drifting light off for it only). A ~9 second title sequence plays once per app open, awe then momentum, ending on the emblem and the placeholder tagline "I move, therefore I am." (superseded the same day by intro v3 and "See. Learn. Become."). Animated-only: the blur clear is a fade with a small rise. Lines in copy.intro, timings in app/src/intro/timeline.ts.
+## B8 decisions (conductor, Oct 26)
+- Needs Rafay's OK (new push wording, all in server/push/compose.js): Evening Short "Rafay, how did it go?"; reminder lines; morning lines ("Morning, Rafay. Your move for today is waiting."); quiet check lines; hidden mode shows "Axiom". Only "Rafay, how did the two clinics go?" is approved.
+- Morning push time is a fixed 8 am local (not in any document): Rafay to confirm or make it a setting.
+- Settings routes are /api/push/token and /api/settings/reminders (ARCHITECTURE.md lists /api/push/register and /api/settings): update the document to match at the end; lock-screen value is `hidden` (document says `nothing`).
+- 14-day pause only stops pushes; marking situations paused needs writes to stored situations, done by the Home step.
+- Voice-guide conflict: the guide says the name never comes first, the approved push starts with the name. The approved push wins for pushes.
 
 ## Rafay's calls (Oct 31)
 - All pending wording is approved (wording_to_approve.md A to F, push wording, account lines); the NEEDS APPROVAL markers are removed.
@@ -684,3 +708,19 @@ Idea from Rafay: founder credits, and growth by referral. Not building until giv
 - Background (Rafay, Nov 3): the journey screens use the construction grid (faint gold lines), not the spider web. The spider web stays on the sign-in intro only. DESIGN.md updated.
 - Deletion (Rafay, Nov 3): approved stories stay after an account is deleted, with no link to the founder. The delete screen shows the server's DELETION_PLAN note before the founder types DELETE.
 - Merge (Rafay, Nov 4): feature/journey-v1 and feature/knowledge-rechunk-pilot both merge into main. Render deploys from main.
+## B9 decisions (conductor, Oct 30)
+- Needs Rafay's OK (new wording in server/journey/home/wording.js): greetings "Morning, {name}. What's the move?" and "{hour} am, {name}. What's the move today?"; item labels "Pick up: {title}", "Pick up where you left off"; account lines (export queued, delete "Nothing has been deleted..." and the plan lines, shared outcomes line).
+- Account delete is a recorded request only; deletion plan must come from a live schema dump and be approved first.
+- Name is editable in Settings (Decision 10 said read-only from Google): Rafay to confirm. Weekend greeting applies 7 am to 10 pm only.
+- Decision (Oct 30): after a delete request is queued, the scheduler sends no pushes to that founder. Token takeover (anyone with a device token can move it) is low risk; fix with a per-install secret when the app registers tokens (B11 follow-up).
+- Care signals take down ALL of a founder's shares, not one situation's (fail closed, wide on purpose). Rafay can narrow it later.
+
+## Intro and background (Rafay, Oct 31)
+- The opening animation plays on every launch until the founder signs up, then never again. It is real motion graphics: the logo builds, the letters animate in, zoom in and out, gold from the logo allowed.
+- The gold blobs go everywhere. They are replaced by the Construction direction: a faint, slowly moving gold grid of thin lines and points.
+- "I move, therefore I am." is not the final line. The tagline is still open (BRAND.md).
+- Fonts: Rafay is choosing from three free pairs (tasks/design/font-options.html). DESIGN.md is updated once he picks.
+- Intro fonts (Rafay, Oct 31): Newsreader for the words, Manrope for small text. Only the intro animation uses them. The app's fonts stay as they are.
+- Tagline brief (Rafay, Oct 31): talks to the founder ("you"), sounds like a rule, keeps the structure of "I move, therefore I am" but not its meaning. The feeling: a productive day, being understood, seeing your own story reflected back, learning what you need now from books and founders ahead, and changing because of it.
+- Tagline brief update (Rafay, Oct 31): short, plain, human, not "AI sounding". A stranger must understand the promise at once: you become a better founder and make better decisions. Rejected: every multi-clause line ("Know your story. Learn theirs. Then move." and the rest).
+- Intro v3 (Rafay, Oct 31): keep the logo film (light point, streak, emblem drawing from its tip, glow, light sweep). Add a very faint spider web behind it. No full-screen words, no dust: once the emblem settles, "See. Learn. Become." animates in its final place under it.

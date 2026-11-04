@@ -104,6 +104,14 @@ Forbidden phrases: "great question", "certainly", "I understand",
 Plain words. Subtle dry humour only in greetings and when a move goes
 well. No swearing. Never assume anyone's gender. Full guide: `tasks/voice.md`.
 
+## Code Map (graphify)
+- `graphify-out/GRAPH_REPORT.md` maps the code. Before searching the repo,
+  read it, then use `graphify query "<question>"`, `graphify path "A" "B"`
+  or `graphify explain "X"`. Open only the files the graph points to.
+- After code changes run `graphify update .` (free, no model).
+- `sources/` and `knowledge_pilot/` are excluded in `.graphifyignore`.
+
+
 ## Workflow
 
 ### 1. Plan first

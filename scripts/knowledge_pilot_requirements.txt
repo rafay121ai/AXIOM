@@ -1,0 +1,7 @@
+docling-slim==2.131.0
+docling-parse==7.22.1
+numpy==2.3.3
+openai==2.6.1
+python-dotenv==1.2.4
+PyMuPDF==1.26.5
+pypdfium2==5.13.0

@@ -2002,6 +2002,18 @@ async function processYouTube(youtubeUrl) {
 
 // ─── Embedding + Insert ───────────────────────────────────────────────────────
 
+// wiki_chunks.embedding is halfvec(1536) on the Knowledge project (changed 2026-10-19). supabase-js cannot send a SQL
+// cast, so send the explicit halfvec text literal "[v1,...,v1536]", which Postgres casts to halfvec(1536) on insert.
+// Accepts an array of numbers or the "[...]" string PostgREST returns for vector columns; null stays null.
+function toHalfvec1536(embedding) {
+  if (embedding == null) return null
+  const values = typeof embedding === 'string' ? JSON.parse(embedding) : embedding
+  if (!Array.isArray(values) || values.length !== 1536 || !values.every(Number.isFinite)) {
+    throw new Error(`halfvec(1536) needs 1536 finite numbers, got ${Array.isArray(values) ? values.length : typeof values}`)
+  }
+  return `[${values.join(',')}]`
+}
+
 async function embedAndInsert(source, sourceRecord, chunks) {
   let inserted = 0
 
@@ -2029,7 +2041,7 @@ async function embedAndInsert(source, sourceRecord, chunks) {
       title: source.title,
       author: source.author,
       key_frameworks: chunkText,
-      embedding,
+      embedding: toHalfvec1536(embedding),
     })
 
     if (error) {

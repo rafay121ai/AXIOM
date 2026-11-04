@@ -153,6 +153,18 @@ async function fetchBatch(client, table, columns, from, to) {
   return data || []
 }
 
+// wiki_chunks.embedding is halfvec(1536) on the Knowledge project (changed 2026-10-19). supabase-js cannot send a SQL
+// cast, so send the explicit halfvec text literal "[v1,...,v1536]", which Postgres casts to halfvec(1536) on insert.
+// Accepts an array of numbers or the "[...]" string PostgREST returns for vector columns; null stays null.
+function toHalfvec1536(embedding) {
+  if (embedding == null) return null
+  const values = typeof embedding === 'string' ? JSON.parse(embedding) : embedding
+  if (!Array.isArray(values) || values.length !== 1536 || !values.every(Number.isFinite)) {
+    throw new Error(`halfvec(1536) needs 1536 finite numbers, got ${Array.isArray(values) ? values.length : typeof values}`)
+  }
+  return `[${values.join(',')}]`
+}
+
 async function upsertBatch(client, table, rows) {
   if (rows.length === 0) return
 
@@ -190,7 +202,10 @@ async function migrateTable(table, columns) {
 
   for (let from = initialTargetCount; from < sourceCount; from += BATCH_SIZE) {
     const to = Math.min(from + BATCH_SIZE - 1, sourceCount - 1)
-    const rows = await fetchBatch(sourceSupabase, table, columns, from, to)
+    const fetched = await fetchBatch(sourceSupabase, table, columns, from, to)
+    const rows = table === 'wiki_chunks'
+      ? fetched.map((row) => ({ ...row, embedding: toHalfvec1536(row.embedding) }))
+      : fetched
     await upsertBatch(knowledgeSupabase, table, rows)
     console.log(`${table}: migrated ${Math.min(to + 1, sourceCount)} / ${sourceCount}`)
   }

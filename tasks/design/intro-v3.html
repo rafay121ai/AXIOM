@@ -1,0 +1,225 @@
+<title>Axiom Intro v3</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500&display=swap">
+<style>
+  /* Layout: one phone-sized stage in the middle, a Replay button under it. Dark only, like the app. */
+  :root { --base: #050505; --ink: #EAECEE; --soft: rgba(234,236,238,.55); --line: rgba(234,236,238,.14); --gold: rgb(205,178,126); color-scheme: dark; }
+  html, body { height: 100%; }
+  body { background: var(--base); color: var(--ink); font-family: "Manrope", -apple-system, sans-serif; }
+  .page { min-height: 100%; display: grid; place-items: center; gap: 16px; padding-block: 24px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .phone { width: min(390px, 100%, calc((100vh - 120px) * 390 / 844)); aspect-ratio: 390 / 844; border-radius: 44px; overflow: hidden;
+    border: 1px solid var(--line); background: var(--base); }
+  canvas { width: 100%; height: 100%; display: block; }
+  button { border: 1px solid var(--line); background: none; color: var(--ink); font: 13px "Manrope", sans-serif; padding: 8px 16px; border-radius: 999px; cursor: pointer; }
+  button:hover { border-color: var(--gold); } button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  .hint { color: var(--soft); font-size: 12px; text-align: center; }
+</style>
+
+<div class="page">
+  <div class="phone"><canvas id="stage" aria-label="Axiom intro animation"></canvas></div>
+  <button id="replay" type="button">Replay</button>
+  <p class="hint">Tap the screen to skip to the end.</p>
+</div>
+
+<script>
+const W = 390, H = 844;
+const cv = document.getElementById('stage'), ctx = cv.getContext('2d');
+const DPR = Math.min(window.devicePixelRatio || 1, 3);
+cv.width = W * DPR; cv.height = H * DPR;
+
+// The emblem, the same two strokes as app/src/components/Logo.tsx.
+const D = [
+  'M 8,84 H 28 C 28,55 35,36 50,26 C 55,23 54,18 50,11 C 45,22 40,27 31,33 C 18,43 13,60 13,84',
+  'M 92,84 H 72 C 72,55 65,36 50,26 C 45,23 46,18 50,11 C 55,22 60,27 69,33 C 82,43 87,60 87,84',
+];
+const svgNS = 'http://www.w3.org/2000/svg';
+const svg = document.createElementNS(svgNS, 'svg');
+svg.style.cssText = 'position:absolute;width:0;height:0';
+document.body.appendChild(svg);
+// Each stroke runs foot, up to the tip, back down; `tip` is how far along the tip sits, so drawing grows out from it.
+const strokes = D.map(d => {
+  const el = document.createElementNS(svgNS, 'path'); el.setAttribute('d', d); svg.appendChild(el);
+  const len = el.getTotalLength();
+  let tip = 0, best = Infinity;
+  for (let l = 0; l <= len; l += .5) { const y = el.getPointAtLength(l).y; if (y < best) { best = y; tip = l; } }
+  return { p: new Path2D(d), el, len, tip };
+});
+
+const TAG = ['SEE.', 'LEARN.', 'BECOME.'];
+
+// One clock (ms). Every beat reads off it, the same way app/src/intro/timeline.ts does.
+const T = { point: [200, 1000], streakIn: [800, 1900], streakOut: [1900, 2500], draw: [1900, 3600], spokes: [2100, 3700], rings: [2700, 4600],
+  bloom: [3400, 4100], sweep: [3700, 4500], settle: [4300, 5400], tag: 5200, tagGap: 280, tagIn: 800, sweep2: [6500, 7300],
+  button: [6300, 7100], shine: [7200, 8100], legal: [6800, 7500], end: 8200 };
+
+const clamp = (x) => Math.max(0, Math.min(1, x));
+const seg = (t, [a, b]) => clamp((t - a) / (b - a));
+const out3 = (x) => 1 - Math.pow(1 - x, 3);
+const inOut = (x) => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const bell = (x) => Math.sin(Math.PI * clamp(x));
+const gold = (a) => `rgba(222,192,138,${a})`;
+
+// Film grain: one noise tile, shifted every frame.
+const grain = document.createElement('canvas'); grain.width = grain.height = 256;
+{ const g = grain.getContext('2d'), img = g.createImageData(256, 256);
+  for (let i = 0; i < img.data.length; i += 4) { const v = Math.random() * 255; img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255; }
+  g.putImageData(img, 0, 0); }
+
+// The emblem draws large at the centre, then settles a little higher and smaller, where it stays.
+const FROM = { y: H * .45, size: 136 }, TO = { y: H * .41, size: 92 };
+
+// A spider web centred on where the emblem settles: uneven spokes, rings that sag between them. Fixed seed, so it is the same every time.
+let seed = 7;
+const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const SPOKES = Array.from({ length: 16 }, (_, i) => (i / 16) * Math.PI * 2 + (rnd() - .5) * .22);
+const RINGS = Array.from({ length: 11 }, (_, k) => 46 * Math.pow(1.3, k));
+const JIT = RINGS.map(() => SPOKES.map(() => .9 + rnd() * .2));
+
+function web(t) {
+  const cx = W / 2, cy = TO.y, sp = out3(seg(t, T.spokes));
+  if (sp <= 0) return;
+  const R = 560, turn = t / 1000 * .004; // a barely visible drift
+  const fade = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
+  fade.addColorStop(0, gold(0)); fade.addColorStop(.1, gold(0)); fade.addColorStop(.24, gold(.13)); fade.addColorStop(.55, gold(.08)); fade.addColorStop(1, gold(0));
+  ctx.save(); ctx.strokeStyle = fade; ctx.lineWidth = .5; ctx.beginPath();
+  SPOKES.forEach(a => { ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a + turn) * R * sp, cy + Math.sin(a + turn) * R * sp); });
+  RINGS.forEach((r, k) => { // rings appear from the inside out
+    const on = seg(t, [T.rings[0] + k * 140, T.rings[0] + k * 140 + 600]);
+    if (on <= 0 || r > R * sp) return;
+    SPOKES.forEach((a, i) => {
+      const j = (i + 1) % SPOKES.length, b = SPOKES[j] + (j === 0 ? Math.PI * 2 : 0);
+      if ((i + 1) / SPOKES.length > on) return;
+      const r1 = r * JIT[k][i], r2 = r * JIT[k][j], mid = (a + b) / 2 + turn, sag = .9;
+      ctx.moveTo(cx + Math.cos(a + turn) * r1, cy + Math.sin(a + turn) * r1);
+      ctx.quadraticCurveTo(cx + Math.cos(mid) * (r1 + r2) / 2 * sag, cy + Math.sin(mid) * (r1 + r2) / 2 * sag, cx + Math.cos(b + turn) * r2, cy + Math.sin(b + turn) * r2);
+    });
+  });
+  ctx.stroke(); ctx.restore();
+}
+
+function logo({ x, y, size, p = 1, glow = 0, sweep = -1 }) {
+  ctx.save();
+  ctx.translate(x - size / 2, y - size / 2); ctx.scale(size / 100, size / 100);
+  const g = ctx.createLinearGradient(0, 0, 100, 100);
+  [[0, '#F0E8DA'], [.25, '#F8F0E3'], [.42, '#B98143'], [.6, '#E9D8BF'], [.8, '#642B35'], [1, '#EDE4D6']].forEach(([o, c]) => g.addColorStop(o, c));
+  ctx.lineWidth = 3.5; ctx.lineJoin = 'miter'; ctx.lineCap = 'butt';
+  strokes.forEach((s, i) => {
+    const q = clamp((p - i * 0.04) / 0.96);
+    if (q <= 0) return;
+    const from = s.tip * (1 - q), to = s.tip + (s.len - s.tip) * q;
+    ctx.setLineDash([0, from, to - from, s.len * 3]);
+    if (glow > 0) { ctx.save(); ctx.shadowColor = gold(.85 * glow); ctx.shadowBlur = 26 * glow * DPR; ctx.strokeStyle = gold(.45 * glow); ctx.stroke(s.p); ctx.restore(); }
+    ctx.strokeStyle = g; ctx.stroke(s.p);
+    if (q < 1) [from, to].forEach(l => { // the two bright ends drawing the stroke away from the tip
+      const pt = s.el.getPointAtLength(l);
+      const r = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, 8);
+      r.addColorStop(0, 'rgba(255,250,238,1)'); r.addColorStop(.25, gold(.75)); r.addColorStop(1, gold(0));
+      ctx.fillStyle = r; ctx.beginPath(); ctx.arc(pt.x, pt.y, 8, 0, 7); ctx.fill();
+    });
+  });
+  if (sweep > -.2 && sweep < 1.2) { // a narrow band of light crossing the finished emblem
+    const s = ctx.createLinearGradient(-10, 0, 110, 60);
+    s.addColorStop(clamp(sweep - .1), 'rgba(255,248,232,0)'); s.addColorStop(clamp(sweep), 'rgba(255,250,240,.9)'); s.addColorStop(clamp(sweep + .1), 'rgba(255,248,232,0)');
+    ctx.setLineDash([]); ctx.strokeStyle = s; strokes.forEach(st => ctx.stroke(st.p));
+  }
+  ctx.restore();
+}
+
+function frame(t) {
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.globalAlpha = 1; ctx.filter = 'none';
+  ctx.fillStyle = '#050505'; ctx.fillRect(0, 0, W, H);
+
+  // warm floor of light, rising once the emblem is drawn
+  const floor = .2 * out3(seg(t, [3400, 5400]));
+  if (floor > 0) { const f = ctx.createLinearGradient(0, H * .35, 0, H); f.addColorStop(0, gold(0)); f.addColorStop(.6, gold(floor * .3)); f.addColorStop(1, gold(floor)); ctx.fillStyle = f; ctx.fillRect(0, 0, W, H); }
+
+  web(t);
+
+  const st = inOut(seg(t, T.settle));
+  const y = FROM.y + (TO.y - FROM.y) * st, size = FROM.size + (TO.size - FROM.size) * st;
+
+  // a point of light at the emblem's tip, then a streak that collapses back into it
+  const ax = W / 2, ay = FROM.y - FROM.size / 2 + .11 * FROM.size;
+  const pt = out3(seg(t, T.point)) * (1 - seg(t, [2200, 2700]));
+  if (pt > 0) {
+    const halo = ctx.createRadialGradient(ax, ay, 0, ax, ay, 40); halo.addColorStop(0, `rgba(255,250,238,${pt})`); halo.addColorStop(.12, gold(.7 * pt)); halo.addColorStop(1, gold(0));
+    ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(ax, ay, 42 + 2 * Math.sin(t / 140), 0, 7); ctx.fill();
+  }
+  const sw = out3(seg(t, T.streakIn)) * (1 - inOut(seg(t, T.streakOut)));
+  if (sw > 0) {
+    const half = 200 * sw, sg = ctx.createLinearGradient(ax - half, 0, ax + half, 0);
+    sg.addColorStop(0, gold(0)); sg.addColorStop(.42, gold(.6)); sg.addColorStop(.5, 'rgba(255,250,240,1)'); sg.addColorStop(.58, gold(.6)); sg.addColorStop(1, gold(0));
+    ctx.save(); ctx.shadowColor = gold(.9); ctx.shadowBlur = 16 * DPR; ctx.fillStyle = sg; ctx.fillRect(ax - half, ay - .75, half * 2, 1.5); ctx.restore();
+  }
+
+  if (t >= T.draw[0]) {
+    const sweep = t < T.sweep2[0] ? -.2 + 1.4 * seg(t, T.sweep) : -.2 + 1.4 * seg(t, T.sweep2);
+    logo({ x: W / 2, y, size, p: inOut(seg(t, T.draw)), glow: .2 + .7 * bell(seg(t, T.bloom)) - .05 * st, sweep });
+  }
+
+  // the tagline arrives where it lives, one word at a time
+  ctx.font = '500 12.5px "Manrope", -apple-system, sans-serif'; ctx.textBaseline = 'middle';
+  const spacing = 4, gap = 14;
+  const widths = TAG.map(w => [...w].reduce((a, c) => a + ctx.measureText(c).width + spacing, -spacing));
+  let x = W / 2 - (widths.reduce((a, b) => a + b, 0) + gap * (TAG.length - 1)) / 2;
+  const ty = TO.y + TO.size / 2 + 34;
+  TAG.forEach((word, i) => {
+    const e = out3(seg(t, [T.tag + i * T.tagGap, T.tag + i * T.tagGap + T.tagIn]));
+    if (e > 0) {
+      ctx.save(); ctx.globalAlpha = e; ctx.fillStyle = 'rgba(234,236,238,.78)';
+      if (e < .98) ctx.filter = `blur(${5 * (1 - e) * DPR}px)`;
+      let cx = x;
+      [...word].forEach(c => { ctx.fillText(c, cx, ty + 6 * (1 - e)); cx += ctx.measureText(c).width + spacing; });
+      ctx.restore();
+    }
+    x += widths[i] + gap;
+  });
+
+  // the Google button rises into place last, then one soft shine crosses it; the legal line follows
+  const be = out3(seg(t, T.button));
+  if (be > 0) {
+    const bw = W - 68, bh = 56, bx = 34, by = H - 176 + 14 * (1 - be);
+    ctx.save(); ctx.globalAlpha = be;
+    ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 18);
+    const face = ctx.createLinearGradient(0, by, 0, by + bh); face.addColorStop(0, 'rgba(255,255,255,.10)'); face.addColorStop(1, 'rgba(255,255,255,.04)');
+    ctx.fillStyle = face; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.16)'; ctx.lineWidth = 1; ctx.stroke();
+    const sh = seg(t, T.shine);
+    if (sh > 0 && sh < 1) {
+      ctx.save(); ctx.clip();
+      const sx = bx - 80 + (bw + 160) * inOut(sh), g = ctx.createLinearGradient(sx - 60, 0, sx + 60, 0);
+      g.addColorStop(0, gold(0)); g.addColorStop(.5, 'rgba(255,246,226,.16)'); g.addColorStop(1, gold(0));
+      ctx.fillStyle = g; ctx.fillRect(bx, by, bw, bh); ctx.restore();
+    }
+    ctx.font = '500 15.5px -apple-system, "SF Pro Text", "Manrope", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#EAECEE';
+    ctx.fillText('Continue with Google', W / 2, by + bh / 2 + 1);
+    ctx.restore();
+    const le = out3(seg(t, T.legal));
+    ctx.save(); ctx.globalAlpha = le * .42; ctx.fillStyle = '#EAECEE'; ctx.textAlign = 'center';
+    ctx.font = '400 11.5px -apple-system, "SF Pro Text", "Manrope", sans-serif';
+    ['By continuing you agree to the Terms and the Privacy Policy.', 'What you tell Axiom stays private. You choose later', 'whether anything is ever shared.']
+      .forEach((line, k) => ctx.fillText(line, W / 2, H - 92 + k * 17));
+    ctx.restore();
+  }
+
+  // grain over everything
+  ctx.save(); ctx.globalAlpha = .045; ctx.globalCompositeOperation = 'screen';
+  const ox = (Math.random() * 256) | 0, oy = (Math.random() * 256) | 0;
+  ctx.fillStyle = ctx.createPattern(grain, 'repeat'); ctx.translate(-ox, -oy); ctx.fillRect(ox, oy, W, H); ctx.restore();
+}
+
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let start = 0, skip = false;
+function loop(now) {
+  frame(skip || reduce ? T.end + 1000 : now - start);
+  requestAnimationFrame(loop);
+}
+document.getElementById('replay').addEventListener('click', () => { skip = false; start = performance.now(); });
+cv.addEventListener('click', () => { skip = true; });
+
+document.fonts.load('500 12px "Manrope"').catch(() => {}).finally(() => { start = performance.now(); requestAnimationFrame(loop); });
+</script>

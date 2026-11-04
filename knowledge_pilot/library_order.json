@@ -1,0 +1,786 @@
+[
+ {
+  "source_id": "how-companies-win-books-7-powers-the-foundations-of-business-strategy",
+  "title": "7 Powers - The Foundations of Business Strategy",
+  "pillar": "how_companies_win",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": true
+ },
+ {
+  "source_id": "human-mind-books-atomic-habits",
+  "title": "Atomic Habits",
+  "pillar": "human_mind",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "money-game-books-business-adventures",
+  "title": "Business Adventures",
+  "pillar": "money_game",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "move-people-books-made-to-stick",
+  "title": "Made to Stick",
+  "pillar": "move_people",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "think-sharper-books-antifragile",
+  "title": "Antifragile",
+  "pillar": "think_sharper",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "whats-coming-books-how-the-world-really-works",
+  "title": "How the World Really Works",
+  "pillar": "whats_coming",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": true
+ },
+ {
+  "source_id": "how-companies-win-books-blitzscaling",
+  "title": "Blitzscaling",
+  "pillar": "how_companies_win",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "human-mind-books-body-keeps-score",
+  "title": "Body Keeps Score",
+  "pillar": "human_mind",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "money-game-books-changing-world-order",
+  "title": "Changing World Order",
+  "pillar": "money_game",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "move-people-books-never-split-the-difference",
+  "title": "Never Split the Difference",
+  "pillar": "move_people",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": true
+ },
+ {
+  "source_id": "think-sharper-books-being-wrong",
+  "title": "Being Wrong",
+  "pillar": "think_sharper",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "whats-coming-books-life-3-0",
+  "title": "Life 3.0",
+  "pillar": "whats_coming",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "how-companies-win-books-crossing-the-chasm",
+  "title": "Crossing the Chasm",
+  "pillar": "how_companies_win",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "human-mind-books-courage-to-be-disliked",
+  "title": "Courage to Be Disliked",
+  "pillar": "human_mind",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "money-game-books-common-stocks-and-uncommon-profits",
+  "title": "Common Stocks and Uncommon Profits",
+  "pillar": "money_game",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "move-people-books-on-writing-well",
+  "title": "On Writing Well",
+  "pillar": "move_people",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "think-sharper-books-beyond-good-and-evil",
+  "title": "Beyond Good and Evil",
+  "pillar": "think_sharper",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "whats-coming-books-power-and-progress",
+  "title": "Power and Progress",
+  "pillar": "whats_coming",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "how-companies-win-books-good-to-great",
+  "title": "Good to Great",
+  "pillar": "how_companies_win",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "human-mind-books-influence-cialdini",
+  "title": "Influence Cialdini",
+  "pillar": "human_mind",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "money-game-books-intelligent-investor",
+  "title": "Intelligent Investor",
+  "pillar": "money_game",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "move-people-books-pitch-anything",
+  "title": "Pitch Anything",
+  "pillar": "move_people",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "think-sharper-books-lateral-thinking",
+  "title": "Lateral Thinking",
+  "pillar": "think_sharper",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "whats-coming-books-prisoners-of-geography",
+  "title": "Prisoners of Geography",
+  "pillar": "whats_coming",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "how-companies-win-books-high-growth-handbook",
+  "title": "High Growth Handbook",
+  "pillar": "how_companies_win",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "human-mind-books-mans-search-for-meaning",
+  "title": "Mans Search for Meaning",
+  "pillar": "human_mind",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "money-game-books-money-masters-of-our-time",
+  "title": "Money Masters of Our Time",
+  "pillar": "money_game",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "move-people-books-pre-suasion",
+  "title": "Pre-Suasion",
+  "pillar": "move_people",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "think-sharper-books-seeking-wisdom",
+  "title": "Seeking Wisdom",
+  "pillar": "think_sharper",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "whats-coming-books-superintelligence",
+  "title": "Superintelligence",
+  "pillar": "whats_coming",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "how-companies-win-books-high-output-management",
+  "title": "High Output Management",
+  "pillar": "how_companies_win",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "human-mind-books-mindset-dweck",
+  "title": "Mindset Dweck",
+  "pillar": "human_mind",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "money-game-books-poor-charlies-almanack",
+  "title": "Poor Charlies Almanack",
+  "pillar": "money_game",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "move-people-books-simply-said",
+  "title": "Simply Said",
+  "pillar": "move_people",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "think-sharper-books-superforecasting",
+  "title": "Superforecasting",
+  "pillar": "think_sharper",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": true
+ },
+ {
+  "source_id": "whats-coming-books-the-code-breaker",
+  "title": "The Code Breaker",
+  "pillar": "whats_coming",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "how-companies-win-books-no-rules-rules",
+  "title": "No Rules Rules",
+  "pillar": "how_companies_win",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "money-game-books-principles-ray-dalio",
+  "title": "Principles Ray Dalio",
+  "pillar": "money_game",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "move-people-books-talk-like-ted",
+  "title": "Talk Like TED",
+  "pillar": "move_people",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "think-sharper-books-the-black-swan",
+  "title": "The Black Swan",
+  "pillar": "think_sharper",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "whats-coming-books-the-dollar-trap",
+  "title": "The Dollar Trap",
+  "pillar": "whats_coming",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "how-companies-win-books-play-bigger",
+  "title": "Play Bigger",
+  "pillar": "how_companies_win",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "money-game-books-psychology-of-money",
+  "title": "Psychology of Money",
+  "pillar": "money_game",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": true
+ },
+ {
+  "source_id": "move-people-books-the-48-laws-of-power",
+  "title": "The 48 Laws Of Power",
+  "pillar": "move_people",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "think-sharper-books-the-gay-science",
+  "title": "The Gay Science",
+  "pillar": "think_sharper",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "whats-coming-books-the-inevitable",
+  "title": "The Inevitable",
+  "pillar": "whats_coming",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "how-companies-win-books-scaling-up",
+  "title": "Scaling Up",
+  "pillar": "how_companies_win",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "money-game-books-rich-dad-poor-dad",
+  "title": "Rich Dad Poor Dad",
+  "pillar": "money_game",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "move-people-books-the-art-of-seduction",
+  "title": "The Art Of Seduction",
+  "pillar": "move_people",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "think-sharper-books-the-great-mental-models-volume-1",
+  "title": "The Great Mental Models Volume 1",
+  "pillar": "think_sharper",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "whats-coming-books-the-second-machine-age",
+  "title": "The Second Machine Age",
+  "pillar": "whats_coming",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "how-companies-win-books-the-cold-start-problem",
+  "title": "The Cold Start Problem",
+  "pillar": "how_companies_win",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "money-game-books-richest-man-babylon",
+  "title": "Richest Man Babylon",
+  "pillar": "money_game",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "move-people-books-the-laws-of-human-nature",
+  "title": "The Laws Of Human Nature",
+  "pillar": "move_people",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": true
+ },
+ {
+  "source_id": "think-sharper-books-the-great-mental-models-volume-2",
+  "title": "The Great Mental Models Volume 2",
+  "pillar": "think_sharper",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "whats-coming-books-the-world-for-sale",
+  "title": "The World for Sale",
+  "pillar": "whats_coming",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "how-companies-win-books-the-e-myth-revisited",
+  "title": "The E-Myth Revisited",
+  "pillar": "how_companies_win",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "money-game-books-security-analysis",
+  "title": "Security Analysis",
+  "pillar": "money_game",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "move-people-books-the-storytelling-animal",
+  "title": "The Storytelling Animal",
+  "pillar": "move_people",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "think-sharper-books-the-notebooks-of-leonardo-da-vinci",
+  "title": "The Notebooks of Leonardo da Vinci",
+  "pillar": "think_sharper",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "how-companies-win-books-the-hard-thing-about-hard-things",
+  "title": "The Hard Thing About Hard Things",
+  "pillar": "how_companies_win",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "move-people-books-to-sell-is-human",
+  "title": "To Sell Is Human",
+  "pillar": "move_people",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "think-sharper-books-the-signal-and-the-noise",
+  "title": "The Signal and the Noise",
+  "pillar": "think_sharper",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "how-companies-win-books-the-innovators-dillema",
+  "title": "The Innovators Dillema",
+  "pillar": "how_companies_win",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "think-sharper-books-thinking-in-bets",
+  "title": "Thinking in Bets",
+  "pillar": "think_sharper",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": true
+ },
+ {
+  "source_id": "how-companies-win-books-the-lean-startup",
+  "title": "The Lean Startup",
+  "pillar": "how_companies_win",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": true
+ },
+ {
+  "source_id": "think-sharper-books-thus-spoke-zarathustra",
+  "title": "Thus Spoke Zarathustra",
+  "pillar": "think_sharper",
+  "type": "book",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "how-companies-win-biographies-steve-jobs",
+  "title": "Steve Jobs",
+  "pillar": "how_companies_win",
+  "type": "biography",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "human-mind-biographies-cant-hurt-me",
+  "title": "Cant Hurt Me",
+  "pillar": "human_mind",
+  "type": "biography",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "money-game-biographies-everything-store",
+  "title": "Everything Store",
+  "pillar": "money_game",
+  "type": "biography",
+  "is_core": true,
+  "is_pilot": true
+ },
+ {
+  "source_id": "think-sharper-biographies-leonardo-da-vinci",
+  "title": "Leonardo da Vinci",
+  "pillar": "think_sharper",
+  "type": "biography",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "human-mind-biographies-educated-westover",
+  "title": "Educated Westover",
+  "pillar": "human_mind",
+  "type": "biography",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "money-game-biographies-made-in-america-walton",
+  "title": "Made in America Walton",
+  "pillar": "money_game",
+  "type": "biography",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "human-mind-biographies-long-walk-to-freedom",
+  "title": "Long Walk to Freedom",
+  "pillar": "human_mind",
+  "type": "biography",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "money-game-biographies-shoe-dog",
+  "title": "Shoe Dog",
+  "pillar": "money_game",
+  "type": "biography",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "human-mind-biographies-open-agassi",
+  "title": "Open Agassi",
+  "pillar": "human_mind",
+  "type": "biography",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "money-game-biographies-snowball-buffett",
+  "title": "Snowball Buffett",
+  "pillar": "money_game",
+  "type": "biography",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "transcripts-acquired-lvmh",
+  "title": "Acquired Lvmh",
+  "pillar": "transcripts",
+  "type": "other",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "transcripts-how-i-built-this-sara-blakely",
+  "title": "How I Built This Sara Blakely",
+  "pillar": "transcripts",
+  "type": "other",
+  "is_core": true,
+  "is_pilot": false
+ },
+ {
+  "source_id": "human-mind-books-thinking-fast-and-slow",
+  "title": "Thinking Fast and Slow",
+  "pillar": "human_mind",
+  "type": "book",
+  "is_core": false,
+  "is_pilot": true
+ },
+ {
+  "source_id": "money-game-books-almanack-naval-ravikant",
+  "title": "Almanack Naval Ravikant",
+  "pillar": "money_game",
+  "type": "book",
+  "is_core": false,
+  "is_pilot": false
+ },
+ {
+  "source_id": "whats-coming-books-currency-wars",
+  "title": "Currency Wars",
+  "pillar": "whats_coming",
+  "type": "book",
+  "is_core": false,
+  "is_pilot": false
+ },
+ {
+  "source_id": "human-mind-books-war-of-art",
+  "title": "War of Art",
+  "pillar": "human_mind",
+  "type": "book",
+  "is_core": false,
+  "is_pilot": false
+ },
+ {
+  "source_id": "money-game-books-millionaire-next-door",
+  "title": "Millionaire Next Door",
+  "pillar": "money_game",
+  "type": "book",
+  "is_core": false,
+  "is_pilot": false
+ },
+ {
+  "source_id": "whats-coming-books-factfulness",
+  "title": "Factfulness",
+  "pillar": "whats_coming",
+  "type": "book",
+  "is_core": false,
+  "is_pilot": false
+ },
+ {
+  "source_id": "money-game-books-zero-to-one",
+  "title": "Zero to One",
+  "pillar": "money_game",
+  "type": "book",
+  "is_core": false,
+  "is_pilot": false
+ },
+ {
+  "source_id": "whats-coming-books-hot-commodities",
+  "title": "Hot Commodities",
+  "pillar": "whats_coming",
+  "type": "book",
+  "is_core": false,
+  "is_pilot": false
+ },
+ {
+  "source_id": "whats-coming-books-lifespan",
+  "title": "Lifespan",
+  "pillar": "whats_coming",
+  "type": "book",
+  "is_core": false,
+  "is_pilot": false
+ },
+ {
+  "source_id": "whats-coming-books-technological-revolutions-and-financial-capital",
+  "title": "Technological Revolutions and Financial Capital",
+  "pillar": "whats_coming",
+  "type": "book",
+  "is_core": false,
+  "is_pilot": false
+ },
+ {
+  "source_id": "whats-coming-books-the-end-of-the-world-is-just-the-beginning",
+  "title": "The End of the World Is Just the Beginning",
+  "pillar": "whats_coming",
+  "type": "book",
+  "is_core": false,
+  "is_pilot": false
+ },
+ {
+  "source_id": "whats-coming-books-the-fourth-turning",
+  "title": "The Fourth Turning",
+  "pillar": "whats_coming",
+  "type": "book",
+  "is_core": false,
+  "is_pilot": false
+ },
+ {
+  "source_id": "whats-coming-books-the-new-map",
+  "title": "The New Map",
+  "pillar": "whats_coming",
+  "type": "book",
+  "is_core": false,
+  "is_pilot": false
+ },
+ {
+  "source_id": "whats-coming-books-the-sovereign-individual",
+  "title": "The Sovereign Individual",
+  "pillar": "whats_coming",
+  "type": "book",
+  "is_core": false,
+  "is_pilot": false
+ },
+ {
+  "source_id": "how-companies-win-biographies-elon-musk",
+  "title": "Elon Musk",
+  "pillar": "how_companies_win",
+  "type": "biography",
+  "is_core": false,
+  "is_pilot": false
+ },
+ {
+  "source_id": "human-mind-biographies-feynman-joking",
+  "title": "Feynman Joking",
+  "pillar": "human_mind",
+  "type": "biography",
+  "is_core": false,
+  "is_pilot": false
+ },
+ {
+  "source_id": "money-game-biographies-titan-rockefeller",
+  "title": "Titan Rockefeller",
+  "pillar": "money_game",
+  "type": "biography",
+  "is_core": false,
+  "is_pilot": false
+ },
+ {
+  "source_id": "human-mind-biographies-when-breath-becomes-air",
+  "title": "When Breath Becomes Air",
+  "pillar": "human_mind",
+  "type": "biography",
+  "is_core": false,
+  "is_pilot": false
+ },
+ {
+  "source_id": "transcripts-plain-english-ai-economics",
+  "title": "Plain English Ai Economics",
+  "pillar": "transcripts",
+  "type": "other",
+  "is_core": false,
+  "is_pilot": false
+ }
+]
