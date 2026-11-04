@@ -72,7 +72,6 @@ export const ACCOUNT_COPY = Object.freeze({
 
 // What deleting covers. Names only, shown with the recorded answer. (new)
 export const DELETION_PLAN = Object.freeze({
-  status: 'awaiting_plan',
   would_remove: [
     'Your situations, Reads and lessons',
     'Your moves and your reports',

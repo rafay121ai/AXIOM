@@ -41,6 +41,9 @@ export function quotedPhrases(text) {
 const numbersIn = (text) =>
   [...norm(text).matchAll(/\d[\d,]*(?:\.\d+)?/g)].map((m) => m[0].replace(/,/g, '').replace(/\.$/, ''))
 
+// A whole number: no digit, letter or decimal/thousands group on either side ("40" is not in "40.5" or "1,040").
+const numberRx = (n) => new RegExp(`(?<![a-z0-9]|\\d[.,])${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![a-z0-9]|[.,]\\d)`, 'i')
+
 // True when `phrase` appears in what the founder typed or chose.
 function inAnswersOf(answerTexts) {
   const corpus = answerTexts.map(norm).filter(Boolean)
@@ -48,7 +51,7 @@ function inAnswersOf(answerTexts) {
     const p = trimEdges(norm(phrase))
     if (!p) return false
     // A number must match whole ("40" is not inside "400" or "2040"); words keep the looser match.
-    return /^[$€£]?\d[\d,.]*[a-z%]{0,2}$/.test(p) ? corpus.some((a) => wordRx(p).test(a)) : corpus.some((a) => a.includes(p))
+    return /^[$€£]?\d[\d,.]*[a-z%]{0,2}$/.test(p) ? corpus.some((a) => numberRx(p).test(a)) : corpus.some((a) => a.includes(p))
   }
 }
 

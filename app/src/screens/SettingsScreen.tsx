@@ -238,8 +238,8 @@ export function SettingsScreen({ load, save, requestExport, requestDelete, cance
               </>
             ) : (
               <>
-                {s?.deletion.would_remove.map((line) => <Text key={line} style={styles.boxLine}>{`·  ${line}`}</Text>)}
-                <Text style={[styles.boxBody, { marginTop: 10 }]}>{s?.deletion.shared_outcomes}</Text>
+                {s?.deletion?.would_remove.map((line) => <Text key={line} style={styles.boxLine}>{`·  ${line}`}</Text>)}
+                <Text style={[styles.boxBody, { marginTop: 10 }]}>{s?.deletion?.shared_outcomes}</Text>
                 <Pressable accessibilityRole="button" onPress={() => setConfirming(false)} style={styles.boxButton}><Text style={styles.boxButtonText}>{copy.settings.keepData}</Text></Pressable>
                 <TextInput accessibilityLabel="DELETE" placeholder="DELETE" placeholderTextColor={ink(0.3)} value={typed} onChangeText={setTyped} autoCapitalize="characters" autoCorrect={false} style={styles.confirmInput} />
                 <Pressable accessibilityRole="button" disabled={typed !== 'DELETE'} onPress={() => void askDelete()} style={[styles.boxButton, { borderColor: 'rgba(222,160,150,0.4)' }, typed !== 'DELETE' && { opacity: 0.4 }]}><Text style={[styles.boxButtonText, { color: DANGER }]}>{copy.settings.deleteAll}</Text></Pressable>

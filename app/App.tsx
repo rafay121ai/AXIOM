@@ -51,7 +51,7 @@ type Stage =
   | { name: 'report'; report: DueReport; next: DueReport[] }
   | { name: 'care'; message: string; help: CareHelp };
 
-// Screens with the faint gold wash instead of the drifting light.
+// Screens with the faint gold wash instead of the construction grid.
 const QUIET: Stage['name'][] = ['home', 'history', 'past', 'settings', 'answers'];
 
 const run = (anim: Animated.CompositeAnimation) => new Promise<void>((resolve) => anim.start(() => resolve()));
@@ -124,10 +124,12 @@ export default function App() {
   // Signing in lands a returning founder on the home screen; a due check-in (the evening reminder's target) opens the Report.
   // A new founder, or one who stopped part way, goes to the questions.
   const landing = useRef(false);
+  const signedUp = useRef(true);
   const openSignup = useCallback(async () => {
     await api.resumeUnsent();
     const signup = await api.getSignup();
     landing.current = signup.complete;
+    signedUp.current = signup.complete;
     goTo(signup.complete ? { name: 'home' } : { name: 'questions', questions: signup.questions, answers: signup.answers, startAt: signup.next });
   }, [goTo]);
 
@@ -274,7 +276,12 @@ export default function App() {
             {stage.name === 'home' && (
               <HomeScreen
                 load={() => api.getHome(deviceTimeZone())}
-                checkIn={(text) => api.sendCheckIn(text)}
+                // Care during sign-up lands here; once the check-in is answered calmly, the questions resume.
+                checkIn={async (text) => {
+                  const res = await api.sendCheckIn(text);
+                  if (!res.care && !signedUp.current) void openSignup();
+                  return res;
+                }}
                 onLoaded={homeLoaded}
                 onStart={(text) => goTo({ name: 'situation', chat: newChat({ pending: text }), opening: copy.situation.openingFresh })}
                 onOpen={async (target) => openDestination(await destinationOf(api, target))}

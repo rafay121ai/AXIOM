@@ -681,3 +681,6 @@ Idea from Rafay: founder credits, and growth by referral. Not building until giv
 - Learn (Rafay, Nov 2): a tapped suggestion chip counts as a real reply toward the move card (still two in total, or at once on asking). PRODUCT.md updated.
 - Testing (Rafay, Nov 2): accounts in ADMIN_USER_IDS skip the 5-a-day limit on new situations; real founders keep it.
 - Move (Rafay, Nov 2): success may not be a "see if / check whether" line (never a yes or no); the effect goes in the prediction. Words are written for the reader, never about the founder's effort. Checklist label is "Before you start". experimentQuality.js unchanged.
+- Background (Rafay, Nov 3): the journey screens use the construction grid (faint gold lines), not the spider web. The spider web stays on the sign-in intro only. DESIGN.md updated.
+- Deletion (Rafay, Nov 3): approved stories stay after an account is deleted, with no link to the founder. The delete screen shows the server's DELETION_PLAN note before the founder types DELETE.
+- Merge (Rafay, Nov 4): feature/journey-v1 and feature/knowledge-rechunk-pilot both merge into main. Render deploys from main.

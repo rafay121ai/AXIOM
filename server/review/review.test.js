@@ -61,6 +61,10 @@ test('GET /review serves the page without auth', async () => {
   const html = await res.text()
   assert.match(html, /<title>Review<\/title>/)
   assert.ok(!html.includes(AUTHOR))
+  assert.ok(!/<script[^>]+src="https?:/.test(html), 'no script from another site')
+  const lib = await fetch(`${w.base}/review/supabase.js`)
+  assert.equal(lib.status, 200)
+  assert.match(await lib.text(), /createClient/)
   await w.close()
 })
 

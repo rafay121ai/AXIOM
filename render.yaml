@@ -11,7 +11,7 @@ services:
     runtime: node
     region: singapore
     plan: free
-    branch: feature/journey-v1
+    branch: main
     rootDir: server
     buildCommand: npm ci
     startCommand: node index.js
@@ -36,6 +36,11 @@ services:
         sync: false
       # Comma-separated user ids (or confirmed emails) of test accounts: they skip the daily situation limit.
       - key: ADMIN_USER_IDS
+        sync: false
+      # The review page (/review): the public anon key for its sign-in, and the reviewers' user ids (comma-separated). Empty: the page is off (404).
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+      - key: REVIEWER_USER_IDS
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false

@@ -153,6 +153,15 @@ test('a quoted bare number: typed is fine; never typed, or only inside a bigger 
   assert.equal(run('4').length, 1)
   assert.equal(run('3').length, 1)
   assert.equal(run('900').length, 1)
+  // Not part of a decimal or a thousands group, but a sentence's full stop or comma is fine.
+  const money = ['We charge 40.5 a seat, 1,000,000 visits, and 40, then 25.']
+  assert.equal(run('40.5', money).length, 0)
+  assert.equal(run('1,000,000', money).length, 0)
+  assert.equal(run('1,000', money).length, 1)
+  assert.equal(run('000', money).length, 1)
+  assert.equal(run('40', money).length, 0)
+  assert.equal(run('25', money).length, 0)
+  assert.equal(run('5', money).length, 1)
   assert.equal(unquoteUnknown('Only "12" weeks.', ['Nobody opens the beta'], ['Nobody opens the beta', '12 weeks']), 'Only 12 weeks.')
   assert.equal(unquoteUnknown('Only "13" weeks.', ['Nobody'], ['Nobody', '12 weeks']), 'Only "13" weeks.')
 })

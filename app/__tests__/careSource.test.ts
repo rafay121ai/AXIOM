@@ -37,6 +37,10 @@ it('keep talking opens the home check-in, never the journey step the care screen
   expect(t).not.toMatch(/name: 'care'[^}]*back/);
 });
 
+it('a calm check-in sends a founder who has not finished sign-up back to the questions', () => {
+  expect(read('App.tsx')).toMatch(/if \(!res\.care && !signedUp\.current\) void openSignup\(\)/);
+});
+
 it('the journey backdrop is the construction grid; the spider web stays on the sign-in intro', () => {
   expect(read('App.tsx')).not.toMatch(/components\/Web'/);
   expect(read('src/components/Construction.tsx')).not.toMatch(/WebLines/);

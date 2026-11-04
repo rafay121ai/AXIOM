@@ -12,6 +12,8 @@ import {
 } from '../journey/report/prompts/reviewDraft.js'
 
 const PAGE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'index.html')
+// The page's Supabase client comes from the server's own install, not a CDN: it holds a reviewer session.
+const SUPABASE_JS = fileURLToPath(new URL('../node_modules/@supabase/supabase-js/dist/umd/supabase.js', import.meta.url))
 const FIELDS = 'id, stage, customer_market, business_model, outcome, draft, story, lesson, created_at'
 
 export const reviewerIds = (env) =>
@@ -47,6 +49,7 @@ export function mountReviewRoutes(app, { supabase, callStructured, clock, env, r
 
   // The page holds no data; it signs in with Supabase and calls the API.
   app.get('/review', off, (_req, res) => res.sendFile(PAGE))
+  app.get('/review/supabase.js', off, (_req, res) => res.type('application/javascript').sendFile(SUPABASE_JS))
   app.get('/review/config.js', off, (_req, res) => {
     res.type('application/javascript').send(
       `window.AXIOM_REVIEW = ${JSON.stringify({ url: env.VITE_SUPABASE_URL || '', anonKey: env.VITE_SUPABASE_ANON_KEY || '' })}`)
