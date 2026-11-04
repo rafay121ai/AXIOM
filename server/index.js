@@ -55,7 +55,8 @@ if (env.EXPO_PUSH === 'on' && supabase) {
 // Real deletions only when ACCOUNT_DELETE=on and the database is configured.
 // Off: delete requests are recorded and nothing is removed.
 if (env.ACCOUNT_DELETE === 'on' && supabase) {
-  startDeletionLoop({ account: createAccount({ supabase, clock: systemClock, deleteOn: true, log: (what, err) => console.error(`[Account] ${what}`, err?.message || '') }) })
+  // Checks once now, so a restart never delays a deletion that is already due.
+  startDeletionLoop({ account: createAccount({ supabase, clock: systemClock, deleteOn: true, log: (what, err) => console.error(`[Account] ${what}`, err?.message || '') }) }).run()
   console.log('[Axiom API] Account deletion on')
 } else {
   console.log('[Axiom API] Account deletion off (ACCOUNT_DELETE is not on)')

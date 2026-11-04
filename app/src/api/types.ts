@@ -319,6 +319,8 @@ export type Settings = {
   privacy: { share_automatically: boolean; text: string };
   /** A deletion waiting out its grace period, with the server's own sentence. Absent or null when none. */
   pending_deletion?: { delete_after: string; message: string } | null;
+  /** What deleting removes and what happens to shared stories, shown before the founder confirms. */
+  deletion: { would_remove: string[]; shared_outcomes: string };
 };
 
 /** Any of these can be saved on their own. The answer is the whole page again. */

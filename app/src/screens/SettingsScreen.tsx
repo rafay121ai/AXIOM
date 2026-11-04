@@ -238,7 +238,8 @@ export function SettingsScreen({ load, save, requestExport, requestDelete, cance
               </>
             ) : (
               <>
-                <Text style={styles.boxBody}>{copy.settings.confirmBody}</Text>
+                {s?.deletion.would_remove.map((line) => <Text key={line} style={styles.boxLine}>{`·  ${line}`}</Text>)}
+                <Text style={[styles.boxBody, { marginTop: 10 }]}>{s?.deletion.shared_outcomes}</Text>
                 <Pressable accessibilityRole="button" onPress={() => setConfirming(false)} style={styles.boxButton}><Text style={styles.boxButtonText}>{copy.settings.keepData}</Text></Pressable>
                 <TextInput accessibilityLabel="DELETE" placeholder="DELETE" placeholderTextColor={ink(0.3)} value={typed} onChangeText={setTyped} autoCapitalize="characters" autoCorrect={false} style={styles.confirmInput} />
                 <Pressable accessibilityRole="button" disabled={typed !== 'DELETE'} onPress={() => void askDelete()} style={[styles.boxButton, { borderColor: 'rgba(222,160,150,0.4)' }, typed !== 'DELETE' && { opacity: 0.4 }]}><Text style={[styles.boxButtonText, { color: DANGER }]}>{copy.settings.deleteAll}</Text></Pressable>
@@ -269,6 +270,7 @@ const styles = StyleSheet.create({
   modal: { ...StyleSheet.absoluteFill, justifyContent: 'center', padding: 26, backgroundColor: 'rgba(0,0,0,0.72)' },
   box: { backgroundColor: '#0b0b0b', borderWidth: 1, borderColor: ink(0.2), borderRadius: 22, padding: 20 },
   boxTitle: { fontFamily: fonts.serifMedium, fontSize: 19, lineHeight: 25, color: '#f4f4f2', marginBottom: 10 },
+  boxLine: { fontFamily: fonts.sans, fontSize: 14, lineHeight: 21, color: ink(0.7) },
   boxBody: { fontFamily: fonts.sans, fontSize: 14, lineHeight: 21, color: ink(0.7), marginBottom: 18 },
   confirmInput: { fontFamily: fonts.sans, fontSize: 15, color: colors.ink, borderWidth: 1, borderColor: ink(0.2), borderRadius: 14, minHeight: 48, paddingHorizontal: 14, marginBottom: 2 },
   boxButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 14, borderWidth: 1, borderColor: ink(0.3), marginTop: 10 },

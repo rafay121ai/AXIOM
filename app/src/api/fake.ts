@@ -229,6 +229,11 @@ const FAKE_SETTINGS: Settings = {
   mentor_style: 'direct',
   keep_items: false,
   privacy: { share_automatically: false, text: SHARE_TEXT.off },
+  // DELETION_PLAN in server/journey/home/wording.js.
+  deletion: {
+    would_remove: ['Your situations, Reads and lessons', 'Your moves and your reports', 'What Axiom remembers about you', 'Your sign-up answers and settings', 'Your reminders and devices'],
+    shared_outcomes: 'Outcomes you shared hold no name. Stories already published stay, with nothing that links them to you. Anything still waiting for review is removed.',
+  },
 };
 export type AccountSim = 'pending' | 'off';
 // The account lines are ACCOUNT_COPY in server/journey/home/wording.js; the server puts the day in {date}.

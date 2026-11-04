@@ -6,7 +6,7 @@
 // account_requests (kind 'delete') status: queued (switch off, recorded only),
 // pending (grace period running), deleting (claimed), cancelled.
 import { HttpError } from '../situations.js'
-import { createFounderDeletion } from './accountDelete.js'
+import { createFounderDeletion, DeletionError } from './accountDelete.js'
 import { ACCOUNT_COPY, DELETION_PLAN } from './wording.js'
 
 export const GRACE_MS = 7 * 24 * 60 * 60 * 1000
@@ -70,10 +70,12 @@ export function createAccount({ supabase, clock, deleteOn = false, log = () => {
         message: careOpen ? ACCOUNT_COPY.deleteRecordedCare : ACCOUNT_COPY.deleteRecorded,
       }
     }
-    const row = await record(userId, 'pending', { delete_after: iso(clock.now() + GRACE_MS) })
+    // Already being deleted: answer with that request, never a second one with a new date.
+    const [deleting] = await waiting(userId, 'deleting')
+    const row = deleting ?? await record(userId, 'pending', { delete_after: iso(clock.now() + GRACE_MS) })
     const text = careOpen ? ACCOUNT_COPY.deletePendingCare : ACCOUNT_COPY.deletePending
     return {
-      status: 'pending_deletion', deleted: false, requested_at: row.created_at, delete_after: row.delete_after,
+      status: 'pending_deletion', deleted: false, requested_at: row.created_at, delete_after: row.delete_after, plan: DELETION_PLAN,
       message: text.replace('{date}', day(row.delete_after)),
     }
   }
@@ -84,15 +86,18 @@ export function createAccount({ supabase, clock, deleteOn = false, log = () => {
   async function deleteDue() {
     if (!deleteOn) return 0
     const due = await one(supabase.from('account_requests').select('id, user_id')
-      .eq('kind', 'delete').in('status', ['pending', 'deleting']).lte('delete_after', iso()).limit(20))
+      .eq('kind', 'delete').in('status', ['pending', 'deleting']).lte('delete_after', iso()).order('delete_after').limit(20))
     let done = 0
     for (const { id, user_id: userId } of due) {
       try {
-        await one(supabase.from('account_requests').update({ status: 'deleting' }).eq('id', id).in('status', ['pending', 'deleting']).select('id'))
+        // The claim must hit exactly this row: a founder who cancelled since the read is not deleted.
+        const claimed = await one(supabase.from('account_requests').update({ status: 'deleting' }).eq('id', id).in('status', ['pending', 'deleting']).select('id'))
+        if (claimed.length !== 1) continue
         await deletion.deleteFounder(userId)
         done += 1
       } catch (err) {
-        log('deletion failed; it is tried again next hour', err)
+        // Only our own short message is logged, never the database's: it can hold the founder's id.
+        log(`deletion failed (${err instanceof DeletionError ? err.message : 'claim failed'}); it is tried again next hour`, null)
       }
     }
     return done

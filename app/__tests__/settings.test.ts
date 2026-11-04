@@ -80,7 +80,6 @@ describe('the fake settings', () => {
 describe('settings words and helpers', () => {
   it('are the mock\'s', () => {
     expect(copy.settings.confirmTitle).toBe('Delete everything Axiom knows about you?');
-    expect(copy.settings.confirmBody).toBe("This removes your situations, check-ins, answers and anything you shared. It can't be undone.");
     expect(copy.settings.lockNote).toBe('Short: your name and "how did it go?". Full: names your move. Nothing: just "Axiom".');
   });
   it('says the time like the mock', () => {

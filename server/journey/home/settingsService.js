@@ -7,6 +7,7 @@ import { validTimeZone } from '../move/schedule.js'
 import { createSignupStore } from '../signup.js'
 import { createSharing } from '../report/sharing.js'
 import { SHARE_AUTO_TEXT } from '../report/wording.js'
+import { DELETION_PLAN } from './wording.js'
 
 export const MENTOR_STYLES = Object.freeze(['calm', 'direct', 'hard'])
 export const DEFAULT_MENTOR_STYLE = 'direct'
@@ -62,6 +63,8 @@ export function createSettings({ supabase, clock, links = {}, pendingDeletion = 
       mentor_style: MENTOR_STYLES.includes(row?.mentor_style) ? row.mentor_style : DEFAULT_MENTOR_STYLE,
       keep_items: row?.keep_items === true,
       pending_deletion,
+      // What the delete screen says before the founder confirms.
+      deletion: { would_remove: DELETION_PLAN.would_remove, shared_outcomes: DELETION_PLAN.shared_outcomes },
       privacy: { share_automatically: shareAutomatically, text: shareAutomatically ? SHARE_AUTO_TEXT.on : SHARE_AUTO_TEXT.off },
     }
   }

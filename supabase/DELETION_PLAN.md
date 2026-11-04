@@ -1,8 +1,11 @@
 # Account deletion plan
 
-Status: written, built, tested against in-memory fakes only. NOT applied to
-any database. Deletion is OFF (`ACCOUNT_DELETE` not `on`). Needs Rafay's
-approval before anything below is switched on.
+Status: the SQL function `public.delete_account` IS applied on live (checked
+read-only on Nov 3 2026: same body as migration `20261101000011`; only
+`service_role` can execute it, `anon` and `authenticated` cannot; 0 delete
+requests exist). Deletion is still OFF (`ACCOUNT_DELETE` not `on`). The server
+code is tested against in-memory fakes only. The copy test below is still
+required before `ACCOUNT_DELETE=on`.
 
 ## What a founder sees
 
@@ -21,28 +24,32 @@ approval before anything below is switched on.
 ## What is removed, in this order
 
 All in one database transaction (SQL function `delete_account`,
-migration `20261101000011`). If the function is missing the server runs the
-same steps one by one; each step is safe to repeat.
+migration `20261101000011`). If the function is missing the server logs an
+error and deletion fails closed: nothing is removed another way.
 
 1. Shared outcomes (see the decision below).
 2. Share unlocks (`peer_unlocks`), consent log, notification log.
 3. Reports, then moves.
 4. Learn: lesson citations, turns, conversations.
 5. Situations: their turns, Reads, then the situations.
-6. Old-app data: messages, weekly reads, wiki nodes and edges, app sessions,
+6. Old-app data: messages, app sessions,
    threads, experiments, personal memories, model usage (cost) logs, product
    events, sessions.
 7. Founder lesson log, care events, devices (push tokens), settings.
 8. The name and email row, the founder profile (sign-up answers, theory).
 9. The delete request itself.
-10. Last, the sign-in account (Supabase auth), by the server. If this last
-    step fails, no founder data is left; the empty sign-in account is retried
-    only if you re-ask, or can be removed from the Supabase dashboard.
+10. Last, the sign-in account (Supabase auth), by the server. Before step 1
+    the server bans the sign-in, so nobody can sign in and write rows while
+    the function runs. If removing the sign-in fails it is tried 3 times; if it
+    still fails, no founder data is left, the empty sign-in stays banned, and
+    it can be removed from the Supabase dashboard (the request row is gone by
+    then, so nothing retries it later). If the ban or the function fails, the
+    request row stays and the next hourly run repeats it.
 
 Only rows of this founder are touched. Every delete is filtered to the
 founder's id.
 
-## Decision for Rafay: shared outcomes
+## Decision (Rafay, Nov 3 2026): approved stories stay
 
 An outcome already approved and published holds no name. The plan:
 - Published story: stays, anonymised. Its private link to the founder is
@@ -50,7 +57,9 @@ An outcome already approved and published holds no name. The plan:
   it down.
 - Waiting for review, rejected, or already withdrawn: removed with its link.
 
-The alternative is to also remove published stories. That is safer for the
+Decided: published stories stay after the account is deleted. The founder is
+told this before typing DELETE (the existing sentence in
+`DELETION_PLAN.shared_outcomes`, sent by the server). The alternative was to also remove published stories. That is safer for the
 person, and costs other founders a lesson. Consent was given at share time, so
 the default keeps them; change it by deleting the story in the first step of
 the function and in `accountDelete.js`.
@@ -67,7 +76,7 @@ story is lost with them. The story stays because no name is attached.
 
 - Knowledge project: holds no founder data.
 - OpenAI: prompts sent to the provider are under its own retention.
-- Logs: the server logs hold no founder text or ids.
+- Logs: the server logs hold no founder text or ids. Deletion failures log a step name and an error code only.
 
 ## How to test it on a copy first
 
@@ -92,5 +101,5 @@ story is lost with them. The story stays because no name is attached.
 3. Published stories stay (anonymised), links removed.
 4. Cost logs and consent log rows are deleted with the founder.
 5. The sentences in `tasks/wording_to_approve.md`, section F.
-6. Applying migration `20261101000011` (after the copy test).
-7. Setting `ACCOUNT_DELETE=on` on Railway, only after 6.
+6. The copy test (steps above). The function is already applied on live; this is the proof it is safe to switch on.
+7. Setting `ACCOUNT_DELETE=on` on Render (where the server runs), only after the copy test passes.

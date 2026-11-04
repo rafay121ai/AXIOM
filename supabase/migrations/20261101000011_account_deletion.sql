@@ -1,10 +1,10 @@
 -- Journey 11: account deletion (grace period and the atomic delete function).
 --
--- NOT APPLIED. Read supabase/DELETION_PLAN.md and supabase/MIGRATION_PLAN.md
--- first. Needs Rafay's approval: this file removes founder data (CLAUDE.md:
--- never touch founder memory, consent and peer outcome privacy logic without
--- explicit instruction). Verify against a fresh read-only dump of the live
--- main schema, and test on a COPY of the database first.
+-- APPLIED on live (checked read-only Nov 3 2026: same body as this file; only
+-- service_role can execute it). Deletion stays OFF (ACCOUNT_DELETE) until the
+-- copy test in supabase/DELETION_PLAN.md passes. This file removes founder data
+-- (CLAUDE.md: never touch founder memory, consent and peer outcome privacy
+-- logic without explicit instruction).
 --
 -- 1. account_requests gains delete_after (end of the 7-day grace period) and
 --    a second partial unique index: one pending deletion per founder.

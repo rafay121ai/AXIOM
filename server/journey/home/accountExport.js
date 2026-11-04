@@ -25,6 +25,9 @@ const COLUMNS = Object.freeze({
   care_events: ['id', 'level', 'created_at', 'resolved_at'],
   push_tokens: ['id', 'platform', 'timezone', 'created_at', 'updated_at'],
   founder_profiles: ['stage', 'business_model', 'customer_markets', 'country', 'goal', 'deadline', 'report_time_local', 'timezone', 'open_answers', 'signup_answers', 'first_reading', 'created_at'],
+  sessions: ['id'], // only to find the messages below; not exported
+  messages: ['id', 'session_id', 'role', 'content', 'created_at'],
+  personal_memories: ['id', 'type', 'content', 'importance', 'created_at'], // never the embedding
   users: ['email', 'first_name', 'created_at'],
   user_settings: ['share_auto', 'morning_on', 'evening_on', 'lock_screen', 'quiet_start', 'quiet_end', 'keep_items', 'mentor_style', 'created_at'],
 })
@@ -62,6 +65,7 @@ export function createAccountExport({ supabase, clock }) {
     const situations = await mine('situations', userId)
     const situationIds = situations.map((s) => s.id)
     const conversations = await mine('learn_conversations', userId)
+    const sessions = await mine('sessions', userId)
     const doc = {
       message: ACCOUNT_COPY.exportReady,
       exported_at: new Date(clock.now()).toISOString(),
@@ -77,6 +81,8 @@ export function createAccountExport({ supabase, clock }) {
       reports: await mine('reports', userId),
       consent_log: (await mine('consent_log', userId)).map(noId),
       care_events: (await mine('care_events', userId)).map(noId),
+      messages: await under('messages', 'session_id', sessions.map((x) => x.id)),
+      personal_memories: await mine('personal_memories', userId),
       devices: (await mine('push_tokens', userId)).map((d) => ({ ...noId(d), token: 'redacted' })),
     }
     if (Buffer.byteLength(JSON.stringify(doc)) > EXPORT_MAX_BYTES) throw new HttpError(413, { error: ACCOUNT_COPY.exportTooLarge })

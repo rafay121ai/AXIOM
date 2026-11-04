@@ -85,7 +85,8 @@ const Settings = {
     checkin_time: 'string', morning_on: 'boolean', evening_on: 'boolean', lock_screen: ['full', 'short', 'hidden'],
     quiet_hours: { start: 'string', end: 'string' }, push_registered: 'boolean',
   },
-  mentor_style: ['calm', 'direct', 'hard'], keep_items: 'boolean', pending_deletion: { $nullable: { delete_after: 'string', message: 'string' } }, privacy: { share_automatically: 'boolean', text: 'string' },
+  mentor_style: ['calm', 'direct', 'hard'], keep_items: 'boolean', pending_deletion: { $nullable: { delete_after: 'string', message: 'string' } },
+  deletion: { would_remove: { $array: 'string' }, shared_outcomes: 'string' }, privacy: { share_automatically: 'boolean', text: 'string' },
   }
 
 const NotCare = (shape) => ({ ...shape, 'care?': ['__never__'] }) // Screened<T>: no `care` field means carry on.

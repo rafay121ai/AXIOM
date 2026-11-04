@@ -149,7 +149,6 @@ export const copy = {
     signOut: 'Sign out',
     delete: 'Delete everything Axiom knows about me',
     confirmTitle: 'Delete everything Axiom knows about you?',
-    confirmBody: "This removes your situations, check-ins, answers and anything you shared. It can't be undone.",
     keepData: 'Keep my data',
     deleteAll: 'Delete everything',
     cancelDeletion: 'Cancel deletion',
