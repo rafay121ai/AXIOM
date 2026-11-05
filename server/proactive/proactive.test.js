@@ -50,14 +50,14 @@ test('two_misses: the last two reports by date, both Couldn\'t or Didn\'t', () =
   assert.equal(twoMisses({ nowMs: NOW, reports: [report(1, 'couldnt')] }), null)
   assert.equal(twoMisses({ nowMs: NOW, reports: [report(1, 'couldnt'), report(2, 'didnt', ' ')] }), null)
   // The last miss must be from the past week: an old pair is not raised at launch.
-  assert.ok(twoMisses({ nowMs: NOW + DAY, reports: [report(2, 'couldnt'), report(3, 'didnt')] }), '7 days old: still raised')
-  assert.equal(twoMisses({ nowMs: NOW + 2 * DAY, reports: [report(2, 'couldnt'), report(3, 'didnt')] }), null, '8 days old')
+  assert.ok(twoMisses({ nowMs: NOW, reports: [report(2, 'couldnt'), report(3, 'didnt')] }), '7 days old: still raised')
+  assert.equal(twoMisses({ nowMs: NOW + DAY, reports: [report(2, 'couldnt'), report(3, 'didnt')] }), null, '8 days old')
 })
 
 test('triggers: priority is goal in 3 days, two misses, goal in 14 days', () => {
-  const reports = [report(1, 'couldnt'), report(2, 'didnt')]
+  const reports = [report(3, 'couldnt'), report(4, 'didnt')]
   const input = (deadline) => ({ nowMs: NOW, timeZone: 'UTC', deadline, goal: 'My first 10 customers', reports })
-  assert.deepEqual(firedTriggers(input('2026-11-06')).map((t) => t.key), ['goal:2026-11-06:3', `misses:${uuid(2)}`])
+  assert.deepEqual(firedTriggers(input('2026-11-06')).map((t) => t.key), ['goal:2026-11-06:3', `misses:${uuid(4)}`])
   assert.deepEqual(firedTriggers(input('2026-11-14')).map((t) => t.kind), ['two_misses', 'goal_near'])
   assert.deepEqual(firedTriggers(input('2027-06-01')).map((t) => t.kind), ['two_misses'])
 })
@@ -329,7 +329,7 @@ test('push wording: short lines by trigger, hidden is just Axiom, full is the op
   const body = (trigger, lockScreen, name = 'Sam') => composePush({ kind: 'proactive', item: { ...item, trigger }, name, lockScreen }).body
   assert.equal(body('goal_near', 'short'), 'Sam, where are you with your goal?')
   assert.equal(body('two_misses', 'short'), 'Sam, what got in the way of your last two moves?')
-  assert.equal(body('two_misses', 'short', null), 'About your last two moves.')
+  assert.equal(body('two_misses', 'short', null), 'What got in the way of your last two moves?')
   assert.equal(body('goal_near', 'hidden'), 'Axiom')
   assert.equal(body('goal_near', 'full'), LINE)
 })
