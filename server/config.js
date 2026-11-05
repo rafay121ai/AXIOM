@@ -22,16 +22,6 @@ export function modelForStep(step, env = process.env) {
 
 export const STEPS = Object.freeze(Object.keys(STEP_DEFAULTS))
 
-// Exact model IDs the current web client may request on /api/openai/chat.
-export const ALLOWED_CLIENT_MODELS = Object.freeze([
-  'gpt-5.2-2025-12-11',
-  'gpt-5.2',
-  'gpt-5.4-mini-2026-03-17',
-  'gpt-5.4-mini',
-  'gpt-4.1-mini',
-  'gpt-4.1-mini-2025-04-14',
-])
-
 export const LIMITS = Object.freeze({
   MAX_FOLLOW_UPS: 2,
   MAX_ACTIVE_MOVES: 2,

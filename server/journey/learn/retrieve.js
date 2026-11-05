@@ -1,4 +1,4 @@
-// Retrieval for Learn, on the server. The same search the old browser code
+// Retrieval for Learn, on the server. The same search the removed web app
 // used (match_wiki_chunks on the Knowledge project), through an injected
 // knowledgeSupabase and an injected embedder. Returns an evidence pack whose
 // rows carry opaque handles (E1..En); the model sees handle, author, title and text,

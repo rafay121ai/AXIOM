@@ -24,7 +24,7 @@ export function createApp({
   env = {},
 } = {}) {
   const app = express()
-  // Railway sits behind exactly one proxy hop; trust only that hop for req.ip.
+  // Render sits behind exactly one proxy hop; trust only that hop for req.ip.
   app.set('trust proxy', 1)
 
   const frontendUrl = env.FRONTEND_URL?.trim().replace(/\/$/, '')
@@ -55,7 +55,7 @@ export function createApp({
   ])
 
   function corsOrigin(origin, callback) {
-    // Allow non-browser requests like Railway health checks or server-to-server probes.
+    // Allow non-browser requests: the phone app, Render health checks.
     if (!origin) return callback(null, true)
 
     const normalizedOrigin = origin.trim().replace(/\/$/, '')
@@ -106,7 +106,7 @@ export function createApp({
   // ─── Rate limiters ────────────────────────────────────────────────────────────
 
   // Flood protection only; per-user limits do the real throttling. Relies on
-  // `trust proxy 1` (line 44), which assumes exactly one proxy hop (Railway).
+  // `trust proxy 1` above, which assumes exactly one proxy hop (Render).
   // Re-check that setting if a CDN or other proxy is ever added in front.
   const ipRateLimit = rateLimit({
     windowMs: 60 * 1000,

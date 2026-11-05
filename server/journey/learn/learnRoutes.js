@@ -71,7 +71,7 @@ export function mountLearnRoutes(app, { supabase, knowledgeSupabase = null, embe
     })))
 
   // The tapped suggestion is Axiom's own text, stored on the server: no care gate.
-  app.post('/api/learn/:id/followup/:n', limiter(20), care.careHold, cap(),
+  app.post('/api/learn/:id/followup/:n', limiter(20), care.careHold, cap(stored.followUp),
     handle((req) => {
       const index = /^\d$/.test(req.params.n) ? Number(req.params.n) : null
       if (index === null) throw new HttpError(404, { error: 'Not found' })

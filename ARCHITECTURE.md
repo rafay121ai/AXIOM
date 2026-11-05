@@ -205,8 +205,8 @@ migration files in the repo, applied only with Rafay's explicit approval.
 
 ### Old product tables (data kept, nothing writes to them)
 `sessions`, `messages`, `conversation_threads`, `app_sessions`, `experiments`,
-`personal_memories`. (`users` and `model_usage_logs` date from then too and are
-still in use.) The new journey does not use `experiments`: moves live in their own table (`experiments.session_id` points
+`personal_memories`, `product_events`, `users` (read for first names; nothing
+writes it now). `model_usage_logs` dates from then too and is still written. The new journey does not use `experiments`: moves live in their own table (`experiments.session_id` points
 at the old `sessions`). Knowledge sources, chunks and embeddings stay in the
 Knowledge project.
 
@@ -232,7 +232,6 @@ Knowledge project.
 | notification_log   | The push cap and dedupe | id, user_id, kind (morning, quiet_check, evening, reminder), slot (morning, evening), local_day, status (sending, sent, failed), attempts, dedupe_key. Unique per founder, day and slot: at most 2 a day. |
 | care_events        | Private | id, user_id, level (unclear, clear), scope_id, created_at, resolved_at. No message text. |
 | account_requests   | Export and delete requests | id, user_id, kind (export, delete), status, delete_after |
-| product_events     | Counters for the old and new flow | id, user_id, event, properties, created_at |
 
 Not built: a separate theory table, a daily usage table (the new-situation
 limit counts `situations.created_at` for the day), and introduction requests

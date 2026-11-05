@@ -219,6 +219,9 @@ Axiom says plainly what is really happening in this situation.
   warning, no strike.
 - A daily limit on new situations (suggested 5) is enforced by the server for
   cost; Axiom says so plainly and offers the open ones.
+- A daily cost limit ($1 per founder). At the limit Axiom says "You've hit
+  today's limit. Come back tomorrow to keep going." It never blocks the care
+  response, the evening Report, or anything already written.
 - Chat that is not a founder situation gets a short friendly line pointing
   back to what Axiom is for.
 

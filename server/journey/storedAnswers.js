@@ -37,6 +37,8 @@ export function createStoredAnswers(supabase) {
     }),
     learnTurn: guarded(async (req, userId) => isUuid(req.params.id) && isUuid(turnId(req)) && await owns('learn_conversations', req.params.id, userId)
       && found(supabase.from('learn_turns').select('id').eq('conversation_id', req.params.id).eq('client_turn_id', turnId(req)))),
+    followUp: guarded(async (req, userId) => isUuid(req.params.id) && isUuid(req.body?.turn_id) && /^\d$/.test(req.params.n) && await owns('learn_conversations', req.params.id, userId)
+      && found(supabase.from('learn_turns').select('id').eq('conversation_id', req.params.id).eq('kind', 'followup').eq('parent_turn_id', req.body.turn_id).eq('followup_index', Number(req.params.n)))),
     moveCreate: guarded(async (req, userId) => isUuid(req.params.id) && Boolean(await learnIdOf(req.params.id, userId))
       && found(supabase.from('moves').select('id').eq('learn_id', req.params.id).neq('status', 'swapped'))),
     swapReplay: guarded((req, userId) => isUuid(req.params.id) && found(supabase.from('moves').select('id').eq('id', req.params.id).eq('user_id', userId).eq('status', 'swapped'))),

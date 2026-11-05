@@ -34,7 +34,7 @@ services:
         value: "off"
       - key: FRONTEND_URL
         sync: false
-      # Comma-separated user ids (or confirmed emails) of test accounts: they skip the daily situation limit.
+      # Comma-separated user ids (or confirmed emails) of test accounts: they skip the daily situation limit and the cost cap.
       - key: ADMIN_USER_IDS
         sync: false
       # The review page (/review): the public anon key for its sign-in, and the reviewers' user ids (comma-separated). Empty: the page is off (404).

@@ -114,6 +114,25 @@ test('at the cap, a stored first reading, Read and turn are replayed free; a new
   } finally { await close() }
 })
 
+test('at the cap, an answered follow-up tap is replayed free; an unanswered one is stopped', async () => {
+  const turn = uuid(41)
+  const { call, openai, close } = await setup({
+    tables: {
+      situations: [{ id: uuid(12), user_id: USER.id, title: 't', status: 'open' }],
+      learn_conversations: [{ id: ID, user_id: USER.id, situation_id: uuid(12) }],
+      learn_turns: [
+        { id: turn, conversation_id: ID, role: 'axiom', kind: 'lesson', text: 'lesson', follow_ups: ['One', 'Two'] },
+        { id: uuid(42), conversation_id: ID, role: 'axiom', kind: 'followup', text: 'answer', parent_turn_id: turn, followup_index: 0 },
+      ],
+    },
+  })
+  try {
+    assert.notEqual((await call(`/api/learn/${ID}/followup/0`, { turn_id: turn })).status, 429)
+    assert.equal((await call(`/api/learn/${ID}/followup/1`, { turn_id: turn })).status, 429)
+    assert.equal(openai.calls.length, 0)
+  } finally { await close() }
+})
+
 test('a failed cost lookup fails open', async () => {
   const { supabase, call, close } = await setup()
   const from = supabase.from.bind(supabase)

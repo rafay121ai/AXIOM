@@ -92,7 +92,7 @@ the task says so and the replacement works.
 - Warning, removal, refund and reapplication system
 - Payments and premium tiers
 - The old web app and its server routes (removed Nov 2026; its tables and
-  stored data remain and stay covered by export and deletion)
+  stored data remain)
 
 ## Axiom's Voice
 Direct and urgent. Never confrontational, never cold. Specific to the
