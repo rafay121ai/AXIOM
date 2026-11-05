@@ -223,7 +223,7 @@ Knowledge project.
 | Table              | Purpose | Key fields |
 |--------------------|---------|------------|
 | founder_profiles   | One row per founder | user_id, signup_answers jsonb (all 13 answers), open_answers jsonb, first_reading jsonb, stage, business_model, customer_markets[], country, goal, deadline, report_time_local, timezone |
-| situations         | One per situation | id, user_id, title, status (open, paused, closed), follow_up_count (CHECK 0 to 2), create_turn_id, care_flag, last_activity_at |
+| situations         | One per situation | id, user_id, title, status (open, paused, closed), follow_up_count (CHECK 0 to 2), create_turn_id, care_flag, last_activity_at, started_by (founder, axiom), trigger_key (unique per founder when set; migration 20261104200000, not yet applied) |
 | situation_turns    | Founder and Axiom messages | id, seq, situation_id, role, text, filler, client_turn_id (repeat-safe), result |
 | reads              | Axiom's read | id, situation_id (unique), headline, body (one text), closing_question, source (model, fallback), closing_answer, skipped, answered_at |
 | learn_conversations | One per situation | id, situation_id (unique), user_id, offers int[] (CHECK at most 2), move_subject, move_fact, lock_token |
@@ -238,7 +238,7 @@ Knowledge project.
 | founder_lesson_log | Author lessons already shown | id, user_id, source_key (unique per founder), slot (1 or 2) |
 | user_settings      | Settings | user_id, share_auto (default false), morning_on, evening_on, lock_screen (full, short, hidden), quiet_start, quiet_end, mentor_style (calm, direct, hard), keep_items, last_greeting |
 | push_tokens        | Devices | id, user_id, token (unique), platform (ios, android), timezone |
-| notification_log   | The push cap and dedupe | id, user_id, kind (morning, quiet_check, evening, reminder), slot (morning, evening), local_day, status (sending, sent, failed), attempts, dedupe_key. Unique per founder, day and slot: at most 2 a day. |
+| notification_log   | The push cap and dedupe | id, user_id, kind (morning, quiet_check, evening, reminder, proactive), slot (morning, evening), local_day, status (sending, sent, failed), attempts, dedupe_key. Unique per founder, day and slot: at most 2 a day. |
 | care_events        | Private | id, user_id, level (unclear, clear), scope_id, created_at, resolved_at. No message text. |
 | account_requests   | Export and delete requests | id, user_id, kind (export, delete), status, delete_after |
 | product_events     | Counters for the old and new flow | id, user_id, event, properties, created_at |
@@ -408,6 +408,23 @@ loaded.
   request is pending.
 - Phone permission is not stored (push_tokens holds only tokens that exist).
 
+## Proactive Axiom, stage 1 (`server/proactive/`, off until PROACTIVE=on)
+Axiom opens a situation itself from facts it already holds. Built to take more
+sources later: a connector adds triggers, the rest stays the same.
+- **Triggers** (`triggers.js`, pure): the goal date 14 and 3 days away, and two
+  missed moves in a row with the last in the past week. Each returns its
+  `source`, a unique `key` and its facts.
+- **Gate and job** (`run.js`, hourly): at most one opener every 3 days. None
+  during care, with a delete request pending, while an opener is unanswered,
+  or for a founder paused by the 14-day rule. An unanswered opener closes
+  quietly after 7 days. Created from 07:00 local.
+- **Opener:** a `situations` row (`started_by = 'axiom'`, `trigger_key`) with
+  Axiom's line as the first turn. Fixed sentences (`wording.js`), no model call.
+  After the founder replies it is an ordinary situation. It does not count
+  toward the 5-a-day limit, and the model sees the line as Axiom's, not theirs.
+- **Home** shows it first and it does not fade. **Push:** on the day it is
+  created it takes the morning slot (kind `proactive`) if the slot is still open.
+
 ---
 
 ## Security
@@ -448,6 +465,7 @@ Names only; values live in Render (`render.yaml`) and a local `.env`.
 - `EXPO_PUSH`: `on` starts the push scheduler (off today).
 - `EXPO_ACCESS_TOKEN`: Expo push sender token.
 - `ACCOUNT_DELETE`: `on` makes account deletion real (off today).
+- `PROACTIVE`: `on` starts the hourly proactive job (off today).
 - `PRIVACY_URL`, `TERMS_URL`: links shown in Settings.
 
 ---

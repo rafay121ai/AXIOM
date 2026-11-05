@@ -446,13 +446,13 @@ own words, so they cost nothing and cannot invent.
 - Push full: the opener. Push short: "{name}, where are you with your goal?" / "{name}, what got in the way of your last two moves?" Hidden: "Axiom".
 
 ## Steps
-- [ ] Read live `situations` and `notification_log` (read only); write the migration and its MIGRATION_PLAN.md entry.
-- [ ] Rafay approves the migration and the wording.
-- [ ] Triggers and gate, with unit tests (dates across time zones, the 3-day gap, care, deletion, unanswered opener, same key twice).
-- [ ] Opener creation (one situation, no duplicates under concurrent runs) and the Read using the opener as context.
-- [ ] Home item and the app: Axiom's line opens the situation; tests.
-- [ ] Push kind `proactive` in the morning slot; scheduler tests.
-- [ ] `PROACTIVE` switch in index.js and render.yaml (off).
+- [x] Read live `situations` and `notification_log` (read only); write the migration and its MIGRATION_PLAN.md entry.
+- [x] Rafay approves the migration and the wording.
+- [x] Triggers and gate, with unit tests (dates across time zones, the 3-day gap, care, deletion, unanswered opener, same key twice).
+- [x] Opener creation (one situation, no duplicates under concurrent runs) and the Read using the opener as context.
+- [x] Home item and the app: Axiom's line opens the situation; tests.
+- [x] Push kind `proactive` in the morning slot; scheduler tests.
+- [x] `PROACTIVE` switch in index.js and render.yaml (off).
 - [ ] Apply the migration on live (Rafay's yes); re-run the deletion copy test.
 - [ ] Walkthrough test from trigger to Report; voice-checker on the new wording; learning-loop.
 - [ ] Rafay tries it in the simulator with a test founder before PROACTIVE=on.

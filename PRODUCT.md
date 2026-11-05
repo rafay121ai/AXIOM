@@ -574,12 +574,23 @@ build or extend them.
   read-feedback endpoint.
 - The Welcome screen and the old chat product.
 
+## Proactive Axiom (stage 1, built, off until switched on)
+Axiom brings something up before the founder asks, from what it already holds.
+It opens a situation itself, with one line in the founder's own words, then the
+journey runs as normal: Read, Learn, Move, Report.
+- **When:** the founder's goal date is 14 days away, then 3 days away, or their
+  last two moves were both missed and the last was in the past week.
+- **Where:** first on Home, and it does not fade until answered. That day it
+  takes the morning push slot, so still at most 2 pushes a day.
+- **Limits:** at most one every 3 days. Never during care, with a deletion
+  waiting, or while an earlier one is unanswered. Unanswered, it closes quietly
+  after 7 days. No warnings.
+
 ## Later and parked (not now)
-- **A proactive Axiom with connected accounts** (company numbers, Stripe,
-  Shopify, Gmail, Notion, CRM, calendar): Axiom brings problems before the
-  founder asks. Three levels (from what it knows, from numbers the founder
-  types, from connected accounts). Notes and constraints are in
-  `tasks/decisions.md` under PARKED.
+- **Proactive stages 2 and 3:** numbers the founder types, then connected
+  accounts (Stripe first, then Calendar or Notion, Gmail after Google
+  verification; also Shopify and CRM). Each adds triggers to the same engine.
+  Notes and constraints are in `tasks/decisions.md` under PARKED.
 - A Connections screen (connect a source, see what Axiom read, switch it off).
 - Rotating the highlight colour per situation.
 - The sign-in line.
