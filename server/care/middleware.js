@@ -5,38 +5,13 @@
 import { classifyCare } from './classify.js'
 import { escalateCare } from './escalation.js'
 import { CARE_COPY } from './copy.js'
-import { hasExperimentBlock, isUuid } from '../writeValidation.js'
+import { isUuid } from '../writeValidation.js'
 
 const SCOPE_KEYS = ['thread_id', 'situation_id', 'session_id']
 
 // ── Text extractors: (req) => string | string[] | null ───────────────────────
 
 export const bodyFields = (...names) => (req) => names.map((n) => req.body?.[n])
-
-// The last user message of a chat payload (string or text parts).
-export const lastUserMessage = (req) => {
-  const msgs = Array.isArray(req.body?.messages) ? req.body.messages : []
-  const last = [...msgs].reverse().find((m) => m?.role === 'user')
-  if (!last) return null
-  if (typeof last.content === 'string') return last.content
-  return Array.isArray(last.content) ? last.content.map((p) => p?.text) : null
-}
-
-// A message body written by the founder. Assistant edits carry the
-// <experiment> block, which is Axiom's text, not the founder's.
-export const founderMessageContent = (req) => {
-  const c = req.body?.content
-  if (typeof c !== 'string' || hasExperimentBlock(c)) return null
-  return req.body?.role === 'assistant' ? null : c
-}
-
-export const onboardingAnswers = (req) =>
-  (Array.isArray(req.body?.answers) ? req.body.answers : []).map((a) => a?.answer)
-
-export const profileFreeText = (req) => [
-  req.body?.goal,
-  ...(Array.isArray(req.body?.open_answers) ? req.body.open_answers.map((a) => a?.answer) : []),
-]
 
 const flatText = (value) => [].concat(value ?? []).filter((v) => typeof v === 'string' && v.trim()).join('\n')
 

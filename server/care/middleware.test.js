@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import express from 'express'
-import { createCare, lastUserMessage, bodyFields, founderMessageContent } from './middleware.js'
+import { createCare, bodyFields } from './middleware.js'
 import { CARE_COPY } from './copy.js'
 import { createApp } from '../app.js'
 import { createFakeClock, createFakeOpenAI, createFakeSupabase } from '../testing/fakes.js'
@@ -112,29 +112,24 @@ test('isCareOpen fails safe to true when the lookup fails', async () => {
   assert.equal(await care.isCareOpen(USER.id), true)
 })
 
-test('extractors', () => {
-  assert.equal(lastUserMessage({ body: { messages: [{ role: 'user', content: 'a' }, { role: 'assistant', content: 'b' }] } }), 'a')
-  assert.deepEqual(lastUserMessage({ body: { messages: [{ role: 'user', content: [{ type: 'text', text: 'p' }] }] } }), ['p'])
-  assert.equal(founderMessageContent({ body: { content: 'Axiom text <experiment>{}</experiment>' } }), null)
-  assert.equal(founderMessageContent({ body: { role: 'assistant', content: 'x' } }), null)
-  assert.equal(founderMessageContent({ body: { role: 'user', content: 'hi' } }), 'hi')
+test('bodyFields reads the named body fields and tolerates a missing body', () => {
+  assert.deepEqual(bodyFields('text', 'note')({ body: { text: 'a', note: 'b', other: 'c' } }), ['a', 'b'])
+  assert.deepEqual(bodyFields('text')({}), [undefined])
 })
 
-test('wired into the real app: /api/messages and /api/openai/chat stop on clear', async () => {
+test('wired into the real app: a situation and a Learn turn stop on clear, and ask no model', async () => {
   const supabase = createFakeSupabase({ users: { tok: USER } })
   const openai = createFakeOpenAI()
   const app = createApp({ env: { FRONTEND_URL: 'https://app.example.com' }, supabase, openai, clock: createFakeClock() })
   assert.equal(typeof app.locals.isCareOpen, 'function')
   await withServer(app, async (base) => {
     const headers = { 'content-type': 'application/json', authorization: 'Bearer tok' }
-    const msg = await fetch(`${base}/api/messages`, { method: 'POST', headers, body: JSON.stringify({ session_id: THREAD, role: 'user', content: 'I want to kill myself' }) })
-    assert.equal((await msg.json()).care, 'clear')
-    const chat = await fetch(`${base}/api/openai/chat`, {
-      method: 'POST', headers,
-      body: JSON.stringify({ model: 'gpt-4.1-mini', messages: [{ role: 'system', content: 'be kind' }, { role: 'user', content: 'suicide' }] }),
-    })
-    assert.equal((await chat.json()).care, 'clear')
+    const post = (path, body) => fetch(`${base}${path}`, { method: 'POST', headers, body: JSON.stringify(body) })
+    const situation = await post('/api/situations', { text: 'I want to kill myself', client_turn_id: THREAD })
+    assert.equal((await situation.json()).care, 'clear')
+    const turn = await post(`/api/learn/${THREAD}/turn`, { text: 'suicide', client_turn_id: THREAD })
+    assert.equal((await turn.json()).care, 'clear')
   })
   assert.equal(openai.calls.length, 0)
-  assert.equal(supabase.rows('messages').length, 0)
+  assert.equal(supabase.rows('situations').length, 0)
 })

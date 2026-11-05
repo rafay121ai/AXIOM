@@ -21,7 +21,7 @@ API stack. That stack does not exist. Ignore any older references to it.
 ### Stack
 | Layer     | Current                                      | Target |
 |-----------|----------------------------------------------|--------|
-| Client    | Vite + React SPA on Vercel (old product)     | **Native app (Expo, React Native) for iOS and Android**, with push notifications. The Vite app stays only until the app replaces it. |
+| Client    | **Native app (Expo, React Native) for iOS and Android**, with push notifications. | Same. |
 | Backend   | Express (Node.js) on Render (`render.yaml`, deploys from `main`) | Same. One API serves the app. |
 | Database  | Supabase, two projects                       | Same. |
 | Auth      | Supabase Auth (Google OAuth)                 | Same (Google sign-in, native flow on the app). |
@@ -32,7 +32,7 @@ API stack. That stack does not exist. Ignore any older references to it.
 ### Supabase projects
 - **Main (Axiom):** users, founder profiles, situations, reads, learn turns,
   moves, reports, consents, settings, push tokens, notification log, model
-  usage, plus the old product's tables until it is retired.
+  usage, plus the old product's tables (data kept; the app that wrote them is gone).
 - **Knowledge (axiom-knowledge):** sources, chunks and embeddings. The server
   reads it through `match_wiki_chunks` (vectors stored as `halfvec(1536)`).
   The verified lesson tables are not there yet. Writes to this project are
@@ -55,9 +55,8 @@ Express API (Render)
 
 ### Core principle
 **All writes go through the Express API.** The client uses Supabase only for
-authentication. The old web app still writes some state from the browser (it
-goes away with that app). The new journey never does this, and a test fails
-the build if the new client code calls `supabase.from` or `rpc`.
+authentication, and a test fails the build if the app calls `supabase.from` or
+`rpc`.
 
 ---
 
@@ -156,14 +155,6 @@ Review queue (reviewers only)
                                    -> the model drafts story and lesson
                                       (step report); a person edits it
   POST /api/review/outcomes/:id    -> approve (story + lesson) or reject
-
-Old web app (until it is retired)
-  /api/openai/chat, /api/openai/embeddings, /api/onboarding/complete,
-  /api/founder-profile (GET, PUT), /api/app-sessions (+ ping, close,
-  messages-sent), /api/session/:id/touch and /memory, /api/threads,
-  /api/messages, /api/experiments (+ status), /api/personal-memories (+
-  mark-used), /api/knowledge/concept-states, /api/events,
-  /api/admin/diagnostics.
 ```
 
 Also: `GET /health` (no sign-in) for the host's health check.
@@ -212,10 +203,10 @@ project is unknown. **Dump both live schemas read only before writing any
 migration.** Never run raw SQL in production. All changes go through
 migration files in the repo, applied only with Rafay's explicit approval.
 
-### Old product tables (kept until it is retired)
+### Old product tables (data kept, nothing writes to them)
 `sessions`, `messages`, `conversation_threads`, `app_sessions`, `experiments`,
-`personal_memories`, `users`, `model_usage_logs`. The new journey does not use
-`experiments`: moves live in their own table (`experiments.session_id` points
+`personal_memories`. (`users` and `model_usage_logs` date from then too and are
+still in use.) The new journey does not use `experiments`: moves live in their own table (`experiments.session_id` points
 at the old `sessions`). Knowledge sources, chunks and embeddings stay in the
 Knowledge project.
 
@@ -304,7 +295,6 @@ default. The server picks the model, never the request.
 | move     | gpt-5.4-mini-2026-03-17 | the words of the move |
 | care     | gpt-5.4-mini-2026-03-17 | care classifier |
 | report   | gpt-5.4-mini-2026-03-17 | report reply, and the reviewer's draft of a shared story |
-| memory   | gpt-4.1-mini | old product memory updates |
 
 Embeddings: `text-embedding-3-small`. Limits in code: 2 follow-ups, 2 active
 moves, 2 pushes a day.
@@ -364,8 +354,12 @@ loaded.
 - Every call is logged to `model_usage_logs` with its step as the call type
   (migrations `20260930000001` and `20261101000009`). VERIFY the prices applied
   to each model ID before real users arrive.
-- A daily cap protects a free product (new situations, and chat calls on the
-  old route).
+- Two daily limits protect a free product: 5 new situations per founder, and
+  $1 of model cost per founder (`server/dailyCap.js`), summed from
+  `model_usage_logs` since 00:00 UTC. Over the cap, routes that would call a
+  model answer 429 `daily_cost_cap`. Never capped: the care check, which always
+  runs first; the Report; replaying anything already stored
+  (`server/journey/storedAnswers.js`); the review queue. Test accounts skip it.
 
 ---
 
@@ -413,7 +407,7 @@ loaded.
 ## Security
 - Supabase JWT checked on every API request.
 - CORS limited to the allowed frontends (`FRONTEND_URL`, `FRONTEND_URLS`).
-- Secrets only in Render and Vercel environment settings. Only public keys in
+- Secrets only in Render environment settings. Only public keys in
   the client.
 - User message content is never sent to external logging services. Logs hold
   metadata only.
@@ -489,7 +483,6 @@ replacement screen works.
 - Backend: Render (`render.yaml`), deploys from `main`, region Singapore, free
   plan while testing (it sleeps after 15 minutes idle). Move to Starter (always
   on) before `EXPO_PUSH` goes on, because the scheduler runs inside the process.
-  Railway is no longer used.
-- Old web app: Vercel, until it is retired.
+  Railway is no longer used. The old web app is removed.
 - Migrations: committed to the repo, applied through the Supabase CLI.
 - Deployment details beyond this are VERIFY from the live configuration.

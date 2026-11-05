@@ -206,6 +206,8 @@ export function failureLine(e: unknown, whatFailed: 'message' | 'read' | 'save' 
   if (e instanceof HttpError) {
     // Both places taken: the server words it with its own limit; the app never writes the number.
     if (e.code === 'move_cap') return { text: e.line ?? copy.move.noRoom, canRetry: false };
+    // The day's spend is used up: the server words it; waiting a moment changes nothing.
+    if (e.code === 'daily_cost_cap') return { text: e.line ?? copy.couldNotAnswer, canRetry: false };
     const known = e.code ? BY_CODE[e.code] : undefined;
     if (known) return known;
   }

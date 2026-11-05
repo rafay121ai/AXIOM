@@ -1,6 +1,6 @@
 import type { Auth } from '../src/api/auth';
 import { createHttpApi } from '../src/api/http';
-import { HttpError } from '../src/api/queue';
+import { HttpError, isRetryable } from '../src/api/queue';
 import { copy, failureLine } from '../src/copy';
 
 const auth: Auth = { signInWithGoogle: async () => {}, signOut: async () => {}, isSignedIn: async () => true, getToken: async () => 'tok' };
@@ -31,6 +31,14 @@ describe('every server code has its own plain line', () => {
     const api = createHttpApi({ baseUrl: 'http://x', auth, fetch: refuse(429, { error: 'daily_limit', message: 'x', open: [] }) });
     const e = await api.getSettings().catch((err) => err);
     expect(failureLine(e)).toEqual({ text: copy.dailyLimit, canRetry: false });
+  });
+
+  it('shows the server line for the day\'s cost cap, and never retries it', async () => {
+    const line = "You've hit today's limit. Come back tomorrow to keep going.";
+    const api = createHttpApi({ baseUrl: 'http://x', auth, fetch: refuse(429, { error: 'Daily cost cap reached', code: 'daily_cost_cap', line }) });
+    const e = await api.getSettings().catch((err) => err);
+    expect(failureLine(e)).toEqual({ text: line, canRetry: false });
+    expect(isRetryable(e)).toBe(false);
   });
 
   it('falls back only for a failure with no code', () => {

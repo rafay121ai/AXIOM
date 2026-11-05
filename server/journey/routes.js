@@ -9,8 +9,9 @@ import { mountMoveRoutes } from './move/moveRoutes.js'
 import { mountReportRoutes } from './report/reportRoutes.js'
 import { mountSharingRoutes } from './report/sharingRoutes.js'
 import { mountHomeRoutes } from './home/homeRoutes.js'
+import { createStoredAnswers } from './storedAnswers.js'
 
-export function mountJourneyRoutes(app, { supabase, knowledgeSupabase = null, embed = null, care, callStructured, clock, links = {}, deleteOn = false, noDailyLimit = () => false }) {
+export function mountJourneyRoutes(app, { supabase, knowledgeSupabase = null, embed = null, care, cap, callStructured, clock, links = {}, deleteOn = false, noDailyLimit = () => false }) {
   const limiter = (max) => rateLimit({
     windowMs: 60 * 1000,
     max,
@@ -19,11 +20,12 @@ export function mountJourneyRoutes(app, { supabase, knowledgeSupabase = null, em
     standardHeaders: true,
     legacyHeaders: false,
   })
+  const stored = createStoredAnswers(supabase)
   const signup = createSignupHandlers({ supabase, clock })
 
-  mountSituationRoutes(app, { supabase, care, callStructured, clock, noDailyLimit })
-  mountLearnRoutes(app, { supabase, knowledgeSupabase, embed, care, callStructured, clock })
-  mountMoveRoutes(app, { supabase, care, callStructured, clock })
+  mountSituationRoutes(app, { supabase, care, cap, stored, callStructured, clock, noDailyLimit })
+  mountLearnRoutes(app, { supabase, knowledgeSupabase, embed, care, cap, stored, callStructured, clock })
+  mountMoveRoutes(app, { supabase, care, cap, stored, callStructured, clock })
   mountReportRoutes(app, { supabase, care, callStructured, clock })
   mountSharingRoutes(app, { supabase, clock })
   mountHomeRoutes(app, { supabase, care, callStructured, clock, links, deleteOn })
@@ -40,7 +42,7 @@ export function mountJourneyRoutes(app, { supabase, knowledgeSupabase = null, em
 
   // Reads the stored answers; the founder sends no text here, so no care gate,
   // but no reading while care is open.
-  app.post('/api/first-reading', limiter(5), care.careHold, async (req, res) => {
+  app.post('/api/first-reading', limiter(5), care.careHold, cap(stored.firstReading), async (req, res) => {
     if (!supabase) return res.status(503).json({ error: 'Service not configured' })
     try {
       const { answers, next } = await signup.view(req.user.id)

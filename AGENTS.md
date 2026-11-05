@@ -15,11 +15,10 @@ to make today, and finds out with them what happened.
 - If code and these documents disagree, stop and flag it. Do not guess.
 
 Global product. Free for now. Native app first (Expo), with push
-notifications. The old Vite web app stays only until replaced.
+notifications.
 
 ## Stack (current)
 - App: Expo (React Native), iOS and Android, with push notifications.
-  Old web app: Vite + React on Vercel, kept until replaced.
 - Backend: Express (Node.js), on Render (Railway account banned, Nov 2026)
 - Database and Auth: Supabase, two projects (main and axiom-knowledge)
 - AI: OpenAI. Model IDs live in server config.
@@ -92,6 +91,8 @@ the task says so and the replacement works.
 - Weekly reads
 - Warning, removal, refund and reapplication system
 - Payments and premium tiers
+- The old web app and its server routes (removed Nov 2026; its tables and
+  stored data remain and stay covered by export and deletion)
 
 ## Axiom's Voice
 Direct and urgent. Never confrontational, never cold. Specific to the

@@ -11,7 +11,7 @@ import { bodyFields } from '../care/middleware.js'
 import { isUuid } from '../writeValidation.js'
 import { createSituations, HttpError, TEXT_MAX } from './situations.js'
 
-export function mountSituationRoutes(app, { supabase, care, callStructured, clock, noDailyLimit = () => false }) {
+export function mountSituationRoutes(app, { supabase, care, cap, stored, callStructured, clock, noDailyLimit = () => false }) {
   const limiter = (max) => rateLimit({
     windowMs: 60 * 1000,
     max,
@@ -49,16 +49,16 @@ export function mountSituationRoutes(app, { supabase, care, callStructured, cloc
 
   app.get('/api/situations/open', limiter(60), handle((req) => service.list(req.user.id)))
 
-  app.post('/api/situations', limiter(10), care.careHold, care.careGate(bodyFields('text')),
+  app.post('/api/situations', limiter(10), care.careHold, care.careGate(bodyFields('text')), cap(stored.situationStart),
     handle((req) => service.create({ userId: req.user.id, text: textOf(req), clientTurnId: clientTurnId(req), unlimited: noDailyLimit(req.user) })))
 
   app.get('/api/situations/:id', limiter(60), handle((req) => service.get(req.user.id, idParam(req))))
 
-  app.post('/api/situations/:id/turn', limiter(30), care.careHold, care.careGate(bodyFields('text')),
+  app.post('/api/situations/:id/turn', limiter(30), care.careHold, care.careGate(bodyFields('text')), cap(stored.situationTurn),
     handle((req) => service.turn({ userId: req.user.id, situationId: idParam(req), text: textOf(req), clientTurnId: clientTurnId(req) })))
 
   // Reads the stored situation; the founder sends no text here.
-  app.post('/api/situations/:id/read', limiter(5), care.careHold,
+  app.post('/api/situations/:id/read', limiter(5), care.careHold, cap(stored.read),
     handle((req) => service.read({ userId: req.user.id, situationId: idParam(req) })))
 
   app.post('/api/situations/:id/read/answer', limiter(20), care.careHold, care.careGate(bodyFields('text')),

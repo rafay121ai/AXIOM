@@ -10,8 +10,8 @@ export class HttpError extends Error {
   }
 }
 
-/** The server says today's limit is used up. Trying again changes nothing. */
-export const isDailyLimit = (e: unknown): boolean => e instanceof HttpError && e.status === 429 && e.code === 'daily_limit';
+/** The server says today's limit (new situations, or the day's spend) is used up. Trying again changes nothing. */
+export const isDailyLimit = (e: unknown): boolean => e instanceof HttpError && e.status === 429 && (e.code === 'daily_limit' || e.code === 'daily_cost_cap');
 
 /** Worth trying again: no network, a server fault, a rate limit, or a sign-in that has just lapsed. */
 export const isRetryable = (e: unknown): boolean => {

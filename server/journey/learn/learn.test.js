@@ -415,7 +415,7 @@ async function hintServer(provider) {
   const app = express()
   app.use(express.json())
   app.use((req, _res, next) => { req.user = { id: USER.id }; next() })
-  mountLearnRoutes(app, { supabase: null, care: { careHold: (_req, _res, next) => next(), careGate: () => (_req, _res, next) => next() }, callStructured: null, clock: createFakeClock(NOW), hintProvider: provider })
+  mountLearnRoutes(app, { supabase: null, care: { careHold: (_req, _res, next) => next(), careGate: () => (_req, _res, next) => next() }, cap: () => (_req, _res, next) => next(), stored: {}, callStructured: null, clock: createFakeClock(NOW), hintProvider: provider })
   const server = app.listen(0)
   await new Promise((r) => server.once('listening', r))
   const get = async (path) => (await fetch(`http://127.0.0.1:${server.address().port}${path}`)).json()

@@ -24,10 +24,11 @@ export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch
       throw new HttpError();
     });
     if (!res.ok) {
-      const body = (await res.json().catch(() => ({}))) as { code?: unknown; error?: unknown; message?: unknown };
+      const body = (await res.json().catch(() => ({}))) as { code?: unknown; error?: unknown; message?: unknown; line?: unknown };
       // Every refusal the app acts on carries `code`; the daily limit names itself in `error`.
       const code = typeof body?.code === 'string' ? body.code : typeof body?.error === 'string' && CODE_NAME.test(body.error) ? body.error : undefined;
-      throw new HttpError(res.status, code, typeof body?.message === 'string' ? body.message : undefined);
+      const line = typeof body?.line === 'string' ? body.line : typeof body?.message === 'string' ? body.message : undefined;
+      throw new HttpError(res.status, code, line);
     }
     return res.json() as Promise<T>;
   }

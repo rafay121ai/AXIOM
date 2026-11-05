@@ -9,7 +9,7 @@ import { HttpError, TEXT_MAX } from '../situations.js'
 import { createMoves } from './moveService.js'
 import { validTimeZone } from './schedule.js'
 
-export function mountMoveRoutes(app, { supabase, care, callStructured, clock }) {
+export function mountMoveRoutes(app, { supabase, care, cap, stored, callStructured, clock }) {
   const limiter = (max) => rateLimit({
     windowMs: 60 * 1000,
     max,
@@ -38,7 +38,7 @@ export function mountMoveRoutes(app, { supabase, care, callStructured, clock }) 
   }
 
   // Builds the move behind Learn's card; the founder sends no text here.
-  app.post('/api/learn/:id/move', limiter(5), care.careHold,
+  app.post('/api/learn/:id/move', limiter(5), care.careHold, cap(stored.moveCreate),
     handle((req) => service.create({ userId: req.user.id, learnId: idParam(req) })))
 
   app.get('/api/moves/active', limiter(60),
@@ -54,7 +54,7 @@ export function mountMoveRoutes(app, { supabase, care, callStructured, clock }) 
       return service.commit({ userId: req.user.id, moveId: idParam(req), timeZone: timeZone ?? null })
     }))
 
-  app.post('/api/moves/:id/swap', limiter(5), care.careHold, care.careGate(bodyFields('reason')),
+  app.post('/api/moves/:id/swap', limiter(5), care.careHold, care.careGate(bodyFields('reason')), cap(stored.swapReplay),
     handle((req) => {
       const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : ''
       if (!reason) bad('reason is required')

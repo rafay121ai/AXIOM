@@ -199,7 +199,6 @@ test('GET routes are not held: home, history, history detail, and a situation', 
 
 // Write routes that may run while care is open, each with its reason. Any other
 // write route must be held: a new route fails here until it is held or listed.
-const OLD_WEB_APP = 'old web app (server/app.js): kept until the native app replaces it; has the care gate, not the hold'
 const NOT_HELD = {
   'POST /api/home/checkin': 'the way out of care',
   'PUT /api/signup/answers/:key': 'sign-up answers; screened by the care gate',
@@ -214,26 +213,6 @@ const NOT_HELD = {
   'DELETE /api/account': 'the founder can always ask to leave',
   'POST /api/review/outcomes/:id/draft': 'reviewer tool, not a founder action; reviewers only',
   'POST /api/review/outcomes/:id': 'reviewer tool, not a founder action; reviewers only',
-  'POST /api/events': OLD_WEB_APP,
-  'POST /api/knowledge/concept-states': OLD_WEB_APP,
-  'POST /api/personal-memories': OLD_WEB_APP,
-  'POST /api/personal-memories/mark-used': OLD_WEB_APP,
-  'POST /api/experiments': OLD_WEB_APP,
-  'POST /api/experiments/:id/status': OLD_WEB_APP,
-  'POST /api/openai/embeddings': OLD_WEB_APP,
-  'POST /api/openai/chat': OLD_WEB_APP,
-  'POST /api/onboarding/complete': OLD_WEB_APP,
-  'PUT /api/founder-profile': OLD_WEB_APP,
-  'POST /api/app-sessions': OLD_WEB_APP,
-  'POST /api/app-sessions/:id/ping': OLD_WEB_APP,
-  'POST /api/app-sessions/:id/close': OLD_WEB_APP,
-  'POST /api/app-sessions/:id/messages-sent': OLD_WEB_APP,
-  'POST /api/session/:id/touch': OLD_WEB_APP,
-  'POST /api/session/:id/memory': OLD_WEB_APP,
-  'POST /api/threads': OLD_WEB_APP,
-  'POST /api/messages': OLD_WEB_APP,
-  'PATCH /api/messages/:id': OLD_WEB_APP,
-  'DELETE /api/messages/:id': OLD_WEB_APP,
 }
 
 test('every write route is held while care is open, or listed with a reason', async () => {
