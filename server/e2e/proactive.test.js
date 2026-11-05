@@ -10,7 +10,7 @@ import {
 
 const DAY = 24 * 60 * 60 * 1000
 const ZONE = 'Asia/Karachi'
-const OPENER = 'You said your first 10 customers by 6 November 2026. That is 11 days away. Where is it now?'
+const OPENER = 'You said "My first 10 customers" by 6 November 2026. That is 11 days away. Where is it now?'
 
 test('a trigger, Axiom\'s opener, the founder\'s reply, then Read, Learn, Move and Report', async (t) => {
   const w = await createWorld()

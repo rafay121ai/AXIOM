@@ -51,7 +51,7 @@ export const PUSH_WORDING = Object.freeze({
   },
   proactive: {
     full: ({ opener }) => opener, // (approved Nov 4)
-    short: ({ name, trigger }) => lead(name, trigger === 'two_misses' ? 'about your last two moves.' : 'I have a question about your goal.'), // (approved Nov 4)
+    short: ({ name, trigger }) => lead(name, trigger === 'two_misses' ? 'what got in the way of your last two moves?' : 'where are you with your goal?'), // (approved Nov 4)
   },
 })
 

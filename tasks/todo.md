@@ -439,11 +439,11 @@ own words, so they cost nothing and cannot invent.
   covered); the copy test is re-run to prove it.
 
 ## New wording (needs Rafay's approval; goes in tasks/wording_to_approve.md)
-- goal_near, 14 days: "You said {goal} by {date}. That is {n} days away. Where is it now?"
-- goal_near, 3 days: "{n} days to {date}, and you said {goal}. What is left?"
+- goal_near, 14 days: "You said \"{goal}\" by {date}. That is {n} days away. Where is it now?"
+- goal_near, 3 days: "{n} days to {date}, and you said \"{goal}\". What is left?"
 - two_misses: "Your last two moves did not happen: {move 1} and {move 2}. What got in the way?"
 - Home item: "Axiom asked: {opener}"
-- Push full: the opener. Push short: "{name}, I have a question about your goal." / "{name}, about your last two moves." Hidden: "Axiom".
+- Push full: the opener. Push short: "{name}, where are you with your goal?" / "{name}, what got in the way of your last two moves?" Hidden: "Axiom".
 
 ## Steps
 - [ ] Read live `situations` and `notification_log` (read only); write the migration and its MIGRATION_PLAN.md entry.

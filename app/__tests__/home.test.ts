@@ -60,7 +60,7 @@ describe('the fake home', () => {
     const api = createFakeApi('none', 0, false, 'opener');
     const [item] = (await api.getHome('UTC')).items;
     expect(item).toMatchObject({ kind: 'situation', stays: true });
-    expect(item.label).toMatch(/^Axiom asked: You said your first 10 customers by /);
+    expect(item.label).toMatch(/^Axiom asked: You said "My first 10 customers" by /);
     const d = await destinationOf(api, item.target);
     expect(d).toMatchObject({ kind: 'situation', situationId: 'fake-opener-1' });
     if (d.kind !== 'situation') throw new Error('not a situation');

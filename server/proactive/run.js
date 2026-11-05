@@ -58,7 +58,7 @@ export function createProactive({ supabase, clock, isCareOpen, log = (what, err)
 
   // Makes the opener. Returns the situation id, or null when this trigger was already made.
   async function create({ userId, trigger, now }) {
-    const title = trigger.kind === 'two_misses' ? trigger.facts.moves[1] : trigger.facts.goalWords
+    const title = trigger.kind === 'two_misses' ? trigger.facts.moves[1] : trigger.facts.goal
     const made = await supabase.from('situations').insert({
       user_id: userId, title: title.replace(/\s+/g, ' ').trim().slice(0, TITLE_MAX), status: 'open', follow_up_count: 0,
       started_by: 'axiom', trigger_key: trigger.key, created_at: iso(now), last_activity_at: iso(now),

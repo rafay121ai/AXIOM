@@ -173,7 +173,7 @@ export type HomeSim = 'morning' | 'report' | 'evening' | 'nothing' | 'care' | 'o
 
 const FAKE_SITUATION = 'fake-situation-1';
 // Proactive stage 1: Axiom opened a situation itself (server/proactive/wording.js; approved Nov 4).
-const FAKE_OPENER = { id: 'fake-opener-1', text: 'You said your first 10 customers by 30 November 2026. That is 12 days away. Where is it now?' };
+const FAKE_OPENER = { id: 'fake-opener-1', text: 'You said "My first 10 customers" by 30 November 2026. That is 12 days away. Where is it now?' };
 const OPENER_ITEM: HomeItem = { kind: 'situation', label: `Axiom asked: ${FAKE_OPENER.text}`, title: 'My first 10 customers', stays: true, target: { stage: 'situation', situation_id: FAKE_OPENER.id } };
 const TODAY_ITEM: HomeItem = { kind: 'move', label: 'Today: ask the clinics for a call', title: FAKE_DUE.title, stays: false, target: { stage: 'move', situation_id: FAKE_SITUATION, move_id: FAKE_MOVE.id } };
 const STILL_ITEM: HomeItem = { ...TODAY_ITEM, label: 'Still to do: ask the clinics for a call' };

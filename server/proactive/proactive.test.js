@@ -64,11 +64,11 @@ test('triggers: priority is goal in 3 days, two misses, goal in 14 days', () => 
 
 test('opener wording: the approved sentences, filled with the founder\'s words', () => {
   const goal = goalNear({ nowMs: NOW, timeZone: 'UTC', deadline: '2026-11-15', goal: 'My first 10 customers' })
-  assert.equal(openerText(goal.kind, goal.facts), 'You said your first 10 customers by 15 November 2026. That is 11 days away. Where is it now?')
+  assert.equal(openerText(goal.kind, goal.facts), 'You said "My first 10 customers" by 15 November 2026. That is 11 days away. Where is it now?')
   const soon = goalNear({ nowMs: NOW, timeZone: 'UTC', deadline: '2026-11-07', goal: 'My first 10 customers' })
-  assert.equal(openerText(soon.kind, soon.facts), '3 days to 7 November 2026, and you said your first 10 customers. What is left?')
+  assert.equal(openerText(soon.kind, soon.facts), '3 days to 7 November 2026, and you said "My first 10 customers". What is left?')
   const last = goalNear({ nowMs: NOW, timeZone: 'UTC', deadline: '2026-11-05', goal: 'My first 10 customers' })
-  assert.equal(openerText(last.kind, last.facts), '1 day to 5 November 2026, and you said your first 10 customers. What is left?')
+  assert.equal(openerText(last.kind, last.facts), '1 day to 5 November 2026, and you said "My first 10 customers". What is left?')
   assert.equal(openerText('two_misses', { moves: ['Call Bilal.', 'Email the clinics.'] }), 'Your last two moves did not happen: call Bilal and email the clinics. What got in the way?')
 })
 
@@ -110,7 +110,7 @@ test('job: makes one opener, a situation in the founder\'s words with Axiom\'s l
   assert.equal(made.title, 'My first 10 customers')
   assert.equal(made.status, 'open')
   const turns = s.base.rows('situation_turns')
-  assert.deepEqual(turns.map((t) => [t.situation_id, t.role, t.text]), [[made.id, 'axiom', 'You said your first 10 customers by 15 November 2026. That is 11 days away. Where is it now?']])
+  assert.deepEqual(turns.map((t) => [t.situation_id, t.role, t.text]), [[made.id, 'axiom', 'You said "My first 10 customers" by 15 November 2026. That is 11 days away. Where is it now?']])
   assert.equal(await s.proactive.run(), 0, 'the same trigger is never made twice')
 })
 
@@ -232,7 +232,7 @@ test('the 5 a day limit counts only situations the founder started', async () =>
 })
 
 test('Home: an unanswered opener is the first item, never fades, and opens that situation', async () => {
-  const line = 'You said your first 10 customers by 15 November 2026. That is 11 days away. Where is it now?'
+  const line = 'You said "My first 10 customers" by 15 November 2026. That is 11 days away. Where is it now?'
   const a = await appSetup({
     tables: { situations: [sit(1), opener(2, HOUR, { title: 'My first 10 customers' })], situation_turns: [{ id: uuid(90), situation_id: uuid(2), seq: 1, role: 'axiom', text: line }], reads: [], moves: [], reports: [], user_settings: [], push_tokens: [] },
   })
@@ -254,7 +254,7 @@ test('Home: an unanswered opener is the first item, never fades, and opens that 
 // ── Push ─────────────────────────────────────────────────────────────────────
 
 const TOKEN = 'ExponentPushToken[abcdefghij1234567890]'
-const LINE = 'You said your first 10 customers by 15 November 2026. That is 11 days away. Where is it now?'
+const LINE = 'You said "My first 10 customers" by 15 November 2026. That is 11 days away. Where is it now?'
 const MORNING_START = Date.parse('2026-11-04T03:00:00Z') // 8 am in Karachi
 
 function pushSetup({ now = MORNING_START, log = [], settings = [], moves = [], createdAt = Date.parse('2026-11-04T02:05:00Z'), lock = null } = {}) {
@@ -279,7 +279,7 @@ function pushSetup({ now = MORNING_START, log = [], settings = [], moves = [], c
 test('push: the opener takes the morning slot on the day it was made', async () => {
   const s = pushSetup()
   await s.scheduler.tick()
-  assert.deepEqual(s.sender.sent.map((m) => [m.body, m.data.kind, m.data.situation_id]), [['Sam, I have a question about your goal.', 'proactive', uuid(2)]])
+  assert.deepEqual(s.sender.sent.map((m) => [m.body, m.data.kind, m.data.situation_id]), [['Sam, where are you with your goal?', 'proactive', uuid(2)]])
   assert.deepEqual(s.base.rows('notification_log').map((r) => [r.kind, r.slot, r.status]), [['proactive', 'morning', 'sent']])
 })
 
@@ -325,8 +325,8 @@ test('push: not once answered, not when the morning switch is off, and the day k
 test('push wording: short lines by trigger, hidden is just Axiom, full is the opener', () => {
   const item = { situationId: uuid(2), situationTitle: 'x', opener: LINE }
   const body = (trigger, lockScreen, name = 'Sam') => composePush({ kind: 'proactive', item: { ...item, trigger }, name, lockScreen }).body
-  assert.equal(body('goal_near', 'short'), 'Sam, I have a question about your goal.')
-  assert.equal(body('two_misses', 'short'), 'Sam, about your last two moves.')
+  assert.equal(body('goal_near', 'short'), 'Sam, where are you with your goal?')
+  assert.equal(body('two_misses', 'short'), 'Sam, what got in the way of your last two moves?')
   assert.equal(body('two_misses', 'short', null), 'About your last two moves.')
   assert.equal(body('goal_near', 'hidden'), 'Axiom')
   assert.equal(body('goal_near', 'full'), LINE)

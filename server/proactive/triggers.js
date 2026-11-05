@@ -2,7 +2,6 @@
 // { source, key, kind, facts } or null. `source` names where the facts came
 // from ('signup', 'reports'; later connectors). `key` is unique per fact, so
 // each trigger fires once per founder (the database keeps it unique).
-import { goalPhrase } from '../journey/home/greeting.js'
 import { day } from '../journey/home/accountService.js'
 import { localDay, zoneOf } from '../push/policy.js'
 
@@ -21,7 +20,7 @@ export function goalNear({ nowMs, timeZone, deadline, goal }) {
     source: 'signup',
     key: `goal:${deadline}:${window}`,
     kind: 'goal_near',
-    facts: { goalWords: words, goal: goalPhrase(words) ?? words, date: day(`${deadline}T00:00:00Z`), days, window },
+    facts: { goal: words, date: day(`${deadline}T00:00:00Z`), days, window },
   }
 }
 
