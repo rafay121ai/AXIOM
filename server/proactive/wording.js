@@ -8,8 +8,9 @@ export function openerText(kind, facts) {
   if (kind === 'two_misses') {
     return `Your last two moves did not happen: ${plain(facts.moves[0])} and ${plain(facts.moves[1])}. What got in the way?` // (approved Nov 4)
   }
+  const goal = String(facts.goal).replace(/"/g, "'") // the goal sits inside our own quote marks
   if (facts.window === 3) {
-    return `${facts.days} ${facts.days === 1 ? 'day' : 'days'} to ${facts.date}, and you said "${facts.goal}". What is left?` // (approved Nov 4)
+    return `${facts.days} ${facts.days === 1 ? 'day' : 'days'} to ${facts.date}, and you said "${goal}". What is left?` // (approved Nov 4)
   }
-  return `You said "${facts.goal}" by ${facts.date}. That is ${facts.days} days away. Where is it now?` // (approved Nov 4)
+  return `You said "${goal}" by ${facts.date}. That is ${facts.days} days away. Where is it now?` // (approved Nov 4)
 }

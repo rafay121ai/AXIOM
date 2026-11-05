@@ -67,6 +67,8 @@ test('opener wording: the approved sentences, filled with the founder\'s words',
   assert.equal(openerText(goal.kind, goal.facts), 'You said "My first 10 customers" by 15 November 2026. That is 11 days away. Where is it now?')
   const soon = goalNear({ nowMs: NOW, timeZone: 'UTC', deadline: '2026-11-07', goal: 'My first 10 customers' })
   assert.equal(openerText(soon.kind, soon.facts), '3 days to 7 November 2026, and you said "My first 10 customers". What is left?')
+  const quoted = goalNear({ nowMs: NOW, timeZone: 'UTC', deadline: '2026-11-15', goal: 'Ship "v2"' })
+  assert.equal(openerText(quoted.kind, quoted.facts), "You said \"Ship 'v2'\" by 15 November 2026. That is 11 days away. Where is it now?")
   const last = goalNear({ nowMs: NOW, timeZone: 'UTC', deadline: '2026-11-05', goal: 'My first 10 customers' })
   assert.equal(openerText(last.kind, last.facts), '1 day to 5 November 2026, and you said "My first 10 customers". What is left?')
   assert.equal(openerText('two_misses', { moves: ['Call Bilal.', 'Email the clinics.'] }), 'Your last two moves did not happen: call Bilal and email the clinics. What got in the way?')
