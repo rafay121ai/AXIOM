@@ -160,3 +160,25 @@ test('every /api/ route is called by app/src/api/http.ts or on the written list'
   assert.deepEqual([...NOT_CALLED_BY_APP].filter((r) => !served.includes(r)), [], 'listed but no longer served')
   assert.deepEqual([...NOT_CALLED_BY_APP].filter((r) => used.has(r)), [], 'listed but the app calls it')
 })
+
+// A limit must never block the loop (the evening report) or the saving of a founder's own words.
+// Every write route is capped (CAPPED above) or listed here with its reason, so a new model route
+// cannot ship unlisted, and a listed route that gains a cap fails.
+const NOT_CAPPED = {
+  'POST /api/situations/:x/read/answer': 'stores the founder\'s answer; never blocked',
+  'POST /api/moves/:x/commit': 'no model call', 'POST /api/moves/:x/report': 'the evening report is the loop; never blocked',
+  'POST /api/reports/:x/consent': 'no model call', 'POST /api/reports/:x/withdraw': 'no model call',
+  'PUT /api/settings/sharing': 'no model call', 'PUT /api/settings': 'no model call', 'PUT /api/settings/reminders': 'no model call',
+  'POST /api/home/checkin': 'the way out of care', 'POST /api/account/export': 'no model call', 'DELETE /api/account': 'no model call',
+  'PUT /api/signup/answers/:x': 'stores sign-up answers; never blocked',
+  'POST /api/push/token': 'no model call', 'DELETE /api/push/token': 'no model call',
+  'POST /api/review/outcomes/:x/draft': 'reviewer tool', 'POST /api/review/outcomes/:x': 'reviewer tool',
+}
+
+test('every write route is capped or on the written not-capped list', () => {
+  const app = createApp({ env: { FRONTEND_URL: 'https://app.example.com' }, openai: createFakeOpenAI() })
+  const capped = new Set(CAPPED.map(([p]) => `POST ${norm(p.replace(ID, ':x').replace(/\/followup\/0/, '/followup/:x'))}`))
+  const writes = routesOf(app).filter((r) => r.path.startsWith('/api/') && r.method !== 'GET').map((r) => `${r.method} ${norm(r.path)}`)
+  assert.deepEqual(writes.filter((r) => !capped.has(r) && !Object.hasOwn(NOT_CAPPED, r)), [])
+  assert.deepEqual(Object.keys(NOT_CAPPED).filter((r) => !writes.includes(r) || capped.has(r)), [], 'listed but gone, or capped')
+})

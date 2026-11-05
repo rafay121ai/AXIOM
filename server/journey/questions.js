@@ -75,7 +75,8 @@ function isoDateOk(value, now) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
   const d = new Date(`${value}T00:00:00.000Z`)
   if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== value) return false
-  const today = new Date(now).toISOString().slice(0, 10)
+  // The founder's time zone is not known yet: accept today anywhere on Earth (UTC-12 is the last to change day).
+  const today = new Date(now - 12 * 3_600_000).toISOString().slice(0, 10)
   const limit = new Date(now + 5 * 366 * 86_400_000).toISOString().slice(0, 10)
   return value >= today && value <= limit
 }

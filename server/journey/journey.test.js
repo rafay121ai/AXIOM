@@ -70,7 +70,12 @@ test('where: country required, customers from the list', () => {
 test('goal: a date is needed with "Pick a date", and must be real and not in the past', () => {
   assert.equal(v('goal', { goal: 'Ship it', when: 'Pick a date' }).ok, false)
   assert.equal(v('goal', { goal: 'Ship it', when: 'Pick a date', date: '2026-02-30' }).ok, false)
-  assert.equal(v('goal', { goal: 'Ship it', when: 'Pick a date', date: '2026-10-25' }).ok, false)
+  assert.equal(v('goal', { goal: 'Ship it', when: 'Pick a date', date: '2026-10-24' }).ok, false)
+  // 02:00 UTC is still the evening before in the Americas: their today is accepted, the day before it is not.
+  const at = { now: Date.parse('2026-11-05T02:00:00.000Z') }
+  const picked = (date) => validateAnswer(questionByKey('goal'), { goal: 'Ship it', when: 'Pick a date', date }, at).ok
+  assert.equal(picked('2026-11-04'), true)
+  assert.equal(picked('2026-11-03'), false)
   assert.equal(v('goal', { goal: 'Ship it', when: 'Pick a date', date: '2027-03-01' }).ok, true)
   assert.equal(v('goal', { goal: 'Ship it', when: 'This month', date: '2027-03-01' }).ok, false)
 })
