@@ -1,12 +1,13 @@
 import { useFonts } from 'expo-font';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, StyleSheet, View } from 'react-native';
+import { Animated, BackHandler, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { api } from './src/api';
 import type { Answer, DueReport, FirstReading, CareHelp, Home, Question, Screened } from './src/api/types';
 import { SignInCancelled } from './src/auth/oauth';
 import { routeScreened } from './src/care/route';
+import { backTarget } from './src/backTarget';
 import { copy } from './src/copy';
 import { type Destination, destinationOf, type MoveSource } from './src/home/flow';
 import { newLearnChat, type LearnChat } from './src/learn/chat';
@@ -88,6 +89,16 @@ export default function App() {
     ]));
     switching.current = false;
   }, [fade, rise]);
+
+  // Android back: up one level, or nothing. It never leaves the app mid-journey, and never leaves the care screen.
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      const to = backTarget(stageRef.current, { name: 'home' }, { name: 'settings' }, { name: 'history' });
+      if (to !== 'exit') { if (to !== 'stay') void goTo(to); return true; }
+      return false;
+    });
+    return () => sub.remove();
+  }, [goTo]);
 
   // Resolves once no screen change is under way. A change asked for while one is running is dropped, so a caller that
   // moves on by itself (the home screen sending a due check-in to the Report) waits for this first.

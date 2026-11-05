@@ -15,3 +15,7 @@ export function clockTime(local: string): string {
   const [h, m] = local.split(':').map(Number);
   return `${h % 12 === 0 ? 12 : h % 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`;
 }
+
+// The founder's own calendar day. Never through UTC: east of it, an early-morning pick saved as the day before.
+export const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+export const fromIsoDay = (s: string) => new Date(`${s}T12:00:00`);

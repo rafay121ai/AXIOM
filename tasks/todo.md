@@ -450,3 +450,14 @@ removes the only cap.
 ## Not in this plan
 `FRONTEND_URL` stays required for now (the server refuses to start without it);
 removing it is a small follow-up once the old site is gone.
+
+---
+
+# Android: what a real build still needs (Nov 5 2026)
+The JS bundle and native config generate; the back button and pickers are fixed. Nothing has run on a device.
+- [ ] Rafay: Expo account and EAS `projectId` (shared with iOS).
+- [ ] Rafay: Firebase project, `google-services.json`, and an FCM credential uploaded to Expo (Android push).
+- [ ] Rafay: Google Play developer account. EAS can generate the signing keystore.
+- [ ] Google sign-in for Android: return URL `axiom://`, allowed in Supabase.
+- [ ] Unverified without a device: keyboard resizing, push delivery, sign-in return, blur and fonts, the permission prompt, the pickers.
+- [ ] expo-doctor: 9 Expo packages are slightly behind SDK 58; `expo-system-ui` is needed for `userInterfaceStyle` on Android. Dependency changes, not made.
