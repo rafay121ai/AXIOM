@@ -39,7 +39,7 @@ function seedFounder(who, tag) {
     consent_log: [{ id: id(who, 9), user_id: u, report_id: id(who, 8), action: 'share', wording_version: 'v1', decided_at: at(NOW) }],
     care_events: [{ id: id(who, 10), user_id: u, level: 'unclear', scope_id: id(who, 1), created_at: at(NOW), resolved_at: at(NOW) }],
     push_tokens: [{ id: id(who, 11), user_id: u, token: `ExponentPushToken[${tag}]`, platform: 'ios', created_at: at(NOW), updated_at: at(NOW) }],
-    notification_log: [{ id: id(who, 12), user_id: u, dedupe_key: tag }],
+    notification_log: [{ id: id(who, 12), user_id: u, dedupe_key: `DEDUPE-${tag}`, kind: 'morning', status: 'sent' }],
     founder_lesson_log: [{ id: id(who, 13), user_id: u, source_key: tag }],
     peer_unlocks: [{ id: id(who, 14), user_id: u, granted_by_report_id: id(who, 8), kind: 'share' }],
     peer_outcomes: [
@@ -48,11 +48,14 @@ function seedFounder(who, tag) {
       { id: id(who, 17), status: 'withdrawn', draft: null },
     ],
     outcome_author_links: [15, 16, 17].map((n) => ({ peer_outcome_id: id(who, n), user_id: u, report_id: id(who, 8), created_at: at(NOW) })),
-    sessions: [{ id: id(who, 18), user_id: u }],
+    sessions: [{ id: id(who, 18), user_id: u, session_token: `SESSTOK-${tag}`, session_notes: secret, created_at: at(NOW) }],
     messages: [{ id: id(who, 19), session_id: id(who, 18), content: secret }],
-    personal_memories: [{ id: id(who, 20), user_id: u, content: secret }],
+    personal_memories: [{ id: id(who, 20), user_id: u, content: secret, embedding: [0.123456] }],
     model_usage_logs: [{ id: id(who, 21), user_id: u }],
-    app_sessions: [{ id: id(who, 22), user_id: u }],
+    app_sessions: [{ id: id(who, 22), user_id: u, entry_point: 'direct', started_at: at(NOW) }],
+    conversation_threads: [{ id: id(who, 23), user_id: u, session_id: id(who, 18), title: `${tag} thread`, status: 'active' }],
+    experiments: [{ id: id(who, 24), user_id: u, session_id: id(who, 18), description: `${tag} experiment`, metadata: { m: 'METADATA' } }],
+    product_events: [{ id: id(who, 25), user_id: u, event: 'message_sent', properties: { p: 'PROPS' }, created_at: at(NOW) }],
   }
 }
 
@@ -123,11 +126,11 @@ test('export: A gets A only, as an attachment, with nothing internal and no user
     assert.match(res.headers.get('content-disposition'), /^attachment; filename=/)
     assert.equal(res.body.message, ACCOUNT_COPY.exportReady)
     assert.equal(res.body.account.email, 'a@example.com')
-    assert.deepEqual(Object.keys(res.body).sort(), ['account', 'care_events', 'consent_log', 'devices', 'exported_at', 'learn_conversations', 'learn_turns', 'message', 'messages', 'moves', 'personal_memories', 'profile', 'reads', 'reports', 'settings', 'situation_turns', 'situations'])
-    for (const key of ['situations', 'situation_turns', 'reads', 'learn_conversations', 'learn_turns', 'moves', 'reports', 'consent_log', 'care_events', 'devices', 'messages', 'personal_memories']) assert.equal(res.body[key].length, 1, key)
+    assert.deepEqual(Object.keys(res.body).sort(), ['account', 'app_sessions', 'care_events', 'consent_log', 'conversation_threads', 'devices', 'experiments', 'exported_at', 'founder_lesson_log', 'learn_conversations', 'learn_turns', 'message', 'messages', 'moves', 'notification_log', 'peer_unlocks', 'personal_memories', 'product_events', 'profile', 'reads', 'reports', 'sessions', 'settings', 'situation_turns', 'situations'])
+    for (const key of ['situations', 'situation_turns', 'reads', 'learn_conversations', 'learn_turns', 'moves', 'reports', 'consent_log', 'care_events', 'devices', 'messages', 'personal_memories', 'sessions', 'conversation_threads', 'app_sessions', 'experiments', 'founder_lesson_log', 'notification_log', 'peer_unlocks', 'product_events']) assert.equal(res.body[key].length, 1, key)
     assert.equal(res.body.reports[0].share_state, 'shared')
     assert.deepEqual(res.body.devices[0].token, 'redacted')
-    for (const leak of [A.id, B.id, 'b@example.com', 'Bravo', 'ExponentPushToken', 'CHUNK', 'HYPOTHESIS', 'INTERNAL', 'user_id', 'peer_outcome', 'published story', 'draft', 'evidence', 'scope_id']) {
+    for (const leak of [A.id, B.id, 'b@example.com', 'Bravo', 'ExponentPushToken', 'CHUNK', 'HYPOTHESIS', 'INTERNAL', 'user_id', 'peer_outcome', 'published story', 'draft', 'evidence', 'scope_id', 'session_token', 'SESSTOK', 'embedding', '0.123456', 'METADATA', 'PROPS', 'DEDUPE', 'Bravo thread', 'Bravo experiment']) {
       assert.ok(!res.text.includes(leak), `export holds ${leak}`)
     }
     assert.ok(res.text.includes('Alpha secret words'))

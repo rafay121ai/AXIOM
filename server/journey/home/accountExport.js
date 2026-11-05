@@ -1,7 +1,8 @@
 // Account export: one JSON document of what Axiom stores about this founder.
 // It only reads, and only rows that belong to this founder. Left out on
-// purpose: internal evidence, validation, chunk ids and sources, model usage,
-// push tokens, and anything about another founder. A shared story is shown
+// purpose: internal evidence, validation, chunk ids and sources, model usage
+// (model_usage_logs: cost, latency and error details, not the founder's content),
+// push tokens, session tokens, and anything about another founder. A shared story is shown
 // only as the founder's own choice on their report (share_state): peer
 // outcomes and their private link are never read, and no user_id is written.
 import { ACCOUNT_COPY } from './wording.js'
@@ -25,7 +26,14 @@ const COLUMNS = Object.freeze({
   care_events: ['id', 'level', 'created_at', 'resolved_at'],
   push_tokens: ['id', 'platform', 'timezone', 'created_at', 'updated_at'],
   founder_profiles: ['stage', 'business_model', 'customer_markets', 'country', 'goal', 'deadline', 'report_time_local', 'timezone', 'open_answers', 'signup_answers', 'first_reading', 'created_at'],
-  sessions: ['id'], // only to find the messages below; not exported
+  sessions: ['id', 'onboarding_answers', 'axiom_profile', 'session_notes', 'concept_progress', 'created_at', 'last_active'], // never session_token
+  conversation_threads: ['id', 'session_id', 'title', 'started_at', 'last_message_at', 'message_count', 'status', 'primary_pillar', 'created_at'],
+  app_sessions: ['id', 'started_at', 'ended_at', 'duration_seconds', 'entry_point', 'messages_sent', 'device'],
+  experiments: ['id', 'session_id', 'title', 'description', 'status', 'pillar', 'topic', 'how_to_do_it', 'real_world_example', 'what_to_notice', 'success_condition', 'report', 'result_summary', 'assigned_at', 'due_at', 'completed_at', 'cancelled_at', 'ghosted_at', 'outcome', 'outcome_reason', 'created_at'],
+  founder_lesson_log: ['id', 'source_key', 'slot', 'created_at'],
+  notification_log: ['id', 'kind', 'local_day', 'slot', 'status', 'sent_at', 'created_at'],
+  peer_unlocks: ['id', 'granted_by_report_id', 'kind', 'used_on_situation_id', 'created_at'],
+  product_events: ['id', 'event', 'created_at'], // not properties: free-form, can hold ids
   messages: ['id', 'session_id', 'role', 'content', 'created_at'],
   personal_memories: ['id', 'type', 'content', 'importance', 'created_at'], // never the embedding
   users: ['email', 'first_name', 'created_at'],
@@ -66,6 +74,7 @@ export function createAccountExport({ supabase, clock }) {
     const situationIds = situations.map((s) => s.id)
     const conversations = await mine('learn_conversations', userId)
     const sessions = await mine('sessions', userId)
+    const noIdOf = async (table) => (await mine(table, userId)).map(noId)
     const doc = {
       message: ACCOUNT_COPY.exportReady,
       exported_at: new Date(clock.now()).toISOString(),
@@ -83,6 +92,14 @@ export function createAccountExport({ supabase, clock }) {
       care_events: (await mine('care_events', userId)).map(noId),
       messages: await under('messages', 'session_id', sessions.map((x) => x.id)),
       personal_memories: await mine('personal_memories', userId),
+      sessions,
+      conversation_threads: await mine('conversation_threads', userId),
+      app_sessions: await mine('app_sessions', userId),
+      experiments: await mine('experiments', userId),
+      founder_lesson_log: await noIdOf('founder_lesson_log'),
+      notification_log: await noIdOf('notification_log'),
+      peer_unlocks: await mine('peer_unlocks', userId),
+      product_events: await noIdOf('product_events'),
       devices: (await mine('push_tokens', userId)).map((d) => ({ ...noId(d), token: 'redacted' })),
     }
     if (Buffer.byteLength(JSON.stringify(doc)) > EXPORT_MAX_BYTES) throw new HttpError(413, { error: ACCOUNT_COPY.exportTooLarge })

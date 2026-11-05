@@ -18,7 +18,22 @@ passes: all 36 rows of founder A go across 28 tables, founder B's 37 rows are
 unchanged, A's approved story stays with no link, the pending, rejected and
 withdrawn stories go, a second run changes nothing, removing the sign-in is
 not blocked, and a run that fails part way leaves everything as it was.
-Step 6 (the server against a copy) was not run.
+
+Server run on the copy, Nov 5 2026 (step 6): the real `accountService.js` and
+`accountDelete.js` against the same local copy, through a small stand-in for
+the Supabase client. All 7 cases pass: the 7-day wait, cancel, ban then delete
+then sign-in removal in that order, a second run, a cancel landing during the
+run, sign-in removal failing 3 times, and the function failing.
+
+Still not proven, because only a real Supabase project can show it: real
+Supabase auth (the ban and the sign-in removal are stand-ins here), its exact
+error shapes, and true parallel connections. Test deletion on one throwaway
+account on live right after `ACCOUNT_DELETE=on`.
+
+Re-run both with `npm ci` then `WITH_FIX=1 node copytest.mjs` and
+`WITH_FIX=1 node servertest.mjs` in `supabase/copytest/`. `schema.sql` is the
+live structure read on Nov 4; `fix.sql` adds the two later migrations. Both
+hold structure only, no founder data. Refresh them after any schema change.
 
 ## What a founder sees
 
@@ -104,8 +119,8 @@ story is lost with them. The story stays because no name is attached.
    id (`select` over every column in `information_schema`). The published
    story is still there with no link. Run it a second time: no error, no
    change.
-6. Then try the server against the copy with `ACCOUNT_DELETE=on`, a 7-day
-   grace shortened by editing `delete_after` by hand.
+6. Then try the server against the copy, with `delete_after` moved by hand
+   (done Nov 5, see the top of this file).
 
 ## What Rafay must approve
 
