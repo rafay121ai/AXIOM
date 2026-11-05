@@ -394,3 +394,60 @@ Order set by Rafay: give-to-get, founder voices, Calm/Direct/Hard prompt, accoun
 - [ ] Record completion or exact remaining access/deployment blockers and learning-loop review.
 
 Resume evidence: server suite in journey/server passes 535/535 after allowing local loopback (initial sandbox listen EPERM was environmental). Supabase connector is not available in Codex; CLI reports no access token. User connection requested. No live database changes performed by Codex. Last Claude log reports 6/15 applied; re-read live history before resuming. Migration 11 requires copy test before live application; ACCOUNT_DELETE stays off. Migration 7 needs deployed scheduler compatibility evidence.
+
+---
+
+# Plan: retire the old web app (Nov 5 2026, branch feature/retire-web-app)
+
+Why: 21 old write routes sit outside the care hold, and the old experiments
+route sits outside the 2-move limit, so a founder in care could still get a
+lesson or move through them. The Oct 31 report said this is fine only if the
+web app is gone before real users.
+
+Checked Nov 5: the old site is already dead (its API points at Railway, which
+returns 404; the account is banned). Last old-app activity on live was Oct 20.
+The native app calls none of the old routes. The Vercel project has no custom
+domain, only axiom-delta-pied.vercel.app.
+
+## What stays untouched
+- All stored data. `messages`, `sessions`, `app_sessions`, `conversation_threads`,
+  `experiments`, `personal_memories`, `product_events` keep every row. No
+  migration. Export and `delete_account` keep covering them. The message trigger
+  stays. Dropping old tables is a separate decision, not part of this.
+- `server/experimentQuality.js` (the validator): the Move step uses it. Unchanged.
+- `server/llm.js`, `modelUsage.js`, `writeValidation.js`: the journey uses them.
+- Root `package.json` scripts for the knowledge pipeline, `scripts/`, `knowledge_pilot/`.
+
+## Steps
+- [ ] Server: remove every old route from `server/app.js` (about 1,100 of its
+      1,694 lines): events, concept-states, personal-memories, admin/diagnostics,
+      experiments, openai/chat and embeddings, onboarding/complete, founder-profile,
+      app-sessions, session touch and memory, threads, messages. Check that no
+      journey route shares a helper before removing it.
+- [ ] Delete what only they used: `usageSummary.js`, `productEvents.js`,
+      `requestValidation.js`, and `dailyCap.js` unless Rafay chooses it below, with
+      their tests.
+- [ ] Tests: shrink the NOT_HELD list in `care/hold.test.js` (no old-app entries
+      left), rewrite `testing/app.test.js` and `care/middleware.test.js` for what remains.
+- [ ] Add a test: every remaining `/api/` route is either in the app's contract or
+      on a short written list (health, review), so an old route cannot come back unseen.
+- [ ] Front end: delete `src/`, `index.html`, `vite.config.js`, `vercel.json`, `dist/`,
+      and the Vite dependencies and scripts from the root `package.json`.
+- [ ] Docs: CLAUDE.md (stack, deprecated list), ARCHITECTURE.md (old routes,
+      infrastructure), PRODUCT.md, `tasks/decisions.md`.
+- [ ] Review with axiom-reviewer, run all tests, merge to main.
+- [ ] Rafay: pause the Vercel project, then remove the old site's address from the
+      Supabase redirect URLs. Pausing can be undone.
+
+## Decision for Rafay: a daily cost cap for the journey
+The $1-a-day cap per founder (`dailyCap.js`) only guards the old chat and
+embeddings routes. The journey has none: only 5 new situations a day and rate
+limits, so Learn replies have no spending ceiling. Removing the old routes
+removes the only cap.
+- Option A (recommended): move the cap to `callStructured`, so every model call
+  in the journey counts. Needs one new line of wording for a founder who hits it.
+- Option B: drop it and rely on the 5-a-day limit and rate limits.
+
+## Not in this plan
+`FRONTEND_URL` stays required for now (the server refuses to start without it);
+removing it is a small follow-up once the old site is gone.
