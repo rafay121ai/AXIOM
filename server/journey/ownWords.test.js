@@ -142,6 +142,19 @@ test('the Read quotes only typed words: a picked option loses its marks, our lab
   assert.equal(unquoteUnknown('You "avoids most: talking to customers".', typedTexts, answerTexts), 'You "avoids most: talking to customers".')
 })
 
+// Live run, Nov 8: the first reading quoted "avoids most: pricing, asking for money" because our label sat inside
+// the answer the model was shown, and fell back. Labels now live in the question; the answer is only their picks.
+test('the model is shown answers without our labels, so quoting a whole answer is quoting the founder', () => {
+  const answers = { strengths: { a: ['Building the product', 'Not quitting'], b: ['Pricing', 'Asking for money'] }, where: { country: 'United States', customers: 'Mostly in my own country' } }
+  const { evidence, answerTexts } = buildEvidence(answers)
+  assert.deepEqual(evidence.map((e) => e.answer), ['United States', 'Mostly in my own country', 'Building the product, Not quitting', 'Pricing, Asking for money'])
+  assert.ok(evidence.some((e) => e.question.includes('What I avoid most')))
+  const quote = (q) => checkFirstReading({ reading: { headline: 'h', body: `You picked "${q}". Start there today.`, underlines: [] }, answerTexts }).problems.filter((p) => p.startsWith('quoted words'))
+  assert.deepEqual(quote('pricing, asking for money'), [])
+  assert.equal(quote('avoids most: pricing, asking for money').length, 1)
+  assert.equal(quote('based in united states').length, 1)
+})
+
 // A quoted single number must be a whole number the founder typed: "40" is not inside "400".
 test('a quoted bare number: typed is fine; never typed, or only inside a bigger number, is caught; a picked one loses its marks', () => {
   const typed = ['I have 400 users and $3k in the bank']

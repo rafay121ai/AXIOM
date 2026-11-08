@@ -5,28 +5,33 @@ import { QUESTIONS, answerStrings, typedStrings } from './questions.js'
 import { checkFirstReading } from './ownWords.js'
 import { FIRST_READING_SCHEMA, firstReadingMessages } from './prompts/firstReading.js'
 
-const readable = (question, answer) => {
-  switch (question.type) {
-    case 'single': return answer.other ? `${answer.value}: ${answer.other}` : answer.value
-    case 'where': return `Based in ${answer.country}. Customers: ${answer.customers}`
-    case 'goal': return `${answer.goal}, ${answer.date ?? answer.when}`
-    case 'two': return `Better than most at: ${answer.a.join(', ') || 'nothing picked'}. Avoids most: ${answer.b.join(', ') || 'nothing picked'}`
-    case 'multi': return answer.join(', ')
-    default: return answer
+// What the model sees per answer. Our labels go in `question`, so every `answer` holds only what the founder
+// picked or typed, and quoting an answer whole is always quoting them. (The first reading quoted
+// "avoids most: pricing, asking for money" when the label sat inside the answer, Nov 8.)
+const NOTHING = 'nothing picked'
+const evidenceItems = (q, answer) => {
+  switch (q.type) {
+    case 'single': return [{ question: q.title, answer: answer.other ? `${answer.value}: ${answer.other}` : answer.value }]
+    case 'where': return [
+      { question: `${q.title} (${q.countryLabel})`, answer: answer.country },
+      { question: `${q.title} (${q.customerLabel})`, answer: answer.customers },
+    ]
+    case 'goal': return [{ question: q.title, answer: `${answer.goal}, ${answer.date ?? answer.when}` }]
+    case 'two': return [answer.a, answer.b].map((picks, i) => ({ question: `${q.title} (${q.groups[i].label})`, answer: picks.join(', ') || NOTHING }))
+    case 'multi': return [{ question: q.title, answer: answer.join(', ') }]
+    default: return [{ question: q.title, answer }]
   }
 }
-
-// Answer types whose shown form is only the founder's picks, joined; the others add our labels.
-const JOINED = new Set(['goal', 'multi'])
 
 // Evidence for the model, and the strings the checker compares against.
 export function buildEvidence(answers) {
   const asked = QUESTIONS.filter((q) => Object.hasOwn(answers, q.key))
+  const evidence = asked.flatMap((q) => evidenceItems(q, answers[q.key]))
   return {
-    evidence: asked.map((q) => ({ question: q.title, answer: readable(q, answers[q.key]) })),
-    // Each answer alone, plus picked choices joined as the model sees them ("My first customer, This month"), so a
-    // faithful quote is not rejected (Read fell back on this, Nov 2). Never our own labels ("Avoids most:").
-    answerTexts: asked.flatMap((q) => [...answerStrings(q, answers[q.key]), ...(JOINED.has(q.type) ? [readable(q, answers[q.key])] : [])]),
+    evidence,
+    // Each pick alone, plus every answer exactly as the model was shown it ("My first customer, This month"), so a
+    // faithful quote is not rejected (Read fell back on this, Nov 2). Our own words never count as theirs.
+    answerTexts: [...new Set([...asked.flatMap((q) => answerStrings(q, answers[q.key])), ...evidence.map((e) => e.answer).filter((a) => a !== NOTHING)])],
     // Only what the founder typed: the Read may quote these and nothing else.
     typedTexts: asked.flatMap((q) => typedStrings(q, answers[q.key])),
   }
