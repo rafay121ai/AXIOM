@@ -8,6 +8,7 @@
 import { randomUUID } from 'node:crypto'
 import { HttpError } from '../situations.js'
 import { retrieveEvidence } from './retrieve.js'
+import { searchNeed } from './searchNeed.js'
 import { composeReply } from './reply.js'
 import { decideMoveOffer, isRealReply, asksWhatNext, MAX_MOVE_OFFERS, MOVE_NOTICE, AXIOM_LINES } from './moveOffer.js'
 import { hasMoveRoom, NO_ROOM_LINE } from '../move/room.js'
@@ -132,7 +133,10 @@ export function createLearn({ supabase, knowledgeSupabase = null, embed = null, 
   async function makeTurn({ userId, situation, conversation, mode, step, learnTurns, extra = {}, evidence: given = null, tapped = null }) {
     const ctx = await contextOf(situation, learnTurns)
     const usageContext = { step, kind: `learn_${mode}`, situation_id: situation.id }
-    const evidence = given ?? await retrieveEvidence({ knowledgeSupabase, embed, query: ctx.query, userId, usageContext, log })
+    // The library is searched with what the founder needs, written from everything they said, never their raw words.
+    const query = given || !knowledgeSupabase || !embed ? ctx.query
+      : (await searchNeed({ prompt: ctx.prompt, callStructured, userId, usageContext, log })) ?? ctx.query
+    const evidence = given ?? await retrieveEvidence({ knowledgeSupabase, embed, query, userId, usageContext, log })
     const reply = await composeReply({
       mode, step, evidence, founderTexts: ctx.founderTexts, usageContext,
       context: { ...ctx.prompt, ...(tapped ? { tapped } : {}), style: await styleOf(supabase, userId) },

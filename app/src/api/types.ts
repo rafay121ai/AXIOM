@@ -126,7 +126,7 @@ export type Read = { headline: string; body: string; closing_question: string; a
 /** What the founder does with the closing question: answers in words, or skips. */
 export type ReadAnswer = { text: string } | { skip: true };
 
-/** `say_more`: the reply was too thin to count. `talk`: Axiom asks one more question (2 at most). `stored`: Learn is next. */
+/** `say_more`: the reply was too thin to count. `talk`: Axiom replies and asks one more question (1 to 5 in all). `stored`: Learn is next. */
 export type ReadAnswerResult = { status: 'say_more' | 'talk'; reply: string } | { status: 'stored'; skipped: boolean; next: 'learn' };
 
 /** A source named under a lesson: always author and book. A quote is there only when the server checked it word for word. */

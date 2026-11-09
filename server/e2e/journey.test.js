@@ -12,7 +12,7 @@ import { MODELS, STEPS } from '../config.js'
 import { FOUNDER, OTHER, createWorld, keysIn, routesOf } from './harness.js'
 import {
   CHECK_IN_ANSWER, DISTRESS, FABRICATED_QUOTE, FIRST_READING, FOLLOWUP_ANSWER, FULL_ANSWERS, LEARN_AFTER_CARE, LEARN_OFFER,
-  LESSON, MOVE, PEER_STORY, PEER_STORY_ID, Q1, Q2, Q3_REFUSED, READ, READ_ANSWER, READ_TALK_ANSWER, READ_TALK_Q, REAL_1,
+  LESSON, MOVE, PEER_STORY, PEER_STORY_ID, Q1, Q2, Q3_REFUSED, READ, LEARN_NEED, READ_ANSWER, READ_TALK_ANSWER, READ_TALK_Q, READ_TALK_REPLY, REAL_1,
   REPORT_NOTE, REPORT_REPLY, SITUATION_TEXT, SWAP_REASON, TURN_2, TURN_3, VERIFIED_QUOTE_SHOWN, WHAT_NEXT, situationVerdict, uuid,
 } from './script.js'
 
@@ -75,7 +75,7 @@ test('a founder walks the whole journey', async (t) => {
 
     // ── Situation ─────────────────────────────────────────────────────────────
     await t.test('situation: 2 follow-ups, then the third turn asks nothing more', async () => {
-      openai.script('situation_turn', situationVerdict(), situationVerdict({ missing: 'tried', question: Q2 }), situationVerdict({ missing: 'date', question: Q3_REFUSED }))
+      openai.script('situation_turn', situationVerdict(), situationVerdict({ question: Q2 }), situationVerdict({ question: Q3_REFUSED }))
       const opened = await founder('POST', '/api/situations', { text: SITUATION_TEXT, client_turn_id: uuid(1) })
       assert.equal(opened.status, 200)
       assert.deepEqual([opened.body.status, opened.body.reply, opened.body.follow_up_count, opened.body.follow_ups_left], ['follow_up', Q1, 1, 1])
@@ -112,14 +112,14 @@ test('a founder walks the whole journey', async (t) => {
 
       const thin = await founder('POST', `/api/situations/${ids.situation}/read/answer`, { text: 'ok' })
       assert.equal(thin.body.status, 'say_more')
-      // The talk after the Read (Rafay, Nov 9): one more question, then Learn.
-      openai.script('read_talk', { ready: false, question: READ_TALK_Q }, { ready: true, question: '' })
+      // The talk after the Read (Rafay, Nov 9): a reply and one more question, then Learn.
+      openai.script('read_talk', { asked_to_learn: false, knows_goal: false, knows_blocker: true, knows_detail: true, missing: 'goal', reply: READ_TALK_REPLY, question: READ_TALK_Q }, { asked_to_learn: false, knows_goal: true, knows_blocker: true, knows_detail: true, missing: 'none', reply: '', question: '' })
       const talk = await founder('POST', `/api/situations/${ids.situation}/read/answer`, { text: READ_ANSWER })
-      assert.deepEqual(talk.body, { status: 'talk', situation_id: ids.situation, reply: READ_TALK_Q })
+      assert.deepEqual(talk.body, { status: 'talk', situation_id: ids.situation, reply: `${READ_TALK_REPLY} ${READ_TALK_Q}` })
       assert.equal(rows('reads')[0].closing_answer, READ_ANSWER)
       assert.equal(rows('reads')[0].answered_at, null)
       const resumed = await founder('GET', `/api/situations/${ids.situation}`)
-      assert.deepEqual(resumed.body.read.talk.map((t) => t.text), [READ_ANSWER, READ_TALK_Q])
+      assert.deepEqual(resumed.body.read.talk.map((t) => t.text), [READ_ANSWER, `${READ_TALK_REPLY} ${READ_TALK_Q}`])
       assert.ok(!resumed.body.turns.some((t) => t.text === READ_TALK_Q))
       const answered = await founder('POST', `/api/situations/${ids.situation}/read/answer`, { text: READ_TALK_ANSWER })
       assert.deepEqual(answered.body, { status: 'stored', situation_id: ids.situation, skipped: false, next: 'learn' })
@@ -129,6 +129,8 @@ test('a founder walks the whole journey', async (t) => {
     // ── Learn ─────────────────────────────────────────────────────────────────
     await t.test('learn: lesson with a verified citation; the invented quote is stripped', async () => {
       // Both tries cite the invented quote, so the server shows the cleaned reply.
+      // The library is searched with what the founder needs (lesson and the reply turn), never their raw words.
+      openai.script('learn_search', { need: LEARN_NEED }, { need: LEARN_NEED })
       openai.script('learn_reply', LESSON, LESSON)
       const res = await founder('POST', `/api/situations/${ids.situation}/learn`)
       assert.equal(res.status, 200)

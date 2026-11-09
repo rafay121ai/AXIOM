@@ -35,7 +35,7 @@ type Line = { id: number; who: 'me' | 'ax'; text: string };
 
 // The Read: the finding as a headline, two short paragraphs, then one question set apart by a hairline.
 // No Continue: answering the question, or skipping it, is what moves on. After an answer Axiom may ask
-// up to 2 more questions here (the server decides), then Learn.
+// up to 5 more questions here (the server decides), then Learn.
 export function ReadScreen({ loadRead, answer, onAnswered, onSomethingElse, onCare, onMenu }: Props) {
   const insets = useSafeAreaInsets();
   const [read, setRead] = useState<Read | null>(null);
