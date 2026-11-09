@@ -108,11 +108,14 @@ export function createLearn({ supabase, knowledgeSupabase = null, embed = null, 
   async function contextOf(userId, situation, learnTurns) {
     const [situationTurns, read, { answers }] = await Promise.all([situationTurnsOf(situation.id), readOf(situation.id), signup.load(userId)])
     const { evidence: signUp, answerTexts } = buildEvidence(answers)
-    const situationTalk = situationTurns.filter((t) => !t.filler).map((t) => ({ role: t.role, text: t.text }))
+    const talkOf = (readTalk) => situationTurns.filter((t) => !t.filler && (t.result?.read_talk === true) === readTalk).map((t) => ({ role: t.role, text: t.text }))
+    const situationTalk = talkOf(false)
+    const readTalk = talkOf(true)
     const learnTalk = learnTurns.filter((t) => !t.filler && t.kind !== 'followup').map((t) => ({ role: t.role, text: t.text }))
     const founderSaid = [
       ...situationTalk.filter((t) => t.role === 'founder').map((t) => t.text),
       ...(read?.closing_answer ? [read.closing_answer] : []),
+      ...readTalk.filter((t) => t.role === 'founder').map((t) => t.text),
     ]
     const learnSaid = learnTalk.filter((t) => t.role === 'founder').map((t) => t.text)
     return {
@@ -120,7 +123,7 @@ export function createLearn({ supabase, knowledgeSupabase = null, embed = null, 
         signUp,
         situation: situationTalk,
         read: read
-          ? { headline: read.headline, body: read.body, closing_question: read.closing_question, founder_answer: read.closing_answer ?? null, skipped: read.skipped === true }
+          ? { headline: read.headline, body: read.body, closing_question: read.closing_question, founder_answer: read.closing_answer ?? null, skipped: read.skipped === true, talk_after: readTalk }
           : null,
         learn: learnTalk,
       },

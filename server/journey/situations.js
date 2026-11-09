@@ -8,6 +8,7 @@ import { buildEvidence } from './firstReading.js'
 import { checkHook } from './hooks.js'
 import { stripFiller, isFillerReply } from './filler.js'
 import { SITUATION_SCHEMA, situationMessages } from './prompts/situation.js'
+import { READ_TALK_SCHEMA, readTalkMessages } from './prompts/readTalk.js'
 import { createRead } from './theRead.js'
 import { BANNED_PHRASES, norm, wordRx } from './ownWords.js'
 import { styleOf } from './prompts/style.js'
@@ -16,6 +17,7 @@ export const MAX_NEW_SITUATIONS_PER_DAY = 5
 export const TEXT_MAX = 2000
 export const MIN_SITUATION_WORDS = 3
 const SAY_MORE = 'Say a bit more.'
+export const MAX_READ_QUESTIONS = 2
 const TITLE_MAX = 60
 const CAS_TRIES = 5
 const OPEN_LIST_MAX = 20
@@ -66,6 +68,8 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     one(supabase.from('reads').select().eq('situation_id', situationId).maybeSingle())
 
   const founderTextsOf = (turns) => turns.filter((t) => t.role === 'founder' && !t.filler).map((t) => t.text)
+  // The talk after the Read lives in situation_turns, marked in result (Rafay, Nov 9).
+  const isReadTalk = (t) => t.result?.read_talk === true
 
   // ── Counting: the follow-up cap and the daily limit ────────────────────────
 
@@ -258,20 +262,24 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     const [turns, read] = await Promise.all([turnsOf(situation.id), readOf(situation.id)])
     return {
       situation: { id: situation.id, title: situation.title, status: situation.status, follow_up_count: situation.follow_up_count, created_at: situation.created_at },
-      turns: turns.filter((t) => !t.filler).map((t) => ({ role: t.role, text: t.text, created_at: t.created_at })),
-      read: read ? readView(read) : null,
+      turns: turns.filter((t) => !t.filler && !isReadTalk(t)).map((t) => ({ role: t.role, text: t.text, created_at: t.created_at })),
+      read: read ? readView(read, turns) : null,
     }
   }
 
-  const readView = (row) => ({
+  // answered: the talk after the Read is over and Learn is next. talk: what was said since the question, to resume it.
+  const readView = (row, turns = []) => ({
     headline: row.headline, body: row.body, closing_question: row.closing_question,
     answered: row.answered_at !== null, skipped: row.skipped === true,
+    talk: row.answered_at === null && row.closing_answer
+      ? [{ role: 'founder', text: row.closing_answer }, ...turns.filter(isReadTalk).map((t) => ({ role: t.role, text: t.text }))]
+      : [],
   })
 
   async function read({ userId, situationId }) {
     const situation = await ownSituation(userId, situationId)
     const stored = await readOf(situation.id)
-    if (stored) return { situation_id: situation.id, ...readView(stored) }
+    if (stored) return { situation_id: situation.id, ...readView(stored, await turnsOf(situation.id)) }
 
     const turns = await turnsOf(situation.id)
     if (founderTextsOf(turns).length === 0) throw new HttpError(409, { error: 'Tell me what is going on first.', code: 'situation_empty' })
@@ -293,17 +301,78 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     return { situation_id: situation.id, ...readView(inserted.data) }
   }
 
-  // The reply to the closing question, or a skip. First answer wins.
-  async function answerRead({ userId, situationId, text, skip }) {
+  // The reply to the closing question, a reply in the talk after it, or a skip.
+  // Axiom asks at most MAX_READ_QUESTIONS more questions, then Learn is next
+  // (Rafay, Nov 9). answered_at marks the talk as over. overCap: at the daily
+  // cost limit the answer is still saved, only the question is skipped.
+  async function answerRead({ userId, situationId, text, skip, overCap = false }) {
     const situation = await ownSituation(userId, situationId)
     const stored = await readOf(situation.id)
     if (!stored) throw new HttpError(409, { error: 'There is no Read for this situation yet.', code: 'read_missing' })
+    const toLearn = (row) => ({ status: 'stored', situation_id: situation.id, skipped: row.skipped === true, next: 'learn' })
+    if (stored.answered_at) return toLearn(stored)
     if (!skip && isFillerReply(text)) return { status: 'say_more', reply: SAY_MORE }
-    const won = await one(supabase.from('reads')
-      .update({ closing_answer: skip ? null : text, skipped: Boolean(skip), answered_at: iso() })
-      .eq('id', stored.id).is('answered_at', null).select('id'))
-    if (won.length > 0) await one(supabase.from('situations').update({ last_activity_at: iso() }).eq('id', situation.id).select('id'))
-    return { status: 'stored', situation_id: situation.id, skipped: won.length > 0 ? Boolean(skip) : stored.skipped === true, next: 'learn' }
+    // Skipping after answering the Read's question only ends the talk; the answer stays.
+    if (skip) return toLearn(await finishRead(situation, stored, stored.closing_answer ? {} : { skipped: true }))
+
+    if (!stored.closing_answer) {
+      // First answer wins; a second tap that lost the race carries on with the stored one.
+      await one(supabase.from('reads').update({ closing_answer: text }).eq('id', stored.id).is('closing_answer', null).select('id'))
+    } else {
+      const talk = (await turnsOf(situation.id)).filter(isReadTalk)
+      // shortcut: a resend of the same text after a dropped reply is not stored twice; no client turn id on this route yet.
+      const last = talk.at(-1)
+      if (!(last?.role === 'founder' && last.text === text)) {
+        await one(supabase.from('situation_turns').insert({ situation_id: situation.id, role: 'founder', text, filler: false, result: { read_talk: true }, created_at: iso() }).select('id'))
+      }
+    }
+    await one(supabase.from('situations').update({ last_activity_at: iso() }).eq('id', situation.id).select('id'))
+
+    const [row, turns] = await Promise.all([readOf(situation.id), turnsOf(situation.id)])
+    const asked = turns.filter((t) => isReadTalk(t) && t.role === 'axiom').length
+    const question = overCap || asked >= MAX_READ_QUESTIONS ? null : await nextReadQuestion({ userId, situation, row, turns, questionsLeft: MAX_READ_QUESTIONS - asked })
+    if (!question) return toLearn(await finishRead(situation, row, {}))
+    await one(supabase.from('situation_turns').insert({ situation_id: situation.id, role: 'axiom', text: question, filler: false, result: { read_talk: true }, created_at: iso() }).select('id'))
+    return { status: 'talk', situation_id: situation.id, reply: question }
+  }
+
+  async function finishRead(situation, row, fields) {
+    await one(supabase.from('reads').update({ ...fields, answered_at: iso() }).eq('id', row.id).is('answered_at', null).select('id'))
+    return readOf(situation.id)
+  }
+
+  // The next question in the talk after the Read, or null when Learn should start.
+  // Any model failure, or a question that fails the checks twice, means Learn: the talk never blocks the journey.
+  async function nextReadQuestion({ userId, situation, row, turns, questionsLeft }) {
+    const { answers } = await signup.load(userId)
+    const { evidence, answerTexts } = buildEvidence(answers)
+    const talk = [{ role: 'founder', text: row.closing_answer }, ...turns.filter(isReadTalk).map((t) => ({ role: t.role, text: t.text }))]
+    const situationTalk = turns.filter((t) => !t.filler && !isReadTalk(t)).map((t) => ({ role: t.role, text: t.text }))
+    const sources = [...founderTextsOf(turns), row.closing_answer, ...answerTexts]
+    let problems = null
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        const { data } = await callStructured({
+          step: 'followup',
+          schema: READ_TALK_SCHEMA,
+          schemaName: 'read_talk',
+          maxCompletionTokens: 400,
+          userId,
+          usageContext: { step: 'followup', kind: 'read_talk', situation_id: situation.id },
+          messages: readTalkMessages({ signUp: evidence, situation: situationTalk, read: { headline: row.headline, body: row.body, closing_question: row.closing_question }, talk, questionsLeft }, problems),
+        })
+        if (data.ready) return null
+        const question = stripFiller(data.question).text
+        const verdict = checkHook({ text: question, sources })
+        if (verdict.ok && question.length <= 220) return question
+        problems = verdict.problems
+      } catch (err) {
+        log('model call failed', err)
+        return null
+      }
+    }
+    log('read talk question failed the checks', { problems })
+    return null
   }
 
   return { create, turn, list, get, read, answerRead }

@@ -65,8 +65,14 @@ export async function resolveDailyCap(userId, lookup, now = new Date(), log = co
 // cap(stored) lets a request through when stored(req) says its answer is
 // already stored: a replay costs no model call.
 export function dailyCapGate({ isCapped, isAdmin = () => false }) {
-  return (stored = null) => async (req, res, next) => {
+  const gate = (stored = null) => async (req, res, next) => {
     if (isAdmin(req.user) || !(await isCapped(req.user.id)) || (stored && await stored(req))) return next()
     return res.status(429).json({ error: 'Daily cost cap reached', code: 'daily_cost_cap', line: DAILY_CAP_LINE })
   }
+  // Never blocks: sets req.overCap, so a route that must save what the founder wrote can skip only its model call.
+  gate.mark = async (req, _res, next) => {
+    req.overCap = !isAdmin(req.user) && await isCapped(req.user.id)
+    next()
+  }
+  return gate
 }

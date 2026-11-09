@@ -61,10 +61,11 @@ export function mountSituationRoutes(app, { supabase, care, cap, stored, callStr
   app.post('/api/situations/:id/read', limiter(5), care.careHold, cap(stored.read),
     handle((req) => service.read({ userId: req.user.id, situationId: idParam(req) })))
 
-  app.post('/api/situations/:id/read/answer', limiter(20), care.careHold, care.careGate(bodyFields('text')),
+  // Never blocked by the cost cap (it saves what the founder wrote); at the cap only the talk's question is skipped.
+  app.post('/api/situations/:id/read/answer', limiter(20), care.careHold, care.careGate(bodyFields('text')), cap.mark ?? ((_req, _res, next) => next()),
     handle((req) => {
       const skip = req.body?.skip === true
       if (skip) return service.answerRead({ userId: req.user.id, situationId: idParam(req), skip: true })
-      return service.answerRead({ userId: req.user.id, situationId: idParam(req), text: textOf(req) })
+      return service.answerRead({ userId: req.user.id, situationId: idParam(req), text: textOf(req), overCap: req.overCap === true })
     }))
 }

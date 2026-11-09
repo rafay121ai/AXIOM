@@ -71,6 +71,7 @@ const UNCLEAR: Screened = { care: 'unclear', reply: 'That sounded heavy. What is
 const FOLLOW_UPS = ['When was the last time you showed it to someone, and what did they say?', 'And what did you do after that?'];
 const MAX_FOLLOW_UPS = 2;
 const SAY_MORE = 'Say a bit more.';
+const READ_TALK_SAMPLE = 'What would the two clinics need to see from you to start this month?';
 const FAKE_READ: Read = {
   headline: 'Nobody has actually said yes or no to this yet.',
   body: [
@@ -304,6 +305,7 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
   // Situations kept in memory, so a turn id sent twice gets the same answer, like the server.
   let nextId = 1;
   const situations = new Map<string, { asked: number; said: string[]; turns: SituationView['turns'] }>();
+  let readTalked = false; // the sample asks one question after the Read answer, then Learn
   const replies = new Map<string, SituationReply>();
   const turn = async (situationId: string | null, text: string, turnId: string): Promise<Screened<SituationReply>> => {
     const flagged = await screen();
@@ -383,7 +385,9 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
       if ('skip' in answer) return { status: 'stored', skipped: true, next: 'learn' };
       const flagged = await screen();
       if (flagged.care) return flagged;
-      return isReal(answer.text) ? { status: 'stored', skipped: false, next: 'learn' } : { status: 'say_more', reply: SAY_MORE };
+      if (!isReal(answer.text)) return { status: 'say_more', reply: SAY_MORE };
+      if (!readTalked) { readTalked = true; return { status: 'talk', reply: READ_TALK_SAMPLE }; }
+      return { status: 'stored', skipped: false, next: 'learn' };
     },
     async startLearn() {
       await wait();

@@ -34,7 +34,8 @@ const HAND_ON_MS = 1100;
 type Line = { id: number; who: 'me' | 'ax'; text: string };
 
 // The Read: the finding as a headline, two short paragraphs, then one question set apart by a hairline.
-// No Continue: answering the question, or skipping it, is what moves on.
+// No Continue: answering the question, or skipping it, is what moves on. After an answer Axiom may ask
+// up to 2 more questions here (the server decides), then Learn.
 export function ReadScreen({ loadRead, answer, onAnswered, onSomethingElse, onCare, onMenu }: Props) {
   const insets = useSafeAreaInsets();
   const [read, setRead] = useState<Read | null>(null);
@@ -63,7 +64,10 @@ export function ReadScreen({ loadRead, answer, onAnswered, onSomethingElse, onCa
       const got = await sendUntilDelivered(() => latest.current.loadRead(), options());
       if (!live.current) return;
       if (got.answered) latest.current.onAnswered();
-      else setRead(got);
+      else {
+        setRead(got);
+        setLines((got.talk ?? []).map((t) => ({ id: nextId.current++, who: t.role === 'founder' ? 'me' : 'ax', text: t.text })));
+      }
     } catch (e) {
       if (live.current) setFailure({ ...failureLine(e, 'read'), retry: () => void load() });
     }
@@ -87,7 +91,7 @@ export function ReadScreen({ loadRead, answer, onAnswered, onSomethingElse, onCa
         return;
       }
       if (res.care) return;
-      if (res.status === 'say_more') {
+      if (res.status === 'say_more' || res.status === 'talk') {
         setLines((all) => [...all, { id: nextId.current++, who: 'ax', text: res.reply }]);
         return;
       }

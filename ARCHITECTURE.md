@@ -98,7 +98,10 @@ Read
   POST /api/situations/:id/read    -> 1 structured call: headline, body, one
                                       closing question. No underlines.
   POST /api/situations/:id/read/answer
-                                   -> stores the answer (or "skipped")
+                                   -> stores the answer (or "skipped"); then
+                                      up to 2 more questions (followup step,
+                                      kind read_talk), then Learn. answered_at
+                                      is set when the talk ends.
 
 Learn (a conversation)
   POST /api/situations/:id/learn   -> start; retrieval + 1 structured call
@@ -215,7 +218,7 @@ Knowledge project.
 |--------------------|---------|------------|
 | founder_profiles   | One row per founder | user_id, signup_answers jsonb (all 13 answers), open_answers jsonb, first_reading jsonb, stage, business_model, customer_markets[], country, goal, deadline, report_time_local, timezone |
 | situations         | One per situation | id, user_id, title, status (open, paused, closed), follow_up_count (CHECK 0 to 2), create_turn_id, care_flag, last_activity_at |
-| situation_turns    | Founder and Axiom messages | id, seq, situation_id, role, text, filler, client_turn_id (repeat-safe), result |
+| situation_turns    | Founder and Axiom messages | id, seq, situation_id, role, text, filler, client_turn_id (repeat-safe), result (result.read_talk marks the talk after the Read) |
 | reads              | Axiom's read | id, situation_id (unique), headline, body (one text), closing_question, source (model, fallback), closing_answer, skipped, answered_at |
 | learn_conversations | One per situation | id, situation_id (unique), user_id, offers int[] (CHECK at most 2), move_subject, move_fact, lock_token |
 | learn_turns        | Lesson conversation | id, seq, conversation_id, role, kind (lesson, reply, followup), text, filler, evidence and validation (server only), sources, picture, follow_ups, move_offer (none, first, second), parent_turn_id, followup_index |

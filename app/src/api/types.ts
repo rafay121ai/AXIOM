@@ -119,14 +119,15 @@ export type SituationView = {
   read: Read | null;
 };
 
-/** The Read: a headline, a short body (paragraphs split by blank lines) and one closing question. No underlines. */
-export type Read = { headline: string; body: string; closing_question: string; answered: boolean; skipped: boolean };
+/** The Read: a headline, a short body (paragraphs split by blank lines) and one closing question. No underlines.
+ * `answered`: the talk after the question is over and Learn is next. `talk`: what was said since the question, to resume it. */
+export type Read = { headline: string; body: string; closing_question: string; answered: boolean; skipped: boolean; talk?: { role: 'founder' | 'axiom'; text: string }[] };
 
 /** What the founder does with the closing question: answers in words, or skips. */
 export type ReadAnswer = { text: string } | { skip: true };
 
-/** `say_more`: the reply was too thin to count. `stored`: it counted, and Learn is next. */
-export type ReadAnswerResult = { status: 'say_more'; reply: string } | { status: 'stored'; skipped: boolean; next: 'learn' };
+/** `say_more`: the reply was too thin to count. `talk`: Axiom asks one more question (2 at most). `stored`: Learn is next. */
+export type ReadAnswerResult = { status: 'say_more' | 'talk'; reply: string } | { status: 'stored'; skipped: boolean; next: 'learn' };
 
 /** A source named under a lesson: always author and book. A quote is there only when the server checked it word for word. */
 export type LearnSource = { author: string; book: string; quote?: string };
