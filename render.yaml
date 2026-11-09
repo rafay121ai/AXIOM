@@ -29,10 +29,13 @@ services:
       # Off until the phone build exists (milestone 5), then set to "on".
       - key: EXPO_PUSH
         value: "off"
-      # Off: delete requests are recorded, nothing is removed. Turn on once tested.
+      # On (Rafay, Nov 9): a delete request waits a 7-day grace period, then the hourly check removes the founder.
       - key: ACCOUNT_DELETE
-        value: "off"
+        value: "on"
       - key: FRONTEND_URL
+        sync: false
+      # Extra allowed origins, comma-separated. Set in the dashboard: https://axiom-founders.vercel.app (web app on Vercel, Nov 8).
+      - key: FRONTEND_URLS
         sync: false
       # Comma-separated user ids (or confirmed emails) of test accounts: they skip the daily situation limit and the cost cap.
       - key: ADMIN_USER_IDS
