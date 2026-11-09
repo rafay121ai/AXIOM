@@ -100,8 +100,10 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
 
   // ── The model's view of one turn ───────────────────────────────────────────
 
-  // Returns { topic, enough, question, title }. Never throws: a failed model
-  // call or a question that will not pass ends in "enough", never in a stall.
+  // Returns { topic, enough, question, title }. Axiom always asks MAX_FOLLOW_UPS
+  // questions before the Read (Rafay, Nov 9): while any are left, a missing or
+  // failing question is asked for again once. Never throws: a failed model call
+  // or a question that will not pass ends in "enough", never in a stall.
   async function assess({ userId, situation, turns, followUpsLeft }) {
     const conversation = turns.filter((t) => !t.filler).map((t) => ({ role: t.role, text: t.text }))
     const sources = founderTextsOf(turns)
@@ -117,11 +119,10 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
           usageContext: { step: 'followup', kind: 'situation_turn', situation_id: situation.id },
           messages: situationMessages({ conversation, followUpsLeft }, problems),
         })
-        const enough = (data.has_situation && data.has_detail) || data.missing === 'none'
         const base = { topic: data.topic, title: data.title.trim() }
-        if (enough || followUpsLeft <= 0) return { ...base, enough: true, question: null }
+        if (followUpsLeft <= 0) return { ...base, enough: true, question: null }
         const question = stripFiller(data.question).text
-        const verdict = checkHook({ text: question, sources })
+        const verdict = question ? checkHook({ text: question, sources }) : { ok: false, problems: ['a question is required: follow_ups_left is more than 0'] }
         if (verdict.ok && question.length <= 220) return { ...base, enough: false, question }
         problems = verdict.problems
       } catch (err) {

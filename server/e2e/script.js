@@ -16,7 +16,7 @@ export const Q2 = 'What have you sent the 2 clinics since the demo?'
 export const Q3_REFUSED = 'When did you last speak to the 2 clinics?'
 
 export const situationVerdict = (over = {}) => ({
-  topic: 'same', has_situation: true, has_detail: false, missing: 'person', question: Q1, title: 'Pricing emails to clinics', ...over,
+  topic: 'same', question: Q1, title: 'Pricing emails to clinics', ...over,
 })
 
 export const FIRST_READING = {

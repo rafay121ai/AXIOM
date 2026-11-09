@@ -461,3 +461,13 @@ The JS bundle and native config generate; the back button and pickers are fixed.
 - [ ] Google sign-in for Android: return URL `axiom://`, allowed in Supabase.
 - [ ] Unverified without a device: keyboard resizing, push delivery, sign-in return, blur and fonts, the permission prompt, the pickers.
 - [ ] expo-doctor: 9 Expo packages are slightly behind SDK 58; `expo-system-ui` is needed for `userInterfaceStyle` on Android. Dependency changes, not made.
+
+# Plan (Nov 9): Axiom talks before it teaches (branch feat/talk-before-teach)
+
+Rafay: Situation always asks exactly 2 questions about the situation; the Read replies and talks until it is time to learn; lessons are searched by what the founder needs.
+
+- [ ] 1. Situation: exactly 2 follow-up questions before the Read (cap stays 2, now also the floor). Questions dig into what they said: what it is or does, then the real issue behind it (why, what is stopping them, what happened). The server asks while follow-ups are left; a missing or failing question is asked for again once, then the Read starts (never blocks).
+- [ ] 2. Read talk: each Axiom turn is a short reply to what they said plus one question. Learn starts when the founder asks what to do, or when the server knows the goal, the blocker and one concrete detail. At most 5 questions after the Read's own, then Learn.
+- [ ] 3. Learn: before the lesson, one call reads Situation and Read and writes what this founder needs from the library; the library is searched with that text only. Falls back to the old query on failure.
+- [ ] 4. Tests for each rule; PRODUCT.md, ARCHITECTURE.md, decisions, lessons. All suites pass. Commit on the branch; Rafay merges later with the memory work.
+Not in scope: remembering how the founder thinks (the other window).

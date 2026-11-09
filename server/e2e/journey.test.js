@@ -75,7 +75,7 @@ test('a founder walks the whole journey', async (t) => {
 
     // ── Situation ─────────────────────────────────────────────────────────────
     await t.test('situation: 2 follow-ups, then the third turn asks nothing more', async () => {
-      openai.script('situation_turn', situationVerdict(), situationVerdict({ missing: 'tried', question: Q2 }), situationVerdict({ missing: 'date', question: Q3_REFUSED }))
+      openai.script('situation_turn', situationVerdict(), situationVerdict({ question: Q2 }), situationVerdict({ question: Q3_REFUSED }))
       const opened = await founder('POST', '/api/situations', { text: SITUATION_TEXT, client_turn_id: uuid(1) })
       assert.equal(opened.status, 200)
       assert.deepEqual([opened.body.status, opened.body.reply, opened.body.follow_up_count, opened.body.follow_ups_left], ['follow_up', Q1, 1, 1])
