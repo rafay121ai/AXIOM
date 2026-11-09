@@ -12,7 +12,7 @@ import { MODELS, STEPS } from '../config.js'
 import { FOUNDER, OTHER, createWorld, keysIn, routesOf } from './harness.js'
 import {
   CHECK_IN_ANSWER, DISTRESS, FABRICATED_QUOTE, FIRST_READING, FOLLOWUP_ANSWER, FULL_ANSWERS, LEARN_AFTER_CARE, LEARN_OFFER,
-  LESSON, MOVE, PEER_STORY, PEER_STORY_ID, Q1, Q2, Q3_REFUSED, READ, READ_ANSWER, REAL_1,
+  LESSON, MOVE, PEER_STORY, PEER_STORY_ID, Q1, Q2, Q3_REFUSED, READ, READ_ANSWER, READ_TALK_ANSWER, READ_TALK_Q, REAL_1,
   REPORT_NOTE, REPORT_REPLY, SITUATION_TEXT, SWAP_REASON, TURN_2, TURN_3, VERIFIED_QUOTE_SHOWN, WHAT_NEXT, situationVerdict, uuid,
 } from './script.js'
 
@@ -112,9 +112,18 @@ test('a founder walks the whole journey', async (t) => {
 
       const thin = await founder('POST', `/api/situations/${ids.situation}/read/answer`, { text: 'ok' })
       assert.equal(thin.body.status, 'say_more')
-      const answered = await founder('POST', `/api/situations/${ids.situation}/read/answer`, { text: READ_ANSWER })
-      assert.deepEqual(answered.body, { status: 'stored', situation_id: ids.situation, skipped: false, next: 'learn' })
+      // The talk after the Read (Rafay, Nov 9): one more question, then Learn.
+      openai.script('read_talk', { ready: false, question: READ_TALK_Q }, { ready: true, question: '' })
+      const talk = await founder('POST', `/api/situations/${ids.situation}/read/answer`, { text: READ_ANSWER })
+      assert.deepEqual(talk.body, { status: 'talk', situation_id: ids.situation, reply: READ_TALK_Q })
       assert.equal(rows('reads')[0].closing_answer, READ_ANSWER)
+      assert.equal(rows('reads')[0].answered_at, null)
+      const resumed = await founder('GET', `/api/situations/${ids.situation}`)
+      assert.deepEqual(resumed.body.read.talk.map((t) => t.text), [READ_ANSWER, READ_TALK_Q])
+      assert.ok(!resumed.body.turns.some((t) => t.text === READ_TALK_Q))
+      const answered = await founder('POST', `/api/situations/${ids.situation}/read/answer`, { text: READ_TALK_ANSWER })
+      assert.deepEqual(answered.body, { status: 'stored', situation_id: ids.situation, skipped: false, next: 'learn' })
+      assert.ok(rows('reads')[0].answered_at)
     })
 
     // ── Learn ─────────────────────────────────────────────────────────────────

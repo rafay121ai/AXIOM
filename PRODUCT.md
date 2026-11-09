@@ -205,7 +205,12 @@ Axiom says plainly what is really happening in this situation.
 - No underlines on the Read. No pictures.
 - **Ends with one real question** the founder can answer in a reply box. The
   answer feeds the lesson. A quiet "Skip this question" exists. There is no
-  Continue button; answering or skipping moves on.
+  Continue button.
+- **After the answer, Axiom may talk a little more** on the Read screen: at
+  most 2 more questions, each asking only for a piece the lesson still needs.
+  Once it has enough (or after the 2nd), it moves on to Learn by itself. The
+  cap is enforced in code. Skipping during the talk moves on and keeps the
+  answer. At the daily cost limit the answer is saved and Learn is next.
 - A one-word reply gets "Say a bit more." and does not move them on.
 - "Something else on my mind" opens a fresh situation.
 - No rating buttons. A plain reply box is a normal chat line, not a rating.

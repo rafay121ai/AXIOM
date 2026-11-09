@@ -31,6 +31,8 @@ export const READ = {
   closing_question: 'Have you gone back to either of those clinics since the demo?',
 }
 export const READ_ANSWER = "No, I haven't gone back to either since the demo three weeks ago."
+export const READ_TALK_Q = 'What do you want from the 2 clinics since the demo?'
+export const READ_TALK_ANSWER = 'I want both clinics to start a paid pilot this month.'
 
 // Knowledge search rows. E1 and E2 are The Mom Test, E3 Never Split the
 // Difference (a third Mom Test passage is dropped: at most 2 per book).

@@ -96,7 +96,7 @@ export const LEARN_PROMPT = [
 
 // input: { mode, signUp, situation, read, learn, evidence, tapped? }
 //   signUp: [{ question, answer }]; situation and learn: [{ role, text }];
-//   read: { headline, body, closing_question, founder_answer, skipped };
+//   read: { headline, body, closing_question, founder_answer, skipped, talk_after: [{ role, text }] };
 //   evidence: [{ handle, text }] (never ids, authors or titles).
 export function learnMessages({ mode, signUp, situation, read, learn, evidence, tapped = null, style }, retryProblems = null) {
   const messages = [

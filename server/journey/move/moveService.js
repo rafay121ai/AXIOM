@@ -110,13 +110,15 @@ export function createMoves({ supabase, callStructured, clock, log = () => {} })
       signup.load(userId),
     ])
     const { evidence: signUp, answerTexts } = buildEvidence(answers)
-    const situation = situationTurns.filter((t) => !t.filler).map((t) => ({ role: t.role, text: t.text }))
+    const talkOf = (readTalk) => situationTurns.filter((t) => !t.filler && (t.result?.read_talk === true) === readTalk).map((t) => ({ role: t.role, text: t.text }))
+    const situation = talkOf(false)
+    const readTalk = talkOf(true)
     const learn = learnTurns.filter((t) => !t.filler && t.kind !== 'followup').map((t) => ({ role: t.role, text: t.text }))
     return {
       prompt: {
         signUp,
         situation,
-        read: read ? { headline: read.headline, body: read.body, closing_question: read.closing_question, founder_answer: read.closing_answer ?? null } : null,
+        read: read ? { headline: read.headline, body: read.body, closing_question: read.closing_question, founder_answer: read.closing_answer ?? null, talk_after: readTalk } : null,
         learn,
         subject: conversation.move_subject,
         fact: conversation.move_fact,
@@ -125,6 +127,7 @@ export function createMoves({ supabase, callStructured, clock, log = () => {} })
         ...answerTexts,
         ...situation.filter((t) => t.role === 'founder').map((t) => t.text),
         ...(read?.closing_answer ? [read.closing_answer] : []),
+        ...readTalk.filter((t) => t.role === 'founder').map((t) => t.text),
         ...learn.filter((t) => t.role === 'founder').map((t) => t.text),
       ],
     }

@@ -148,7 +148,8 @@ describe('fixtures follow the same rules as the server', () => {
     const api = createFakeApi();
     expect(await api.answerRead('s1', { skip: true })).toMatchObject({ status: 'stored', skipped: true });
     expect(await api.answerRead('s1', { text: 'ok' })).toMatchObject({ status: 'say_more' });
-    expect(await api.answerRead('s1', { text: 'No, I have not gone back since the demo' })).toMatchObject({ status: 'stored', skipped: false });
+    expect(await api.answerRead('s1', { text: 'No, I have not gone back since the demo' })).toMatchObject({ status: 'talk' });
+    expect(await api.answerRead('s1', { text: 'A price and a start date for the pilot' })).toMatchObject({ status: 'stored', skipped: false });
   });
 });
 
