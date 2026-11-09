@@ -440,53 +440,83 @@ test('the Read needs something the founder wrote, and closes the situation to mo
   } finally { await close() }
 })
 
-// Rafay, Nov 9: after the Read, Axiom talks until it has enough, at most 2 questions, then Learn.
-test('the talk after the Read asks at most 2 questions, even when the model wants more', async () => {
-  const ask = (question) => JSON.stringify({ knows_goal: false, knows_blocker: true, knows_detail: true, missing: 'goal', question })
-  const q1 = 'What did the clinics say at the demo three weeks ago?'
-  const q2 = 'Who at the clinics did you show the demo to?'
-  const { call, rows, openai, close } = await setup([enough(), enough(), readReply(), ask(q1), ask(q2)])
+// Rafay, Nov 9: after the Read, Axiom replies and talks (at least 1 question, at most 5) until it is time to learn.
+const ANSWER = 'No, I have not contacted them since the demo three weeks ago.'
+const talkLine = (over = {}) => JSON.stringify({
+  asked_to_learn: false, knows_goal: false, knows_blocker: true, knows_detail: true, missing: 'goal',
+  reply: 'Three weeks since the demo and no word to the clinics.',
+  question: 'What do you want the clinics to do after the demo?', ...over,
+})
+const allKnown = (over = {}) => talkLine({ knows_goal: true, missing: 'none', ...over })
+
+test('the talk after the Read replies, then asks; the line shown is reply plus question', async () => {
+  const { call, rows, close } = await setup([enough(), enough(), readReply(), talkLine()])
   try {
     const id = (await create(call, 1)).body.situation_id
     await call('POST', `/api/situations/${id}/read`)
-    const first = await call('POST', `/api/situations/${id}/read/answer`, { text: 'No, I have not contacted them since the demo three weeks ago.' })
-    assert.deepEqual(first.body, { status: 'talk', situation_id: id, reply: q1 })
-    const second = await call('POST', `/api/situations/${id}/read/answer`, { text: 'They liked the demo and asked about pricing.' })
-    assert.equal(second.body.reply, q2)
-    assert.equal((await call('GET', `/api/situations/${id}`)).body.read.answered, false)
-    const calls = openai.calls.length
-    const third = await call('POST', `/api/situations/${id}/read/answer`, { text: 'The owner of each clinic, Dr Patel and Dr Rao.' })
-    assert.deepEqual(third.body, { status: 'stored', situation_id: id, skipped: false, next: 'learn' })
-    assert.equal(openai.calls.length, calls) // no third question is even asked for
-    assert.equal(rows('situation_turns').filter((t) => t.result?.read_talk && t.role === 'axiom').length, 2)
-    assert.equal(rows('model_usage_logs').at(-1).call_type, 'followup')
-    assert.equal((await call('GET', `/api/situations/${id}`)).body.read.answered, true)
+    const res = await call('POST', `/api/situations/${id}/read/answer`, { text: ANSWER })
+    assert.deepEqual(res.body, { status: 'talk', situation_id: id, reply: 'Three weeks since the demo and no word to the clinics. What do you want the clinics to do after the demo?' })
+    assert.equal(rows('reads')[0].answered_at, null)
+    assert.deepEqual((await call('GET', `/api/situations/${id}`)).body.read.talk.map((t) => t.role), ['founder', 'axiom'])
   } finally { await close() }
 })
 
-test('the talk after the Read moves on only when goal, blocker and a detail are all known', async () => {
-  const known = (over) => JSON.stringify({ knows_goal: true, knows_blocker: true, knows_detail: true, missing: 'none', question: '', ...over })
-  const q1 = 'What do you want the clinics to do after the demo three weeks ago?'
-  const { call, close } = await setup([enough(), enough(), readReply(), known({ knows_goal: false, missing: 'goal', question: q1 }), known()])
+test('the talk after the Read always asks once, even when everything is known after the first answer', async () => {
+  const { call, close } = await setup([enough(), enough(), readReply(), allKnown(), allKnown()])
   try {
     const id = (await create(call, 1)).body.situation_id
     await call('POST', `/api/situations/${id}/read`)
-    assert.equal((await call('POST', `/api/situations/${id}/read/answer`, { text: 'No, I have not contacted them since the demo three weeks ago.' })).body.reply, q1)
+    assert.equal((await call('POST', `/api/situations/${id}/read/answer`, { text: ANSWER })).body.status, 'talk')
     assert.equal((await call('POST', `/api/situations/${id}/read/answer`, { text: 'I want both clinics to start a paid pilot.' })).body.next, 'learn')
   } finally { await close() }
 })
 
-test('skipping during the talk after the Read moves on to Learn', async () => {
-  const q1 = 'What did the clinics say at the demo three weeks ago?'
-  const { call, rows, close } = await setup([enough(), enough(), readReply(), JSON.stringify({ knows_goal: false, knows_blocker: true, knows_detail: true, missing: 'goal', question: q1 })])
+test('asking what to do goes straight to Learn', async () => {
+  const { call, close } = await setup([enough(), enough(), readReply(), talkLine({ asked_to_learn: true })])
   try {
     const id = (await create(call, 1)).body.situation_id
     await call('POST', `/api/situations/${id}/read`)
-    assert.equal((await call('POST', `/api/situations/${id}/read/answer`, { text: 'No, I have not contacted them since the demo three weeks ago.' })).body.status, 'talk')
+    assert.equal((await call('POST', `/api/situations/${id}/read/answer`, { text: 'Not since the demo. Ok, what should I do?' })).body.next, 'learn')
+  } finally { await close() }
+})
+
+test('the talk after the Read asks at most 5 questions, even when the model wants more', async () => {
+  const { call, rows, openai, close } = await setup([enough(), enough(), readReply(), talkLine(), talkLine(), talkLine(), talkLine(), talkLine()])
+  try {
+    const id = (await create(call, 1)).body.situation_id
+    await call('POST', `/api/situations/${id}/read`)
+    for (let i = 0; i < 5; i += 1) {
+      assert.equal((await call('POST', `/api/situations/${id}/read/answer`, { text: `${ANSWER} Answer ${i}.` })).body.status, 'talk')
+    }
+    const calls = openai.calls.length
+    const last = await call('POST', `/api/situations/${id}/read/answer`, { text: 'The owner of each clinic, Dr Patel and Dr Rao.' })
+    assert.deepEqual(last.body, { status: 'stored', situation_id: id, skipped: false, next: 'learn' })
+    assert.equal(openai.calls.length, calls) // no sixth question is even asked for
+    assert.equal(rows('situation_turns').filter((t) => t.result?.read_talk && t.role === 'axiom').length, 5)
+    assert.equal(rows('model_usage_logs').at(-1).call_type, 'followup')
+  } finally { await close() }
+})
+
+test('a talk line whose reply asks a question or says nothing of theirs is sent back', async () => {
+  const { call, openai, close } = await setup([enough(), enough(), readReply(), talkLine({ reply: 'Why is that?' }), talkLine()])
+  try {
+    const id = (await create(call, 1)).body.situation_id
+    await call('POST', `/api/situations/${id}/read`)
+    assert.equal((await call('POST', `/api/situations/${id}/read/answer`, { text: ANSWER })).body.status, 'talk')
+    assert.match(openai.calls.at(-1).payload.messages.at(-1).content, /the reply holds a question/)
+  } finally { await close() }
+})
+
+test('skipping during the talk after the Read moves on to Learn and keeps the answer', async () => {
+  const { call, rows, close } = await setup([enough(), enough(), readReply(), talkLine()])
+  try {
+    const id = (await create(call, 1)).body.situation_id
+    await call('POST', `/api/situations/${id}/read`)
+    assert.equal((await call('POST', `/api/situations/${id}/read/answer`, { text: ANSWER })).body.status, 'talk')
     const skip = await call('POST', `/api/situations/${id}/read/answer`, { skip: true })
     assert.deepEqual(skip.body, { status: 'stored', situation_id: id, skipped: false, next: 'learn' })
     assert.ok(rows('reads')[0].answered_at)
-    assert.equal(rows('reads')[0].closing_answer, 'No, I have not contacted them since the demo three weeks ago.')
+    assert.equal(rows('reads')[0].closing_answer, ANSWER)
   } finally { await close() }
 })
 
