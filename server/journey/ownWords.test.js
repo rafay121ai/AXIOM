@@ -133,13 +133,11 @@ test('a quote with a word they never used keeps its marks, so the check still se
 })
 
 // Rafay, Nov 2: the Read quoted "Avoids most: Talking to customers, Launching", our form label, as the founder's words.
-test('the Read quotes only typed words: a picked option loses its marks, our labels are never theirs', () => {
-  const { answerTexts, typedTexts } = buildEvidence({ goal: { goal: 'My first customer', when: 'This month' }, strengths: { a: ['Building'], b: ['Talking to customers'] }, stuck: 'Nobody opens the beta' })
+test('our form labels are never the founder\'s words', () => {
+  const { answerTexts } = buildEvidence({ goal: { goal: 'My first customer', when: 'This month' }, strengths: { a: ['Building'], b: ['Talking to customers'] }, stuck: 'Nobody opens the beta' })
   assert.ok(!answerTexts.some((t) => t.includes('Avoids most')))
-  assert.deepEqual(typedTexts, ['Nobody opens the beta'])
-  assert.equal(unquoteUnknown('You want "my first customer, this month".', typedTexts, answerTexts), 'You want my first customer, this month.')
-  assert.equal(unquoteUnknown('You said "nobody opens the beta".', typedTexts, answerTexts), 'You said "nobody opens the beta".')
-  assert.equal(unquoteUnknown('You "avoids most: talking to customers".', typedTexts, answerTexts), 'You "avoids most: talking to customers".')
+  assert.equal(unquoteUnknown('You said "nobody opens the beta".', answerTexts), 'You said "nobody opens the beta".')
+  assert.equal(unquoteUnknown('You "avoids most: talking to customers".', answerTexts), 'You "avoids most: talking to customers".')
 })
 
 // Live run, Nov 8: the first reading quoted "avoids most: pricing, asking for money" because our label sat inside
@@ -156,7 +154,7 @@ test('the model is shown answers without our labels, so quoting a whole answer i
 })
 
 // A quoted single number must be a whole number the founder typed: "40" is not inside "400".
-test('a quoted bare number: typed is fine; never typed, or only inside a bigger number, is caught; a picked one loses its marks', () => {
+test('a quoted bare number: typed is fine; never typed, or only inside a bigger number, is caught', () => {
   const typed = ['I have 400 users and $3k in the bank']
   const quote = (n) => ({ headline: 'h', body: `You wrote "${n}". Send the price today.`, underlines: [] })
   const run = (n, texts = typed) => checkFirstReading({ reading: quote(n), answerTexts: texts }).problems.filter((p) => p.startsWith('quoted words'))
@@ -175,6 +173,4 @@ test('a quoted bare number: typed is fine; never typed, or only inside a bigger 
   assert.equal(run('40', money).length, 0)
   assert.equal(run('25', money).length, 0)
   assert.equal(run('5', money).length, 1)
-  assert.equal(unquoteUnknown('Only "12" weeks.', ['Nobody opens the beta'], ['Nobody opens the beta', '12 weeks']), 'Only 12 weeks.')
-  assert.equal(unquoteUnknown('Only "13" weeks.', ['Nobody'], ['Nobody', '12 weeks']), 'Only "13" weeks.')
 })

@@ -14,8 +14,6 @@
 // - no strikes, warnings or removal: an unreported move closes quietly.
 // Tables and columns: see ../schema_needs.md.
 import { LIMITS } from '../../config.js'
-import { createSignupStore } from '../signup.js'
-import { buildEvidence } from '../firstReading.js'
 import { HttpError } from '../situations.js'
 import { checkMove, experimentOf, isRealSwapReason, NEED_REASON } from './moveChecks.js'
 import { validateExperimentQuality } from '../../experimentQuality.js'
@@ -61,7 +59,6 @@ export function moveView(row) {
 }
 
 export function createMoves({ supabase, callStructured, clock, log = () => {} }) {
-  const signup = createSignupStore({ supabase, clock })
   const iso = (ms = clock.now()) => new Date(ms).toISOString()
   const one = async (query) => {
     const { data, error } = await query
@@ -102,21 +99,19 @@ export function createMoves({ supabase, callStructured, clock, log = () => {} })
 
   // ── Writing a move ─────────────────────────────────────────────────────────
 
-  async function contextOf(userId, conversation) {
-    const [situationTurns, read, learnTurns, { answers }] = await Promise.all([
+  // Built from this situation only; the sign-up answers feed only the first reading (Rafay, Nov 9).
+  async function contextOf(conversation) {
+    const [situationTurns, read, learnTurns] = await Promise.all([
       one(supabase.from('situation_turns').select().eq('situation_id', conversation.situation_id).order('seq', { ascending: true })),
       one(supabase.from('reads').select().eq('situation_id', conversation.situation_id).maybeSingle()),
       one(supabase.from('learn_turns').select().eq('conversation_id', conversation.id).order('seq', { ascending: true })),
-      signup.load(userId),
     ])
-    const { evidence: signUp, answerTexts } = buildEvidence(answers)
     const talkOf = (readTalk) => situationTurns.filter((t) => !t.filler && (t.result?.read_talk === true) === readTalk).map((t) => ({ role: t.role, text: t.text }))
     const situation = talkOf(false)
     const readTalk = talkOf(true)
     const learn = learnTurns.filter((t) => !t.filler && t.kind !== 'followup').map((t) => ({ role: t.role, text: t.text }))
     return {
       prompt: {
-        signUp,
         situation,
         read: read ? { headline: read.headline, body: read.body, closing_question: read.closing_question, founder_answer: read.closing_answer ?? null, talk_after: readTalk } : null,
         learn,
@@ -124,7 +119,6 @@ export function createMoves({ supabase, callStructured, clock, log = () => {} })
         fact: conversation.move_fact,
       },
       founderTexts: [
-        ...answerTexts,
         ...situation.filter((t) => t.role === 'founder').map((t) => t.text),
         ...(read?.closing_answer ? [read.closing_answer] : []),
         ...readTalk.filter((t) => t.role === 'founder').map((t) => t.text),
@@ -136,7 +130,7 @@ export function createMoves({ supabase, callStructured, clock, log = () => {} })
   // One model call, a second naming the problems. Nothing is shown unless
   // every check passes.
   async function compose({ userId, conversation, kind, swap = null }) {
-    const ctx = await contextOf(userId, conversation)
+    const ctx = await contextOf(conversation)
     const style = await styleOf(supabase, userId)
     const founderTexts = swap ? [...ctx.founderTexts, swap.reason] : ctx.founderTexts
     let problems = null

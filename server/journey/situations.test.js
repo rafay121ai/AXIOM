@@ -506,3 +506,27 @@ test('a test account in ADMIN_USER_IDS is not held to the daily limit', async ()
     for (let i = 1; i <= MAX_NEW_SITUATIONS_PER_DAY + 1; i += 1) assert.equal((await create(call, i)).status, 200)
   } finally { await close() }
 })
+
+// Live, Nov 9: a new situation about a different app got a Read built only on the
+// sign-up answers (the founder's main business), so it read as the old chat. Later
+// steps now see only the situation (Rafay: founders change ideas and pivot).
+test('a Read that says nothing about this situation is sent back', () => {
+  const answerTexts = ['I built this app earlier which helped people reflect on their thoughts. I built it end to end but never sold it.']
+  const offTopic = {
+    headline: 'You are trying to get your first 10 customers this month.',
+    body: 'You avoid talking to customers, asking for money and launching. You are still unsure about positioning.',
+    closing_question: 'What did people say when you showed them the app you built?',
+  }
+  assert.ok(checkRead({ read: offTopic, answerTexts }).problems.some((p) => p.includes('not about this situation')))
+  const onTopic = { ...offTopic, body: 'You built the reflection app end to end and never sold it. Nobody has been asked to pay yet.' }
+  assert.ok(!checkRead({ read: onTopic, answerTexts }).problems.some((p) => p.includes('not about this situation')))
+})
+
+test('later steps never send the sign-up answers to the model', async () => {
+  const { call, openai, close } = await setup([enough(), readReply()])
+  try {
+    const id = (await create(call, 1)).body.situation_id
+    await call('POST', `/api/situations/${id}/read`)
+    for (const c of openai.calls) assert.ok(!c.payload.messages.some((m) => /sign_up_answers/.test(m.content)))
+  } finally { await close() }
+})

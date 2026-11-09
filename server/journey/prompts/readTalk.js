@@ -26,10 +26,10 @@ export const READ_TALK_PROMPT = [
 ].join('\n')
 
 // read: { headline, body, closing_question }; talk: [{ role: 'founder'|'axiom', text }], starting with their answer.
-export function readTalkMessages({ signUp, situation, read, talk, questionsLeft }, retryProblems = null) {
+export function readTalkMessages({ situation, read, talk, questionsLeft }, retryProblems = null) {
   const messages = [
     { role: 'system', content: READ_TALK_PROMPT },
-    { role: 'user', content: JSON.stringify({ sign_up_answers: signUp, situation, read, talk, questions_left: questionsLeft }) },
+    { role: 'user', content: JSON.stringify({ situation, read, talk, questions_left: questionsLeft }) },
   ]
   if (retryProblems?.length) messages.push({ role: 'system', content: `Your last question broke these rules: ${retryProblems.slice(0, 5).join('; ')}. Write it again and fix every one.` })
   return messages
