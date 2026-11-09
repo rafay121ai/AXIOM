@@ -3,7 +3,7 @@
 // read composed from the founder's own words replaces it if that fails.
 import { buildEvidence } from './firstReading.js'
 import { checkFirstReading, unquoteUnknown } from './ownWords.js'
-import { checkHook } from './hooks.js'
+import { checkHook, threadKinds } from './hooks.js'
 import { stripFiller } from './filler.js'
 import { READ_SCHEMA, readMessages } from './prompts/read.js'
 
@@ -46,9 +46,14 @@ const clean = (data) => {
 // Problems with a read. answerTexts: sign-up strings plus what the founder
 // wrote in this situation. The closing question is held to the same
 // own-words rules as the body, and must be a real hook.
-export function checkRead({ read, answerTexts, quoteTexts = answerTexts }) {
+// situationTexts: what the founder wrote in this situation. A Read built only
+// on sign-up answers read as the old chat for a new idea (live, Nov 9).
+export function checkRead({ read, answerTexts, quoteTexts = answerTexts, situationTexts = answerTexts }) {
   const problems = []
   if (read.body.length < 40) problems.push('body is too short')
+  if (threadKinds(`${read.headline} ${read.body}`, situationTexts).length === 0) {
+    problems.push('the Read is not about this situation: build it on what they wrote here, in their words; sign-up answers are only background')
+  }
   if (read.underlines !== undefined) problems.push('the Read has no underlines')
   const own = checkFirstReading({
     reading: { headline: read.headline, body: `${read.body} ${read.closing_question}`, underlines: [] },
@@ -88,7 +93,7 @@ export async function createRead({ signUpAnswers, conversation, deps, situationI
         messages: readMessages({ signUp: evidence, conversation, style }, problems),
       })
       const read = unquoted(clean(data), quoteTexts, answerTexts)
-      const verdict = checkRead({ read, answerTexts, quoteTexts })
+      const verdict = checkRead({ read, answerTexts, quoteTexts, situationTexts: founderTexts })
       if (verdict.ok) return { read, source: 'model' }
       problems = verdict.problems
     } catch (err) {

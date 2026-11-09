@@ -506,3 +506,19 @@ test('a test account in ADMIN_USER_IDS is not held to the daily limit', async ()
     for (let i = 1; i <= MAX_NEW_SITUATIONS_PER_DAY + 1; i += 1) assert.equal((await create(call, i)).status, 200)
   } finally { await close() }
 })
+
+// Live, Nov 9: a new situation about a different app got a Read built only on the
+// sign-up answers (the founder's main business), so it read as the old chat.
+test('a Read that says nothing about this situation is sent back', () => {
+  const situationTexts = ['I built this app earlier which helped people reflect on their thoughts. I built it end to end but never sold it.']
+  const signUp = ['Talking to customers, Asking for money, Launching', 'if this is the idea the world needs', 'first 10 customers this month']
+  const answerTexts = [...signUp, ...situationTexts]
+  const offTopic = {
+    headline: 'You are trying to get your first 10 customers this month.',
+    body: 'You wrote you avoid Talking to customers, Asking for money, Launching. You are still stuck on "if this is the idea the world needs".',
+    closing_question: 'What will you ask for your first 10 customers this month?',
+  }
+  assert.ok(checkRead({ read: offTopic, answerTexts, situationTexts }).problems.some((p) => p.includes('not about this situation')))
+  const onTopic = { ...offTopic, body: 'You built the reflection app end to end and never sold it. You wrote you avoid Asking for money.' }
+  assert.ok(!checkRead({ read: onTopic, answerTexts, situationTexts }).problems.some((p) => p.includes('not about this situation')))
+})
