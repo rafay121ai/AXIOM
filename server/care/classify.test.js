@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { classifyCare, CARE_SCHEMA } from './classify.js'
-import { callStructured } from '../llm.js'
+import { callStructured, withoutLengths } from '../llm.js'
 import { createFakeOpenAI } from '../testing/fakes.js'
 
 const noModel = () => { throw new Error('model must not be called') }
@@ -91,7 +91,7 @@ test('real callStructured path: step is care, schema is strict, usage is logged'
   assert.equal(out.level, 'unclear')
   assert.equal(openai.calls.length, 1)
   assert.equal(openai.calls[0].payload.response_format.json_schema.strict, true)
-  assert.deepEqual(openai.calls[0].payload.response_format.json_schema.schema, CARE_SCHEMA)
+  assert.deepEqual(openai.calls[0].payload.response_format.json_schema.schema, withoutLengths(CARE_SCHEMA))
   assert.equal(usage.length, 1)
 })
 

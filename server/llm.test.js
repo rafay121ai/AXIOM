@@ -39,6 +39,19 @@ test('callStructured returns valid output on the first try', async () => {
   assert.equal(openai.calls[0].payload.response_format.type, 'json_schema')
 })
 
+test('string lengths are not sent to the model but still enforced (a cut-off live Read, Nov 9)', async () => {
+  const schema = { type: 'object', properties: { body: { type: 'string', minLength: 2, maxLength: 5 } }, required: ['body'], additionalProperties: false }
+  const { openai, supabase } = setup(['{"body":"far too long"}', '{"body":"short"}'])
+  const { logModelUsage } = createUsageLogger({ supabase, log: { log() {}, error() {} } })
+  const out = await callStructured({ openai, logModelUsage, step: 'read', schema, messages, userId: USER_ID })
+  assert.deepEqual(out.data, { body: 'short' })
+  assert.equal(out.attempts, 2)
+  const sent = openai.calls[0].payload.response_format.json_schema.schema
+  assert.deepEqual(sent.properties.body, { type: 'string' })
+  assert.deepEqual(sent.required, ['body'])
+  assert.match(openai.calls[1].payload.messages.at(-1).content, /body: too long/)
+})
+
 test('callStructured retries once on invalid JSON, then succeeds', async () => {
   const { run, openai, supabase } = setup(['not json', '{"headline":"ok"}'])
   const out = await run()

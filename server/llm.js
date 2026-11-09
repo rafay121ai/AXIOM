@@ -12,6 +12,21 @@ export class StructuredOutputError extends Error {
 const typeOf = (v) => (v === null ? 'null' : Array.isArray(v) ? 'array' : Number.isInteger(v) ? 'integer' : typeof v)
 const matchesType = (v, t) => (t === 'number' ? typeof v === 'number' && Number.isFinite(v) : typeOf(v) === t)
 
+// The schema sent to the model, without string lengths. Strict mode enforces
+// them while decoding, so a long answer was cut mid-sentence or squeezed with
+// foreign characters (a live Read, Nov 9). validateAgainstSchema still checks
+// them, and a reply that breaks them is asked for again.
+export function withoutLengths(schema) {
+  if (Array.isArray(schema)) return schema.map(withoutLengths)
+  if (!schema || typeof schema !== 'object') return schema
+  const out = {}
+  for (const [key, value] of Object.entries(schema)) {
+    if (key === 'minLength' || key === 'maxLength') continue
+    out[key] = key === 'enum' || key === 'required' ? value : withoutLengths(value)
+  }
+  return out
+}
+
 // Checks a value against the JSON Schema subset used for model output:
 // type, enum, properties/required/additionalProperties, items, minLength,
 // maxLength, minItems, maxItems, minimum, maximum. Returns a list of problems.
@@ -83,7 +98,7 @@ export async function callStructured({
         model,
         messages: attemptMessages,
         max_completion_tokens: maxCompletionTokens,
-        response_format: { type: 'json_schema', json_schema: { name: schemaName, strict: true, schema } },
+        response_format: { type: 'json_schema', json_schema: { name: schemaName, strict: true, schema: withoutLengths(schema) } },
       })
     } catch (err) {
       await logModelUsage({

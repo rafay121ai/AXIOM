@@ -727,4 +727,5 @@ Idea from Rafay: founder credits, and growth by referral. Not building until giv
 - Order (Rafay, Nov 4): the knowledge rebuild (step 6) waits until Rafay has used the app on their own phone for a week (step 4).
 - Old web app (Rafay, Nov 5): the web app's code and server routes are deleted. Its tables and stored data stay; dropping them is a separate decision. It was already unreachable (Railway ban).
 - Hosting (Rafay, Nov 5): the server stays on Render, because its schedulers need a process that keeps running. The Vercel project is kept to host the Privacy and Terms pages, and later a landing page.
+- Old Vercel project "axiom" (Rafay, Nov 9): its builds are skipped (Ignored Build Step `exit 0`), since the old web app it built is gone. Remove that setting when the legal pages are added there.
 - Cost cap (Rafay, Nov 5): $1 a day per founder across the journey, moved from the old chat routes. Never blocks the care check, the Report or a stored answer. Test accounts skip it. Line: "You've hit today's limit. Come back tomorrow to keep going."
