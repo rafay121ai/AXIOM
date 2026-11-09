@@ -353,7 +353,8 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
           usageContext: { step: 'followup', kind: 'read_talk', situation_id: situation.id },
           messages: readTalkMessages({ situation: situationTalk, read: { headline: row.headline, body: row.body, closing_question: row.closing_question }, talk, questionsLeft }, problems),
         })
-        if (data.ready) return null
+        // The server decides: Learn starts only when the goal, the blocker and one concrete detail are all known.
+        if (data.knows_goal && data.knows_blocker && data.knows_detail) return null
         const question = stripFiller(data.question).text
         const verdict = checkHook({ text: question, sources })
         if (verdict.ok && question.length <= 220) return question

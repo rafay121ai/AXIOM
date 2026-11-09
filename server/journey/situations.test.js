@@ -432,7 +432,7 @@ test('the Read needs something the founder wrote, and closes the situation to mo
 
 // Rafay, Nov 9: after the Read, Axiom talks until it has enough, at most 2 questions, then Learn.
 test('the talk after the Read asks at most 2 questions, even when the model wants more', async () => {
-  const ask = (question) => JSON.stringify({ ready: false, question })
+  const ask = (question) => JSON.stringify({ knows_goal: false, knows_blocker: true, knows_detail: true, missing: 'goal', question })
   const q1 = 'What did the clinics say at the demo three weeks ago?'
   const q2 = 'Who at the clinics did you show the demo to?'
   const { call, rows, openai, close } = await setup([enough(), readReply(), ask(q1), ask(q2)])
@@ -454,9 +454,21 @@ test('the talk after the Read asks at most 2 questions, even when the model want
   } finally { await close() }
 })
 
+test('the talk after the Read moves on only when goal, blocker and a detail are all known', async () => {
+  const known = (over) => JSON.stringify({ knows_goal: true, knows_blocker: true, knows_detail: true, missing: 'none', question: '', ...over })
+  const q1 = 'What do you want the clinics to do after the demo three weeks ago?'
+  const { call, close } = await setup([enough(), readReply(), known({ knows_goal: false, missing: 'goal', question: q1 }), known()])
+  try {
+    const id = (await create(call, 1)).body.situation_id
+    await call('POST', `/api/situations/${id}/read`)
+    assert.equal((await call('POST', `/api/situations/${id}/read/answer`, { text: 'No, I have not contacted them since the demo three weeks ago.' })).body.reply, q1)
+    assert.equal((await call('POST', `/api/situations/${id}/read/answer`, { text: 'I want both clinics to start a paid pilot.' })).body.next, 'learn')
+  } finally { await close() }
+})
+
 test('skipping during the talk after the Read moves on to Learn', async () => {
   const q1 = 'What did the clinics say at the demo three weeks ago?'
-  const { call, rows, close } = await setup([enough(), readReply(), JSON.stringify({ ready: false, question: q1 })])
+  const { call, rows, close } = await setup([enough(), readReply(), JSON.stringify({ knows_goal: false, knows_blocker: true, knows_detail: true, missing: 'goal', question: q1 })])
   try {
     const id = (await create(call, 1)).body.situation_id
     await call('POST', `/api/situations/${id}/read`)

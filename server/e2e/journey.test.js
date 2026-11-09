@@ -113,7 +113,7 @@ test('a founder walks the whole journey', async (t) => {
       const thin = await founder('POST', `/api/situations/${ids.situation}/read/answer`, { text: 'ok' })
       assert.equal(thin.body.status, 'say_more')
       // The talk after the Read (Rafay, Nov 9): one more question, then Learn.
-      openai.script('read_talk', { ready: false, question: READ_TALK_Q }, { ready: true, question: '' })
+      openai.script('read_talk', { knows_goal: false, knows_blocker: true, knows_detail: true, missing: 'goal', question: READ_TALK_Q }, { knows_goal: true, knows_blocker: true, knows_detail: true, missing: 'none', question: '' })
       const talk = await founder('POST', `/api/situations/${ids.situation}/read/answer`, { text: READ_ANSWER })
       assert.deepEqual(talk.body, { status: 'talk', situation_id: ids.situation, reply: READ_TALK_Q })
       assert.equal(rows('reads')[0].closing_answer, READ_ANSWER)
