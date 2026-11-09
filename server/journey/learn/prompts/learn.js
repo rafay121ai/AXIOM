@@ -47,7 +47,8 @@ const MODES = Object.freeze({
   ],
   reply: [
     'The founder replied. React to what they actually said and refine the point with them. About 40 to 120 words.',
-    'Use a passage only if it fits what they just said.',
+    'If they asked a direct question (what an author says, how to do something), answer it first and fully. Asked about an author, explain that author\'s passage in plain words, name them and cite it, then tie it to their situation.',
+    'Otherwise use a passage only if it fits what they just said.',
     'End with one plain question that moves them closer to acting. Do not give the move yet.',
   ],
   offer: [
