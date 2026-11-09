@@ -18,6 +18,30 @@
       "runtimeExecutable": "bash",
       "runtimeArgs": ["-c", "cd /Users/rafayessani/AXIOM-wt/journey/app && npx expo start --dev-client --port 8081"],
       "port": 8081
+    },
+    {
+      "name": "axiom-web-sample",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd /Users/rafayessani/AXIOM/app && env -u EXPO_PUBLIC_API -u EXPO_PUBLIC_FAKE_HOME npx expo start --web --port 8083"],
+      "port": 8083
+    },
+    {
+      "name": "axiom-api-local",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd /Users/rafayessani/AXIOM/server && FRONTEND_URL=http://localhost:8081 PORT=3001 node index.js"],
+      "port": 3001
+    },
+    {
+      "name": "axiom-web-live",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd /Users/rafayessani/AXIOM/app && set -a && . ../.env && set +a && EXPO_PUBLIC_API=http EXPO_PUBLIC_API_URL=http://localhost:3001 EXPO_PUBLIC_SUPABASE_URL=$VITE_SUPABASE_URL EXPO_PUBLIC_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY npx expo start --web --port 8081 -c"],
+      "port": 8081
+    },
+    {
+      "name": "axiom-video-studio",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd /Users/rafayessani/AXIOM/video && npx remotion studio src/index.ts --port 3010 --no-open"],
+      "port": 3010
     }
   ]
 }

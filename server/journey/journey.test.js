@@ -230,7 +230,9 @@ test('first reading: model output that passes the checker is returned, with a us
     assert.equal(openai.calls.length, 1)
     assert.equal(openai.calls[0].payload.model, 'gpt-5.2-2025-12-11')
     const evidence = JSON.parse(openai.calls[0].payload.messages[1].content)
-    assert.equal(evidence.answers.length, 13)
+    // 13 questions; "where" and the strengths question each become two items, their labels in the question.
+    assert.equal(evidence.answers.length, 15)
+    assert.ok(!evidence.answers.some((a) => /Avoids most|Based in|Better than most/.test(a.answer)))
     const usage = supabase.rows('model_usage_logs')
     assert.equal(usage.length, 1)
     assert.equal(usage[0].user_id, USER.id)
