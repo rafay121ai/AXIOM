@@ -103,7 +103,7 @@ export function checkFact(fact, founderTexts) {
 
 // data: the model's output. Returns { reply, problems }. `reply` is the
 // cleaned version (every hard rule applied), used when the retry fails too.
-export function checkReply({ data, mode, evidence, founderTexts }) {
+export function checkReply({ data, mode, evidence, founderTexts, asked = null }) {
   const problems = []
   const handles = new Map(evidence.map((e) => [e.handle, e]))
   const citations = (data.citations ?? []).map((c) => ({ handle: c.handle, ...(c.quote?.trim() ? { quote: c.quote } : {}) }))
@@ -121,6 +121,11 @@ export function checkReply({ data, mode, evidence, founderTexts }) {
   }
   // A follow-up given passages but citing none came out generic on live (Rafay, Nov 2): ask once more.
   if (mode === 'followup' && evidence.length && sources.length === 0) problems.push('build the answer on the passage that fits it best: put its handle in citations')
+  // The founder asked about an author we hold passages from; a reply that cited none of them dodged the question (live, Nov 9).
+  const askedAbout = asked ? evidence.filter((e) => namesSource(asked, [e])) : []
+  if (askedAbout.length && !sources.some((s) => askedAbout.some((e) => e.author === s.author))) {
+    problems.push(`the founder asked about ${askedAbout[0].author}: answer that first from their passage, name them and cite it`)
+  }
   let text = verdict.status === 'ok' ? verdict.text : cleanProse({ text: data.reply, sources: [], handles }).text
 
   // Sentence by sentence: what may never reach the founder goes. A cited author or book may be named; any other may not.
@@ -180,6 +185,7 @@ export function checkReply({ data, mode, evidence, founderTexts }) {
 export async function composeReply({ mode, step, context, evidence, founderTexts, usageContext, deps }) {
   // Author and title are shown so the lesson can name who taught it (Rafay, Nov 2); the server still checks every name.
   const shown = evidence.map((e) => ({ handle: e.handle, author: e.author, title: e.source_title, text: e.text }))
+  const asked = mode === 'lesson' ? null : (context.learn ?? []).filter((t) => t.role === 'founder').at(-1)?.text ?? null
   let problems = null
   let fallback = null
   for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -199,7 +205,7 @@ export async function composeReply({ mode, step, context, evidence, founderTexts
       if (fallback) return fallback
       throw err
     }
-    const verdict = checkReply({ data, mode, evidence, founderTexts })
+    const verdict = checkReply({ data, mode, evidence, founderTexts, asked })
     if (verdict.problems.length === 0) return verdict.reply
     if (verdict.reply.text) fallback = verdict.reply
     problems = verdict.problems

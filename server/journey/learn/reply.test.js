@@ -66,3 +66,14 @@ test('naming the author of a cited passage stays when another passage from the s
   assert.ok(!problems.some((p) => p.includes('did not cite')), problems.join('; '))
   assert.match(reply.text, /Paul Graham/)
 })
+
+// Live, Nov 9: asked "what Reid Hoffman says", the reply held his passages, cited none and changed the subject.
+test('a reply to a question about an author must answer from that author', () => {
+  const asked = 'Can you tell me in detail what Reid Hoffman says?'
+  const dodge = { reply: 'You have a prototype and no customers yet. Which customer will you call this week?', citations: [] }
+  const { problems } = checkReply({ data: dodge, mode: 'reply', evidence: two, founderTexts: founder, asked })
+  assert.ok(problems.some((p) => p.includes('asked about Reid Hoffman')))
+  const answer = { reply: 'Reid Hoffman says distribution is a core link in the chain. You have a prototype and no customers yet. Which customer will you call this week?', citations: [{ handle: 'E1', quote: '' }] }
+  assert.ok(!checkReply({ data: answer, mode: 'reply', evidence: two, founderTexts: founder, asked }).problems.some((p) => p.includes('asked about')))
+  assert.ok(!checkReply({ data: dodge, mode: 'reply', evidence: two, founderTexts: founder, asked: 'What should I ask first?' }).problems.some((p) => p.includes('asked about')))
+})
