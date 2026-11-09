@@ -161,6 +161,11 @@ first reading.
 Axiom tells the founder what it thinks is really going on, based on how they
 answered, not only what they said.
 
+**The sign-up answers feed only the First Reading.** Founders change ideas,
+plan something else or pivot, so every later step (Situation questions, Read,
+the talk after it, Learn, Move) works only from what the founder writes in that
+situation. Settings such as report time and time zone are not affected.
+
 - **Short:** about 5 sentences, appearing one at a time.
 - **Always three things:** one pattern they did not say outright, their own
   words or a number or date, and a pointer into the next step.
@@ -187,8 +192,7 @@ never pre-filled or locked.
   first message has both, it asks nothing.
 - One-word or filler replies ("ok") do not count as an answer and do not use
   up a follow-up.
-- Axiom never asks for anything it already knows from sign-up or past
-  situations.
+- Axiom never asks for anything already said in this situation.
 - When it has enough, it moves straight to the Read. No closing line, no
   restating what they just said.
 

@@ -6,8 +6,6 @@
 // each Axiom turn and is never sent to the app or accepted from it.
 // Tables and columns: see ../schema_needs.md.
 import { randomUUID } from 'node:crypto'
-import { createSignupStore } from '../signup.js'
-import { buildEvidence } from '../firstReading.js'
 import { HttpError } from '../situations.js'
 import { retrieveEvidence } from './retrieve.js'
 import { composeReply } from './reply.js'
@@ -44,7 +42,6 @@ export function turnView(row) {
 }
 
 export function createLearn({ supabase, knowledgeSupabase = null, embed = null, callStructured, clock, log = () => {} }) {
-  const signup = createSignupStore({ supabase, clock })
   const sharing = createSharing({ supabase, clock })
   const founderLessons = createFounderLessons({ supabase, sharing, clock })
   const iso = () => new Date(clock.now()).toISOString()
@@ -105,9 +102,9 @@ export function createLearn({ supabase, knowledgeSupabase = null, embed = null, 
 
   // ── What the model is given ────────────────────────────────────────────────
 
-  async function contextOf(userId, situation, learnTurns) {
-    const [situationTurns, read, { answers }] = await Promise.all([situationTurnsOf(situation.id), readOf(situation.id), signup.load(userId)])
-    const { evidence: signUp, answerTexts } = buildEvidence(answers)
+  // Built from this situation only; the sign-up answers feed only the first reading (Rafay, Nov 9).
+  async function contextOf(situation, learnTurns) {
+    const [situationTurns, read] = await Promise.all([situationTurnsOf(situation.id), readOf(situation.id)])
     const talkOf = (readTalk) => situationTurns.filter((t) => !t.filler && (t.result?.read_talk === true) === readTalk).map((t) => ({ role: t.role, text: t.text }))
     const situationTalk = talkOf(false)
     const readTalk = talkOf(true)
@@ -120,21 +117,20 @@ export function createLearn({ supabase, knowledgeSupabase = null, embed = null, 
     const learnSaid = learnTalk.filter((t) => t.role === 'founder').map((t) => t.text)
     return {
       prompt: {
-        signUp,
         situation: situationTalk,
         read: read
           ? { headline: read.headline, body: read.body, closing_question: read.closing_question, founder_answer: read.closing_answer ?? null, skipped: read.skipped === true, talk_after: readTalk }
           : null,
         learn: learnTalk,
       },
-      founderTexts: [...answerTexts, ...founderSaid, ...learnSaid],
+      founderTexts: [...founderSaid, ...learnSaid],
       query: [situation.title, ...founderSaid, learnSaid.at(-1)].filter(Boolean).join('\n'),
     }
   }
 
   // Retrieval, one model call (two at most), and the stored Axiom turn.
   async function makeTurn({ userId, situation, conversation, mode, step, learnTurns, extra = {}, evidence: given = null, tapped = null }) {
-    const ctx = await contextOf(userId, situation, learnTurns)
+    const ctx = await contextOf(situation, learnTurns)
     const usageContext = { step, kind: `learn_${mode}`, situation_id: situation.id }
     const evidence = given ?? await retrieveEvidence({ knowledgeSupabase, embed, query: ctx.query, userId, usageContext, log })
     const reply = await composeReply({

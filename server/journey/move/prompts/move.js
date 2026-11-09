@@ -47,16 +47,15 @@ export const MOVE_PROMPT = [
   'Never use: "great question", "certainly", "I understand", "that\'s interesting", "absolutely", "of course", "I\'d be happy to", "great". Never assume gender: use "you" or "they".',
 ].join('\n')
 
-// input: { signUp, situation, read, learn, subject, fact, swap? }
+// input: { situation, read, learn, subject, fact, swap? }
 //   swap: { previous: { title, mission }, reason }.
-export function moveMessages({ signUp, situation, read, learn, subject, fact, swap = null, style }, retryProblems = null) {
+export function moveMessages({ situation, read, learn, subject, fact, swap = null, style }, retryProblems = null) {
   const messages = [
     { role: 'system', content: MOVE_PROMPT },
     ...styleMessages(style),
     {
       role: 'user',
       content: JSON.stringify({
-        sign_up_answers: signUp,
         situation,
         read,
         learn_conversation: learn,

@@ -76,7 +76,7 @@ export const LEARN_PROMPT = [
   '- In reply, never write a handle and never use quotation marks of any kind. A short exact quote goes in quote, and the app shows it set apart with the author.',
   '- If evidence is empty or no passage fits, cite nothing and write only from the founder\'s own facts. Then say nothing about books, authors, research or sources, and never say that anything is missing. Never use anything you remember from outside the evidence.',
   '',
-  'Facts: use only numbers, dates and names the founder wrote or chose. Never add, convert, estimate or invent one, and never invent a deadline.',
+  'Facts: use only numbers, dates and names the founder wrote in this situation. Never add, convert, estimate or invent one, and never invent a deadline.',
   '',
   `picture_json: an empty string, or one picture as JSON when it makes things clearer. Types: ${PICTURE_TYPES.join(', ')}.`,
   '  split_bar {"type":"split_bar","data":{"title","unit","parts":[{"label","value"}]}} (2 to 6 parts)',
@@ -94,11 +94,11 @@ export const LEARN_PROMPT = [
   'Never use: "great question", "certainly", "I understand", "that\'s interesting", "absolutely", "of course", "I\'d be happy to", "great". Never assume gender: use "you" or "they".',
 ].join('\n')
 
-// input: { mode, signUp, situation, read, learn, evidence, tapped? }
-//   signUp: [{ question, answer }]; situation and learn: [{ role, text }];
+// input: { mode, situation, read, learn, evidence, tapped? }
+//   situation and learn: [{ role, text }];
 //   read: { headline, body, closing_question, founder_answer, skipped, talk_after: [{ role, text }] };
 //   evidence: [{ handle, text }] (never ids, authors or titles).
-export function learnMessages({ mode, signUp, situation, read, learn, evidence, tapped = null, style }, retryProblems = null) {
+export function learnMessages({ mode, situation, read, learn, evidence, tapped = null, style }, retryProblems = null) {
   const messages = [
     { role: 'system', content: LEARN_PROMPT },
     ...styleMessages(style),
@@ -106,7 +106,6 @@ export function learnMessages({ mode, signUp, situation, read, learn, evidence, 
     {
       role: 'user',
       content: JSON.stringify({
-        sign_up_answers: signUp,
         situation,
         read,
         learn_conversation: learn,

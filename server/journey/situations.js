@@ -3,8 +3,6 @@
 // counter moves only by a compare-and-swap update, so concurrent turns can
 // never take a third. Tables and columns: see schema_needs.md.
 import { LIMITS } from '../config.js'
-import { createSignupStore } from './signup.js'
-import { buildEvidence } from './firstReading.js'
 import { checkHook } from './hooks.js'
 import { stripFiller, isFillerReply } from './filler.js'
 import { SITUATION_SCHEMA, situationMessages } from './prompts/situation.js'
@@ -45,7 +43,6 @@ const titleOk = (title, founderTexts) => {
 const busy = () => new HttpError(409, { error: 'This turn is still being processed. Try again in a moment.', code: 'turn_busy' })
 
 export function createSituations({ supabase, callStructured, clock, log = () => {} }) {
-  const signup = createSignupStore({ supabase, clock })
   const iso = () => new Date(clock.now()).toISOString()
   const one = async (query) => {
     const { data, error } = await query
@@ -105,10 +102,9 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
 
   // Returns { topic, enough, question, title }. Never throws: a failed model
   // call or a question that will not pass ends in "enough", never in a stall.
-  async function assess({ userId, situation, signUpAnswers, turns, followUpsLeft }) {
-    const { evidence, answerTexts } = buildEvidence(signUpAnswers)
+  async function assess({ userId, situation, turns, followUpsLeft }) {
     const conversation = turns.filter((t) => !t.filler).map((t) => ({ role: t.role, text: t.text }))
-    const sources = [...founderTextsOf(turns), ...answerTexts]
+    const sources = founderTextsOf(turns)
     let problems = null
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       try {
@@ -119,7 +115,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
           maxCompletionTokens: 400,
           userId,
           usageContext: { step: 'followup', kind: 'situation_turn', situation_id: situation.id },
-          messages: situationMessages({ signUp: evidence, conversation, followUpsLeft }, problems),
+          messages: situationMessages({ conversation, followUpsLeft }, problems),
         })
         const enough = (data.has_situation && data.has_detail) || data.missing === 'none'
         const base = { topic: data.topic, title: data.title.trim() }
@@ -183,10 +179,10 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
   }
 
   async function decide({ userId, situation, text, clientTurnId, first }) {
-    const [turns, signUp] = await Promise.all([turnsOf(situation.id), signup.load(userId)])
+    const turns = await turnsOf(situation.id)
     const before = founderTextsOf(turns).length - 1 // this turn is already stored
     const left = LIMITS.MAX_FOLLOW_UPS - situation.follow_up_count
-    const verdict = await assess({ userId, situation, signUpAnswers: signUp.answers, turns, followUpsLeft: left })
+    const verdict = await assess({ userId, situation, turns, followUpsLeft: left })
 
     if (!first && verdict.topic === 'new' && before > 0 && (await newToday(userId)) < MAX_NEW_SITUATIONS_PER_DAY) {
       const fresh = await startSituation(userId, clientTurnId)
@@ -283,9 +279,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
 
     const turns = await turnsOf(situation.id)
     if (founderTextsOf(turns).length === 0) throw new HttpError(409, { error: 'Tell me what is going on first.', code: 'situation_empty' })
-    const { answers } = await signup.load(userId)
     const { read: made, source } = await createRead({
-      signUpAnswers: answers,
       situationId: situation.id,
       conversation: turns.filter((t) => !t.filler).map((t) => ({ role: t.role, text: t.text })),
       style: await styleOf(supabase, userId),
@@ -344,11 +338,9 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
   // The next question in the talk after the Read, or null when Learn should start.
   // Any model failure, or a question that fails the checks twice, means Learn: the talk never blocks the journey.
   async function nextReadQuestion({ userId, situation, row, turns, questionsLeft }) {
-    const { answers } = await signup.load(userId)
-    const { evidence, answerTexts } = buildEvidence(answers)
     const talk = [{ role: 'founder', text: row.closing_answer }, ...turns.filter(isReadTalk).map((t) => ({ role: t.role, text: t.text }))]
     const situationTalk = turns.filter((t) => !t.filler && !isReadTalk(t)).map((t) => ({ role: t.role, text: t.text }))
-    const sources = [...founderTextsOf(turns), row.closing_answer, ...answerTexts]
+    const sources = [...founderTextsOf(turns), row.closing_answer]
     let problems = null
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       try {
@@ -359,7 +351,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
           maxCompletionTokens: 400,
           userId,
           usageContext: { step: 'followup', kind: 'read_talk', situation_id: situation.id },
-          messages: readTalkMessages({ signUp: evidence, situation: situationTalk, read: { headline: row.headline, body: row.body, closing_question: row.closing_question }, talk, questionsLeft }, problems),
+          messages: readTalkMessages({ situation: situationTalk, read: { headline: row.headline, body: row.body, closing_question: row.closing_question }, talk, questionsLeft }, problems),
         })
         if (data.ready) return null
         const question = stripFiller(data.question).text

@@ -67,7 +67,7 @@ founder owns the row (404 otherwise) and returns generic errors. **Every
 endpoint that accepts founder text runs the care check first (see Care).**
 
 ```
-Sign-up (once)
+Sign-up (once; the answers feed only the first reading, never later steps)
   GET  /api/signup                 -> saved answers and the next question
   PUT  /api/signup/answers/:key    -> save one answer (resumable, 13 questions)
   POST /api/first-reading          -> 1 structured call: first reading + hook.

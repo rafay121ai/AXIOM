@@ -1,7 +1,7 @@
 // First reading: built only from the founder's own sign-up answers. The model
 // writes it; ownWords.js checks it; a plain reading composed from the answers
 // replaces it if the model cannot get it right.
-import { QUESTIONS, answerStrings, typedStrings } from './questions.js'
+import { QUESTIONS, answerStrings } from './questions.js'
 import { checkFirstReading } from './ownWords.js'
 import { FIRST_READING_SCHEMA, firstReadingMessages } from './prompts/firstReading.js'
 
@@ -32,8 +32,6 @@ export function buildEvidence(answers) {
     // Each pick alone, plus every answer exactly as the model was shown it ("My first customer, This month"), so a
     // faithful quote is not rejected (Read fell back on this, Nov 2). Our own words never count as theirs.
     answerTexts: [...new Set([...asked.flatMap((q) => answerStrings(q, answers[q.key])), ...evidence.map((e) => e.answer).filter((a) => a !== NOTHING)])],
-    // Only what the founder typed: the Read may quote these and nothing else.
-    typedTexts: asked.flatMap((q) => typedStrings(q, answers[q.key])),
   }
 }
 

@@ -28,15 +28,15 @@ export const SITUATION_PROMPT = [
   '- question: one question asking only for that missing piece, about what the founder just wrote, using their own words, a number or a date from their messages. Empty string if nothing is missing or if follow_ups_left is 0.',
   '- title: a plain title of 3 to 8 words for this situation, in the founder\'s own words.',
   '',
-  'Never ask for anything already in sign_up_answers. One question only. No greeting, no acknowledgement, no comment on what they wrote.',
+  'Never ask for anything already in the conversation. One question only. No greeting, no acknowledgement, no comment on what they wrote.',
   'Voice: plain everyday words, short. No metaphors, no hypotheticals, no teaser ("want to know why?"). Never use: "great question", "certainly", "I understand", "that\'s interesting", "absolutely", "of course", "I\'d be happy to", "great". Never assume gender.',
 ].join('\n')
 
-// signUp: [{ question, answer }]; conversation: [{ role: 'founder'|'axiom', text }]
-export function situationMessages({ signUp, conversation, followUpsLeft }, retryProblems = null) {
+// conversation: [{ role: 'founder'|'axiom', text }]
+export function situationMessages({ conversation, followUpsLeft }, retryProblems = null) {
   const messages = [
     { role: 'system', content: SITUATION_PROMPT },
-    { role: 'user', content: JSON.stringify({ sign_up_answers: signUp, conversation, follow_ups_left: followUpsLeft }) },
+    { role: 'user', content: JSON.stringify({ conversation, follow_ups_left: followUpsLeft }) },
   ]
   if (retryProblems?.length) {
     messages.push({
