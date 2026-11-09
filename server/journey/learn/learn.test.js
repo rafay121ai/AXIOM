@@ -82,10 +82,13 @@ function slow(openai, ms) {
   return openai
 }
 
+// What the library is searched with in these tests (the search-need call is not scripted).
+const SEARCH_NEED = 'how to get the first paying customers when early users went quiet after a demo'
+
 async function setup(script = [], { rows = ROWS, answered = true, delayMs = 0, tables = {}, unique = {} } = {}) {
   const base = createFakeSupabase({ users: { tok: USER, tok2: OTHER }, tables: { ...seed({ answered }), ...tables }, unique })
   const supabase = withUniqueKeys(base)
-  const openai = createFakeOpenAI(script)
+  const openai = createFakeOpenAI(script, { byName: { learn_search: JSON.stringify({ need: SEARCH_NEED }) } })
   if (delayMs) slow(openai, delayMs)
   const knowledge = fakeKnowledge(rows)
   const app = createApp({ env: ENV, supabase, knowledgeSupabase: knowledge, openai, clock: createFakeClock(NOW) })
@@ -101,9 +104,12 @@ async function setup(script = [], { rows = ROWS, answered = true, delayMs = 0, t
     const text = await res.text()
     return { status: res.status, body: text.startsWith('{') ? JSON.parse(text) : text }
   }
-  const chatCalls = () => openai.calls.filter((c) => c.payload?.messages)
+  // Learn's own model calls; the search-need side call is checked on its own below.
+  const isSearch = (c) => c.payload?.response_format?.json_schema?.name === 'learn_search'
+  const chatCalls = () => openai.calls.filter((c) => c.payload?.messages && !isSearch(c))
+  const searchCalls = () => openai.calls.filter(isSearch)
   const close = () => new Promise((r) => server.close(r))
-  return { call: as('tok'), callOther: as('tok2'), callAnon: as(null), openai, chatCalls, knowledge, rows: (t) => base.rows(t), close }
+  return { call: as('tok'), callOther: as('tok2'), callAnon: as(null), openai, chatCalls, searchCalls, knowledge, rows: (t) => base.rows(t), close }
 }
 
 const learnReply = (over = {}) => JSON.stringify({
@@ -134,6 +140,20 @@ async function started(script, opts) {
 const sendTurn = (call, id, text, n) => call('POST', `/api/learn/${id}/turn`, { text, client_turn_id: uuid(n) })
 
 // ── Retrieval ────────────────────────────────────────────────────────────────
+
+// Live, Nov 9: searching the founder's raw words brought a lesson on "time to reflect" for "should I sell my old app?".
+test('the library is searched with what the founder needs, never their raw words', async () => {
+  const { openai, searchCalls, start, close } = await started([learnReply()])
+  try {
+    assert.equal(start.status, 200)
+    assert.equal(searchCalls().length, 1)
+    const prompt = searchCalls()[0].payload.messages.at(-1).content
+    assert.match(prompt, /"situation"/)
+    const embedded = openai.calls.filter((c) => c.payload?.input).map((c) => c.payload.input)
+    assert.deepEqual(embedded, [SEARCH_NEED])
+  } finally { await close() }
+})
+
 
 test('evidence pack: opaque handles, at most 2 per book, low matches dropped, no more than 6', () => {
   const pack = evidenceFromRows(ROWS)

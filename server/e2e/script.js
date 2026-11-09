@@ -31,6 +31,7 @@ export const READ = {
   closing_question: 'Have you gone back to either of those clinics since the demo?',
 }
 export const READ_ANSWER = "No, I haven't gone back to either since the demo three weeks ago."
+export const LEARN_NEED = 'how to get early users who saw a demo to pay, when you have gone quiet on them'
 export const READ_TALK_REPLY = 'Three weeks since the demo and nothing sent to either clinic.'
 export const READ_TALK_Q = 'What do you want from the 2 clinics since the demo?'
 export const READ_TALK_ANSWER = 'I want both clinics to start a paid pilot this month.'

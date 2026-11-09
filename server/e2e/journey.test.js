@@ -12,7 +12,7 @@ import { MODELS, STEPS } from '../config.js'
 import { FOUNDER, OTHER, createWorld, keysIn, routesOf } from './harness.js'
 import {
   CHECK_IN_ANSWER, DISTRESS, FABRICATED_QUOTE, FIRST_READING, FOLLOWUP_ANSWER, FULL_ANSWERS, LEARN_AFTER_CARE, LEARN_OFFER,
-  LESSON, MOVE, PEER_STORY, PEER_STORY_ID, Q1, Q2, Q3_REFUSED, READ, READ_ANSWER, READ_TALK_ANSWER, READ_TALK_Q, READ_TALK_REPLY, REAL_1,
+  LESSON, MOVE, PEER_STORY, PEER_STORY_ID, Q1, Q2, Q3_REFUSED, READ, LEARN_NEED, READ_ANSWER, READ_TALK_ANSWER, READ_TALK_Q, READ_TALK_REPLY, REAL_1,
   REPORT_NOTE, REPORT_REPLY, SITUATION_TEXT, SWAP_REASON, TURN_2, TURN_3, VERIFIED_QUOTE_SHOWN, WHAT_NEXT, situationVerdict, uuid,
 } from './script.js'
 
@@ -129,6 +129,8 @@ test('a founder walks the whole journey', async (t) => {
     // ── Learn ─────────────────────────────────────────────────────────────────
     await t.test('learn: lesson with a verified citation; the invented quote is stripped', async () => {
       // Both tries cite the invented quote, so the server shows the cleaned reply.
+      // The library is searched with what the founder needs (lesson and the reply turn), never their raw words.
+      openai.script('learn_search', { need: LEARN_NEED }, { need: LEARN_NEED })
       openai.script('learn_reply', LESSON, LESSON)
       const res = await founder('POST', `/api/situations/${ids.situation}/learn`)
       assert.equal(res.status, 200)
