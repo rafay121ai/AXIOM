@@ -27,6 +27,8 @@ const MIGRATIONS = join(SERVER, '..', 'supabase', 'migrations')
 const ROLLBACK = join(SERVER, '..', 'supabase', 'rollback', '20261101_rollback.sql')
 const FIRST_JOURNEY_MIGRATION = '20261101000001'
 const DELETION_MIGRATION = '20261101000011_account_deletion.sql'
+// The memory layer (tasks/memory-plan.md) has its own checks at the end of this file.
+const MEMORY_PREFIX = '20261109'
 
 // ── SQL parsing ──────────────────────────────────────────────────────────────
 
@@ -79,7 +81,7 @@ const NOT_A_COLUMN = /^(constraint|primary|unique|check|foreign|exclude)\b/i
 function readMigrations() {
   return readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort().map((name) => ({
     name,
-    journey: name >= FIRST_JOURNEY_MIGRATION,
+    journey: name >= FIRST_JOURNEY_MIGRATION && !name.startsWith(MEMORY_PREFIX),
     sql: readFileSync(join(MIGRATIONS, name), 'utf8'),
   }))
 }
@@ -155,7 +157,7 @@ test('migrations: the journey files exist, in order, after every older migration
   assert.ok(journey.length >= 11, `expected the journey migrations, found ${journey.length}`)
   const names = all.map((f) => f.name)
   assert.deepEqual(names, [...names].sort())
-  assert.deepEqual(journey.map((f) => f.name), names.slice(names.length - journey.length))
+  assert.deepEqual(journey.map((f) => f.name), names.filter((n) => !n.startsWith(MEMORY_PREFIX)).slice(-journey.length))
 })
 
 test('migrations: every new table is created idempotently', () => {
@@ -433,8 +435,10 @@ test('migrations: CHECK lists match the values the server code uses', () => {
   assert.deepEqual(checkList(schema.notification_log.body, 'slot')?.sort(), ['evening', 'morning'])
   assert.deepEqual(checkList(journeySql, 'lock_screen')?.sort(), [...LOCK_SCREEN_MODES].sort())
   assert.deepEqual(checkList(journeySql, 'mentor_style')?.sort(), [...MENTOR_STYLES].sort())
-  const callTypes = checkList(journeySql, 'call_type')
-  for (const t of [...USAGE_CALL_TYPES, ...STEPS]) assert.ok(callTypes?.includes(t), `call_type check lacks ${t}`)
+  // 'beliefs' is allowed by 20261109000002 (memory layer, not applied yet); every other step by 20261101000009.
+  const memoryCallTypes = all.find((f) => f.name.startsWith('20261109000002'))?.sql ?? ''
+  const callTypes = [...(checkList(journeySql, 'call_type') ?? []), ...(checkList(stripSqlComments(memoryCallTypes), 'call_type') ?? [])]
+  for (const t of [...USAGE_CALL_TYPES, ...STEPS]) assert.ok(callTypes.includes(t), `call_type check lacks ${t}`)
   assert.match(sqlCompact, /check \(call_type in \([^)]*\)\) not valid;/, 'call_type check must stay NOT VALID')
 })
 
@@ -682,4 +686,127 @@ test('cross-check: every new table is used by the server or documented in the pl
   for (const t of journeyTables) assert.ok(plan.includes(`\`${t}\``), `${t} is not described in MIGRATION_PLAN.md`)
   for (const f of journey) assert.ok(plan.includes(f.name), `${f.name} is not in MIGRATION_PLAN.md`)
   assert.ok(journeyRaw.length > 0)
+})
+
+
+// ── 4. The memory layer (supabase/migrations/20261109*, not applied yet) ─────
+
+const memoryFiles = all.filter((f) => f.name.startsWith(MEMORY_PREFIX))
+const memoryFile = (part) => memoryFiles.find((f) => f.name.includes(part))
+const MEMORY_TABLES = [
+  'founder_beliefs', 'founder_traits', 'founder_world', 'founder_vocabulary', 'founder_threads',
+  'memory_evidence', 'memory_runs', 'founder_corrections',
+]
+const MEMORY_ITEM_TABLES = MEMORY_TABLES.slice(0, 5)
+const memoryCompact = (part) => stripSqlComments(memoryFile(part).sql).replace(/\s+/g, ' ').toLowerCase()
+
+test('memory: the four files exist and create exactly the eight tables, idempotently', () => {
+  assert.equal(memoryFiles.length, 4)
+  assert.ok(!/founder_brief/.test(memoryFiles.map((f) => f.sql).join('')), 'the unused brief table is gone')
+  const sql = stripSqlComments(memoryFile('founder_memory').sql)
+  const created = [...sql.matchAll(/create\s+table\s+if\s+not\s+exists\s+public\.(\w+)/gi)].map((m) => m[1])
+  assert.deepEqual(created.sort(), [...MEMORY_TABLES].sort())
+  assert.doesNotMatch(sql, /create\s+table\s+(?!if\s+not\s+exists)/i)
+  assert.doesNotMatch(sql, /create\s+(unique\s+)?index\s+(?!if\s+not\s+exists)/i)
+  assert.doesNotMatch(sql, /alter\s+table\s+public\.(?!founder_|memory_)\w+\s+(add|drop|alter)/i, 'no existing table is changed')
+})
+
+test('memory: every table is server only (RLS on, client privileges revoked, no policies)', () => {
+  const sql = memoryCompact('founder_memory')
+  for (const t of MEMORY_TABLES) {
+    assert.ok(sql.includes(`alter table public.${t} enable row level security;`), `${t}: RLS not enabled`)
+    assert.ok(sql.includes(`revoke all on table public.${t} from public, anon, authenticated;`), `${t}: client privileges not revoked`)
+    assert.ok(sql.includes(`grant all on table public.${t} to service_role;`), `${t}: service_role not granted`)
+    assert.match(sql, new RegExp(`create table if not exists public\\.${t} \\(.*?user_id uuid not null references auth\\.users\\(id\\) on delete cascade`), `${t}: user_id must cascade from auth.users`)
+  }
+  for (const part of ['founder_memory', 'usage_call_type', 'deletion_memory']) {
+    assert.doesNotMatch(stripSqlComments(memoryFile(part).sql), /create\s+policy|\bto\b[^;]*\b(anon|authenticated)\b/i, part)
+  }
+})
+
+test('memory: traits live in a closed list the database enforces', () => {
+  const sql = memoryCompact('founder_memory')
+  for (const dimension of ['decision_speed', 'evidence_basis', 'after_setback', 'move_size', 'detail_level', 'pace_of_follow_through']) {
+    assert.ok(sql.includes(`dimension = '${dimension}' and value in (`), dimension)
+  }
+  assert.match(sql, /constraint founder_traits_closed_list check/)
+  assert.match(sql, /create unique index if not exists founder_traits_one_active on public\.founder_traits \(user_id, dimension\) where status = 'active'/)
+})
+
+test('memory: evidence and corrections can point only at the five item tables, and every receipt has a source', () => {
+  const sql = memoryCompact('founder_memory')
+  const list = MEMORY_ITEM_TABLES.map((t) => `'${t}'`).join(', ')
+  assert.equal(sql.split(`check (item_table in (${list}))`).length - 1, 2, 'memory_evidence and founder_corrections')
+  assert.match(sql, /source_kind = 'signup' and source_key is not null\) or \(source_kind <> 'signup' and source_id is not null/)
+  assert.match(sql, /snippet text not null constraint memory_evidence_snippet_len check \(char_length\(snippet\) between 1 and 200\)/)
+  assert.match(sql, /create unique index if not exists memory_runs_once on public\.memory_runs \(source_kind, source_id, mode\) where status <> 'failed'/)
+})
+
+test('memory: nothing destructive outside the deletion file, and no strike or warning columns', () => {
+  for (const part of ['founder_memory', 'usage_call_type']) {
+    const raw = memoryFile(part).sql
+    for (const rx of [/drop\s+table/i, /drop\s+column/i, /delete\s+from/i, /\btruncate\b/i, /rename\s+(column|to)\b/i]) assert.doesNotMatch(raw, rx, `${part}: ${rx}`)
+  }
+  assert.doesNotMatch(memoryFile('founder_memory').sql, /strike|warning/i)
+})
+
+test('memory: the call type check keeps every old value and adds beliefs, not validated against old rows', () => {
+  const sql = memoryCompact('usage_call_type')
+  const OLD = ['chat', 'query_expansion', 'onboarding', 'memory_update', 'concept_state_update', 'embedding', 'read', 'learn', 'followup', 'move', 'care', 'report', 'memory']
+  for (const v of [...OLD, 'beliefs']) assert.ok(sql.includes(`'${v}'`), v)
+  assert.match(sql, /\) not valid;/)
+  const set = sql.indexOf("set lock_timeout = '5s'")
+  assert.ok(set >= 0 && set < sql.indexOf('drop constraint') && sql.indexOf('add constraint') < sql.indexOf('reset lock_timeout'))
+})
+
+test('memory: delete_account keeps the live body, deletes all eight tables, and only one founder\'s rows', () => {
+  const raw = memoryFile('deletion_memory').sql
+  const sql = stripSqlComments(raw).replace(/\s+/g, ' ').toLowerCase().trim()
+  assert.match(sql, /^create or replace function public\.delete_account\(p_user_id uuid\) returns void language plpgsql set search_path to '' as \$function\$/)
+  for (const rx of [/drop\s+(table|column|schema|view|function)/, /\btruncate\b/, /rename\s/]) assert.doesNotMatch(sql, rx)
+  const deletes = sql.split(';').filter((x) => /delete from/.test(x))
+  assert.ok(deletes.length >= 34, 'the deletion function lost steps')
+  for (const d of deletes) assert.match(d, /where (status <> 'approved' and id in \(select peer_outcome_id from public\.outcome_author_links where user_id = p_user_id\)|(\w+ in \(.*)?(user_id|id) = p_user_id)/, `not filtered to one founder: ${d}`)
+  for (const t of MEMORY_TABLES) assert.ok(sql.includes(`delete from public.${t} where user_id = p_user_id`), `${t} is not deleted`)
+  // Everything the live function deleted before is still deleted (live dump, Nov 9).
+  const live = readFileSync(join(SERVER, '..', 'audit', 'schema_live_2026-11-09.md'), 'utf8')
+  for (const m of live.matchAll(/delete from public\.(\w+)/g)) assert.ok(sql.includes(`delete from public.${m[1]}`), `${m[1]} was dropped from delete_account`)
+  assert.match(sql, /delete from public\.peer_outcomes where status <> 'approved'/)
+})
+
+test('memory: the rollback restores the old function and check, then drops exactly the eight tables, children first', () => {
+  const raw = readFileSync(join(SERVER, '..', 'supabase', 'rollback', '20261109_rollback.sql'), 'utf8')
+  const sql = stripSqlComments(raw).replace(/\s+/g, ' ').toLowerCase()
+  assert.doesNotMatch(sql, /\bcascade\b|\btruncate\b|\brename\b|\binsert\b|\bupdate\b/)
+  const drops = [...sql.matchAll(/drop table if exists public\.(\w+);/g)].map((m) => m[1])
+  assert.deepEqual([...drops].sort(), [...MEMORY_TABLES].sort())
+  assert.ok(sql.indexOf('create or replace function public.delete_account') < sql.indexOf('drop table'), 'old function first')
+  assert.ok(!sql.slice(0, sql.indexOf('drop table')).includes('founder_beliefs'), 'the restored function must not mention memory tables')
+  assert.ok(!/'beliefs'/.test(sql), 'the restored check has no beliefs')
+})
+
+test('birthday: additive only, month and day (no year), both or neither, the day must exist in the month, undone by the rollback', () => {
+  const file = memoryFile('founder_birthday')
+  assert.ok(file, 'the birthday migration exists')
+  const raw = file.sql
+  assert.match(raw, /changes an existing table, additively/i, 'the header says it changes a table')
+  const sql = memoryCompact('founder_birthday')
+  assert.doesNotMatch(sql, /drop\s|\btruncate\b|rename\s|\bdelete\b|\bupdate\b|\binsert\b|create table|alter column|add column (?!if not exists)/)
+  const added = [...sql.matchAll(/alter table public\.(\w+) add column if not exists (\w+) (\w+)/g)].map((m) => `${m[1]}.${m[2]} ${m[3]}`)
+  assert.deepEqual(added.sort(), ['founder_profiles.birth_day smallint', 'founder_profiles.birth_month smallint'])
+  assert.ok(!/birth_year|birth_date|\bage\b|date_of_birth|\bdob\b/.test(sql), 'no year, no full date')
+  assert.ok(!/not null/.test(sql.split('founder_profiles_birthday_valid')[0]), 'both columns are nullable')
+  // both or neither
+  assert.match(sql, /birth_month is null and birth_day is null/)
+  // month 1..12, day 1..31 and the day exists in the month, Feb 29 allowed
+  assert.match(sql, /birth_month between 1 and 12 and birth_day >= 1/)
+  assert.match(sql, /when birth_month = 2 then 29 when birth_month in \(4, 6, 9, 11\) then 30 else 31 end/)
+  // idempotent: the constraint is added only when it does not exist
+  assert.match(sql, /if not exists \(select 1 from pg_constraint where conname = 'founder_profiles_birthday_valid'/)
+  // the rollback drops exactly these two columns, not touching other tables
+  const rollback = stripSqlComments(readFileSync(join(SERVER, '..', 'supabase', 'rollback', '20261109_rollback.sql'), 'utf8')).replace(/\s+/g, ' ').toLowerCase()
+  const dropped = [...rollback.matchAll(/alter table public\.(\w+) drop column if exists (\w+);/g)].map((m) => `${m[1]}.${m[2]}`)
+  assert.deepEqual(dropped.sort(), ['founder_profiles.birth_day', 'founder_profiles.birth_month'])
+  // the server writes only these two columns
+  assert.match(readFileSync(join(SERVER, 'journey', 'home', 'accountExport.js'), 'utf8'), /'birth_month', 'birth_day'/)
 })

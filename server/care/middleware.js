@@ -75,16 +75,27 @@ export function createCare({ supabase, callStructured, clock = { now: () => Date
     if (error) throw error
   }
 
-  // extract: (req) => string | string[] | null. Add context(req) => string[]
-  // later when a route has the conversation to hand.
-  function careGate(extract) {
+  // extract: (req) => string | string[] | null. context(req) => string[] gives
+  // earlier founder messages; it is used only when the rules need the model.
+  function careGate(extract, context = null) {
     return async function careGateMiddleware(req, res, next) {
       const text = flatText(extract(req))
       if (!text) return next()
       const userId = req.user?.id
 
+      const earlier = context
+        ? async () => {
+            try {
+              return (await context(req)) || []
+            } catch (err) {
+              log('context failed', err)
+              return []
+            }
+          }
+        : []
       const verdict = await classifyCare({
         text,
+        context: earlier,
         deps: { callStructured, userId },
       })
       if (verdict.level === 'none') return next()

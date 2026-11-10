@@ -1,7 +1,7 @@
 import { createFakeApi } from '../src/api/fake';
-import type { GoalQuestion, MultiQuestion, Question, TextQuestion, TwoQuestion, WhereQuestion } from '../src/api/types';
+import type { GoalQuestion, Question, TextQuestion, TwoQuestion, WhereQuestion } from '../src/api/types';
 import {
-  MAX_OPTIONS, autoAdvances, countrySuggestions, isDone, needsContinue, optionGroups, startIndex, tapMulti, tapSingle, tapTwo,
+  MAX_OPTIONS, autoAdvances, countrySuggestions, isDone, needsContinue, optionGroups, startIndex, tapSingle, tapTwo, SKIP, isSkip, pickMonth, birthdayDone, daysIn, progressAt,
 } from '../src/onboarding/flow';
 import { clip, waitLines } from '../src/onboarding/waitLines';
 
@@ -10,22 +10,29 @@ beforeAll(async () => { questions = (await createFakeApi().getSignup()).question
 const byKey = <T extends Question>(k: string) => questions.find((q) => q.key === k) as T;
 
 describe('questions', () => {
-  it('has 13, one per screen', () => expect(questions).toHaveLength(13));
-
+  it('has the 14, in order, one per screen', () => {
+    expect(questions.map((q) => q.key)).toEqual(['stage', 'commitment', 'business_model', 'where', 'goal', 'building', 'why', 'strengths', 'decision', 'drop_plan', 'hard_truth', 'contrarian', 'people', 'stuck']);
+  });
   it('never shows more than 5 options at once', () => {
     for (const q of questions) for (const g of optionGroups(q)) expect(g.length).toBeLessThanOrEqual(MAX_OPTIONS);
   });
 
-  it('only question 10 is multi-select in two groups, question 11 ticks several', () => {
-    expect(questions[9].type).toBe('two');
-    expect(questions[10].type).toBe('multi');
-    expect(questions.filter((q) => q.type === 'two' || q.type === 'multi')).toHaveLength(2);
+  it('only the strengths question has two groups, and no question ticks several in one', () => {
+    expect(questions.filter((q) => q.type === 'two').map((q) => q.key)).toEqual(['strengths']);
+  });
+
+  it('the new single questions are plain single choices', () => {
+    for (const k of ['decision', 'drop_plan', 'hard_truth']) expect(byKey(k).type).toBe('single');
+  });
+
+  it('only contrarian and people can be skipped', () => {
+    expect(questions.filter((q) => q.type === 'text' && q.optional).map((q) => q.key)).toEqual(['contrarian', 'people']);
   });
 });
 
 describe('resuming part way', () => {
   it('starts at the first question the server says is unanswered, not question 1', () => {
-    expect(startIndex(questions, 'building')).toBe(11);
+    expect(startIndex(questions, 'building')).toBe(5);
     expect(startIndex(questions, 'stage')).toBe(0);
   });
   it('starts at question 1 when the server names none or an unknown one', () => {
@@ -33,26 +40,23 @@ describe('resuming part way', () => {
     expect(startIndex(questions, undefined)).toBe(0);
     expect(startIndex(questions, 'gone')).toBe(0);
   });
+  it('a founder the server calls complete gets no question to start at', async () => {
+    const signup = await createFakeApi('none', 0, false, 'morning').getSignup();
+    expect(signup).toMatchObject({ complete: true, next: null });
+  });
   it('is what a new fake founder gets from the sign-up', async () => {
     const signup = await createFakeApi().getSignup();
-    expect(signup).toMatchObject({ answers: {}, next: 'stage', complete: false });
+    expect(signup).toMatchObject({ answers: {}, next: 'stage', complete: false, total: 14 });
   });
 });
 
 describe('auto-advance', () => {
   it('a single choice moves on by itself', () => {
     const q = questions[0];
-    const a = tapSingle(undefined, q.type === 'single' ? q.options[0] : '');
+    const a = tapSingle(q.type === 'single' ? q.options[0] : '');
     expect(isDone(q, a)).toBe(true);
     expect(needsContinue(q, a)).toBe(false);
     expect(autoAdvances(q, a)).toBe(true);
-  });
-
-  it('"Other" waits for Continue', () => {
-    const q = byKey('background');
-    const a = tapSingle(undefined, 'Other');
-    expect(needsContinue(q, a)).toBe(true);
-    expect(autoAdvances(q, a)).toBe(false);
   });
 
   it('written answers never advance by themselves', () => {
@@ -88,8 +92,8 @@ describe('auto-advance', () => {
   });
 });
 
-describe('multi-select', () => {
-  it('question 10 needs at least one pick in each group and ticks toggle', () => {
+describe('two-group select', () => {
+  it('strengths needs at least one pick in each group and ticks toggle', () => {
     const q = byKey<TwoQuestion>('strengths');
     let a = tapTwo(undefined, 0, q.groups[0].options[0]);
     expect(isDone(q, a)).toBe(false);
@@ -101,16 +105,37 @@ describe('multi-select', () => {
     a = tapTwo(a, 0, q.groups[0].options[1]);
     expect(a.a).toEqual([q.groups[0].options[0]]);
   });
+});
 
-  it('"None of it yet" clears the rest, and picking another clears it', () => {
-    const q = byKey<MultiQuestion>('tried');
-    let a = tapMulti(q, undefined, 'Talked to customers');
-    a = tapMulti(q, a, 'Launched it');
-    expect(a).toEqual(['Talked to customers', 'Launched it']);
-    a = tapMulti(q, a, 'None of it yet');
-    expect(a).toEqual(['None of it yet']);
-    a = tapMulti(q, a, 'Launched it');
-    expect(a).toEqual(['Launched it']);
+describe('optional written questions', () => {
+  it('typed text of 3 characters counts, 2 does not, and a skip counts', () => {
+    const q = byKey<TextQuestion>('contrarian');
+    expect(isDone(q, 'ab')).toBe(false);
+    expect(isDone(q, 'abc')).toBe(true);
+    expect(isDone(q, SKIP)).toBe(true);
+    expect(isSkip(SKIP)).toBe(true);
+    expect(isSkip('abc')).toBe(false);
+    expect(needsContinue(q, SKIP)).toBe(true);
+  });
+  it('a required written question refuses nothing here but never shows Skip', () => {
+    expect((byKey<TextQuestion>('stuck')).optional).toBeUndefined();
+  });
+});
+
+describe('name and birthday', () => {
+  it('the hairline stays empty on them and fills over the 14', () => {
+    expect(progressAt(0, 2, 14)).toBe(0);
+    expect(progressAt(1, 2, 14)).toBe(0);
+    expect(progressAt(2, 2, 14)).toBeCloseTo(1 / 14);
+    expect(progressAt(15, 2, 14)).toBe(1);
+    expect(progressAt(0, 0, 14)).toBeCloseTo(1 / 14);
+  });
+  it('a birthday is done with a month and a day, and a month change drops a day it does not have', () => {
+    expect(birthdayDone({ month: 3 })).toBe(false);
+    expect(birthdayDone({ month: 3, day: 31 })).toBe(true);
+    expect(pickMonth({ month: 3, day: 31 }, 4)).toEqual({ month: 4, day: undefined });
+    expect(pickMonth({ month: 3, day: 30 }, 4)).toEqual({ month: 4, day: 30 });
+    expect(daysIn(2)).toBe(29);
   });
 });
 

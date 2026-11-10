@@ -202,6 +202,8 @@ test('GET routes are not held: home, history, history detail, and a situation', 
 const NOT_HELD = {
   'POST /api/home/checkin': 'the way out of care',
   'PUT /api/signup/answers/:key': 'sign-up answers; screened by the care gate',
+  'PUT /api/signup/name': 'sign-up name; screened by the care gate',
+  'PUT /api/signup/birthday': 'sign-up birthday, numbers only; teaches and gives nothing',
   'POST /api/reports/:id/consent': 'sharing a care-touched report is refused inside the share function',
   'POST /api/reports/:id/withdraw': 'taking a share down is always allowed',
   'PUT /api/settings/sharing': 'a settings switch; teaches and gives nothing',

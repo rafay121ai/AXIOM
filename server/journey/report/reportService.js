@@ -14,6 +14,8 @@
 //   shared. Every decision is logged with its time and wording version. The
 //   question versions offered with a report are stored on it; a consent may
 //   only name one of them.
+// - memory is learned from a finished report after the response is ready, and
+//   never delays or fails it (memory/extractBeliefs.js).
 // Tables and columns: see ../schema_needs.md.
 import { HttpError } from '../situations.js'
 import { isFillerReply } from '../filler.js'
@@ -25,6 +27,7 @@ import { REPORT_SCHEMA, reportMessages } from './prompts/report.js'
 import { createSharing } from './sharing.js'
 import { styleOf } from '../prompts/style.js'
 import { createFounderLessons } from './founderLessons.js'
+import { overCap, runMemoryPass, scheduleMemory } from '../memory/extractBeliefs.js'
 import {
   AFTER_STORY_VERSION, ALONE_VERSION, CONSENT_WORDINGS, KEPT_PRIVATE_LINE, NEED_MORE, OUTCOMES, OUTCOME_QUESTIONS,
   SHARED_LINE, SHARE_AUTO_VERSION, STORY_OFFER, WITHDRAWN_LINE, WITHDRAW_VERSION, fallbackReply, openingLine,
@@ -34,6 +37,8 @@ import {
 // offline check-in is sent when the phone is back online).
 const REPORTABLE = Object.freeze([...ACTIVE_STATUSES, 'closed_no_report'])
 const NOTE_MIN_WORDS = 2
+const CLOSED_MOVE_DAYS = 14
+const CLOSED_MOVES_PER_CALL = 3
 // A second request for a report still being written polls for the reply,
 // backing off (WAIT_FIRST_MS doubling up to WAIT_MAX_STEP_MS) for about
 // WAIT_TOTAL_MS before answering 409. A reply still missing after STALE_MS is
@@ -90,7 +95,7 @@ function consentView(row) {
   return { ask: false, ...sharingView(row) }
 }
 
-export function createReports({ supabase, callStructured, clock, log = () => {}, pause = realPause }) {
+export function createReports({ supabase, callStructured, clock, log = () => {}, pause = realPause, isCapped = async () => false }) {
   const moves = createMoves({ supabase, callStructured, clock, log })
   const sharing = createSharing({ supabase, clock })
   const founderLessons = createFounderLessons({ supabase, sharing, clock })
@@ -205,6 +210,22 @@ export function createReports({ supabase, callStructured, clock, log = () => {},
     return asked
   }
 
+  // Memory is learned after the response is on its way: detached, and a failure only reaches the log.
+  const remember = (job) => scheduleMemory(job, log)
+  const memoryPass = (args) => runMemoryPass({ supabase, callStructured, log, clock, isCapped, ...args })
+
+  // Moves that closed with no report in the last 14 days: a facts-only pass for up to 3 not yet remembered,
+  // newest first, and none while the founder is over the daily cost cap.
+  async function rememberClosedMoves(userId) {
+    if (await overCap(isCapped, userId)) return
+    const since = new Date(clock.now() - CLOSED_MOVE_DAYS * 86400000).toISOString()
+    const closed = await one(supabase.from('moves').select('id').eq('user_id', userId).eq('status', 'closed_no_report')
+      .gte('closed_at', since).order('closed_at', { ascending: false }))
+    const ran = new Set((await one(supabase.from('memory_runs').select('source_id').eq('user_id', userId).eq('source_kind', 'move')
+      .eq('mode', 'facts_only').in('status', ['done', 'skipped_care']))).map((r) => r.source_id))
+    for (const m of closed.filter((c) => !ran.has(c.id)).slice(0, CLOSED_MOVES_PER_CALL)) await memoryPass({ userId, sourceKind: 'move', sourceId: m.id, mode: 'facts_only' })
+  }
+
   async function finish({ userId, row, move }) {
     if (REPORTABLE.includes(move.status)) {
       await one(supabase.from('moves').update({ status: 'reported', active_slot: null, updated_at: iso() })
@@ -212,6 +233,7 @@ export function createReports({ supabase, callStructured, clock, log = () => {},
     }
     await sharing.unlock({ userId, reportId: row.id, kind: 'report' })
     const decided = row.share_state === null ? await decideSharing({ userId, row, move }) : row
+    remember(() => memoryPass({ userId, sourceKind: 'report', sourceId: row.id, mode: 'full' }))
     return {
       status: 'reported',
       report: reportView(decided, move),
@@ -228,6 +250,7 @@ export function createReports({ supabase, callStructured, clock, log = () => {},
   async function due({ userId }) {
     if (await sharing.careOpen(userId)) return { reports: [] }
     await moves.settle(userId)
+    remember(() => rememberClosedMoves(userId))
     const rows = await one(supabase.from('moves').select().eq('user_id', userId).in('status', ACTIVE_STATUSES)
       .order('report_due_at', { ascending: true }))
     return {

@@ -5,28 +5,28 @@ import { Glass } from './Glass';
 
 type Props = { label: string; selected: boolean; onPress: () => void };
 
-function Mark({ selected, square }: { selected: boolean; square: boolean }) {
+function Mark({ selected }: { selected: boolean }) {
   return (
-    <View style={[styles.ring, square && styles.square, !selected && styles.ringOff]}>
+    <View style={[styles.ring, !selected && styles.ringOff]}>
       {selected && <LinearGradient colors={goldGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />}
       {selected && <View style={styles.tick} />}
     </View>
   );
 }
 
-/** A full-width glass row. Round mark for one answer, square mark when several can be ticked. */
-export function Row({ label, selected, onPress, multi = false }: Props & { multi?: boolean }) {
+/** A full-width glass row with a round mark: one answer. */
+export function Row({ label, selected, onPress }: Props) {
   return (
     <Glass
       onPress={onPress}
       selected={selected}
-      accessibilityRole={multi ? 'checkbox' : 'radio'}
+      accessibilityRole="radio"
       accessibilityLabel={label}
       style={styles.rowGap}
       contentStyle={styles.row}
     >
       <Text style={[type.option, styles.rowText, { color: selected ? colors.inkBright : ink(0.78) }]}>{label}</Text>
-      <Mark selected={selected} square={multi} />
+      <Mark selected={selected} />
     </Glass>
   );
 }
@@ -54,6 +54,5 @@ const styles = StyleSheet.create({
   chip: { paddingVertical: 12, paddingHorizontal: 16, minHeight: 44, justifyContent: 'center' },
   ring: { width: 19, height: 19, borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: 'transparent' },
   ringOff: { borderColor: ink(0.35) },
-  square: { borderRadius: 6 },
   tick: { position: 'absolute', left: 6.5, top: 3, width: 4, height: 8, borderColor: colors.onGold, borderRightWidth: 1.5, borderBottomWidth: 1.5, transform: [{ rotate: '45deg' }] },
 });

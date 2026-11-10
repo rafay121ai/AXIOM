@@ -4,6 +4,8 @@
 // not the rule.
 import { MAX_START_MINUTES } from '../moveChecks.js'
 import { styleMessages } from '../../prompts/style.js'
+import { trackRecordMessages } from '../../memory/trackRecord.js'
+import { briefMessages } from '../../memory/brief.js'
 
 export const MOVE_SCHEMA = Object.freeze({
   type: 'object',
@@ -49,10 +51,12 @@ export const MOVE_PROMPT = [
 
 // input: { situation, read, learn, subject, fact, swap? }
 //   swap: { previous: { title, mission }, reason }.
-export function moveMessages({ situation, read, learn, subject, fact, swap = null, style }, retryProblems = null) {
+export function moveMessages({ situation, read, learn, subject, fact, swap = null, style, trackRecord = '', brief = '' }, retryProblems = null) {
   const messages = [
     { role: 'system', content: MOVE_PROMPT },
     ...styleMessages(style),
+    ...trackRecordMessages('move', trackRecord),
+    ...briefMessages(brief),
     {
       role: 'user',
       content: JSON.stringify({

@@ -3,8 +3,10 @@
 // a plain 404. Errors are generic.
 import rateLimit from 'express-rate-limit'
 import { bodyFields } from '../../care/middleware.js'
+import { createRecentContext } from '../../care/recentContext.js'
 import { isUuid } from '../../writeValidation.js'
 import { HttpError, TEXT_MAX } from '../situations.js'
+import { founderFirstName } from '../home/name.js'
 import { createLearn } from './learn.js'
 import { pickLoadingHint } from './loadingHint.js'
 
@@ -56,6 +58,8 @@ export function mountLearnRoutes(app, { supabase, knowledgeSupabase = null, embe
     if (text.length > TEXT_MAX) bad(`text is longer than ${TEXT_MAX} characters`)
     return text
   }
+  // Saved name first, sign-in name otherwise; never throws.
+  const savedOrSignInName = (req) => founderFirstName(supabase, req.user.id, req.user).catch(() => firstNameOf(req.user))
   const clientTurnId = (req) => (isUuid(req.body?.client_turn_id) ? req.body.client_turn_id : bad('client_turn_id must be a uuid'))
 
   // Reads the stored situation and Read answer; the founder sends no text here.
@@ -65,9 +69,9 @@ export function mountLearnRoutes(app, { supabase, knowledgeSupabase = null, embe
   app.get('/api/learn/:id', limiter(60),
     handle((req) => service.get({ userId: req.user.id, learnId: idParam(req) })))
 
-  app.post('/api/learn/:id/turn', limiter(30), care.careHold, care.careGate(bodyFields('text')), cap(stored.learnTurn),
-    handle((req) => service.turn({
-      userId: req.user.id, learnId: idParam(req), text: textOf(req), clientTurnId: clientTurnId(req), name: firstNameOf(req.user),
+  app.post('/api/learn/:id/turn', limiter(30), care.careHold, care.careGate(bodyFields('text'), createRecentContext({ supabase, log }).forLearn), cap(stored.learnTurn),
+    handle(async (req) => service.turn({
+      userId: req.user.id, learnId: idParam(req), text: textOf(req), clientTurnId: clientTurnId(req), name: await savedOrSignInName(req),
     })))
 
   // The tapped suggestion is Axiom's own text, stored on the server: no care gate.

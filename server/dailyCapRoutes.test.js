@@ -171,6 +171,7 @@ const NOT_CAPPED = {
   'PUT /api/settings/sharing': 'no model call', 'PUT /api/settings': 'no model call', 'PUT /api/settings/reminders': 'no model call',
   'POST /api/home/checkin': 'the way out of care', 'POST /api/account/export': 'no model call', 'DELETE /api/account': 'no model call',
   'PUT /api/signup/answers/:x': 'stores sign-up answers; never blocked',
+  'PUT /api/signup/name': 'no model call', 'PUT /api/signup/birthday': 'no model call',
   'POST /api/push/token': 'no model call', 'DELETE /api/push/token': 'no model call',
   'POST /api/review/outcomes/:x/draft': 'reviewer tool', 'POST /api/review/outcomes/:x': 'reviewer tool',
 }

@@ -39,7 +39,7 @@ const NUMBER_WORDS = Object.freeze({
 })
 // Longest first, so "hundreds" is read whole; "double-check" is not a number.
 const NUMBER_WORD_RX = new RegExp(`(?<![a-z])(${Object.keys(NUMBER_WORDS).sort((a, b) => b.length - a.length).join('|')})(?![a-z]|-check)`, 'g')
-const numbersIn = (text) => {
+export const numbersIn = (text) => {
   const t = norm(text)
   return [
     ...[...t.matchAll(/\d[\d,]*(?:\.\d+)?/g)].map((m) => m[0].replace(/,/g, '').replace(/\.$/, '')),

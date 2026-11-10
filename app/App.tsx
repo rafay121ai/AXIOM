@@ -37,7 +37,7 @@ import { colors, motion, fontFiles, space } from './src/theme';
 
 type Stage =
   | { name: 'signin' }
-  | { name: 'questions'; questions: Question[]; answers: Record<string, Answer>; startAt: string | null }
+  | { name: 'questions'; questions: Question[]; answers: Record<string, Answer>; startAt: string | null; signInName?: string }
   | { name: 'wait'; lines: string[] }
   | { name: 'reading'; reading: FirstReading }
   | { name: 'situation'; chat: Chat; opening: string; suggestion?: string }
@@ -141,7 +141,9 @@ export default function App() {
     const signup = await api.getSignup();
     landing.current = signup.complete;
     signedUp.current = signup.complete;
-    goTo(signup.complete ? { name: 'home' } : { name: 'questions', questions: signup.questions, answers: signup.answers, startAt: signup.next });
+    if (signup.complete) return goTo({ name: 'home' });
+    const signInName = await api.getSignInName().catch(() => undefined);
+    goTo({ name: 'questions', questions: signup.questions, answers: signup.answers, startAt: signup.next, signInName });
   }, [goTo]);
 
   // A closed browser leaves the founder on the sign-in screen with nothing said; any other failure says so once.
@@ -218,7 +220,10 @@ export default function App() {
                 questions={stage.questions}
                 answers={stage.answers}
                 startAt={stage.startAt}
+                signInName={stage.signInName}
                 onSave={async (k, a) => route(await api.saveAnswer(k, a))}
+                onSaveName={async (name) => route(await api.saveName(name))}
+                onSaveBirthday={(month, day) => api.saveBirthday(month, day)}
                 onFinish={finish}
               />
             )}

@@ -2,6 +2,8 @@
 // question. The model says what it knows; the server decides whether Learn can
 // start (all three known) and counts questions (at most 2). The prompt is not
 // the rule.
+import { briefMessages } from '../memory/brief.js'
+import { NEVER_ASK_KNOWN } from './situation.js'
 
 export const READ_TALK_SCHEMA = Object.freeze({
   type: 'object',
@@ -32,9 +34,11 @@ export const READ_TALK_PROMPT = [
 ].join('\n')
 
 // read: { headline, body, closing_question }; talk: [{ role: 'founder'|'axiom', text }], starting with their answer.
-export function readTalkMessages({ situation, read, talk, questionsLeft }, retryProblems = null) {
+export function readTalkMessages({ situation, read, talk, questionsLeft, brief = '' }, retryProblems = null) {
   const messages = [
     { role: 'system', content: READ_TALK_PROMPT },
+    ...briefMessages(brief),
+    ...(brief ? [NEVER_ASK_KNOWN] : []),
     { role: 'user', content: JSON.stringify({ situation, read, talk, questions_left: questionsLeft }) },
   ]
   if (retryProblems?.length) messages.push({ role: 'system', content: `Your last question broke these rules: ${retryProblems.slice(0, 5).join('; ')}. Write it again and fix every one.` })

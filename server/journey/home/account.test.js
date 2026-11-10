@@ -56,6 +56,17 @@ function seedFounder(who, tag) {
     conversation_threads: [{ id: id(who, 23), user_id: u, session_id: id(who, 18), title: `${tag} thread`, status: 'active' }],
     experiments: [{ id: id(who, 24), user_id: u, session_id: id(who, 18), description: `${tag} experiment`, metadata: { m: 'METADATA' } }],
     product_events: [{ id: id(who, 25), user_id: u, event: 'message_sent', properties: { p: 'PROPS' }, created_at: at(NOW) }],
+    founder_beliefs: [
+      { id: id(who, 26), user_id: u, belief: `${tag} old belief`, kind: 'fact', confidence: 0.6, status: 'superseded', superseded_by: id(who, 27), source: 'conversation' },
+      { id: id(who, 27), user_id: u, belief: `${tag} new belief`, kind: 'fact', confidence: 0.6, status: 'active', source: 'conversation' },
+    ],
+    founder_traits: [{ id: id(who, 28), user_id: u, dimension: 'decision_speed', value: 'fast', confidence: 0.5, origin: 'observed', status: 'active' }],
+    founder_world: [{ id: id(who, 29), user_id: u, name: `${tag} Co`, kind: 'company', mention_count: 1, status: 'active' }],
+    founder_vocabulary: [{ id: id(who, 30), user_id: u, term: `${tag} term`, meaning: 'm', confidence: 0.6, mention_count: 1, status: 'active' }],
+    founder_threads: [{ id: id(who, 31), user_id: u, title: `${tag} thread goal`, kind: 'goal', status: 'open' }],
+    memory_evidence: [{ id: id(who, 32), user_id: u, item_table: 'founder_beliefs', item_id: id(who, 27), source_kind: 'report', source_id: id(who, 8), snippet: `${tag} snippet`, created_at: at(NOW) }],
+    memory_runs: [{ id: id(who, 33), user_id: u, source_kind: 'report', source_id: id(who, 8), mode: 'full', status: 'done', model: 'm', created_at: at(NOW) }],
+    founder_corrections: [{ id: id(who, 34), user_id: u, item_table: 'founder_beliefs', item_text: `${tag} wrong`, reason: 'wrong', created_at: at(NOW) }],
   }
 }
 
@@ -77,7 +88,7 @@ function installDeleteAccount(base) {
     await del('situation_turns', 'situation_id', sits); await del('reads', 'situation_id', sits)
     await base.from('situations').delete().eq('user_id', u)
     await del('messages', 'session_id', await ids('sessions', 'user_id', u))
-    for (const t of ['founder_lesson_log', 'care_events', 'push_tokens', 'user_settings', 'app_sessions', 'conversation_threads', 'experiments', 'personal_memories', 'model_usage_logs', 'product_events', 'sessions', 'founder_profiles', 'account_requests']) await base.from(t).delete().eq('user_id', u)
+    for (const t of ['founder_lesson_log', 'founder_beliefs', 'founder_traits', 'founder_world', 'founder_vocabulary', 'founder_threads', 'memory_evidence', 'memory_runs', 'founder_corrections', 'care_events', 'push_tokens', 'user_settings', 'app_sessions', 'conversation_threads', 'experiments', 'personal_memories', 'model_usage_logs', 'product_events', 'sessions', 'founder_profiles', 'account_requests']) await base.from(t).delete().eq('user_id', u)
     await base.from('users').delete().eq('id', u)
     return { data: null, error: null }
   }
@@ -126,11 +137,15 @@ test('export: A gets A only, as an attachment, with nothing internal and no user
     assert.match(res.headers.get('content-disposition'), /^attachment; filename=/)
     assert.equal(res.body.message, ACCOUNT_COPY.exportReady)
     assert.equal(res.body.account.email, 'a@example.com')
-    assert.deepEqual(Object.keys(res.body).sort(), ['account', 'app_sessions', 'care_events', 'consent_log', 'conversation_threads', 'devices', 'experiments', 'exported_at', 'founder_lesson_log', 'learn_conversations', 'learn_turns', 'message', 'messages', 'moves', 'notification_log', 'peer_unlocks', 'personal_memories', 'product_events', 'profile', 'reads', 'reports', 'sessions', 'settings', 'situation_turns', 'situations'])
+    assert.deepEqual(Object.keys(res.body).sort(), ['account', 'app_sessions', 'care_events', 'consent_log', 'conversation_threads', 'devices', 'experiments', 'exported_at', 'founder_beliefs', 'founder_corrections', 'founder_lesson_log', 'founder_threads', 'founder_traits', 'founder_vocabulary', 'founder_world', 'learn_conversations', 'learn_turns', 'memory_evidence', 'memory_runs', 'message', 'messages', 'moves', 'notification_log', 'peer_unlocks', 'personal_memories', 'product_events', 'profile', 'reads', 'reports', 'sessions', 'settings', 'situation_turns', 'situations'])
     for (const key of ['situations', 'situation_turns', 'reads', 'learn_conversations', 'learn_turns', 'moves', 'reports', 'consent_log', 'care_events', 'devices', 'messages', 'personal_memories', 'sessions', 'conversation_threads', 'app_sessions', 'experiments', 'founder_lesson_log', 'notification_log', 'peer_unlocks', 'product_events']) assert.equal(res.body[key].length, 1, key)
     assert.equal(res.body.reports[0].share_state, 'shared')
+    for (const key of ['founder_traits', 'founder_world', 'founder_vocabulary', 'founder_threads', 'memory_evidence', 'memory_runs', 'founder_corrections']) assert.equal(res.body[key].length, 1, key)
+    // Both belief rows, the superseded one too; none of it names a founder id.
+    assert.deepEqual(res.body.founder_beliefs.map((r) => r.status).sort(), ['active', 'superseded'])
+    assert.deepEqual(Object.keys(res.body.memory_evidence[0]).sort(), ['created_at', 'id', 'item_id', 'item_table', 'snippet', 'source_kind'])
     assert.deepEqual(res.body.devices[0].token, 'redacted')
-    for (const leak of [A.id, B.id, 'b@example.com', 'Bravo', 'ExponentPushToken', 'CHUNK', 'HYPOTHESIS', 'INTERNAL', 'user_id', 'peer_outcome', 'published story', 'draft', 'evidence', 'scope_id', 'session_token', 'SESSTOK', 'embedding', '0.123456', 'METADATA', 'PROPS', 'DEDUPE', 'Bravo thread', 'Bravo experiment']) {
+    for (const leak of [A.id, B.id, 'b@example.com', 'Bravo', 'ExponentPushToken', 'CHUNK', 'HYPOTHESIS', 'INTERNAL', 'user_id', 'peer_outcome', 'published story', 'draft', '"evidence"', 'scope_id', 'session_token', 'SESSTOK', 'embedding', '0.123456', 'METADATA', 'PROPS', 'DEDUPE', 'Bravo thread', 'Bravo experiment']) {
       assert.ok(!res.text.includes(leak), `export holds ${leak}`)
     }
     assert.ok(res.text.includes('Alpha secret words'))

@@ -67,9 +67,13 @@ founder owns the row (404 otherwise) and returns generic errors. **Every
 endpoint that accepts founder text runs the care check first (see Care).**
 
 ```
-Sign-up (once; the answers feed only the first reading, never later steps)
+Sign-up (once)
   GET  /api/signup                 -> saved answers and the next question
-  PUT  /api/signup/answers/:key    -> save one answer (resumable, 13 questions)
+  PUT  /api/signup/name            -> the name to call the founder (care checked)
+  PUT  /api/signup/birthday        -> month and day only (founder_profiles.birth_month, birth_day)
+  PUT  /api/signup/answers/:key    -> save one answer (resumable, 14 questions;
+                                      the two optional written ones may be skipped;
+                                      hard_truth also sets the Settings style once)
   POST /api/first-reading          -> 1 structured call: first reading + hook.
                                       Stored in founder_profiles.first_reading;
                                       a repeat returns the stored one. The first
@@ -185,6 +189,10 @@ transcribes it, and the transcript follows the same path as text.
     No lesson or move that turn. Repeated or worsening signals escalate to
     **clear**.
   - **none**: carry on.
+- The classifier gets the last 4 earlier founder messages of the situation
+  (and its Learn conversation) as context. The lookup is lazy: it runs only
+  when the rules cannot settle the message and the model is about to be asked.
+  A failed lookup gives no context and never changes a screening.
 - Rules plus a model, tuned to catch rather than miss. False alarms
   ("kill the feature", "burn rate") are handled by a test set that is part of
   the build.
@@ -216,7 +224,7 @@ Knowledge project.
 ### Current tables (main project, migrations in `supabase/migrations/`)
 | Table              | Purpose | Key fields |
 |--------------------|---------|------------|
-| founder_profiles   | One row per founder | user_id, signup_answers jsonb (all 13 answers), open_answers jsonb, first_reading jsonb, stage, business_model, customer_markets[], country, goal, deadline, report_time_local, timezone |
+| founder_profiles   | One row per founder | user_id, signup_answers jsonb (all 14 answers; older rows keep the old 13), open_answers jsonb, first_reading jsonb, stage, business_model, customer_markets[], country, goal, deadline, report_time_local, timezone, birth_month, birth_day |
 | situations         | One per situation | id, user_id, title, status (open, paused, closed), follow_up_count (CHECK 0 to 2), create_turn_id, care_flag, last_activity_at |
 | situation_turns    | Founder and Axiom messages | id, seq, situation_id, role, text, filler, client_turn_id (repeat-safe), result (result.read_talk marks the talk after the Read) |
 | reads              | Axiom's read | id, situation_id (unique), headline, body (one text), closing_question, source (model, fallback), closing_answer, skipped, answered_at |
@@ -235,6 +243,14 @@ Knowledge project.
 | notification_log   | The push cap and dedupe | id, user_id, kind (morning, quiet_check, evening, reminder), slot (morning, evening), local_day, status (sending, sent, failed), attempts, dedupe_key. Unique per founder, day and slot: at most 2 a day. |
 | care_events        | Private | id, user_id, level (unclear, clear), scope_id, created_at, resolved_at. No message text. |
 | account_requests   | Export and delete requests | id, user_id, kind (export, delete), status, delete_after |
+| founder_beliefs    | What Axiom learned: business facts, patterns, preferences (server only, memory layer, not yet applied) | id, user_id, belief (3 to 240), kind (fact, pattern, preference), confidence 0 to 1, status (active, superseded), superseded_by, source (signup, conversation, report) |
+| founder_traits     | How the founder decides, from a closed list the database enforces | id, user_id, dimension, value, confidence, origin (self_report, observed), status, superseded_by. One active per founder and dimension. |
+| founder_world      | People, companies, products, channels they mention | id, user_id, name (unique per founder, case-insensitive, while active), kind, role, mention_count, last_mentioned_at, status |
+| founder_vocabulary | Their shorthand | id, user_id, term (unique per founder, case-insensitive, while active), meaning, confidence, mention_count, status |
+| founder_threads    | Storylines across situations | id, user_id, title, kind (goal, bet, open_question), status (open, done, dropped) |
+| memory_evidence    | The receipt for each item above | id, user_id, item_table, item_id, source_kind, source_id or source_key, snippet (verbatim, max 200) |
+| memory_runs        | One row per extraction pass, so nothing is counted twice | id, user_id, source_kind, source_id, mode (signup_seed, full, facts_only), status (done, failed, skipped_care), model. Unique per source and mode, ignoring failed rows. |
+| founder_corrections | What the founder marked wrong or outdated | id, user_id, item_table, item_text, reason (wrong, outdated) |
 
 Not built: a separate theory table, a daily usage table (the new-situation
 limit counts `situations.created_at` for the day), and introduction requests
@@ -297,9 +313,20 @@ default. The server picks the model, never the request.
 | move     | gpt-5.4-mini-2026-03-17 | the words of the move |
 | care     | gpt-5.4-mini-2026-03-17 | care classifier |
 | report   | gpt-5.4-mini-2026-03-17 | report reply, and the reviewer's draft of a shared story |
+| beliefs  | gpt-4.1-mini (`MODEL_BELIEFS`) | memory extraction and the sign-up seed |
 
 Embeddings: `text-embedding-3-small`. Limits in code: 2 follow-ups, 2 active
 moves, 2 pushes a day.
+
+### Memory in the prompts
+- The **track record** (the last 5 moves that ended and how they went) goes
+  into the Read and Move prompts. The **brief** (how the founder works, facts,
+  people and things, shorthand, open threads; at most 900 characters) goes into
+  the Situation, Read, Read talk, Learn and Move prompts.
+- Both are built by code from stored rows with a fixed template, never by a
+  model (`server/journey/memory/`). They are background: the system message
+  says the conversation always wins, and nothing in them is a source of
+  numbers, dates or names. Nothing is learned from care moments.
 
 ### Calls per step
 | Step        | Calls |
@@ -314,6 +341,9 @@ moves, 2 pushes a day.
 | Report      | Deterministic write + a call for the reply text |
 | Review draft | 1 call when a reviewer asks for a draft of a shared story |
 | Care        | A fast classifier plus rules, before everything |
+| Memory (after a report) | 1 background extraction call (mode full), never blocks the report |
+| Memory (move closed, no report) | 1 background facts-only pass |
+| Memory (sign-up seed) | Tapped answers are seeded by code; 1 facts-only call over the written answers |
 
 ### Learn reply JSON (target)
 ```
@@ -437,7 +467,7 @@ Names only; values live in Render (`render.yaml`) and a local `.env`.
 - `VITE_KNOWLEDGE_SUPABASE_URL`, `KNOWLEDGE_SUPABASE_SERVICE_ROLE_KEY`: Knowledge project.
 - `VITE_SUPABASE_ANON_KEY`: public key for the review page sign-in.
 - `OPENAI_API_KEY`: model calls.
-- `MODEL_<STEP>`: optional model override per step (READ, LEARN, FOLLOWUP, MOVE, CARE, REPORT, MEMORY).
+- `MODEL_<STEP>`: optional model override per step (READ, LEARN, FOLLOWUP, MOVE, CARE, REPORT, BELIEFS).
 - `FRONTEND_URL` (required; the server stops without it), `FRONTEND_URLS`: allowed origins.
 - `ADMIN_USER_IDS`, `ADMIN_EMAILS`: test accounts that skip the daily situation limit.
 - `REVIEWER_USER_IDS`: who may use `/review`; empty turns the page off.
@@ -445,6 +475,15 @@ Names only; values live in Render (`render.yaml`) and a local `.env`.
 - `EXPO_ACCESS_TOKEN`: Expo push sender token.
 - `ACCOUNT_DELETE`: `on` makes account deletion real (off today).
 - `PRIVACY_URL`, `TERMS_URL`: links shown in Settings.
+
+---
+
+## Deploy order (memory layer)
+The four `supabase/migrations/20261109*` files (and the rollback in
+`supabase/rollback/20261109_rollback.sql`) are written but **not applied**.
+They must be applied BEFORE the server code that uses them is deployed: the
+account export, the birthday route and cost logging depend on them. To roll
+back, roll the server code back first, then run the rollback SQL.
 
 ---
 

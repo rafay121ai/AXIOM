@@ -1,4 +1,4 @@
-// The Read: the model writes it from the situation alone (sign-up answers feed only the first reading);
+// The Read: the model writes it from this situation; the brief and track record are background and the conversation wins (only the first reading uses the sign-up answers directly);
 // ownWords.js and hooks.js check it; one retry names the problems; a plain
 // read composed from the founder's own words replaces it if that fails.
 import { checkFirstReading, unquoteUnknown } from './ownWords.js'
@@ -71,9 +71,9 @@ const unquoted = (read, answerTexts) => ({
 
 // deps: { callStructured, userId, log }. Never throws: any model failure ends
 // in the fallback. Returns { read, source }.
-// Built from this situation only: founders change ideas and pivot, so the
-// sign-up answers feed only the first reading (Rafay, Nov 9).
-export async function createRead({ conversation, deps, situationId, style }) {
+// Built from this situation; the brief and track record feed it as background, the conversation wins, and only the first
+// reading uses the sign-up answers directly (Rafay, Nov 9). trackRecord: how their recent moves went.
+export async function createRead({ conversation, deps, situationId, style, trackRecord = '', brief = '' }) {
   const founderTexts = conversation.filter((t) => t.role === 'founder').map((t) => t.text)
   let problems = null
   for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -85,7 +85,7 @@ export async function createRead({ conversation, deps, situationId, style }) {
         maxCompletionTokens: 1200,
         userId: deps.userId,
         usageContext: { step: 'read', kind: 'read', situation_id: situationId },
-        messages: readMessages({ conversation, style }, problems),
+        messages: readMessages({ conversation, style, trackRecord, brief }, problems),
       })
       const read = unquoted(clean(data), founderTexts)
       const verdict = checkRead({ read, answerTexts: founderTexts })

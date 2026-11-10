@@ -1,5 +1,5 @@
 import type {
-  Answer, GoalAnswer, MultiAnswer, Question, SingleAnswer, TextAnswer, TwoAnswer, WhereAnswer,
+  Answer, GoalAnswer, Question, SingleAnswer, SkipAnswer, TextAnswer, TwoAnswer, WhereAnswer,
 } from '../api/types';
 
 // The rules of the question flow, with no screen code in them.
@@ -10,7 +10,6 @@ export const MAX_OPTIONS = 5;
 export function optionGroups(q: Question): string[][] {
   switch (q.type) {
     case 'single':
-    case 'multi':
       return [q.options];
     case 'goal':
       return [q.goals, q.whens];
@@ -23,9 +22,9 @@ export function optionGroups(q: Question): string[][] {
   }
 }
 
-export function isOther(q: Question, a: Answer | undefined): boolean {
-  return q.type === 'single' && !!q.otherOption && !!a && (a as SingleAnswer).value === q.otherOption;
-}
+export const SKIP: SkipAnswer = { skipped: true };
+
+export const isSkip = (a: Answer | undefined): a is SkipAnswer => typeof a === 'object' && 'skipped' in a;
 
 export function isDone(q: Question, a: Answer | undefined): boolean {
   if (a === undefined) return false;
@@ -44,10 +43,8 @@ export function isDone(q: Question, a: Answer | undefined): boolean {
       const t = a as TwoAnswer;
       return t.a.length > 0 && t.b.length > 0;
     }
-    case 'multi':
-      return (a as MultiAnswer).length > 0;
     case 'text':
-      return (a as TextAnswer).trim().length >= q.minLength;
+      return isSkip(a) || (a as TextAnswer).trim().length >= q.minLength;
   }
 }
 
@@ -56,11 +53,10 @@ export function needsContinue(q: Question, a: Answer | undefined): boolean {
   switch (q.type) {
     case 'text':
     case 'two':
-    case 'multi':
     case 'where':
       return true;
     case 'single':
-      return isOther(q, a);
+      return false;
     case 'goal':
       return (a as GoalAnswer | undefined)?.when === q.dateOption;
   }
@@ -71,19 +67,12 @@ export function autoAdvances(q: Question, a: Answer | undefined): boolean {
   return isDone(q, a) && !needsContinue(q, a);
 }
 
-export function tapSingle(prev: Answer | undefined, value: string): SingleAnswer {
-  return { value, other: (prev as SingleAnswer | undefined)?.other };
+export function tapSingle(value: string): SingleAnswer {
+  return { value };
 }
 
 export function toggle(list: string[], value: string): string[] {
   return list.includes(value) ? list.filter((x) => x !== value) : [...list, value];
-}
-
-export function tapMulti(q: Question, prev: Answer | undefined, value: string): MultiAnswer {
-  const list = (prev as MultiAnswer | undefined) ?? [];
-  const exclusive = q.type === 'multi' ? q.exclusive : undefined;
-  if (value === exclusive) return list.includes(value) ? [] : [value];
-  return toggle(list.filter((x) => x !== exclusive), value);
 }
 
 export function tapTwo(prev: Answer | undefined, group: 0 | 1, value: string): TwoAnswer {
@@ -103,6 +92,29 @@ export function startIndex(questions: Question[], next: string | null | undefine
   return Math.max(0, questions.findIndex((q) => q.key === next));
 }
 
+/** Name and birthday come before question 1, only for a founder who has answered nothing yet. */
+export const LEAD_STEPS = 2;
+
+export const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const DAYS_IN = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+/** The days a month can have (February always 29: no year is ever asked). */
+export const daysIn = (month: number) => DAYS_IN[month - 1];
+
+export type Birthday = { month?: number; day?: number };
+
+/** Picking a month drops a day that month does not have. */
+export function pickMonth(b: Birthday, month: number): Birthday {
+  return { month, day: b.day !== undefined && b.day <= daysIn(month) ? b.day : undefined };
+}
+
+export const birthdayDone = (b: Birthday) => b.month !== undefined && b.day !== undefined;
+
+/** Name and birthday count for nothing: the hairline starts at 0 and fills over the 14 questions. */
+export function progressAt(step: number, lead: number, total: number): number {
+  return step < lead ? 0 : progress(step - lead, total);
+}
+
 export function progress(index: number, total: number): number {
   return (index + 1) / total;
 }
@@ -111,8 +123,8 @@ export function progress(index: number, total: number): number {
 export function answerSummary(a: Answer | undefined): string {
   if (a === undefined) return '';
   if (typeof a === 'string') return a;
-  if (Array.isArray(a)) return a.join(', ');
-  if ('value' in a) return a.other ? `${a.value}: ${a.other}` : a.value;
+  if (isSkip(a)) return '';
+  if ('value' in a) return a.value;
   if ('a' in a) return [...a.a, ...a.b].join(', ');
   if ('country' in a || 'customers' in a) return [(a as WhereAnswer).country, (a as WhereAnswer).customers].filter(Boolean).join(', ');
   const g = a as GoalAnswer;

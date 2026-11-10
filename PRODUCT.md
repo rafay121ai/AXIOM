@@ -104,51 +104,75 @@ Gold.
   value of the year. The line is **not yet written** (Rafay will provide it).
 - One quiet line about terms and privacy, and that answers stay private.
 
-## Onboarding (once): 13 questions
+## Onboarding (once): name, birthday, 14 questions
 
 ### Format
+- Before the questions: a name screen (what to call the founder) and a
+  birthday screen (month and day only, no year). Nothing reads the birthday
+  yet and no birthday greeting is written.
 - One question per screen. No question counter, only a thin progress line.
   A back arrow. Smooth slide between questions.
 - **No question has more than 5 options** and every question fits one screen
   (no scrolling).
 - Any tap on a single-choice question moves on by itself. A Continue button
   appears only for written answers, multi-select and typed answers.
-- 11 taps, 2 written. Short "other" write-ins on questions 8 and 9 do not
-  count as written.
+- 10 taps and typed answers, 4 written. Two of the written ones (12 and 13
+  below: the belief people argue with, who else is part of this) are optional,
+  with a Skip. A skipped question is stored as skipped.
 - Answers are saved as they go, so an interrupted sign-up resumes where it
   stopped.
-- Captures structured fields and the founder's own words. No personality
-  tests, and **no money question** (revenue and runway are not asked at
-  sign-up; they may be asked later, after trust).
+- The answer to question 11 (how they want hard things said) sets the
+  Settings style once, at sign-up: Gently = Calm, Straight = Direct, Blunt =
+  Hard. The founder can change it in Settings.
+- Captures structured fields and the founder's own words. The personal
+  questions ask about behaviour (how they decide, why they drop plans), not
+  personality types, and there is **no money question** (revenue and runway
+  are not asked at sign-up; they may be asked later, after trust).
+- Removed from the old 13: time on it, team size, what you tried, background.
+  Answers already stored are kept. A founder who finished the old 13 is not
+  asked again.
 
-### The questions (final wording is reviewed before build)
-1. Where are you with it right now? (Just an idea / talking to people / building,
-   nobody pays yet / someone is paying me / it's growing)
-2. How long have you been on it? (Under 3 months / 3 to 6 / 6 to 12 / 1 to 2
-   years / more than 2 years)
-3. How much of your week goes into it? (Full time / part time 15+ hours /
-   evenings and weekends under 15 hours / on and off)
-4. Who pays you, or would? (Businesses / consumers / both sides of a
-   marketplace / clients for services / no one yet)
-5. Where are you, and where are your customers? (Country typed with
-   suggestions; customers mostly in own country / mostly abroad / both)
-6. Who is building it with you? (Just me / a cofounder or two / small team of
-   2 to 5 / six or more)
-7. What are you aiming for, and by when? (First customer / first 10 / a
-   revenue number / raise money / ship it; this month / in 3 months / in 6
-   months / pick a date)
-8. What did you do before this? (Worked in tech / something else / student /
-   ran a business before / other)
-9. Why are you doing this? "Pick the one most true, even if it is not
-   flattering." (Get out of a job / lived this problem / big opportunity /
-   prove something / freedom, money, or something that matters)
-10. Be honest about yourself. Better than most at (multi-select, max 5
-    options) and what you avoid most (multi-select, max 5 options).
-11. What have you already tried? (Tick all: talked to customers, built a
-    prototype, launched, tried to sell or raise, none of it yet)
-12. Written: What are you building, and for whom?
-13. Written: What are you most stuck on, or putting off? And what have you
-    tried on it?
+### The questions (7 business, 7 personal; final wording is reviewed before build)
+Business
+1. Where are you with it right now? (Just an idea / I'm talking to people
+   about it / I'm building it and nobody pays yet / Someone is paying me / It's
+   growing)
+2. How much of your week goes into it? (Full time / Part time, 15 hours or
+   more / Evenings and weekends, under 15 hours / On and off)
+3. Who pays you, or would? (Businesses / Consumers / Both sides of a
+   marketplace / Clients, for services / No one yet)
+4. Where are you, and where are your customers? (Country typed with
+   suggestions; Mostly in my own country / Mostly abroad / Both)
+5. What are you aiming for, and by when? (My first customer / My first 10
+   customers / A revenue number / Raise money / Ship it; This month / In 3
+   months / In 6 months / Pick a date)
+6. Written: What are you building, and for whom?
+
+Personal
+7. Why are you doing this? "Pick the one that is most true, even if it is not
+   flattering." (To get out of a job I don't want / I've lived this problem
+   myself / I see a big opportunity / To prove something / Freedom, money, or
+   something that matters)
+8. Be honest about yourself. Better than most people at (Building the product
+   / Selling / Numbers and planning / Leading people / Not quitting) and what
+   I avoid most (Talking to customers / Asking for money / Pricing / Hard
+   talks with the team / Launching); pick as many as are true.
+9. You have a big decision and not enough information. What do you usually do?
+   (Decide now and adjust later / Wait and collect more / Ask someone I trust /
+   Put it off until I have to)
+10. When you drop a plan halfway, it is usually because... (A better idea
+    showed up / It got repetitive / Nobody was checking on me / It got
+    uncomfortable / I rarely drop plans)
+11. When someone tells you something hard about your work, you want it...
+    (Gently / Straight / Blunt, no padding)
+12. Written, optional: What do you believe about this business that most
+    people around you would argue with?
+13. Written, optional: Who else is part of this? Names and what they do.
+14. Written (business): What are you most stuck on, or putting off? And what
+    have you tried on it?
+
+The 7th business question (what they are stuck on) is asked last, so the
+screen order is 1 to 14 as numbered; question 14 is business.
 
 ### After the last question
 A wait screen shows a drawing logo and lines made for founders, the first one
@@ -161,10 +185,21 @@ first reading.
 Axiom tells the founder what it thinks is really going on, based on how they
 answered, not only what they said.
 
-**The sign-up answers feed only the First Reading.** Founders change ideas,
-plan something else or pivot, so every later step (Situation questions, Read,
-the talk after it, Learn, Move) works only from what the founder writes in that
-situation. Settings such as report time and time zone are not affected.
+**Axiom learns the founder over time.** The sign-up answers start it. After
+that:
+- The Read and the Move see a short track record of the founder's recent
+  moves (done, couldn't, didn't).
+- Situation questions, the Read, the talk after it, Learn and the Move also
+  see what Axiom has learned: beliefs, how the founder decides, people they
+  mention, their shorthand and their ongoing threads.
+- The conversation always wins. Nothing old is ever a source of numbers,
+  dates or names; those come from what the founder writes in this situation.
+- Axiom never announces that it remembers.
+- Only how the founder works and decides is remembered. Never mood, health,
+  money trouble, relationships, family, age, religion, politics, identity or
+  labels. Nothing is learned from care moments.
+
+Settings such as report time and time zone are not affected.
 
 - **Short:** about 5 sentences, appearing one at a time.
 - **Always three things:** one pattern they did not say outright, their own

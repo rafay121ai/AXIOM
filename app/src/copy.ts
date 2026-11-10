@@ -78,6 +78,8 @@ export const copy = {
   },
   // mock-onboarding-v2.html, screen 9 (home) and its menu drawer.
   // The step names: a short title card on entering each step, then beside the menu logo (Rafay, Nov 2).
+  // The two screens before question 1. Wording from Rafay's Nov 9 brief.
+  onboarding: { nameTitle: 'What should I call you?', birthdayTitle: 'When is your birthday?', birthdaySub: 'Month and day. No year.', skip: 'Skip' },
   steps: { situation: 'Situation', read: 'Read', learn: 'Learn' },
   home: {
     placeholder: "What's going on?",

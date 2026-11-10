@@ -4,12 +4,13 @@
 // penalises a founder.
 import rateLimit from 'express-rate-limit'
 import { bodyFields } from '../../care/middleware.js'
+import { createRecentContext } from '../../care/recentContext.js'
 import { isUuid } from '../../writeValidation.js'
 import { HttpError, TEXT_MAX } from '../situations.js'
 import { createReports } from './reportService.js'
 import { CONSENT_WORDINGS, OUTCOMES } from './wording.js'
 
-export function mountReportRoutes(app, { supabase, care, callStructured, clock }) {
+export function mountReportRoutes(app, { supabase, care, callStructured, clock, isCapped }) {
   const limiter = (max) => rateLimit({
     windowMs: 60 * 1000,
     max,
@@ -19,7 +20,7 @@ export function mountReportRoutes(app, { supabase, care, callStructured, clock }
     legacyHeaders: false,
   })
   const log = (what, detail) => console.error(`[Report] ${what}`, detail?.message || detail?.problems || '')
-  const service = createReports({ supabase, callStructured, clock, log })
+  const service = createReports({ supabase, callStructured, clock, log, isCapped })
 
   const handle = (fn) => async (req, res) => {
     if (!supabase) return res.status(503).json({ error: 'Service not configured' })
@@ -61,7 +62,7 @@ export function mountReportRoutes(app, { supabase, care, callStructured, clock }
   app.get('/api/reports/due', limiter(60),
     handle((req) => service.due({ userId: req.user.id })))
 
-  app.post('/api/moves/:id/report', limiter(10), reportCareGate(holdThen(care.careGate(bodyFields('note')))),
+  app.post('/api/moves/:id/report', limiter(10), reportCareGate(holdThen(care.careGate(bodyFields('note'), createRecentContext({ supabase, log }).forMove))),
     handle((req) => {
       const { outcome, note, client_turn_id: clientTurnId } = req.body ?? {}
       if (!OUTCOMES.includes(outcome)) bad(`outcome must be one of ${OUTCOMES.join(', ')}`)

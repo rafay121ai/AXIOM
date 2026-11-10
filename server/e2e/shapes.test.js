@@ -93,9 +93,11 @@ const NotCare = (shape) => ({ ...shape, 'care?': ['__never__'] }) // Screened<T>
 
 export const CONTRACT = Object.freeze({
   // http.ts reads questions, answers, complete.
-  getSignup: { questions: { $array: { type: 'string', key: 'string', title: 'string' }, min: 13 }, answers: 'object', complete: 'boolean' },
+  getSignup: { questions: { $array: { type: 'string', key: 'string', title: 'string' }, min: 14 }, answers: 'object', complete: 'boolean' },
   // http.ts saveAnswer: only `care` decides anything.
   saveAnswer: NotCare({}),
+  saveName: NotCare({ name: 'string' }),
+  saveBirthday: { month: 'number', day: 'number' },
   getFirstReading: { headline: 'string', body: 'string', underlines: { $array: 'string' } },
   'startSituation(follow_up)': NotCare(SituationReply),
   'startSituation(say_more)': NotCare({ ...SituationReply, situation_id: 'null', status: ['say_more'], reply: 'string' }),
@@ -183,6 +185,8 @@ before(async () => {
 
   errors.push(await call('POST', '/api/first-reading'))
   await keep('getSignup', call('GET', '/api/signup'))
+  await keep('saveName', call('PUT', '/api/signup/name', { name: 'Hamza' }))
+  await keep('saveBirthday', call('PUT', '/api/signup/birthday', { month: 3, day: 14 }))
   for (const key of QUESTION_KEYS) await keep('saveAnswer', call('PUT', `/api/signup/answers/${key}`, { answer: FULL_ANSWERS[key] }))
   openai.script('first_reading', FIRST_READING)
   await keep('getFirstReading', call('POST', '/api/first-reading'))
@@ -267,7 +271,7 @@ test('every call in the app\'s http client has a contract here', () => {
   // Methods of the object createHttpApi returns, by name.
   const api = http.slice(http.indexOf('\n  return {'))
   const methods = [...api.matchAll(/^ {4}(?:async )?(\w+)(?:: |\()/gm)].map((m) => m[1])
-  const local = new Set(['signInWithGoogle', 'signOut', 'isSignedIn', 'resumeUnsent']) // sign-in and the phone's own outbox, not the API
+  const local = new Set(['signInWithGoogle', 'signOut', 'isSignedIn', 'resumeUnsent', 'getSignInName']) // sign-in and the phone's own outbox, not the API
   const covered = new Set(Object.keys(CONTRACT).map((k) => k.replace(/\(.*\)$/, '')))
   covered.add('registerPushToken').add('removePushToken') // http.ts ignores the answer
   const missing = methods.filter((m) => !local.has(m) && !covered.has(m))

@@ -136,7 +136,11 @@ const clip = (s, n) => String(s ?? '').slice(0, n)
 
 async function askModel({ text, context, deps }) {
   if (typeof deps?.callStructured !== 'function') throw new Error('no model available')
-  const recent = (Array.isArray(context) ? context : []).slice(-3).map((c) => clip(c, 500))
+  let earlier = context
+  if (typeof context === 'function') {
+    try { earlier = await context() } catch { earlier = [] }
+  }
+  const recent = (Array.isArray(earlier) ? earlier : []).slice(-4).map((c) => clip(c, 500))
   const { data } = await deps.callStructured({
     step: 'care',
     schema: CARE_SCHEMA,
@@ -152,6 +156,7 @@ async function askModel({ text, context, deps }) {
   return data
 }
 
+// context: an array, or a function (sync or async) returning one; called only when the model is asked.
 // Returns { level: 'none'|'unclear'|'clear', reason }. Never throws.
 export async function classifyCare({ text, context = [], deps = {} }) {
   const rules = ruleCheck(text)

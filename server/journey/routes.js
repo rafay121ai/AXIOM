@@ -1,7 +1,7 @@
 // Journey routes: sign-up answers and the first reading. Mounted by app.js
 // after requireAuth is in place for /api/signup and /api/first-reading.
 import rateLimit from 'express-rate-limit'
-import { createSignupHandlers, signupFreeText } from './signup.js'
+import { createSignupHandlers, signupFreeText, nameFreeText } from './signup.js'
 import { createFirstReading } from './firstReading.js'
 import { mountSituationRoutes } from './situationRoutes.js'
 import { mountLearnRoutes } from './learn/learnRoutes.js'
@@ -10,6 +10,8 @@ import { mountReportRoutes } from './report/reportRoutes.js'
 import { mountSharingRoutes } from './report/sharingRoutes.js'
 import { mountHomeRoutes } from './home/homeRoutes.js'
 import { createStoredAnswers } from './storedAnswers.js'
+import { scheduleMemory } from './memory/extractBeliefs.js'
+import { seedFromSignup } from './memory/signupSeed.js'
 
 export function mountJourneyRoutes(app, { supabase, knowledgeSupabase = null, embed = null, care, cap, callStructured, clock, links = {}, deleteOn = false, noDailyLimit = () => false }) {
   const limiter = (max) => rateLimit({
@@ -26,13 +28,21 @@ export function mountJourneyRoutes(app, { supabase, knowledgeSupabase = null, em
   mountSituationRoutes(app, { supabase, care, cap, stored, callStructured, clock, noDailyLimit })
   mountLearnRoutes(app, { supabase, knowledgeSupabase, embed, care, cap, stored, callStructured, clock })
   mountMoveRoutes(app, { supabase, care, cap, stored, callStructured, clock })
-  mountReportRoutes(app, { supabase, care, callStructured, clock })
+  mountReportRoutes(app, { supabase, care, callStructured, clock, isCapped: cap.isCapped })
   mountSharingRoutes(app, { supabase, clock })
   mountHomeRoutes(app, { supabase, care, callStructured, clock, links, deleteOn })
 
   app.get('/api/signup', limiter(60), signup.get)
   app.put('/api/signup/answers/:key', limiter(60), care.careGate(signupFreeText), signup.put)
+  app.put('/api/signup/birthday', limiter(20), signup.putBirthday)
+  app.put('/api/signup/name', limiter(20), care.careGate(nameFreeText), signup.putName)
 
+  // The reading was just built and stored: seed memory from the answers, after the response.
+  // Not on a replay of a stored reading: that is free at the daily cost cap, and the seed makes a model call.
+  const seedMemory = (userId, answers) => {
+    const log = (what, detail) => console.error(`[Memory] ${what}`, detail?.message || '')
+    scheduleMemory(() => seedFromSignup({ supabase, callStructured, userId, answers, log, clock, isCapped: cap.isCapped }), log)
+  }
   const building = new Map()
   const storedReading = async (userId) => {
     const { data, error } = await supabase.from('founder_profiles').select('first_reading').eq('user_id', userId).maybeSingle()
@@ -63,9 +73,11 @@ export function mountJourneyRoutes(app, { supabase, knowledgeSupabase = null, em
           // A fallback is shown but not kept, so the next open tries for a real reading.
           if (source === 'fallback') return reading
           // Only the first writer wins; whoever reads back gets the stored one.
-          const { error } = await supabase.from('founder_profiles')
-            .update({ first_reading: reading }).eq('user_id', req.user.id).is('first_reading', null)
+          const { data: changed, error } = await supabase.from('founder_profiles')
+            .update({ first_reading: reading }).eq('user_id', req.user.id).is('first_reading', null).select('user_id')
           if (error) throw error
+          // Seed only when this write changed a row: a second writer must not seed twice.
+          if ((changed ?? []).length > 0) seedMemory(req.user.id, answers)
           return (await storedReading(req.user.id)) ?? reading
         })().finally(() => building.delete(req.user.id))
         building.set(req.user.id, build)

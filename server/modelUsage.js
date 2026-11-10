@@ -22,7 +22,8 @@ export const USAGE_CALL_TYPES = Object.freeze([
   'concept_state_update',
   'embedding',
   // Journey steps (config.js STEPS); the live CHECK accepts them once
-  // supabase/migrations/20261101000009_model_usage_call_types.sql is applied.
+  // supabase/migrations/20261101000009_model_usage_call_types.sql is applied
+  // ('beliefs': 20261109000002).
   ...STEPS,
 ])
 

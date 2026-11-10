@@ -9,6 +9,8 @@ export type Auth = {
   signOut(): Promise<void>;
   /** True when a sign-in is saved on this device, so a returning founder skips the sign-in screen and its film. */
   isSignedIn(): Promise<boolean>;
+  /** The first name in the Google profile saved at sign-in, when there is one. */
+  getName(): Promise<string | undefined>;
   /** The signed-in founder's access token, sent to the API as a Bearer token. */
   getToken(): Promise<string>;
 };
@@ -28,6 +30,12 @@ export function createAuth(client: SupabaseClient, phone?: Deps): Auth {
     async isSignedIn() {
       const { data } = await client.auth.getSession();
       return data.session !== null;
+    },
+    async getName() {
+      const { data } = await client.auth.getSession();
+      const meta = data.session?.user.user_metadata as { given_name?: unknown; full_name?: unknown; name?: unknown } | undefined;
+      const full = [meta?.given_name, meta?.full_name, meta?.name].find((v): v is string => typeof v === 'string' && v.trim() !== '');
+      return full?.trim().split(/\s+/)[0];
     },
     async getToken() {
       const { data } = await client.auth.getSession();

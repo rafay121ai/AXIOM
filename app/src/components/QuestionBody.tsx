@@ -1,6 +1,6 @@
 import { Platform, StyleSheet, Text, TextInput, View } from 'react-native';
-import type { Answer, GoalAnswer, MultiAnswer, Question, SingleAnswer, TextAnswer, TwoAnswer, WhereAnswer } from '../api/types';
-import { countrySuggestions, isOther, tapMulti, tapSingle, tapTwo } from '../onboarding/flow';
+import type { Answer, GoalAnswer, Question, SingleAnswer, TwoAnswer, WhereAnswer } from '../api/types';
+import { countrySuggestions, tapSingle, tapTwo } from '../onboarding/flow';
 import { ink, type } from '../theme';
 import { Chip, Row } from './Choice';
 import { DateField } from './DateField';
@@ -16,13 +16,8 @@ export function QuestionBody({ q, a, set }: BodyProps) {
       return (
         <View>
           {q.options.map((o) => (
-            <Row key={o} label={o} selected={s?.value === o} onPress={() => set(tapSingle(a, o))} />
+            <Row key={o} label={o} selected={s?.value === o} onPress={() => set(tapSingle(o))} />
           ))}
-          {isOther(q, a) && (
-            <View style={styles.gapTop}>
-              <Field placeholder="In a few words" value={s?.other ?? ''} onChangeText={(other) => set({ value: s!.value, other })} />
-            </View>
-          )}
         </View>
       );
     }
@@ -88,18 +83,8 @@ export function QuestionBody({ q, a, set }: BodyProps) {
         </View>
       );
     }
-    case 'multi': {
-      const list = (a as MultiAnswer | undefined) ?? [];
-      return (
-        <View>
-          {q.options.map((o) => (
-            <Row key={o} multi label={o} selected={list.includes(o)} onPress={() => set(tapMulti(q, a, o))} />
-          ))}
-        </View>
-      );
-    }
     case 'text': {
-      const v = (a as TextAnswer | undefined) ?? '';
+      const v = typeof a === 'string' ? a : '';
       return (
         <View>
           <TextInput
@@ -111,7 +96,7 @@ export function QuestionBody({ q, a, set }: BodyProps) {
             style={[type.big, styles.big]}
             textAlignVertical="top"
           />
-          <Text style={styles.shortHint}>{v.trim().length >= q.minLength ? '' : q.shortHint}</Text>
+          <Text style={styles.shortHint}>{v.trim().length >= q.minLength ? '' : q.shortHint ?? ''}</Text>
         </View>
       );
     }

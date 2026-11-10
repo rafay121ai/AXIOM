@@ -4,7 +4,7 @@ import { createOutbox, memoryStore, type Unsent } from '../src/api/outbox';
 import { HttpError } from '../src/api/queue';
 import { copy } from '../src/copy';
 
-const auth: Auth = { signInWithGoogle: async () => {}, signOut: async () => {}, isSignedIn: async () => true, getToken: async () => 'tok' };
+const auth: Auth = { signInWithGoogle: async () => {}, signOut: async () => {}, isSignedIn: async () => true, getName: async () => undefined, getToken: async () => 'tok' };
 const ok = (body: unknown = {}) => ({ ok: true, status: 200, json: async () => body }) as Response;
 const refuse = (status: number, body: unknown = {}) => ({ ok: false, status, json: async () => body }) as Response;
 const req = (id: string, extra: Partial<Unsent> = {}): Unsent => ({ id, method: 'POST', path: `/api/${id}`, body: { id }, ...extra });

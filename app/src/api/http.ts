@@ -48,8 +48,13 @@ export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch
     signInWithGoogle: () => auth.signInWithGoogle(),
     isSignedIn: () => auth.isSignedIn(),
     async getSignup() {
-      const { questions, answers, next, complete } = await request<Signup>('GET', '/api/signup');
-      return { questions, answers, next, complete };
+      const { questions, answers, next, complete, total } = await request<Signup>('GET', '/api/signup');
+      return { questions, answers, next, complete, total };
+    },
+    getSignInName: () => auth.getName(),
+    saveName: (name) => sendWritten<Screened>('name', 'PUT', '/api/signup/name', { name }),
+    async saveBirthday(month, day) {
+      await sendWritten('birthday', 'PUT', '/api/signup/birthday', { month, day });
     },
     saveAnswer: (key, answer) => queue.save(key, answer),
     async getFirstReading() {

@@ -69,6 +69,8 @@ export function dailyCapGate({ isCapped, isAdmin = () => false }) {
     if (isAdmin(req.user) || !(await isCapped(req.user.id)) || (stored && await stored(req))) return next()
     return res.status(429).json({ error: 'Daily cost cap reached', code: 'daily_cost_cap', line: DAILY_CAP_LINE })
   }
+  // For background work with no request (memory): true when this founder is over the cap.
+  gate.isCapped = isCapped
   // Never blocks: sets req.overCap, so a route that must save what the founder wrote can skip only its model call.
   gate.mark = async (req, _res, next) => {
     req.overCap = !isAdmin(req.user) && await isCapped(req.user.id)
