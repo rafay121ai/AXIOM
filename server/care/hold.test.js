@@ -201,6 +201,7 @@ test('GET routes are not held: home, history, history detail, and a situation', 
 // write route must be held: a new route fails here until it is held or listed.
 const NOT_HELD = {
   'POST /api/home/checkin': 'the way out of care',
+  'POST /api/memory/:table/:id/wrong': 'taking something out of memory is always allowed; teaches and gives nothing',
   'PUT /api/signup/answers/:key': 'sign-up answers; screened by the care gate',
   'PUT /api/signup/name': 'sign-up name; screened by the care gate',
   'PUT /api/signup/birthday': 'sign-up birthday, numbers only; teaches and gives nothing',

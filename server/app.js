@@ -138,6 +138,7 @@ export function createApp({
   app.use('/api/settings', requireAuth)
   app.use('/api/home', requireAuth)
   app.use('/api/history', requireAuth)
+  app.use('/api/memory', requireAuth)
   app.use('/api/account', requireAuth)
   app.use('/api/push', requireAuth)
   app.use('/api/loading-hint', requireAuth)

@@ -152,5 +152,21 @@ export function createMemoryStore({ supabase, clock = { now: () => Date.now() },
     },
 
     corrections: async (userId) => ok(await q('founder_corrections', userId)),
+
+    // The founder's own control over memory: one row of one table, the newest receipt per item, and the retire step.
+    item: (table, userId, id) => one(table, userId, id),
+    // founder_corrections has no updated_at, so not the shared insert.
+    async addCorrection({ userId, itemTable, itemText, reason }) {
+      ok(await supabase.from('founder_corrections').insert({ user_id: userId, item_table: itemTable, item_text: itemText, reason, created_at: iso() }).select())
+    },
+    retire: (table, userId, id) => patch(table, userId, id, { status: table === 'founder_threads' ? 'dropped' : 'superseded' }),
+    // { [itemId]: evidence row } for one table, newest receipt per item.
+    async latestEvidence(userId, itemTable) {
+      const rows = ok(await supabase.from('memory_evidence').select('item_id, snippet, created_at, source_kind, source_id, source_key')
+        .eq('user_id', userId).eq('item_table', itemTable).order('created_at', { ascending: false }).limit(EVIDENCE_READ_LIMIT))
+      const by = {}
+      for (const e of rows) by[e.item_id] ??= e
+      return by
+    },
   }
 }

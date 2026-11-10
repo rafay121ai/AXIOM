@@ -68,6 +68,13 @@ test('a new fact: 0.6, from the report, with a receipt', async () => {
   assert.deepEqual([receipt.item_table, receipt.item_id, receipt.source_kind, receipt.source_id, receipt.snippet], ['founder_beliefs', row.id, 'report', REPORT, 'I sell to clinics in Karachi'])
 })
 
+test('a pattern whose words are only in the move record gets a move receipt', async () => {
+  const { supabase, run } = setup()
+  await run({ new_beliefs: [{ belief: 'Aims at a 20-minute call.', kind: 'pattern', snippet: 'ask each for a 20-minute call' }] })
+  const [receipt] = supabase.rows('memory_evidence')
+  assert.deepEqual([receipt.source_kind, receipt.source_id], ['move', MOVE])
+})
+
 test('a contradiction creates the new fact, supersedes the old and keeps it', async () => {
   const old = stored(A, 'Sells to shops in Lahore.')
   const { supabase, run } = setup({ founder_beliefs: [old] })

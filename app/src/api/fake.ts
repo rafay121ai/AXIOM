@@ -1,5 +1,5 @@
 import { HttpError } from './queue';
-import type { AccountExport, AccountRequest, AxiomApi, Commitment, ConsentResult, DueReport, FirstReading, HistoryPage, HistoryRow, Home, HomeItem, FounderLessons, LearnReply, LearnTurn, MoveView, Outcome, Question, Read, ReadAnswerResult, ReportResult, Screened, Settings, SituationReply, SituationView, Story, StoryReply, SwapResult } from './types';
+import type { AccountExport, AccountRequest, AxiomApi, Commitment, ConsentResult, DueReport, FirstReading, HistoryPage, HistoryRow, Home, HomeItem, FounderLessons, LearnReply, LearnTurn, MemoryItem, MoveView, Outcome, Question, Read, ReadAnswerResult, ReportResult, Screened, Settings, SituationReply, SituationView, Story, StoryReply, SwapResult } from './types';
 
 // Fixture questions: the same 14, in the same order and words, as server/journey/questions.js.
 const QUESTIONS: Question[] = [
@@ -187,6 +187,16 @@ const FAKE_RECENT = [
   { id: 'fake-situation-4', title: 'Why nobody replies to my emails', status: 'didnt' },
 ];
 
+// SAMPLE founder, labelled as such (as the other fixtures are): the lines and receipts from tasks/design/memory.html.
+const MEMORY: MemoryItem[] = [
+  { id: 'a1', table: 'founder_traits', group: 'decide', text: 'You decide fast and adjust later.', receipt: { text: '"I\'ll just send it and fix the wording after."', at: '2026-11-03T09:00:00Z' } },
+  { id: 'a2', table: 'founder_traits', group: 'decide', text: 'You look at the numbers before you decide.', receipt: { text: '"11 of 40 trial users came back in week two. That is what I\'m going on."', at: '2026-10-27T09:00:00Z' } },
+  { id: 'b1', table: 'founder_traits', group: 'work', text: 'You finish small moves the same day. Moves over an hour wait.', receipt: { text: 'Your move: Rewrite the pricing page', at: '2026-11-05T09:00:00Z' } },
+  { id: 'c1', table: 'founder_beliefs', group: 'business', text: 'You sell scheduling software to small dental clinics.', receipt: { text: '"Scheduling software for dental clinics with 2 to 5 chairs."', at: '2025-10-24T09:00:00Z' } },
+  { id: 'd1', table: 'founder_world', group: 'people', text: 'Dana is your cofounder and builds the booking flow.', receipt: null },
+  { id: 'e1', table: 'founder_threads', group: 'open', text: 'You are working out whether to charge per clinic or per chair.', receipt: { text: '"Per clinic or per chair? Not sure yet."', at: '2026-11-06T09:00:00Z' } },
+];
+
 // History and a past situation, from the mock's sample rows (placeholder authors, as the mock says).
 const HISTORY: { row: HistoryRow; page: Omit<HistoryPage, 'id' | 'title' | 'status' | 'status_label' | 'action'> }[] = [
   { row: { id: FAKE_SITUATION, title: 'Asking the two clinics for a call', status: 'open', status_label: 'Open', last_activity_at: '2026-10-26T09:00:00.000Z' },
@@ -300,6 +310,7 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
   const withPending = (s: Settings): Settings => ({ ...s, pending_deletion: deleteAfter ? { delete_after: deleteAfter, message: ACCOUNT.waiting.replace('{date}', day(deleteAfter)) } : null });
   const homeState: HomeSim | undefined = reportDue ? 'evening' : home;
   let checkedIn = false;
+  let memory = [...MEMORY];
   let settings = FAKE_SETTINGS;
   const wait = () => (latencyMs > 0 ? new Promise<void>((r) => setTimeout(r, latencyMs)) : undefined);
   const screen = async (): Promise<Screened> => (sim === 'clear' ? CLEAR : sim === 'unclear' ? UNCLEAR : {});
@@ -493,6 +504,12 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
       if (flagged.care) return flagged;
       checkedIn = true;
       return { ok: true };
+    },
+    async getMemory() {
+      return [...memory];
+    },
+    async markWrong(_table, id) {
+      memory = memory.filter((m) => m.id !== id);
     },
     async getHistory(q) {
       const needle = q.trim().toLowerCase();

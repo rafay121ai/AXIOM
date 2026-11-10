@@ -27,7 +27,7 @@ Four rules decide everything:
 | Writing | `rgb(234,236,238)`, a bright mix of white and stone. Lower levels by opacity: 0.9 body, 0.7 secondary, 0.5 labels, 0.35 hints |
 | Highlight (Gold) | gradient from `rgb(205,178,126)` to `rgb(168,142,94)`. Used for the key mark, ticks, the Continue and Send buttons, thin underlines, small dots |
 | Wash | a very faint, smooth gold gradient behind the black: strongest at the bottom (about 20 to 26%), a whisper at the top (about 8 to 10%). Never blobs on the home, drawer, settings or history |
-| Construction grid | on the journey screens (situation, Read, Learn, move, report), a faint gold 32px grid of 1px lines at 3.5% with a small point at every fourth crossing, fading out at the top and bottom, drifting one cell over 60 seconds (still when the phone asks for reduced motion). Gives the glass something to blur. The sign-up page has none: black, a warm glow rising from the bottom and a very faint gold spider web behind the emblem |
+| Construction grid | on the journey screens (situation, Read, Learn, move, report), a faint gold 32px grid of 1px lines at 3.5% with a small point at every fourth crossing, fading out at the top and bottom, drifting one cell over 60 seconds (still when the phone asks for reduced motion). Gives the glass something to blur. The grid is also used on the "What Axiom thinks" screen, where it draws in (the `draw` option on `Construction`); PENDING Rafay's approval. The sign-up page has none: black, a warm glow rising from the bottom and a very faint gold spider web behind the emblem |
 | Delete | a muted red `rgb(222,160,150)`, only for "delete everything" |
 
 Parked: rotating a new highlight per situation (Seafoam `#7FBFAA`, Periwinkle

@@ -154,6 +154,8 @@ export const CONTRACT = Object.freeze({
     how_it_went: { $nullable: { report_id: 'string', outcome: OUTCOME, note: 'string|null', reply: 'string', prediction: { text: 'string', check: 'string|null' }, sharing: ['shared', 'private'] } },
     action: { kind: ['pick_up', 'bring_back', 'talk_again'], label: 'string', target: Target },
   },
+  getMemory: { items: { $array: { id: 'string', table: 'string', group: ['decide', 'work', 'business', 'people', 'open'], text: 'string', receipt: { $nullable: { text: 'string', at: 'string' } } }, min: 1 } },
+  markWrong: { ok: [true] },
   getSettings: Settings,
   updateSettings: Settings, // the whole page again
   requestExport: { message: 'string', exported_at: 'string' },
@@ -229,6 +231,9 @@ before(async () => {
   await keep('sendCheckIn', call('POST', '/api/home/checkin', { text: 'All fine, back to the clinics.' }))
   await keep('getHistory', call('GET', `/api/history?q=${encodeURIComponent('')}`))
   await keep('getHistoryPage', call('GET', `/api/history/${sit}`))
+  await world.idle() // the sign-up seed runs after the first reading
+  const memory = await keep('getMemory', call('GET', '/api/memory'))
+  await keep('markWrong', call('POST', `/api/memory/${memory.items[0].table}/${memory.items[0].id}/wrong`, { reason: 'wrong' }))
   await keep('getSettings', call('GET', '/api/settings'))
   await keep('updateSettings', call('PUT', '/api/settings', { mentor_style: 'hard', lock_screen: 'full' }))
   await keep('requestExport', call('POST', '/api/account/export', {}))

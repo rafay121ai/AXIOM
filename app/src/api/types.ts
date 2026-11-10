@@ -290,6 +290,12 @@ export type HistoryPage = {
 export type LockScreen = 'full' | 'short' | 'hidden';
 export type MentorStyle = 'calm' | 'direct' | 'hard';
 
+export type MemoryGroup = 'decide' | 'work' | 'business' | 'people' | 'open';
+export type MemoryTable = 'founder_beliefs' | 'founder_traits' | 'founder_world' | 'founder_vocabulary' | 'founder_threads';
+export type MemoryReason = 'wrong' | 'outdated';
+/** One line of "What Axiom thinks". The receipt text is the server's (the founder's own words, or "Your move: ..."); `at` is an ISO timestamp. */
+export type MemoryItem = { id: string; table: MemoryTable; group: MemoryGroup; text: string; receipt: { text: string; at: string } | null };
+
 /** Settings, as one page. The words under "share automatically" (`privacy.text`) are the server's. */
 export type Settings = {
   you: { name: string | null; email: string | null; country: string | null; timezone: string | null };
@@ -399,6 +405,10 @@ export interface AxiomApi {
   getHistory(q: string): Promise<HistoryRow[]>;
   /** One past situation. */
   getHistoryPage(id: string): Promise<HistoryPage>;
+  /** What Axiom has learned about the founder, each line with where it came from. */
+  getMemory(): Promise<MemoryItem[]>;
+  /** Removes one line for good. Both reasons do the same for the founder; the server keeps the reason. Safe to send again. */
+  markWrong(table: MemoryTable, id: string, reason: MemoryReason): Promise<void>;
   /** The settings page. */
   getSettings(): Promise<Settings>;
   /** Saves some settings and returns the page as it now stands. */

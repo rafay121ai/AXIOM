@@ -43,6 +43,7 @@ const SHARED_RULES = [
   'Facts are about the business and can change. If a new fact contradicts an active fact, use supersede with that fact\'s id, and write the replacement.',
   'Use reinforce when this input shows an active item again, weaken when it points against one. Use ids from the input only.',
   'Never use he, she, him, her, his or hers: Axiom never assumes anyone\'s gender. Write about the founder without a pronoun.',
+  'Write each belief as a short plain sentence that starts with a verb in the third person ("Sells to clinics.", "Says they drop plans when..."). Never write "the founder", and never use "they" for anyone but the founder.',
   'Write plain, short sentences. No quotation marks. Use only numbers, dates and names that are in the founder\'s words.',
   'If nothing qualifies, return empty arrays. That is the normal case. Most inputs give nothing.',
 ]

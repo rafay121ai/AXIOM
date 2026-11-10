@@ -34,7 +34,7 @@ test('the code part writes self-reported rows capped at 0.5, with a receipt that
   assert.ok(rows.some((r) => r.belief === 'Says they avoid pricing.' && r.kind === 'pattern'))
   assert.ok(rows.some((r) => r.belief === 'Says they are better than most at building the product.'))
   assert.ok(rows.some((r) => r.belief === 'Wants hard things said straight.' && r.kind === 'preference'))
-  assert.ok(rows.some((r) => r.belief === 'Goal: My first 10 customers, in 3 months.' && r.kind === 'fact'))
+  assert.ok(rows.some((r) => r.belief === 'Your goal: my first 10 customers, in 3 months.' && r.kind === 'fact'))
   assert.ok(rows.some((r) => r.belief === 'Based in Pakistan.'))
   const receipts = supabase.rows('memory_evidence')
   assert.equal(receipts.length, rows.length + 1) // plus the trait
@@ -64,7 +64,7 @@ test('"I rarely drop plans" creates nothing', () => {
 
 test('a fixed date goal carries its date', () => {
   const [row] = seedRows({ goal: { goal: 'Ship it', when: 'Pick a date', date: '2026-12-31' } })
-  assert.equal(row.text, 'Goal: Ship it, by 2026-12-31.')
+  assert.equal(row.text, 'Your goal: ship it, by 2026-12-31.')
 })
 
 test('the seed is idempotent: a second call writes and asks for nothing', async () => {
@@ -135,7 +135,7 @@ test('a failed model part leaves the code rows and is retried alone', async () =
 
 test('the contrarian answer is stored verbatim as a fact; too long, or sensitive, is not', async () => {
   const own = 'Most people think clinics want a cheap tool but I think they want fewer no-shows.'
-  assert.ok(seedRows({ contrarian: own }).some((r) => r.key === 'contrarian' && r.text === own && r.kind === 'fact'))
+  assert.ok(seedRows({ contrarian: own }).some((r) => r.key === 'contrarian' && r.text === `In their words: ${own}` && r.kind === 'fact'))
   assert.equal(seedRows({ contrarian: 'x'.repeat(241) }).length, 0)
   assert.equal(seedRows({ contrarian: 'My family thinks it will fail but I think it will not.' }).length, 0)
   assert.equal(seedRows({ contrarian: { skipped: true }, people: { skipped: true } }).length, 0)
@@ -175,4 +175,10 @@ test('a seed row the database refuses is skipped; the others are written once', 
   const rows = base.rows('founder_beliefs')
   assert.ok(rows.length >= 9)
   assert.equal(new Set(rows.map((r) => r.belief)).size, rows.length)
+})
+
+test('colon sentences and customers read as whole sentences', () => {
+  const texts = seedRows({ stage: { value: 'Just an idea' }, commitment: { value: 'Full time' }, business_model: { value: 'Businesses' }, where: { customers: 'Mostly abroad' } }).map((r) => r.text)
+  assert.deepEqual(texts, ['You are at this stage: just an idea.', 'Your time on it: full time.', 'Who pays you: businesses.', 'Your customers are mostly abroad.'])
+  assert.equal(seedRows({ where: { customers: 'Both' } })[0].text, 'Your customers are in your own country and abroad.')
 })

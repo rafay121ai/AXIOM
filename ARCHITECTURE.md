@@ -139,6 +139,18 @@ Report
 
 Settings and history
   GET  /api/history, GET /api/history/:id        (read only)
+  GET  /api/memory                 -> { items: [{ id, table, group, text,
+                                      receipt: { text, at } | null }] }.
+                                      group: decide | work | business |
+                                      people | open. No model call. Items the
+                                      founder corrected are left out.
+  POST /api/memory/:table/:id/wrong -> body { reason: 'wrong' | 'outdated' };
+                                      stores the correction in
+                                      founder_corrections. The extractor and
+                                      the sign-up seed never recreate a
+                                      corrected item. The app sends it
+                                      directly, not through the outbox, so a
+                                      failure is never retried later.
   GET/PUT /api/settings            -> mentor style, lock-screen mode, keep
                                       items on screen, and the other settings
   GET/PUT /api/settings/reminders  -> check-in time, morning and evening on
@@ -419,6 +431,27 @@ loaded.
 
 ---
 
+## Connectors and signals (planned, NOT BUILT; full plan: `tasks/connectors-plan.md`)
+- Composio holds the OAuth tokens. We store only its connected-account id. Read
+  only: an allowlist of Composio action names, anything else throws.
+- Composio sends one signed webhook per event to `POST /connectors/webhook`
+  (Standard Webhooks headers: id, timestamp, signature; 300 s replay window; the
+  webhook id is the idempotency key). The route verifies, inserts a job, returns.
+- A Postgres job queue (`FOR UPDATE SKIP LOCKED`) runs: filter (code) -> extract
+  (one model call, JSON only, no tools, content is untrusted) -> verify (code
+  checks every name, number and date against the source) -> score -> push, home
+  item or drop.
+- Gmail and Calendar are polling triggers (minimum 2 minutes on Composio-managed
+  auth); Notion is push. Delivery is near, not real-time.
+- New tables (not applied): `connector_accounts`, `watch_sources`,
+  `connector_jobs`, `signals`; `founder_beliefs.source` gains `connector`;
+  `model_usage_logs.call_type` gains `signal` and `connector`. Server only, RLS
+  on, no client policies. A fresh live dump comes before any migration.
+- Signal pushes: kind `signal`, 4 a day per founder (separate from the two
+  scheduled slots), cap checked atomically in the database. Extreme events skip
+  the cap, at most 2 a day. New env: `COMPOSIO_API_KEY`, `COMPOSIO_WEBHOOK_SECRET`,
+  `CONNECTORS`, `SIGNAL_PUSH`, `MODEL_SIGNAL` (all off or unset by default).
+
 ## Scheduling and Notifications (current, off until EXPO_PUSH=on)
 - **Push** (Expo push to iOS and Android) from `server/push/`. The morning move
   and the evening check-in. **At most 2 a day** per founder, one per slot,
@@ -496,8 +529,10 @@ back, roll the server code back first, then run the rollback SQL.
 - Turning account deletion on: the plan exists and `delete_account` is live;
   only the `ACCOUNT_DELETE` switch remains.
 - Any OpenAI spend beyond tests.
-- Connected accounts (Stripe, Shopify, Gmail, Notion, CRM, calendar) are
-  parked; see PRODUCT.md and `tasks/decisions.md`.
+- Connected accounts: Gmail, Calendar and Notion are decided (Nov 10), not
+  built. Every phase of `tasks/connectors-plan.md` is gated: schema, applying
+  migrations, any real founder connecting, any OpenAI spend. Stripe, Shopify and
+  CRM stay parked.
 
 ---
 

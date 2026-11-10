@@ -433,8 +433,25 @@ not push the founder back into what they left off.
 
 ### Menu (side drawer)
 Slides in from the left, pushing the home aside. Divided by thin lines:
-Start something new, What's open, History, Paused, and the founder's name
-with Settings.
+Start something new, What's open, History, Paused, What Axiom thinks (title
+PENDING, see below), and the founder's name with Settings.
+
+### What Axiom thinks
+Opened only from the menu. Never pushed and shown nowhere else. It is the
+founder's own view of what Axiom has learned about them: a count, then lines
+grouped as How you decide, How you work, Your business, People and words,
+Still open. Tapping a line opens its receipt: where it came from (the
+founder's own words or move, with a date), or a note that there is no source.
+Each receipt has Wrong and Outdated. Either removes the line, and Axiom stops
+using it; the extractor and the sign-up seed never recreate a removed line.
+Nothing shows a score, a confidence or an id. No undo. If nothing is learned
+yet, one line says so. Server: GET /api/memory and POST
+/api/memory/:table/:id/wrong (see ARCHITECTURE.md).
+
+PENDING (Rafay has not decided): (1) whether a founder-opened "mark wrong"
+control is allowed given the no-rating rule; (2) the copy of this screen has
+not been approved; (3) the title: Settings already has "What Axiom knows about
+you".
 
 ### History
 A plain list of past situations, newest first, no day headings, separated by
@@ -457,7 +474,7 @@ plan before it is built.
 ---
 
 ## Pushes
-- **At most 2 a day.** Normally the morning move and the evening check-in. If
+- **At most 2 scheduled pushes a day.** Normally the morning move and the evening check-in. (Proactive signals have their own cap of 4 a day, planned: see "Proactive Axiom".) If
   nothing is due, no push. The "quiet for 3 days" check replaces the morning
   one. Quiet hours.
 - The name appears inside most pushes. Each one names something real.
@@ -623,13 +640,39 @@ build or extend them.
   read-feedback endpoint.
 - The Welcome screen and the old chat product.
 
+## Proactive Axiom (decided Nov 10 2026, NOT BUILT; plan: `tasks/connectors-plan.md`)
+Axiom reads the founder's Gmail, Google Calendar and Notion (read only, through
+Composio) and tells them what they should know, without being asked.
+- **Three lanes.** People (co-founder, investor, customer), Time (a meeting with
+  no prep, a promise with a date), World (news in newsletters the founder chose
+  to watch, when it changes their business). A signal does not have to connect
+  to the open situation.
+- **Pushed because the founder should know.** An action is optional. If a real
+  move exists (founder is the only variable, startable in 10 minutes, binary),
+  it is offered through the normal Move flow. Otherwise there is no move.
+- **Says what the source says**, names the source, and marks the effect on the
+  founder's business as Axiom's own read. Every name, number and date is checked
+  against the source text by code. No teaser: the push carries the whole point.
+- **Facts about people come only from the founder's own emails and notes.** If
+  Axiom cannot tell who someone is, it says so. Author lessons come only from the
+  verified library.
+- **Learns the founder from the connectors** (business, people, rhythm) and stores
+  it without asking first. Each fact shows its source on the memory screen and can
+  be marked wrong or outdated. Never health, politics, religion, family or money
+  in personal accounts. Disconnecting keeps what Axiom learned, with a separate
+  "delete what Axiom learned" button; deleting the account removes everything.
+- **Newsletters:** after Gmail connects, Axiom ranks the founder's newsletters
+  and asks which matter. Only those are watched.
+- **Pushes:** signals get their own 4 a day on top of the morning and evening
+  ones. An extreme event may skip the cap, at most 2 a day, still respecting
+  quiet hours unless the event is dated within 3 hours. Lock screen defaults to
+  Short. Pushes stop during care and delete requests, as before.
+- Raw email text is never stored. Read only: Axiom never sends or edits anything.
+- Delivery is not real-time: Gmail and Calendar are checked every few minutes.
+
 ## Later and parked (not now)
-- **A proactive Axiom with connected accounts** (company numbers, Stripe,
-  Shopify, Gmail, Notion, CRM, calendar): Axiom brings problems before the
-  founder asks. Three levels (from what it knows, from numbers the founder
-  types, from connected accounts). Notes and constraints are in
-  `tasks/decisions.md` under PARKED.
-- A Connections screen (connect a source, see what Axiom read, switch it off).
+- Connected accounts beyond Gmail, Calendar and Notion (Stripe, Shopify, CRM,
+  company numbers). The first three are now planned: see "Proactive Axiom".
 - Rotating the highlight colour per situation.
 - The sign-in line.
 - Voice input for answers.

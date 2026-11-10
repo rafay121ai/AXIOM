@@ -6,8 +6,8 @@
 import { deadlineFor } from '../signup.js'
 import { isSkip } from '../questions.js'
 import { createSharing } from '../report/sharing.js'
-import { NEW_PATTERN_CONFIDENCE, SELF_REPORT_CAP, checkBeliefText, cleanStoredText, snippetInSource } from './beliefRules.js'
-import { applyExtraction, overCap } from './extractBeliefs.js'
+import { IN_THEIR_WORDS, NEW_PATTERN_CONFIDENCE, SELF_REPORT_CAP, checkBeliefText, cleanStoredText, snippetInSource } from './beliefRules.js'
+import { applyExtraction, isCorrected, overCap } from './extractBeliefs.js'
 import { createMemoryStore } from './memoryStore.js'
 import { FACTS_ONLY_SCHEMA, signupMessages } from './prompts/beliefs.js'
 
@@ -28,6 +28,11 @@ const HARD_TRUTH = {
   Straight: 'Wants hard things said straight.',
   'Blunt, no padding': 'Wants hard things said bluntly, with no padding.',
 }
+const CUSTOMERS = {
+  'Mostly in my own country': 'Your customers are mostly in your own country.',
+  'Mostly abroad': 'Your customers are mostly abroad.',
+  'Both': 'Your customers are in your own country and abroad.',
+}
 const low = (s) => s.charAt(0).toLowerCase() + s.slice(1)
 const written = (v) => (typeof v === 'string' && !isSkip(v) && v.trim() ? v.trim() : null)
 
@@ -36,19 +41,19 @@ export function seedRows(answers, nowMs = Date.now()) {
   const rows = []
   const add = (key, kind, text, snippet) => rows.push({ key, kind, text: cleanStoredText(text), snippet: cleanStoredText(snippet) })
   const a = answers ?? {}
-  if (a.stage?.value) add('stage', 'fact', `Where they are with it: ${a.stage.value}.`, a.stage.value)
-  if (a.commitment?.value) add('commitment', 'fact', `Time on it: ${a.commitment.value}.`, a.commitment.value)
-  if (a.business_model?.value) add('business_model', 'fact', `Who pays: ${a.business_model.value}.`, a.business_model.value)
+  if (a.stage?.value) add('stage', 'fact', `You are at this stage: ${low(a.stage.value)}.`, a.stage.value)
+  if (a.commitment?.value) add('commitment', 'fact', `Your time on it: ${low(a.commitment.value)}.`, a.commitment.value)
+  if (a.business_model?.value) add('business_model', 'fact', `Who pays you: ${low(a.business_model.value)}.`, a.business_model.value)
   // Free text: it passes the same checks as every other belief, and is dropped if it fails.
   const country = written(a.where?.country)
   if (country) {
     const checked = checkBeliefText({ text: `Based in ${country}.`, sourceTexts: [country] })
     if (checked.ok) add('where', 'fact', checked.text, country)
   }
-  if (a.where?.customers) add('where', 'fact', `Their customers are: ${low(a.where.customers)}.`, a.where.customers)
+  if (a.where?.customers) if (CUSTOMERS[a.where.customers]) add('where', 'fact', CUSTOMERS[a.where.customers], a.where.customers)
   if (a.goal?.goal && a.goal?.when) {
     const by = deadlineFor(a.goal, nowMs)
-    add('goal', 'fact', `Goal: ${a.goal.goal}, ${a.goal.date ? `by ${by}` : low(a.goal.when)}.`, a.goal.goal)
+    add('goal', 'fact', `Your goal: ${low(a.goal.goal)}, ${a.goal.date ? `by ${by}` : low(a.goal.when)}.`, a.goal.goal)
   }
   if (a.why?.value) add('why', 'fact', `Why they are doing it: ${a.why.value}.`, a.why.value)
   for (const label of a.strengths?.a ?? []) add('strengths', 'pattern', `Says they are better than most at ${low(label)}.`, label)
@@ -57,7 +62,7 @@ export function seedRows(answers, nowMs = Date.now()) {
   if (HARD_TRUTH[a.hard_truth?.value]) add('hard_truth', 'preference', HARD_TRUTH[a.hard_truth.value], a.hard_truth.value)
   // The contrarian belief stays verbatim, so code copies it: nothing to invent.
   const own = written(a.contrarian)
-  const checked = own && checkBeliefText({ text: own, sourceTexts: [own] })
+  const checked = own && checkBeliefText({ text: `${IN_THEIR_WORDS}${own}`, sourceTexts: [own] })
   if (checked?.ok) add('contrarian', 'fact', checked.text, own)
   return rows
 }
@@ -73,11 +78,12 @@ export async function seedFromSignup({ supabase, store, callStructured, userId, 
     if (!(await mem.hasRun(userId, 'signup', userId, 'signup_seed'))) {
       const taken = new Set((await mem.activeBeliefs(userId)).map((b) => b.belief))
       const traits = await mem.activeTraits(userId)
+      const corrections = await mem.corrections(userId)
       const trait = DECISION_TRAIT[answers?.decision?.value]
       // Recorded as done before the first write, so a second seed finds the claim and writes nothing; each row is then written on its own.
       if (await run('signup_seed', 'done')) {
         for (const r of seedRows(answers, clock.now())) {
-          if (taken.has(r.text)) continue
+          if (taken.has(r.text) || isCorrected(corrections, 'founder_beliefs', r.text)) continue
           try {
             const row = await mem.insertBelief({
               userId, belief: r.text, kind: r.kind, source: 'signup',
@@ -88,7 +94,7 @@ export async function seedFromSignup({ supabase, store, callStructured, userId, 
             log('sign-up seed row skipped', err)
           }
         }
-        if (trait && !traits.some((t) => t.dimension === trait[0])) {
+        if (trait && !traits.some((t) => t.dimension === trait[0]) && !isCorrected(corrections, 'founder_traits', trait.join(' ').replace(/_/g, ' '))) {
           try {
             const row = await mem.upsertTrait({ userId, dimension: trait[0], value: trait[1], confidence: SELF_REPORT_CAP, origin: 'self_report' })
             if (row) await proof('founder_traits', row.id, 'decision', answers.decision.value)

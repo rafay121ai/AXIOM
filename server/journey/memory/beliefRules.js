@@ -165,3 +165,6 @@ export function snippetInSource(snippet, sourceTexts = []) {
   const s = norm(snippet)
   return s.length > 0 && sourceTexts.some((src) => norm(src).includes(s))
 }
+
+// How a founder's own typed sentence is stored as a fact; the screen shows it as: You said: "...".
+export const IN_THEIR_WORDS = 'In their words: '

@@ -23,7 +23,25 @@ const MAX_NEW_THREADS = 2
 const VOCAB_CONFIDENCE = 0.5
 
 const squash = (t) => norm(t).replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
-const sameWords = (a, b) => ` ${a} `.includes(` ${b} `) || ` ${b} `.includes(` ${a} `)
+// A reworded belief is the same belief: most of the content words (crudely stemmed) of the shorter text are in the other.
+const FUNCTION_WORDS = new Set(['a', 'an', 'the', 'is', 'are', 'to', 'of', 'in', 'on', 'at', 'and', 'or', 'they', 'them', 'their', 'says', 'say', 'wants', 'want', 'with', 'for', 'when', 'that', 'it'])
+const contentWords = (s) => new Set(s.split(' ').filter((w) => w && !FUNCTION_WORDS.has(w)).map((w) => w.replace(/(es|s)$/, '')))
+const rewordedFrom = (a, b) => {
+  const [x, y] = [contentWords(a), contentWords(b)].sort((p, q) => p.size - q.size)
+  return x.size >= 3 && [...x].filter((w) => y.has(w)).length / x.size >= 0.8
+}
+// True when the founder marked this item wrong or outdated. Compared only inside the same table (a trait is "dimension value").
+// Names, terms and traits match as a whole; "outdated" blocks only the same text, so the updated fact can still be learned;
+// "wrong" on a belief or thread also blocks a rewording.
+export const isCorrected = (corrections, table, text) => {
+  const s = squash(text)
+  return s.length > 0 && corrections.some((c) => {
+    if (c.item_table !== table) return false
+    const old = squash(c.item_text)
+    if (s === old) return true
+    return c.reason === 'wrong' && (table === 'founder_beliefs' || table === 'founder_threads') && rewordedFrom(s, old)
+  })
+}
 const typedBy = (text, sources) => sources.some((s) => wordRx(norm(text)).test(norm(s)))
 
 // ── Running in the background ───────────────────────────────────────────────
@@ -61,10 +79,10 @@ const rows = (x) => (Array.isArray(x) ? x.filter((i) => i && typeof i === 'objec
 // claim(): called once, after everything is checked and before the first write;
 // false (the run was already recorded by someone else) writes nothing.
 // Returns counts of what was written, or null when the claim was refused.
-export async function applyExtraction({ store, userId, data, mode, founderTexts, moveTexts = [], receipt, beliefSource, nowMs, corrections = [], cap = 1, claim = null, log = () => {} }) {
+export async function applyExtraction({ store, userId, data, mode, founderTexts, moveTexts = [], moveId = null, receipt, beliefSource, nowMs, corrections = [], cap = 1, claim = null, log = () => {} }) {
   const full = mode === 'full'
   const sourcesFor = (kind) => (kind === 'fact' ? founderTexts : [...founderTexts, ...moveTexts])
-  const corrected = (text) => { const s = squash(text); return s.length > 0 && corrections.some((c) => sameWords(s, squash(c.item_text))) }
+  const corrected = (table, text) => isCorrected(corrections, table, text)
   // The cleaned snippet, or null: words the founder wrote, short enough for the database, nothing blocked.
   const snippetOf = (raw, sources) => {
     const snippet = cleanStoredText(raw)
@@ -93,7 +111,11 @@ export async function applyExtraction({ store, userId, data, mode, founderTexts,
   const taken = new Set(beliefs.map((b) => squash(b.belief)))
   const done = { beliefs: 0, traits: 0, world: 0, vocabulary: 0, threads: 0 }
   let created = 0
-  const proof = (itemTable, itemId, snippet) => store.addEvidence([{ userId, itemTable, itemId, snippet, ...receipt(snippet) }])
+  // A snippet only in the move record is the move's, not the founder's words.
+  const proof = (itemTable, itemId, snippet) => store.addEvidence([{
+    userId, itemTable, itemId, snippet,
+    ...(moveId && !snippetInSource(snippet, founderTexts) ? { sourceKind: 'move', sourceId: moveId } : receipt(snippet)),
+  }])
 
   // A row the model may touch: this founder's, active, and a fact when facts only.
   const usable = (id) => {
@@ -105,7 +127,7 @@ export async function applyExtraction({ store, userId, data, mode, founderTexts,
     if (created >= MAX_NEW_PER_RUN || !['fact', 'pattern', 'preference'].includes(kind) || (!full && kind !== 'fact')) return null
     const text = textOf('belief', belief, sourcesFor(kind))
     const snippet = snippetOf(rawSnippet, sourcesFor(kind))
-    if (!text || !snippet || corrected(text) || taken.has(squash(text))) return null
+    if (!text || !snippet || corrected('founder_beliefs', text) || taken.has(squash(text))) return null
     taken.add(squash(text))
     created += 1
     return async () => {
@@ -164,7 +186,7 @@ export async function applyExtraction({ store, userId, data, mode, founderTexts,
     const seen = new Set()
     for (const t of rows(data.traits)) {
       const snippet = snippetOf(t.snippet, sourcesFor('pattern'))
-      if (!isTraitValue(t.dimension, t.value) || seen.has(t.dimension) || !snippet || corrected(`${t.dimension} ${t.value}`.replace(/_/g, ' '))) continue
+      if (!isTraitValue(t.dimension, t.value) || seen.has(t.dimension) || !snippet || corrected('founder_traits', `${t.dimension} ${t.value}`.replace(/_/g, ' '))) continue
       seen.add(t.dimension)
       const old = traits.find((x) => x.dimension === t.dimension)
       const same = old?.value === t.value
@@ -184,7 +206,7 @@ export async function applyExtraction({ store, userId, data, mode, founderTexts,
   for (const w of rows(data.world)) {
     const name = textOf('world', w.name, founderTexts)
     const snippet = snippetOf(w.snippet, founderTexts)
-    if (!name || !snippet || !['person', 'company', 'product', 'channel'].includes(w.kind) || !typedBy(name, founderTexts) || corrected(name)) continue
+    if (!name || !snippet || !['person', 'company', 'product', 'channel'].includes(w.kind) || !typedBy(name, founderTexts) || corrected('founder_world', name)) continue
     const role = w.role ? textOf('role', w.role, founderTexts) : null // a bad role is dropped, the person stays
     ops.push(async () => {
       const row = await store.upsertWorld({ userId, name, kind: w.kind, role })
@@ -198,7 +220,7 @@ export async function applyExtraction({ store, userId, data, mode, founderTexts,
     const term = textOf('term', v.term, founderTexts)
     const meaning = textOf('meaning', v.meaning, founderTexts)
     const snippet = snippetOf(v.snippet, founderTexts)
-    if (!term || !meaning || !snippet || !typedBy(term, founderTexts) || corrected(term)) continue
+    if (!term || !meaning || !snippet || !typedBy(term, founderTexts) || corrected('founder_vocabulary', term)) continue
     ops.push(async () => {
       const row = await store.upsertVocabulary({ userId, term, meaning, confidence: VOCAB_CONFIDENCE })
       if (!row) return
@@ -211,7 +233,7 @@ export async function applyExtraction({ store, userId, data, mode, founderTexts,
   let threads = 0
   for (const t of rows(data.threads)) {
     const title = textOf('thread', t.title, founderTexts)
-    if (threads >= MAX_NEW_THREADS || !title || !['goal', 'bet', 'open_question'].includes(t.kind) || corrected(title) || open.has(squash(title))) continue
+    if (threads >= MAX_NEW_THREADS || !title || !['goal', 'bet', 'open_question'].includes(t.kind) || corrected('founder_threads', title) || open.has(squash(title))) continue
     open.add(squash(title))
     threads += 1
     ops.push(async () => {
@@ -332,7 +354,7 @@ async function pass({ supabase, store, callStructured, userId, sourceKind, sourc
   })
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('memory output is not an object')
   const written = await applyExtraction({
-    store, userId, data, mode, founderTexts, moveTexts: full && moveRecord ? Object.values(moveRecord).filter(Boolean) : [],
+    store, userId, data, mode, founderTexts, moveTexts: full && moveRecord ? Object.values(moveRecord).filter(Boolean) : [], moveId: full && move ? move.id : null,
     receipt: () => ({ sourceKind, sourceId }), beliefSource: full ? 'report' : 'conversation', nowMs: clock.now(), corrections, log,
     // The run is recorded as done right before the first write: a duplicate (another pass got there first) writes nothing.
     claim: async () => !(await store.hasRun(userId, sourceKind, sourceId, mode)) && (await run('done', model)) !== null,

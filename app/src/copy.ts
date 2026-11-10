@@ -110,6 +110,22 @@ export const copy = {
     // the mock styles a withdraw link (.withdraw) but shows no words for it.
     takeDown: 'Take it down',
   },
+  // tasks/design/memory.md, "Copy": every string is new and waits for Rafay's approval. {n} is the count.
+  memory: {
+    title: 'What Axiom thinks',
+    summaryOne: 'Axiom has learned {n} thing about you and your work.',
+    summaryMany: 'Axiom has learned {n} things about you and your work.',
+    hint: 'Tap a line to see where it comes from. If it is wrong or out of date, mark it and Axiom stops using it.',
+    sections: { decide: 'How you decide', work: 'How you work', business: 'Your business', people: 'People and words', open: 'Still open' },
+    from: 'Where this comes from',
+    noSource: 'Axiom has no note of where this came from.',
+    wrong: 'Wrong',
+    outdated: 'Outdated',
+    markWrong: 'Mark as wrong: ',
+    markOutdated: 'Mark as outdated: ',
+    removed: 'Removed. Axiom will not use it again.',
+    empty: "Axiom hasn't learned anything about you yet.",
+  },
   // mock-onboarding-v2.html, screen 11 (Settings) and mock-states-v1.html section 4, word for word.
   settings: {
     title: 'Settings',
