@@ -1,6 +1,6 @@
 -- Memory layer 3 of 3: delete_account also removes what Axiom learned.
--- NOT APPLIED. Removes founder data (CLAUDE.md: needs Rafay's explicit
--- approval). The body is the LIVE function of Nov 9 2026
+-- APPLIED to live on Nov 10 2026 by Rafay, by hand. Removes founder data
+-- (CLAUDE.md: needed Rafay's explicit approval). The body is the LIVE function of Nov 9 2026
 -- (audit/schema_live_2026-11-09.md, copied verbatim) plus one block that
 -- deletes the eight memory tables, before the rows they hang off. Superseded
 -- rows go too: they are the founder's data.

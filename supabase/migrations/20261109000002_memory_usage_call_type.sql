@@ -1,5 +1,5 @@
 -- Memory layer 2 of 3: model_usage_logs.call_type accepts 'beliefs'.
--- NOT APPLIED. Written against the live check of Nov 9 2026
+-- APPLIED to live on Nov 10 2026. Written against the live check of Nov 9 2026
 -- (audit/schema_live_2026-11-09.md), which allows exactly the 13 values below
 -- without 'beliefs'.
 --

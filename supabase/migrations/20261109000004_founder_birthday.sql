@@ -1,6 +1,5 @@
 -- Memory layer 4 of 4: the founder's birthday, month and day ONLY (tasks/memory-plan.md,
--- Revision 3). NOT APPLIED. Needs Rafay's explicit approval, then the
--- migration-checker agent, then apply.
+-- Revision 3). APPLIED to live on Nov 10 2026 (Rafay approved).
 --
 -- THIS CHANGES AN EXISTING TABLE, additively: two nullable columns on
 -- public.founder_profiles. Nothing is dropped, renamed or rewritten, and no

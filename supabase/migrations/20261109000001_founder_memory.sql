@@ -1,6 +1,5 @@
 -- Memory layer 1 of 3: the founder memory tables (tasks/memory-plan.md,
--- Revision 2). NOT APPLIED. Needs Rafay's explicit approval, then the
--- migration-checker agent, then apply. Written against the live schema dump of
+-- Revision 2). APPLIED to live on Nov 10 2026 (Rafay approved). Written against the live schema dump of
 -- Nov 9 2026 (audit/schema_live_2026-11-09.md): none of these tables exist.
 --
 -- What Axiom learns about a founder, and the receipt for each piece:
