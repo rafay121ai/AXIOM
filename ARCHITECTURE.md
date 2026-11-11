@@ -103,11 +103,15 @@ Read
                                       closing question. No underlines.
   POST /api/situations/:id/read/answer
                                    -> stores the answer (or "skipped"); then
-                                      up to 2 more questions (followup step,
-                                      kind read_talk), then Learn. answered_at
-                                      is set when the talk ends.
+                                      a reply plus a question, 1 to 5 times
+                                      (followup step, kind read_talk), then
+                                      Learn. answered_at is set when the talk
+                                      ends.
 
 Learn (a conversation)
+  Retrieval: a small call (followup step, kind learn_search) writes what the
+  founder needs from the library; that text is embedded and searched, never
+  their raw words. Falls back to their words if the call fails.
   POST /api/situations/:id/learn   -> start; retrieval + 1 structured call
   GET  /api/learn/:id
   POST /api/learn/:id/turn         -> retrieval + 1 structured reply call;

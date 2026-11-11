@@ -170,10 +170,10 @@ test('the Read gets the brief once, in place', async () => {
   assert.equal(m.at(-1).role, 'user')
 })
 
-test('the Read talk gets the brief and the never-ask line; the 2-question cap is untouched', async () => {
+test('the Read talk gets the brief and the never-ask line', async () => {
   const read = { id: 'r1', situation_id: SIT, headline: 'h', body: 'b', closing_question: 'q?', closing_answer: null, skipped: false, answered_at: null }
   const w = world({ beliefs: [belief(A, 'Sells candles to shops')], extra: { reads: [read] } })
-  w.script.push({ knows_goal: false, knows_blocker: true, knows_detail: true, question: 'What do you want from Dr Hamid in the paid pilot?' })
+  w.script.push({ asked_to_learn: false, knows_goal: false, knows_blocker: true, knows_detail: true, missing: 'goal', reply: 'You want him to say yes to the pilot.', question: 'What do you want from Dr Hamid in the paid pilot?' })
   const res = await w.service.answerRead({ userId: A, situationId: SIT, text: 'I want him to say yes to the pilot.' })
   assert.equal(res.status, 'talk')
   assert.equal(framed(w.sent[0]).length, 1)

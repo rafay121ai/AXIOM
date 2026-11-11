@@ -220,15 +220,18 @@ earlier answer sits above an **empty** chat box as one tap to send. The box is
 never pre-filled or locked.
 
 ### Follow up rule (enforced by the server)
-- At most **2** follow-up questions per situation, one at a time, each about
-  what the founder just wrote, asking only for the missing piece (a number, a
-  person or role, a date, or something already tried).
-- Axiom stops once it has a named situation plus one concrete detail. If the
-  first message has both, it asks nothing.
+- **Exactly 2** follow-up questions per situation, always, one at a time,
+  each about what the founder just wrote (Rafay, Nov 9). The first makes clear
+  what this is (what the thing does, or what happened). The second goes to the
+  real issue behind it (why they started it, what is stopping them, what
+  happened when they tried). Example: "What does the app do for someone, step
+  by step?", then "What has stopped you from selling it so far?"
+- If no usable question comes after one retry, the Read starts anyway: Axiom
+  never stalls.
 - One-word or filler replies ("ok") do not count as an answer and do not use
   up a follow-up.
 - Axiom never asks for anything already said in this situation.
-- When it has enough, it moves straight to the Read. No closing line, no
+- After the 2nd answer, it moves straight to the Read. No closing line, no
   restating what they just said.
 
 ---
@@ -245,12 +248,13 @@ Axiom says plainly what is really happening in this situation.
 - **Ends with one real question** the founder can answer in a reply box. The
   answer feeds the lesson. A quiet "Skip this question" exists. There is no
   Continue button.
-- **After the answer, Axiom may talk a little more** on the Read screen: at
-  most 2 more questions, each asking only for a piece the lesson still needs:
-  what they want to happen, what is in the way, and one concrete detail (a
-  number, person or date). The server moves on to Learn only when all three
-  are known, or after the 2nd question. The
-  cap is enforced in code. Skipping during the talk moves on and keeps the
+- **After the answer, Axiom talks with them on the Read screen** (Rafay, Nov
+  9). Each turn is a short reply to what they said, then one question. It asks
+  at least 1 and at most 5 questions. It moves on to Learn when the founder
+  asks what to do ("ok, what should I do?"), or when the server knows what
+  they want to happen, what is in the way, and one concrete detail about what
+  they are building. After the 5th question, Learn starts regardless. All of
+  this is enforced in code. Skipping during the talk moves on and keeps the
   answer. At the daily cost limit the answer is saved and Learn is next.
 - A one-word reply gets "Say a bit more." and does not move them on.
 - "Something else on my mind" opens a fresh situation.
@@ -278,6 +282,11 @@ A conversation first. Axiom gives a lesson, the founder replies, Axiom
 refines.
 
 ### The lesson
+- **The library is searched by need, not raw words** (Rafay, Nov 9). Before
+  each Learn reply, one small call reads the Situation, the Read, the talk
+  and Learn so far, and writes what this founder needs from authors and
+  founders, in general terms. Only that text is searched. If the call fails,
+  the founder's own words are searched as before.
 - Written like a person talking: short (about 100 to 150 words, hard cap 200,
   enforced by the server). Starts from the founder's situation, uses what they
   answered on the Read (without repeating it back), weaves in one or two

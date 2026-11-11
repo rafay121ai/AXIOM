@@ -85,7 +85,7 @@ async function setup({ events = [], script = [], failCareRead = false } = {}) {
 }
 
 const verdict = () => JSON.stringify({
-  topic: 'same', has_situation: true, has_detail: false, missing: 'number',
+  topic: 'same',
   question: 'How many of the clinics asked for pricing?', title: 'Pricing emails to clinics',
 })
 

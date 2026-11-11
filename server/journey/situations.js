@@ -3,7 +3,7 @@
 // counter moves only by a compare-and-swap update, so concurrent turns can
 // never take a third. Tables and columns: see schema_needs.md.
 import { LIMITS } from '../config.js'
-import { checkHook } from './hooks.js'
+import { checkHook, threadKinds } from './hooks.js'
 import { stripFiller, isFillerReply } from './filler.js'
 import { SITUATION_SCHEMA, situationMessages } from './prompts/situation.js'
 import { READ_TALK_SCHEMA, readTalkMessages } from './prompts/readTalk.js'
@@ -17,7 +17,8 @@ export const MAX_NEW_SITUATIONS_PER_DAY = 5
 export const TEXT_MAX = 2000
 export const MIN_SITUATION_WORDS = 3
 const SAY_MORE = 'Say a bit more.'
-export const MAX_READ_QUESTIONS = 2
+export const MIN_READ_QUESTIONS = 1
+export const MAX_READ_QUESTIONS = 5
 const TITLE_MAX = 60
 const CAS_TRIES = 5
 const OPEN_LIST_MAX = 20
@@ -102,8 +103,10 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
 
   // ── The model's view of one turn ───────────────────────────────────────────
 
-  // Returns { topic, enough, question, title }. Never throws: a failed model
-  // call or a question that will not pass ends in "enough", never in a stall.
+  // Returns { topic, enough, question, title }. Axiom always asks MAX_FOLLOW_UPS
+  // questions before the Read (Rafay, Nov 9): while any are left, a missing or
+  // failing question is asked for again once. Never throws: a failed model call
+  // or a question that will not pass ends in "enough", never in a stall.
   async function assess({ userId, situation, turns, followUpsLeft }) {
     const conversation = turns.filter((t) => !t.filler).map((t) => ({ role: t.role, text: t.text }))
     const sources = founderTextsOf(turns)
@@ -120,11 +123,10 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
           usageContext: { step: 'followup', kind: 'situation_turn', situation_id: situation.id },
           messages: situationMessages({ conversation, followUpsLeft, brief }, problems),
         })
-        const enough = (data.has_situation && data.has_detail) || data.missing === 'none'
         const base = { topic: data.topic, title: data.title.trim() }
-        if (enough || followUpsLeft <= 0) return { ...base, enough: true, question: null }
+        if (followUpsLeft <= 0) return { ...base, enough: true, question: null }
         const question = stripFiller(data.question).text
-        const verdict = checkHook({ text: question, sources })
+        const verdict = question ? checkHook({ text: question, sources }) : { ok: false, problems: ['a question is required: follow_ups_left is more than 0'] }
         if (verdict.ok && question.length <= 220) return { ...base, enough: false, question }
         problems = verdict.problems
       } catch (err) {
@@ -301,9 +303,10 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
   }
 
   // The reply to the closing question, a reply in the talk after it, or a skip.
-  // Axiom asks at most MAX_READ_QUESTIONS more questions, then Learn is next
-  // (Rafay, Nov 9). answered_at marks the talk as over. overCap: at the daily
-  // cost limit the answer is still saved, only the question is skipped.
+  // Axiom replies and asks at least one more question, at most
+  // MAX_READ_QUESTIONS, then Learn is next (Rafay, Nov 9). answered_at marks the
+  // talk as over. overCap: at the daily cost limit the answer is still saved,
+  // only the talk is skipped.
   async function answerRead({ userId, situationId, text, skip, overCap = false }) {
     const situation = await ownSituation(userId, situationId)
     const stored = await readOf(situation.id)
@@ -329,10 +332,10 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
 
     const [row, turns] = await Promise.all([readOf(situation.id), turnsOf(situation.id)])
     const asked = turns.filter((t) => isReadTalk(t) && t.role === 'axiom').length
-    const question = overCap || asked >= MAX_READ_QUESTIONS ? null : await nextReadQuestion({ userId, situation, row, turns, questionsLeft: MAX_READ_QUESTIONS - asked })
-    if (!question) return toLearn(await finishRead(situation, row, {}))
-    await one(supabase.from('situation_turns').insert({ situation_id: situation.id, role: 'axiom', text: question, filler: false, result: { read_talk: true }, created_at: iso() }).select('id'))
-    return { status: 'talk', situation_id: situation.id, reply: question }
+    const line = overCap || asked >= MAX_READ_QUESTIONS ? null : await nextReadLine({ userId, situation, row, turns, asked })
+    if (!line) return toLearn(await finishRead(situation, row, {}))
+    await one(supabase.from('situation_turns').insert({ situation_id: situation.id, role: 'axiom', text: line, filler: false, result: { read_talk: true }, created_at: iso() }).select('id'))
+    return { status: 'talk', situation_id: situation.id, reply: line }
   }
 
   async function finishRead(situation, row, fields) {
@@ -340,9 +343,13 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     return readOf(situation.id)
   }
 
-  // The next question in the talk after the Read, or null when Learn should start.
-  // Any model failure, or a question that fails the checks twice, means Learn: the talk never blocks the journey.
-  async function nextReadQuestion({ userId, situation, row, turns, questionsLeft }) {
+  // Axiom's next line in the talk after the Read (a reply to what they said,
+  // then one question), or null when Learn should start. The server decides:
+  // Learn starts when they ask what to do, or once at least one question was
+  // asked and the goal, the blocker and one concrete detail are all known. Any
+  // model failure, or a line that fails the checks twice, means Learn: the talk
+  // never blocks the journey.
+  async function nextReadLine({ userId, situation, row, turns, asked }) {
     const talk = [{ role: 'founder', text: row.closing_answer }, ...turns.filter(isReadTalk).map((t) => ({ role: t.role, text: t.text }))]
     const situationTalk = turns.filter((t) => !t.filler && !isReadTalk(t)).map((t) => ({ role: t.role, text: t.text }))
     const sources = [...founderTextsOf(turns), row.closing_answer]
@@ -357,14 +364,18 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
           maxCompletionTokens: 400,
           userId,
           usageContext: { step: 'followup', kind: 'read_talk', situation_id: situation.id },
-          messages: readTalkMessages({ situation: situationTalk, read: { headline: row.headline, body: row.body, closing_question: row.closing_question }, talk, questionsLeft, brief }, problems),
+          messages: readTalkMessages({ situation: situationTalk, read: { headline: row.headline, body: row.body, closing_question: row.closing_question }, talk, questionsLeft: MAX_READ_QUESTIONS - asked, brief }, problems),
         })
-        // The server decides: Learn starts only when the goal, the blocker and one concrete detail are all known.
-        if (data.knows_goal && data.knows_blocker && data.knows_detail) return null
+        if (data.asked_to_learn) return null
+        if (asked >= MIN_READ_QUESTIONS && data.knows_goal && data.knows_blocker && data.knows_detail) return null
+        const reply = stripFiller(data.reply).text
         const question = stripFiller(data.question).text
         const verdict = checkHook({ text: question, sources })
-        if (verdict.ok && question.length <= 220) return question
-        problems = verdict.problems
+        const replyProblems = !reply ? ['the reply is empty: answer what they just said first']
+          : reply.includes('?') ? ['the reply holds a question: one question only, in question']
+            : threadKinds(reply, sources).length === 0 ? ['the reply says nothing of theirs: use their own words'] : []
+        if (verdict.ok && replyProblems.length === 0 && question.length <= 220) return `${reply} ${question}`
+        problems = [...replyProblems, ...verdict.problems]
       } catch (err) {
         log('model call failed', err)
         return null

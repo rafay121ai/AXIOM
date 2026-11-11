@@ -12,8 +12,8 @@ import { after, before, test } from 'node:test'
 import { QUESTION_KEYS } from '../journey/questions.js'
 import { createWorld } from './harness.js'
 import {
-  FIRST_READING, FOLLOWUP_ANSWER, FULL_ANSWERS, LEARN_OFFER, LEARN_REPLY_1, LESSON, MOVE, READ, READ_ANSWER, REAL_1, REAL_2,
-  REPORT_NOTE, REPORT_REPLY, SITUATION_TEXT, SWAPPED_MOVE, SWAP_REASON, TURN_2, situationVerdict, uuid,
+  FIRST_READING, FOLLOWUP_ANSWER, FULL_ANSWERS, LEARN_OFFER, LEARN_REPLY_1, LESSON, MOVE, Q2, READ, READ_ANSWER, REAL_1, REAL_2,
+  REPORT_NOTE, REPORT_REPLY, SITUATION_TEXT, SWAPPED_MOVE, SWAP_REASON, TURN_2, TURN_3, situationVerdict, uuid,
 } from './script.js'
 
 // ── Shape language ───────────────────────────────────────────────────────────
@@ -194,9 +194,11 @@ before(async () => {
   await keep('getFirstReading', call('POST', '/api/first-reading'))
 
   await keep('startSituation(say_more)', call('POST', '/api/situations', { text: 'ok', client_turn_id: uuid(1) }))
-  openai.script('situation_turn', situationVerdict(), situationVerdict({ has_detail: true, missing: 'none', question: '' }))
+  // Axiom always asks 2 questions (Rafay, Nov 9); the third turn is ready.
+  openai.script('situation_turn', situationVerdict(), situationVerdict({ question: Q2 }), situationVerdict({ question: '' }))
   const sit = (await keep('startSituation(follow_up)', call('POST', '/api/situations', { text: SITUATION_TEXT, client_turn_id: uuid(2) }))).situation_id
-  await keep('sendTurn(ready)', call('POST', `/api/situations/${sit}/turn`, { text: TURN_2, client_turn_id: uuid(3) }))
+  await call('POST', `/api/situations/${sit}/turn`, { text: TURN_2, client_turn_id: uuid(3) })
+  await keep('sendTurn(ready)', call('POST', `/api/situations/${sit}/turn`, { text: TURN_3, client_turn_id: uuid(30) }))
   await keep('getSituation', call('GET', `/api/situations/${sit}`))
   openai.script('read', READ)
   await keep('getRead', call('POST', `/api/situations/${sit}/read`))

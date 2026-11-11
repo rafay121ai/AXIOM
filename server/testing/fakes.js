@@ -3,7 +3,9 @@ import { randomUUID } from 'node:crypto'
 
 // Scripted OpenAI: pass replies in order. A reply is a string (message
 // content), an Error (thrown), or { content, usage }.
-export function createFakeOpenAI(script = []) {
+// byName: fixed replies for one schema name, answered without using the script
+// (for a side call, like the Learn search need, that a test does not script).
+export function createFakeOpenAI(script = [], { byName = {} } = {}) {
   const queue = [...script]
   const calls = []
   return {
@@ -12,8 +14,10 @@ export function createFakeOpenAI(script = []) {
       completions: {
         async create(payload, options) {
           calls.push({ payload, options })
-          if (queue.length === 0) throw new Error('FakeOpenAI: script exhausted')
-          const next = queue.shift()
+          const name = payload.response_format?.json_schema?.name
+          const fixed = Object.hasOwn(byName, name) ? byName[name] : undefined
+          if (fixed === undefined && queue.length === 0) throw new Error('FakeOpenAI: script exhausted')
+          const next = fixed ?? queue.shift()
           if (next instanceof Error) throw next
           const { content, usage } = typeof next === 'string' ? { content: next } : next
           return {
