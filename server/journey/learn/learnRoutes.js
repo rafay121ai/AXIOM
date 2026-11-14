@@ -25,7 +25,7 @@ export function firstNameOf(user) {
   return /^[\p{L}][\p{L}'’-]*$/u.test(name) && name.length <= NAME_MAX ? name : null
 }
 
-export function mountLearnRoutes(app, { supabase, knowledgeSupabase = null, embed = null, care, cap, stored, callStructured, clock, hintProvider = createMemoryHintProvider() }) {
+export function mountLearnRoutes(app, { supabase, knowledgeSupabase = null, embed = null, care, cap, stored, callStructured, clock, lessonCites = false, hintProvider = createMemoryHintProvider() }) {
   const limiter = (max) => rateLimit({
     windowMs: 60 * 1000,
     max,
@@ -34,8 +34,8 @@ export function mountLearnRoutes(app, { supabase, knowledgeSupabase = null, embe
     standardHeaders: true,
     legacyHeaders: false,
   })
-  const log = (what, detail) => console.error(`[Learn] ${what}`, detail?.message || detail?.problems || '')
-  const service = createLearn({ supabase, knowledgeSupabase, embed, callStructured, clock, log })
+  const log = (what, detail) => console.error(`[Learn] ${what}`, detail?.message || detail?.problems || (detail ? JSON.stringify(detail) : ''))
+  const service = createLearn({ supabase, knowledgeSupabase, embed, callStructured, clock, log, lessonCites })
 
   const handle = (fn) => async (req, res) => {
     if (!supabase) return res.status(503).json({ error: 'Service not configured' })

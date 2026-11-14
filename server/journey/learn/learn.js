@@ -43,7 +43,7 @@ export function turnView(row) {
   }
 }
 
-export function createLearn({ supabase, knowledgeSupabase = null, embed = null, callStructured, clock, log = () => {} }) {
+export function createLearn({ supabase, knowledgeSupabase = null, embed = null, callStructured, clock, log = () => {}, lessonCites = false }) {
   const sharing = createSharing({ supabase, clock })
   const founderLessons = createFounderLessons({ supabase, sharing, clock })
   const iso = () => new Date(clock.now()).toISOString()
@@ -137,7 +137,7 @@ export function createLearn({ supabase, knowledgeSupabase = null, embed = null, 
     // The library is searched with what the founder needs, written from everything they said, never their raw words.
     const query = given || !knowledgeSupabase || !embed ? ctx.query
       : (await searchNeed({ prompt: ctx.prompt, callStructured, userId, usageContext, log })) ?? ctx.query
-    const evidence = given ?? await retrieveEvidence({ knowledgeSupabase, embed, query, userId, usageContext, log })
+    const evidence = given ?? await retrieveEvidence({ knowledgeSupabase, embed, query, userId, usageContext, log, lessonCites })
     const reply = await composeReply({
       mode, step, evidence, founderTexts: ctx.founderTexts, usageContext,
       context: { ...ctx.prompt, ...(tapped ? { tapped } : {}), style: await styleOf(supabase, userId), brief: await loadBrief(supabase, userId, ctx.founderTexts.join('\n')) },

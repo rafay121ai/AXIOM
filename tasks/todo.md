@@ -471,3 +471,88 @@ Rafay: Situation always asks exactly 2 questions about the situation; the Read r
 - [x] 3. Learn: before the lesson, one call reads Situation and Read and writes what this founder needs from the library; the library is searched with that text only. Falls back to the old query on failure.
 - [x] 4. Tests for each rule; PRODUCT.md, ARCHITECTURE.md, decisions, lessons. All suites pass. Commit on the branch; Rafay merges later with the memory work.
 Not in scope: remembering how the founder thinks (the other window).
+
+---
+
+# Proactive Axiom (connectors): see tasks/connectors-plan.md
+- [ ] Rafay approves the plan (Q1 to Q5 answered, all three connectors before demo day)
+- [~] Phase 0: decisions and docs done; Composio scopes check needs Rafay (see plan)
+- [ ] Phases 1 to 10 as listed in the plan file
+
+---
+
+# Plan (Nov 14): the verified lesson library and Learn (PLAN ONLY, nothing run)
+
+Rafay: wants the new lessons (about 15,700, 66 books, verified quote, chapter, page) in Learn, working with the old chunks (`wiki_chunks`, 188 sources, book-level cites only).
+
+**Read this first.** `knowledge_pilot/EVAL.md` (Oct 2026) already tested this twice, blind. Lessons as the retrieval layer lost to the old chunks on "would genuinely help": 25% and 24% against 37 to 40%. Reasons: narrow lesson cards give less context than long passages, and the new library covers 66 books only. The doc recommends NOT cutting over, and an end-to-end test first. So the lessons should not replace or outrank the chunks for finding material. Their strength is verification: author, book, chapter, page and a quote that is checked against the book. That is what Learn's hard rule needs.
+
+Live check (Nov 14, read only): `wiki_sources` 188, `wiki_chunks` 20,970, `source_learning_maps` 2,568. No `lessons` table. The 8 duplicates in the Oct 19 backup were removed. Since then Learn gained a model-written search need (`searchNeed.js`), which is the "query rewriting" option from EVAL.md; it has not been re-scored.
+
+## Design to test (Rafay, Nov 14: the MODEL picks the passages, code sets the boundary)
+1. The server searches wide: a pool of top `wiki_chunks` passages (about 15 to 20, at most 2 per book) plus, for those books, the best lesson candidates. Each gets an opaque handle.
+2. The model reads the founder's need and the pool, picks the passages that fit (3 to 6), and writes the reply from them, citing by handle. Open: one call (pick and write) or two (pick, then write).
+3. Code checks after: only handles in the pool are accepted; quotes, authors and books are verified against the chosen rows; a chapter, page or quote is shown only when it comes from a lesson row. Chunk-only picks stay book-level. `validateCitations` already does most of this.
+4. The model can only choose from what code retrieved, so it cannot invent a source.
+5. Test variants in step 1: code picks, model picks from the pool, model picks plus lesson-attached cites; also vector re-rank vs model pick. Measure tokens and cost per Learn turn.
+
+## Steps (each gate is Rafay's explicit go; steps 1 to 3 touch no live data)
+- [x] 1. (Nov 14, done: see knowledge_pilot/eval/e2e/summary.json and scores_*.json) End-to-end eval, local only (EVAL.md option 1): the same 20 situations through the real Learn step, (a) chunks only (today, with `searchNeed`), (b) chunks plus lesson-attached cites. Score the finished answers blind, and count answers where every quote and attribution verifies. Result decides whether to go on.
+- [ ] 2. Re-score retrieval now that `searchNeed` exists, to see if the 37 to 40% moved.
+- [ ] 3. If (b) is not clearly better: stop. Keep chunks, record why in `tasks/decisions.md`.
+- [ ] 4. If (b) wins: fresh read-only dump of the live Knowledge schema (`wiki_sources`, `wiki_chunks`), compare with `sql/create_lessons.sql` and `ARCHITECTURE.md` ("library_lessons, chunk_lessons, source_crosswalk" vs the file's `lessons`; pick one design). Migration plan, then approval.
+- [ ] 5. `upload_lessons.py --dry-run` (counts and size, no network). Then upload one book as a trial, check, then the rest. Writes live; needs explicit go.
+- [ ] 6. Server: lesson lookup in `retrieve.js` behind a flag (`LESSON_CITES`, default off), evidence rows carry chapter, page, quote only from lessons, loading hint shows the book name only.
+- [ ] 7. Tests: (a) a chunk row never gets a chapter, page or quote; (b) given a lesson and a chunk for the same book, one row reaches the model and its cite comes from the lesson; (c) the model cannot cite a handle that is not in the pack; (d) a log line per Learn answer counts rows with lesson cites vs book-level cites (ids only, no text).
+- [ ] 8. Learn verification list from CLAUDE.md; roll out flag on for Rafay's account, then everyone.
+- [ ] Known gaps, not in this plan: no classical thinkers in either library (Aristotle, Marcus Aurelius, Machiavelli, Sun Tzu); Atomic Habits has 1 chunk; some "what's coming" articles are niche utility news; whats_coming scored 0 in both evals.
+
+## Result of step 1 (Nov 14, 20 situations x 3 variants, 2 blind judges, cost $0.25)
+- A chunks only (today): help 1.48, fit 1.48. B model picks from a pool of 10: help 1.55, fit 1.62. C pool plus lessons: help 1.50, fit 1.62. Differences are inside the noise (judges agreed on 41 of 60; 12 of 20 situations tied).
+- C is not worse than today and carries a verified chapter and page on 9 of 20 replies (A and B: 0). That is its value.
+- Retries: the first model draft failed the server's checks in 11 of 20 (A), 13 (B), 15 (C). Root cause not yet looked at.
+- Not yet done: steps 4 and 5 (live schema dump, create the lessons table, upload). Flag LESSON_CITES stays off until then.
+
+---
+
+# Plan (Nov 14): make lessons, reflection and disagreement picture perfect (PLAN, nothing built)
+
+Rafay: all three must be picture perfect, plus a disagreement view. Order: 1 and 2 first (they share the lessons going live), then 3, then 4.
+
+## WS1. Consistency (every reply specific, none generic)
+- [ ] Root-cause the retries: the first draft failed the server checks in 11 to 15 of 20 runs. Log which problem fired per run (ids and problem names only), group them, fix the cause (prompt vs check conflict). Never loosen a hard rule to make a number look better.
+- [ ] Golden set: the 20 situations in `knowledge_pilot/eval/situations.json` as a repeatable local check (retries, own-words, citation validity, cost). Run before any Learn prompt change.
+- [ ] Never ship a generic reply: if the reply carries nothing of this founder after retry, the existing fallback stays, and we count how often it happens.
+
+## WS2. Lessons that teach the reasoning
+- [ ] Lessons live (steps 4 and 5 above): fresh read-only schema dump, one reviewed migration, dry run, one-book trial, then all. Each write to the live Knowledge project needs Rafay's explicit go at its gate.
+- [ ] Reply shape from the lesson fields already stored (author_argues, applies_when, caveat): what the author argues, when it holds and when it breaks, what it means for this founder. Needs the voice and word budget (cap 200) reviewed: FLAG FIRST, copy approved by Rafay.
+- [ ] Receipts: tapping a citation opens the passage and its page (like the memory screen). Mock first, DESIGN.md language only.
+- [ ] Coverage: missing thinkers (Aristotle, Marcus Aurelius, Machiavelli, Sun Tzu, Zero to One). Separate pipeline run; source licences are VERIFY; cost estimate first.
+
+## WS3. Reflection after the report
+- [ ] Read the current Report flow and copy; list what Axiom says after Done, Couldn't, Didn't.
+- [ ] Reflection that says what this result teaches, from the founder's own numbers and pattern (track record, memory brief), never announcing that it remembers, never a strike or warning. Copy approved by Rafay before code.
+- [ ] Checks in code: only the founder's numbers and dates, no invented claim about their history.
+
+## WS4. Disagreement ("another view")
+- [ ] Rule: two DIFFERENT authors, same decision, opposed positions, each with a verified quote from the pool. Code checks both quotes and that the authors differ; if either fails, nothing shows. Never manufactured: shown only when the pool really holds a conflict.
+- [ ] Where it shows: open question for Rafay (inside the lesson vs a tap on the reply). Mock first.
+- [ ] Tests: a conflict is shown with both verified; a single-author pool never shows one; an invented counter-view is dropped.
+
+## Gates
+Rafay approves: lesson reply copy and shape, Report reflection copy, disagreement placement and mock, each live Knowledge write. Verify per CLAUDE.md (Learn lessons render, citations validated, follow up taps work; Report outcome saved) and run test suites at each step.
+
+---
+
+# For later (Nov 14, Rafay): after OpenAI credits are added
+OpenAI returned `insufficient_quota` (no credits) on Nov 14, so nothing that embeds or calls a model can run, and the live server may be affected if it shares the key. Rafay to add credits at platform.openai.com/settings/organization/billing.
+- [x] (Nov 14, done: 112 passages + 109 lessons live, all 15,712 lessons linked) Load The Psychology of Money passages live: `python3 knowledge_pilot/load_book_chunks.py` (112 passages, about $0.0015; dry run already checked). Adds one wiki_sources row and 112 wiki_chunks rows; undo = delete that source's rows. Needs a check afterwards (count, one search).
+- [ ] Re-run the 20-situation e2e test (`knowledge_pilot/eval/e2e/run.mjs`) now that lessons match by source id; about $0.30; two blind judges as before.
+- [ ] Turn `LESSON_CITES=on` for Rafay's account first, check a few real Learn conversations, then everyone.
+- [ ] Root-cause the Learn retries (first draft failing the server's checks in 11 to 15 of 20 runs): `run_retries.mjs` and `retries.json` exist, RETRIES.md was never written.
+- [ ] Commit the uncommitted work (Learn pool/lessons code, SQL files, upload scripts, `lessonPool.test.js`, plans). Server tests: 714 pass on Node 22; two e2e tests use `Object.groupBy` and fail on Node 20 (package allows Node 20).
+- [ ] Decide who the lessons-live results change for founders: lesson reply shape, receipts, reflection after the report, "another view" disagreement tap (see the WS1 to WS4 plan above).
+
+## Finding (Nov 14, real Learn trace on a new situation)
+- One book (Scaling Up) took 14 of the 20 closest passages, so after the 2-per-book rule only 4 books survived and the wider pool had 7 passages, not 10. Asking the search for 40 candidates instead of 20 gave a pool of 10 from 6 books (60 or 100 gave the same 6). Candidate count is `MATCH_COUNT = 20` in `server/journey/learn/retrieve.js`. Not changed yet: test on the 20 situations first.

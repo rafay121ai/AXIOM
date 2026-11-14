@@ -425,6 +425,19 @@ loaded.
   `library_lessons`, `chunk_lessons`, `source_crosswalk`. None exist in the
   code or migrations yet. Until they do, Learn cites at book level and the
   loading hint is empty.
+- Flagged design (`LESSON_CITES=on`, default off; written, not run live). The
+  Knowledge `wiki_chunks` passages and the verified lessons work together in
+  Learn: the server searches a wider pool (up to 10 passages, 2 per book),
+  attaches to each the best lesson of the same book (matched by source id:
+  the chunk's `wiki_chunks.source_id` equals the lesson's `wiki_source_id`,
+  never by spelling; 512-dim `match_lessons`, similarity 0.35 or more), and the model
+  picks which passages to use and writes the reply in one call. Code checks
+  after: only pool handles count; a quote verified in the lesson paragraphs
+  shows chapter and page from the lesson; a quote verified only in the chunk
+  stays book-level; nothing is taken from the model. Any lesson lookup failure
+  gives chunk-only rows. `knowledge_pilot/sql/create_lessons.sql` adds
+  `filter_sources` (uuid[]) to `match_lessons`; a live DB with the older
+  version runs `migrate_match_lessons_by_source.sql`.
 
 ### Needed for the new product
 - Source and chunk IDs passed through retrieval to the reply call.

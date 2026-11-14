@@ -168,6 +168,7 @@ export function createApp({
     cap: dailyCapGate({ isCapped: isOverCap, isAdmin: isAdminUser }),
     callStructured: callStructuredForApp,
     clock,
+    lessonCites: env.LESSON_CITES === 'on',
     deleteOn: env.ACCOUNT_DELETE === 'on',
     // Test accounts (ADMIN_USER_IDS / ADMIN_EMAILS) skip the daily limit on new situations (Rafay, Nov 2).
     noDailyLimit: isAdminUser,
