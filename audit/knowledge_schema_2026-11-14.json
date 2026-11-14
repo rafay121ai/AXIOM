@@ -1,0 +1,252 @@
+{
+ "definitions": {
+  "wiki_sources": {
+   "required": [
+    "id",
+    "pillar",
+    "content_type",
+    "title",
+    "created_at",
+    "updated_at",
+    "is_core_library"
+   ],
+   "properties": {
+    "id": {
+     "default": "gen_random_uuid()",
+     "description": "Note:\nThis is a Primary Key.<pk/>",
+     "format": "uuid",
+     "type": "string"
+    },
+    "pillar": {
+     "format": "text",
+     "type": "string"
+    },
+    "content_type": {
+     "format": "text",
+     "type": "string"
+    },
+    "title": {
+     "format": "text",
+     "type": "string"
+    },
+    "author": {
+     "format": "text",
+     "type": "string"
+    },
+    "source_url": {
+     "format": "text",
+     "type": "string"
+    },
+    "source_key": {
+     "format": "text",
+     "type": "string"
+    },
+    "summary_for_retrieval": {
+     "format": "text",
+     "type": "string"
+    },
+    "source_quality": {
+     "format": "text",
+     "type": "string"
+    },
+    "created_at": {
+     "default": "now()",
+     "format": "timestamp with time zone",
+     "type": "string"
+    },
+    "updated_at": {
+     "default": "now()",
+     "format": "timestamp with time zone",
+     "type": "string"
+    },
+    "enrichment_status": {
+     "format": "text",
+     "type": "string"
+    },
+    "enrichment_version": {
+     "format": "text",
+     "type": "string"
+    },
+    "enriched_at": {
+     "format": "timestamp with time zone",
+     "type": "string"
+    },
+    "source_claims": {
+     "format": "jsonb"
+    },
+    "axiom_interpretation": {
+     "format": "jsonb"
+    },
+    "source_claims_confidence": {
+     "format": "double precision",
+     "type": "number"
+    },
+    "axiom_interpretation_confidence": {
+     "format": "double precision",
+     "type": "number"
+    },
+    "published_at": {
+     "format": "timestamp with time zone",
+     "type": "string"
+    },
+    "is_core_library": {
+     "default": true,
+     "format": "boolean",
+     "type": "boolean"
+    }
+   },
+   "type": "object"
+  },
+  "source_learning_maps": {
+   "required": [
+    "id",
+    "source_id",
+    "concept_index",
+    "concept_name",
+    "concept_description",
+    "why_it_matters",
+    "absorbed_signal",
+    "created_at"
+   ],
+   "properties": {
+    "id": {
+     "default": "gen_random_uuid()",
+     "description": "Note:\nThis is a Primary Key.<pk/>",
+     "format": "uuid",
+     "type": "string"
+    },
+    "source_id": {
+     "description": "Note:\nThis is a Foreign Key to `wiki_sources.id`.<fk table='wiki_sources' column='id'/>",
+     "format": "uuid",
+     "type": "string"
+    },
+    "concept_index": {
+     "format": "int32",
+     "type": "integer"
+    },
+    "concept_name": {
+     "format": "text",
+     "type": "string"
+    },
+    "concept_description": {
+     "format": "text",
+     "type": "string"
+    },
+    "why_it_matters": {
+     "format": "text",
+     "type": "string"
+    },
+    "absorbed_signal": {
+     "format": "text",
+     "type": "string"
+    },
+    "created_at": {
+     "default": "now()",
+     "format": "timestamp with time zone",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "wiki_chunks": {
+   "required": [
+    "id",
+    "pillar",
+    "embedding",
+    "created_at"
+   ],
+   "properties": {
+    "id": {
+     "default": "gen_random_uuid()",
+     "description": "Note:\nThis is a Primary Key.<pk/>",
+     "format": "uuid",
+     "type": "string"
+    },
+    "pillar": {
+     "format": "text",
+     "type": "string"
+    },
+    "content_type": {
+     "format": "text",
+     "type": "string"
+    },
+    "title": {
+     "format": "text",
+     "type": "string"
+    },
+    "author": {
+     "format": "text",
+     "type": "string"
+    },
+    "key_frameworks": {
+     "format": "text",
+     "type": "string"
+    },
+    "embedding": {
+     "format": "public.halfvec(1536)",
+     "type": "string"
+    },
+    "created_at": {
+     "default": "now()",
+     "format": "timestamp with time zone",
+     "type": "string"
+    },
+    "chunk_index": {
+     "format": "int32",
+     "type": "integer"
+    },
+    "source_id": {
+     "description": "Note:\nThis is a Foreign Key to `wiki_sources.id`.<fk table='wiki_sources' column='id'/>",
+     "format": "uuid",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "user_concept_states": {
+   "required": [
+    "id",
+    "user_id",
+    "concept_id",
+    "state",
+    "updated_at"
+   ],
+   "properties": {
+    "id": {
+     "default": "gen_random_uuid()",
+     "description": "Note:\nThis is a Primary Key.<pk/>",
+     "format": "uuid",
+     "type": "string"
+    },
+    "user_id": {
+     "format": "uuid",
+     "type": "string"
+    },
+    "concept_id": {
+     "description": "Note:\nThis is a Foreign Key to `source_learning_maps.id`.<fk table='source_learning_maps' column='id'/>",
+     "format": "uuid",
+     "type": "string"
+    },
+    "state": {
+     "default": "encountered",
+     "enum": [
+      "encountered",
+      "partial",
+      "absorbed"
+     ],
+     "format": "public.concept_learning_state",
+     "type": "string"
+    },
+    "updated_at": {
+     "default": "now()",
+     "format": "timestamp with time zone",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  }
+ },
+ "rpc": [
+  "/rpc/match_wiki_chunks"
+ ]
+}

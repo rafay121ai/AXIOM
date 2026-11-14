@@ -7,6 +7,7 @@ import { createApp } from '../app.js'
 import { createFakeClock, createFakePushSender, createFakeSupabase } from '../testing/fakes.js'
 import { createNameLookup, createPushScheduler } from '../push/scheduler.js'
 import { KNOWLEDGE_ROWS, PEER_STORY, uuid } from './script.js'
+import { memoryIdle } from '../journey/memory/extractBeliefs.js'
 
 export const FOUNDER = { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', email: 'amina@example.com', user_metadata: { full_name: 'Amina Khan' } }
 export const OTHER = { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', email: 'sam@example.com', user_metadata: { full_name: 'Sam Lee' } }
@@ -30,14 +31,20 @@ export const UNIQUE = Object.freeze({
   outcome_author_links: [{ cols: ['peer_outcome_id'] }],
   notification_log: [{ cols: ['user_id', 'dedupe_key'] }, { cols: ['user_id', 'local_day', 'slot'], where: COUNTING }],
   push_tokens: [{ cols: ['token'] }],
+  memory_runs: [{ cols: ['source_kind', 'source_id', 'mode'], where: (r) => r.status !== 'failed' }],
   account_requests: [{ cols: ['user_id', 'kind'], where: (r) => r.status === 'queued' }],
 })
+
+// What the memory extraction ('beliefs') answers when nothing is scripted: nothing to remember.
+export const EMPTY_BELIEFS = Object.freeze({ new_beliefs: [], reinforce: [], weaken: [], supersede: [], traits: [], world: [], vocabulary: [], threads: [] })
+// The facts-only schema has no traits field: a reply with one is refused and asked for again.
+const { traits: _noTraits, ...EMPTY_FACTS } = EMPTY_BELIEFS
 
 // OpenAI scripted per step. Journey calls send a json_schema name
 // (first_reading, situation_turn, read, learn_reply, move, report, care_check):
 // each answers from its own queue, in order. A call with nothing scripted
 // throws and is recorded in `unexpected`. `optional` replies may stay unused.
-export function createStepOpenAI() {
+function createStepOpenAI() {
   const queues = new Map()
   const optional = new Set()
   const calls = []
@@ -55,12 +62,12 @@ export function createStepOpenAI() {
         async create(payload) {
           const step = payload.response_format?.json_schema?.name ?? 'unstructured'
           calls.push({ kind: 'chat', step, model: payload.model, payload })
-          const queue = queues.get(step)
-          if (!queue?.length) {
+          if (!queues.get(step)?.length && step.startsWith('beliefs')) queues.set(step, [step.includes('facts_only') ? EMPTY_FACTS : EMPTY_BELIEFS])
+          if (!queues.get(step)?.length) {
             unexpected.push(step)
             throw new Error(`StepOpenAI: nothing scripted for "${step}"`)
           }
-          const next = queue.shift()
+          const next = queues.get(step).shift()
           return {
             id: `fake-${calls.length}`,
             model: payload.model,
@@ -80,7 +87,7 @@ export function createStepOpenAI() {
 }
 
 // The Knowledge project: only the match_wiki_chunks search the server uses.
-export function createFakeKnowledge(rows = KNOWLEDGE_ROWS) {
+function createFakeKnowledge(rows = KNOWLEDGE_ROWS) {
   const calls = []
   return { calls, async rpc(name, args) { calls.push({ name, args }); return { data: rows, error: null } } }
 }
@@ -154,6 +161,8 @@ export async function createWorld({ seed = {} } = {}) {
     sender,
     scheduler,
     responses,
+    // Waits for memory work started after a response (extraction runs in the background).
+    idle: memoryIdle,
     rows,
     snapshot,
     founder: client('founder', 'token-founder'),

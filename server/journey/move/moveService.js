@@ -21,6 +21,8 @@ import { MOVE_SCHEMA, moveMessages } from './prompts/move.js'
 import { activeMoves, ACTIVE_STATUSES, NO_ROOM_LINE } from './room.js'
 import { reportDueAt, REPORT_WINDOW_MS } from './schedule.js'
 import { styleOf } from '../prompts/style.js'
+import { loadTrackRecord } from '../memory/trackRecord.js'
+import { loadBrief } from '../memory/brief.js'
 
 export const OPEN_STATUSES = Object.freeze(['draft', ...ACTIVE_STATUSES])
 const SWAPPABLE = new Set(['draft', 'committed'])
@@ -99,7 +101,7 @@ export function createMoves({ supabase, callStructured, clock, log = () => {} })
 
   // ── Writing a move ─────────────────────────────────────────────────────────
 
-  // Built from this situation only; the sign-up answers feed only the first reading (Rafay, Nov 9).
+  // This situation, plus the brief and track record from earlier ones; the conversation wins. Only the first reading uses the sign-up answers directly (Rafay, Nov 9).
   async function contextOf(conversation) {
     const [situationTurns, read, learnTurns] = await Promise.all([
       one(supabase.from('situation_turns').select().eq('situation_id', conversation.situation_id).order('seq', { ascending: true })),
@@ -132,7 +134,9 @@ export function createMoves({ supabase, callStructured, clock, log = () => {} })
   async function compose({ userId, conversation, kind, swap = null }) {
     const ctx = await contextOf(conversation)
     const style = await styleOf(supabase, userId)
+    const trackRecord = await loadTrackRecord(supabase, userId, log)
     const founderTexts = swap ? [...ctx.founderTexts, swap.reason] : ctx.founderTexts
+    const brief = await loadBrief(supabase, userId, ctx.founderTexts.join('\n'))
     let problems = null
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       let data
@@ -144,7 +148,7 @@ export function createMoves({ supabase, callStructured, clock, log = () => {} })
           maxCompletionTokens: 900,
           userId,
           usageContext: { step: 'move', kind, situation_id: conversation.situation_id },
-          messages: moveMessages({ ...ctx.prompt, ...(swap ? { swap } : {}), style }, problems),
+          messages: moveMessages({ ...ctx.prompt, ...(swap ? { swap } : {}), style, trackRecord, brief }, problems),
         }))
       } catch (err) {
         log('model call failed', err)

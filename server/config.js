@@ -11,6 +11,7 @@ const STEP_DEFAULTS = Object.freeze({
   move: CHAT_MODEL,
   care: CHAT_MODEL,
   report: CHAT_MODEL,
+  beliefs: UTILITY_MODEL,
 })
 
 export const MODELS = Object.freeze({ embedding: 'text-embedding-3-small' })

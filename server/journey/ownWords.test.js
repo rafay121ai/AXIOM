@@ -115,8 +115,8 @@ test('fallback states only what was picked, never infers, and reads naturally fo
 
 // Live Read fell back on Nov 2: it quoted the answers as it was shown them, joined, and once reworded them.
 test('a quote of the answers exactly as the model was shown them is accepted', () => {
-  const { answerTexts } = buildEvidence({ goal: { goal: 'My first customer', when: 'This month' }, tried: ['Talked to customers', 'Launched it'] })
-  const reading = { headline: 'You want "my first customer, this month".', body: 'You have "talked to customers, launched it" and still have no one paying, which is what to change first.', underlines: [] }
+  const { answerTexts } = buildEvidence({ goal: { goal: 'My first customer', when: 'This month' }, strengths: { a: ['Selling', 'Not quitting'], b: [] } })
+  const reading = { headline: 'You want "my first customer, this month".', body: 'You are better at "selling, not quitting" and still have no one paying, which is what to change first.', underlines: [] }
   const { problems } = checkFirstReading({ reading, answerTexts })
   assert.ok(!problems.some((p) => p.startsWith('quoted words')), problems.join('; '))
 })

@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Axiom: What Axiom thinks (sample)</title>
+<style>
+  /* Tokens copied from mock-onboarding-v2.html. Nothing new. */
+  :root {
+    --ink-rgb: 234,236,238;
+    --hl-rgb: 205,178,126; --hl2-rgb: 168,142,94;
+    --blur: 42px; --tint: .1; --edge: .2; --bg: #050505;
+    --serif: ui-serif, "New York", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --sans: -apple-system, "SF Pro Text", "Inter", system-ui, "Segoe UI", sans-serif;
+    --ink: rgb(var(--ink-rgb)); --hl: linear-gradient(90deg, rgb(var(--hl-rgb)), rgb(var(--hl2-rgb)));
+    --ease: cubic-bezier(.2,.8,.2,1);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: #101011; color: #b9b8b3; font-family: var(--sans); padding: 28px 20px; }
+  button { font: inherit; color: inherit; }
+  .wrap { max-width: 980px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 56px; justify-content: center; align-items: flex-start; }
+
+  /* dev panel (not part of the app) */
+  .side { width: 340px; font-size: 13.5px; line-height: 1.55; }
+  .side h1 { font-family: var(--serif); font-weight: 500; font-size: 24px; margin: 0 0 6px; color: #ecebe6; }
+  .side h3 { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #8e8d88; margin: 22px 0 10px; font-weight: 500; }
+  .jump { display: flex; flex-wrap: wrap; gap: 6px; }
+  .jump button { font-size: 12px; color: #cfcdc6; background: transparent; border: 1px solid #2c2c2e; border-radius: 99px; padding: 6px 11px; cursor: pointer; }
+  .jump button:hover { border-color: #8a8984; } .jump button.on { background: #242426; border-color: #8a8984; color: #f2f1ec; }
+  .why { border: 1px solid #2a2a2c; border-radius: 14px; padding: 13px 15px; background: #121213; }
+  .why p { margin: 6px 0 0; color: #a9a8a2; } .why b { color: #e4e1d8; font-weight: 500; }
+
+  /* phone */
+  .phone { width: 390px; height: 840px; order: -1; position: relative; border-radius: 52px; border: 1px solid #2a2a2c; overflow: hidden; background: var(--bg); color: var(--ink); flex: none; box-shadow: 0 40px 100px rgba(0,0,0,.55); }
+  .notch { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 112px; height: 28px; border-radius: 99px; background: #000; z-index: 30; }
+  .glass { background: rgba(var(--ink-rgb), var(--tint)); -webkit-backdrop-filter: blur(var(--blur)) saturate(140%); backdrop-filter: blur(var(--blur)) saturate(140%); border: 1px solid rgba(var(--ink-rgb), var(--edge)); }
+  .view { position: absolute; inset: 0; z-index: 1; display: none; flex-direction: column; overflow: hidden; }
+  .view.on { display: flex; animation: in .5s cubic-bezier(.2,.7,.2,1) both; }
+  @keyframes in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  /* wash (from .hmwash) */
+  .wash { position: absolute; inset: 0; pointer-events: none; background:
+      radial-gradient(130% 58% at 50% 108%, rgba(205,178,126,.26), rgba(205,178,126,0) 66%),
+      radial-gradient(100% 40% at 50% -8%, rgba(205,178,126,.10), rgba(205,178,126,0) 72%),
+      linear-gradient(180deg, rgba(168,142,94,.05), rgba(0,0,0,0) 50%); }
+
+  /* Construction grid: 32px, 1px lines at 3.5%, a point at every 4th crossing, fading at top and bottom,
+     drifting one cell in 60s. Here the lines also DRAW IN when the screen opens (vertical lines top to bottom,
+     horizontal lines left to right, then the points). After that it is the normal still grid. */
+  .grid { position: absolute; inset: 0; pointer-events: none; overflow: hidden;
+    -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 22%, #000 70%, transparent 100%);
+            mask-image: linear-gradient(180deg, transparent 0, #000 22%, #000 70%, transparent 100%); }
+  .grid i { position: absolute; inset: -32px 0 0 -32px; animation: drift 60s linear infinite; }
+  .grid .gv { background-image: linear-gradient(90deg, rgba(var(--hl-rgb), .035) 1px, transparent 1px); background-size: 32px 32px; }
+  .grid .gh { background-image: linear-gradient(180deg, rgba(var(--hl-rgb), .035) 1px, transparent 1px); background-size: 32px 32px; }
+  .grid .gd { background-image:
+      radial-gradient(circle at 0 0, rgba(var(--hl-rgb), .09) 1.2px, transparent 1.6px),
+      radial-gradient(circle at 32px 32px, rgba(var(--hl-rgb), .09) 1.2px, transparent 1.6px),
+      radial-gradient(circle at 64px 64px, rgba(var(--hl-rgb), .09) 1.2px, transparent 1.6px),
+      radial-gradient(circle at 96px 96px, rgba(var(--hl-rgb), .09) 1.2px, transparent 1.6px);
+    background-size: 128px 128px; }
+  @keyframes drift { to { transform: translate(32px, 32px); } }
+  .grid .gv { clip-path: inset(0 0 0 0); animation: drift 60s linear infinite, gdown 1.4s cubic-bezier(.3,.6,.2,1) both; }
+  .grid .gh { animation: drift 60s linear infinite, gright 1.4s cubic-bezier(.3,.6,.2,1) .15s both; }
+  .grid .gd { animation: drift 60s linear infinite, gfade 1.2s ease .8s both; }
+  @keyframes gdown { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0 0 0 0); } }
+  @keyframes gright { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+  @keyframes gfade { from { opacity: 0; } to { opacity: 1; } }
+
+  /* header (from .sthead) */
+  .sthead { position: relative; z-index: 2; background: linear-gradient(#050505 72%, rgba(5,5,5,0)); display: flex; align-items: center; justify-content: space-between; padding: 56px 18px 10px; }
+  .sthead span.t { font-family: var(--serif); font-size: 20px; color: #f4f4f2; }
+  .stback { background: none; border: 0; width: 44px; height: 44px; border-radius: 50%; color: rgba(var(--ink-rgb), .85); font-size: 28px; line-height: 1; cursor: pointer; padding-bottom: 4px; } .stback:hover { background: rgba(var(--ink-rgb), .08); }
+  .samplemark { width: 44px; text-align: right; font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: rgba(var(--hl-rgb), .95); }
+  :focus-visible { outline: 1px solid rgba(var(--hl-rgb), .8); outline-offset: 3px; border-radius: 6px; }
+
+  /* body */
+  .mbody { position: relative; z-index: 1; flex: 1; overflow-y: auto; padding: 0 0 56px; scrollbar-width: none; } .mbody::-webkit-scrollbar { display: none; }
+  .sum { font-family: var(--serif); font-size: 22px; line-height: 1.35; color: #f4f4f2; margin: 6px 26px 0; animation: fade 1s cubic-bezier(.2,.7,.2,1) .3s both; }
+  .sum .num { font-variant-numeric: tabular-nums; }
+  .sub { font-size: 13px; line-height: 1.5; color: rgba(var(--ink-rgb), .5); margin: 10px 26px 22px; animation: fade 1s cubic-bezier(.2,.7,.2,1) .5s both; }
+  @keyframes fade { from { opacity: 0; filter: blur(6px); transform: translateY(4px); } to { opacity: 1; filter: blur(0); transform: none; } }
+  .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  .ms { position: relative; padding: 16px 24px 4px; overflow: hidden; transition: height .55s var(--ease), padding .55s var(--ease), opacity .4s; }
+  .ms::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px; background: rgba(var(--ink-rgb), .14); transform-origin: left; animation: draw .9s var(--ease) var(--sd, 0ms) both; }
+  @keyframes draw { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  .msh { display: flex; align-items: center; gap: 9px; margin-bottom: 4px; animation: fade 1s cubic-bezier(.2,.7,.2,1) var(--sd, 0ms) both; }
+  .msh svg { width: 16px; height: 16px; fill: none; stroke: rgba(var(--hl-rgb), .85); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  .msh h2 { margin: 0; font-weight: 400; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: rgba(var(--ink-rgb), .45); }
+  .ml { list-style: none; margin: 0; padding: 0; }
+
+  .mi { position: relative; overflow: hidden; animation: fade 1s cubic-bezier(.2,.7,.2,1) var(--d, 0ms) both; }
+  .mi + .mi { border-top: 1px solid rgba(var(--ink-rgb), .08); }
+  .mim { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 13px 0; background: none; border: 0; text-align: left; cursor: pointer; color: rgba(var(--ink-rgb), .92); transition: color .2s; }
+  .mim:hover { color: #fff; }
+  .mit { flex: 1; font-family: var(--serif); font-size: 17px; line-height: 25px; }
+  .mit .w { display: inline-block; white-space: pre; transition: opacity .6s ease, filter .6s ease, transform .6s ease; transition-delay: var(--wd, 0ms); }
+  .mit .w.gone { opacity: 0; filter: blur(6px); transform: translateY(-3px); }
+  .chev { color: rgba(var(--ink-rgb), .35); font-size: 19px; transition: transform .35s var(--ease), color .2s; }
+  .mi.open .chev { transform: rotate(90deg); color: rgba(var(--hl-rgb), .9); }
+
+  /* the receipt: unfolds under the line, a gold hairline draws across first */
+  .rc { display: grid; grid-template-rows: 0fr; visibility: hidden; transition: grid-template-rows .45s var(--ease), visibility 0s linear .45s; }
+  .mi.open .rc { grid-template-rows: 1fr; visibility: visible; transition-delay: 0s; }
+  .rci { min-height: 0; overflow: hidden; position: relative; }
+  .rci::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px; background: linear-gradient(90deg, rgba(var(--hl-rgb), .7), rgba(var(--hl-rgb), 0)); transform: scaleX(0); transform-origin: left; transition: transform .6s var(--ease); }
+  .mi.open .rci::before { transform: scaleX(1); transition-delay: .1s; }
+  .rcb { padding: 14px 0 6px; opacity: 0; transition: opacity .35s; }
+  .mi.open .rcb { opacity: 1; transition-delay: .25s; }
+  .rcl { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: rgba(var(--ink-rgb), .45); margin-bottom: 7px; }
+  .rcq { font-size: 14.5px; line-height: 1.5; color: rgba(var(--ink-rgb), .7); margin: 0; }
+  .rcd { font-size: 12px; color: rgba(var(--ink-rgb), .5); margin: 4px 0 0; }
+  .rca { display: flex; gap: 8px; margin: 4px 0 0 -8px; }
+  .ta { background: none; border: 0; min-height: 44px; padding: 0 8px; cursor: pointer; display: flex; align-items: center; }
+  .ta span { font-size: 14px; letter-spacing: .13px; color: rgba(var(--ink-rgb), .5); border-bottom: 1px solid transparent; padding: 2px 0; transition: color .2s, border-color .2s; }
+  .ta:hover span, .ta:active span { color: rgba(var(--ink-rgb), .9); border-bottom-color: rgba(var(--ink-rgb), .4); }
+
+  /* empty state */
+  .empty { position: absolute; inset: 0; z-index: 1; display: none; align-items: center; justify-content: center; padding: 0 44px 80px; text-align: center; font-family: var(--serif); font-size: 21px; line-height: 1.5; color: rgba(var(--ink-rgb), .85); }
+  .empty p { margin: 0; animation: fade 1s cubic-bezier(.2,.7,.2,1) .4s both; }
+  .isempty .empty { display: flex; } .isempty .mbody { visibility: hidden; }
+  .mocknote { font-size: 11.5px; letter-spacing: .02em; color: rgba(var(--ink-rgb), .38); text-align: center; border: 1px dashed rgba(var(--ink-rgb), .2); border-radius: 12px; padding: 12px 14px; margin: 30px 24px 0; }
+
+  /* confirmation (floats, so it is glass) */
+  .toast { position: absolute; left: 50%; bottom: 34px; z-index: 40; transform: translate(-50%, 10px); opacity: 0; pointer-events: none; padding: 12px 18px; border-radius: 16px; font-size: 14px; color: rgba(var(--ink-rgb), .92); white-space: nowrap; transition: opacity .3s, transform .3s var(--ease); }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  /* the menu (drawer) with the new row. Copied from the home drawer. */
+  .hm { background: var(--bg); }
+  .hmmain { position: absolute; inset: 0; transform: translateX(84%); border-radius: 28px; box-shadow: -20px 0 50px rgba(0,0,0,.6); background: var(--bg); display: flex; align-items: center; justify-content: center; font-family: var(--serif); font-size: 22px; color: rgba(var(--ink-rgb), .4); }
+  .hmdrawer { position: absolute; top: 0; bottom: 0; left: 0; width: 84%; display: flex; flex-direction: column; padding-top: 54px; background: radial-gradient(120% 45% at 0% 104%, rgba(205,178,126,.10), rgba(205,178,126,0) 62%), #070707; }
+  .dtop { padding: 4px 22px 14px; } .dtop svg { width: 28px; height: 28px; opacity: .9; display: block; }
+  .dnew { display: flex; align-items: center; gap: 12px; margin: 0 14px 14px; padding: 12px; background: none; border: 0; border-radius: 12px; color: var(--ink); font-size: 15.5px; cursor: pointer; text-align: left; }
+  .dnew span { width: 28px; height: 28px; border-radius: 50%; border: 1px solid rgba(var(--ink-rgb), .35); display: grid; place-items: center; font-size: 18px; line-height: 1; }
+  .dscroll { flex: 1; overflow-y: auto; border-top: 1px solid rgba(var(--ink-rgb), .14); }
+  .dsec { padding: 16px 22px 8px; border-bottom: 1px solid rgba(var(--ink-rgb), .14); }
+  .dlab { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: rgba(var(--ink-rgb), .45); margin-bottom: 6px; }
+  .drow { display: flex; align-items: center; gap: 11px; width: 100%; min-height: 44px; padding: 9px 0; background: none; border: 0; text-align: left; cursor: pointer; color: rgba(var(--ink-rgb), .85); font-size: 15px; line-height: 1.35; } .drow:hover { color: #fff; }
+  .drow i { width: 6px; height: 6px; border-radius: 50%; background: rgb(var(--hl-rgb)); box-shadow: 0 0 0 4px rgba(var(--hl-rgb), .16); flex: none; }
+  .drow .chev { margin-left: auto; }
+  .drow.newrow { outline-offset: -2px; }
+  .dfoot { display: flex; align-items: center; gap: 12px; padding: 14px 22px 26px; border-top: 1px solid rgba(var(--ink-rgb), .14); }
+  .dfoot .av { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--hl); color: #0b0907; font-weight: 600; font-size: 14px; } .dfoot .dn { flex: 1; font-size: 15px; } .dfoot small { display: block; font-size: 12px; color: rgba(var(--ink-rgb), .5); margin-top: 2px; }
+
+  /* reduced motion: no drawing, no drift, no blur, no tweening. Everything is simply there. */
+  html.rm *, html.rm *::before, html.rm *::after { animation: none !important; transition: none !important; }
+
+  /* an actual iPhone: fill the screen */
+  @media (max-width: 460px) {
+    body { padding: 0; background: var(--bg); } .side { display: none; }
+    .phone { width: 100vw; height: 100vh; height: 100dvh; border-radius: 0; border: 0; box-shadow: none; } .notch { display: none; }
+    .sthead { padding-top: 48px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="side">
+    <h1>What Axiom thinks</h1>
+    <div class="jump" role="group" aria-label="Prototype controls">
+      <button id="cReplay">Replay open</button>
+      <button id="cEmpty">Empty state</button>
+      <button id="cReset">Restore sample</button>
+      <button id="cMenu">From the menu</button>
+      <button id="cRm" aria-pressed="false">Reduce motion: off</button>
+    </div>
+    <h3>How to try it</h3>
+    <div class="why">
+      <p><b>Tap any line</b> to unfold where it comes from. <b>Wrong</b> or <b>Outdated</b> dissolves it line by line and the list closes the gap. Both are permanent.</p>
+      <p>Everything is sample data. <code>?empty=1</code> opens the empty state. The system setting "reduce motion" is respected; the button above simulates it.</p>
+    </div>
+  </div>
+
+  <div class="phone" id="phone">
+    <div class="notch"></div>
+
+    <!-- the menu with the new row -->
+    <div class="view hm" id="menu">
+      <div class="hmmain">Home</div>
+      <div class="hmdrawer">
+        <div class="dtop"><svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="gl2"><stop offset="0" stop-color="rgb(205,178,126)"/><stop offset="1" stop-color="rgb(168,142,94)"/></linearGradient></defs><g fill="none" stroke="url(#gl2)" stroke-width="3.5"><path d="M 8,84 H 28 C 28,55 35,36 50,26 C 55,23 54,18 50,11 C 45,22 40,27 31,33 C 18,43 13,60 13,84"/><path d="M 92,84 H 72 C 72,55 65,36 50,26 C 55,23 54,18 50,11 C 55,22 60,27 69,33 C 82,43 87,60 87,84"/></g></svg></div>
+        <button class="dnew"><span>+</span>Start something new</button>
+        <div class="dscroll">
+          <div class="dsec"><div class="dlab">What's open</div><button class="drow"><i></i>Today: ask the clinics for a call</button></div>
+          <div class="dsec"><div class="dlab">History</div><button class="drow">Why the clinics went quiet</button><button class="drow">Pricing for the second plan</button><button class="drow" style="color:rgba(214,216,219,.6)">See all history ›</button></div>
+          <div class="dsec"><button class="drow newrow" id="goMem">What Axiom thinks<span class="chev">›</span></button></div>
+        </div>
+        <div class="dfoot"><div class="av">R</div><div class="dn">Rafay<small>Settings</small></div><span class="chev">›</span></div>
+      </div>
+    </div>
+
+    <!-- the screen -->
+    <div class="view on" id="mem">
+      <div class="wash"></div>
+      <div class="grid" aria-hidden="true"><i class="gv"></i><i class="gh"></i><i class="gd"></i></div>
+      <div class="sthead"><button class="stback" id="back" aria-label="Back">‹</button><span class="t" role="heading" aria-level="1">What Axiom thinks</span><span class="samplemark">Sample</span></div>
+      <div class="mbody" id="body">
+        <p class="sum" id="sum"><span class="vh" id="sumText"></span><span aria-hidden="true">Axiom has learned <span class="num" id="num">0</span> <span id="things">things</span> about you and your work.</span></p>
+        <p class="sub">Tap a line to see where it comes from. If it is wrong or out of date, mark it and Axiom stops using it.</p>
+        <div id="sections"></div>
+        <p class="mocknote">Mock only. Sample data: every line, quote and date here is made up. Real ones come from the founder's own words and moves.</p>
+      </div>
+      <div class="empty" id="emptyBox"><p>Axiom hasn't learned anything about you yet.</p></div>
+      <div class="toast glass" id="toast" role="status" aria-live="polite"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const html = document.documentElement;
+  const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+  let simRm = false;
+  const syncRm = () => html.classList.toggle('rm', mq.matches || simRm);
+  mq.addEventListener && mq.addEventListener('change', syncRm); syncRm();
+  const reduce = () => html.classList.contains('rm');
+
+  // SAMPLE data in the shape GET /api/memory returns: { items: [{ id, table, group, text, receipt: { text, at } | null }] }
+  const SAMPLE = [
+    { id: 'a1', table: 'founder_traits', group: 'decide', text: 'You decide fast and adjust later.', receipt: { text: '"I\'ll just send it and fix the wording after."', at: '2026-11-03' } },
+    { id: 'a2', table: 'founder_traits', group: 'decide', text: 'You look at the numbers before you decide.', receipt: { text: '"11 of 40 trial users came back in week two. That is what I\'m going on."', at: '2026-10-27' } },
+    { id: 'a3', table: 'founder_traits', group: 'decide', text: 'When something fails, you change the approach straight away.', receipt: { text: '"Nobody picked up. Switching to email tomorrow."', at: '2026-11-05' } },
+    { id: 'b1', table: 'founder_traits', group: 'work', text: 'You finish small moves the same day. Moves over an hour wait.', receipt: { text: 'Your move: Rewrite the pricing page', at: '2026-11-05' } },
+    { id: 'b2', table: 'founder_beliefs', group: 'work', text: 'You want the short version first and the detail only when you ask.', receipt: { text: '"Give me the short one. I\'ll ask if I need more."', at: '2026-10-29' } },
+    { id: 'c1', table: 'founder_beliefs', group: 'business', text: 'You sell scheduling software to small dental clinics.', receipt: { text: '"Scheduling software for dental clinics with 2 to 5 chairs."', at: '2026-10-24' } },
+    { id: 'c2', table: 'founder_beliefs', group: 'business', text: 'You have 3 paying clinics and want 10 by March.', receipt: { text: '"3 clinics pay us now. The target is 10 by March."', at: '2026-11-03' } },
+    { id: 'd1', table: 'founder_world', group: 'people', text: 'Dana is your cofounder and builds the booking flow.', receipt: { text: '"Dana (my cofounder) is building the booking flow."', at: '2026-10-24' } },
+    { id: 'd2', table: 'founder_vocabulary', group: 'people', text: 'When you say "the clinics", you mean the 14 on your first list.', receipt: { text: '"Sent the demo to the clinics (the 14 from my first list)."', at: '2026-10-31' } },
+    { id: 'e1', table: 'founder_threads', group: 'open', text: 'You are working out whether to charge per clinic or per chair.', receipt: { text: '"Per clinic or per chair? Not sure yet."', at: '2026-11-06' } },
+  ];
+  const GROUPS = [
+    ['decide', 'How you decide', '<path d="M12 20v-8M12 12 6 5M12 12l6-7"/>'],
+    ['work', 'How you work', '<path d="M4 18h5v-5h5V8h6"/>'],
+    ['business', 'Your business', '<path d="M5 19V8h14v11M9 8V5h6v3"/>'],
+    ['people', 'People and words', '<circle cx="9" cy="9" r="3"/><circle cx="17" cy="10" r="2.2"/><path d="M3.5 19c.6-3 2.7-4.5 5.5-4.5s4.9 1.5 5.5 4.5"/>'],
+    ['open', 'Still open', '<path d="M18 8a7 7 0 1 0 1 6"/>'],
+  ];
+  const TODAY = new Date('2026-11-10');
+  const fmt = (iso) => { const d = new Date(iso); const o = { day: 'numeric', month: 'short' }; if (d.getFullYear() !== TODAY.getFullYear()) o.year = 'numeric'; return d.toLocaleDateString('en-GB', o); };
+
+  let items = [], total = 0, shown = 0, numTimer = 0, toastTimer = 0;
+  const sections = $('sections');
+
+  function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+  function setCount(n, animate) {
+    cancelAnimationFrame(numTimer);
+    $('things').textContent = n === 1 ? 'thing' : 'things';
+    $('sumText').textContent = `Axiom has learned ${n} ${n === 1 ? 'thing' : 'things'} about you and your work.`;
+    if (!animate || reduce()) { shown = n; $('num').textContent = n; return; }
+    const from = shown, t0 = performance.now(), dur = from === 0 ? 900 : 400;
+    const step = (t) => { const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3); shown = Math.round(from + (n - from) * e); $('num').textContent = shown; if (k < 1) numTimer = requestAnimationFrame(step); };
+    numTimer = requestAnimationFrame(step);
+  }
+
+  function build() {
+    sections.textContent = '';
+    let idx = 0;
+    GROUPS.forEach(([key, label, mark]) => {
+      const list = items.filter((i) => i.group === key);
+      if (!list.length) return;
+      const sec = el('section', 'ms'); sec.dataset.group = key;
+      const first = 900 + idx * 95;
+      sec.style.setProperty('--sd', Math.max(0, first - 260) + 'ms');
+      const h = el('div', 'msh');
+      h.insertAdjacentHTML('beforeend', `<svg viewBox="0 0 24 24" aria-hidden="true">${mark}</svg>`);
+      const h2 = el('h2', null, label); h2.id = 'h-' + key; h.appendChild(h2);
+      sec.setAttribute('aria-labelledby', h2.id);
+      const ul = el('ul', 'ml');
+      list.forEach((it) => {
+        const li = el('li', 'mi'); li.dataset.id = it.id; li.style.setProperty('--d', (900 + idx * 95) + 'ms'); idx++;
+        const m = el('button', 'mim'); m.type = 'button'; m.setAttribute('aria-expanded', 'false'); m.setAttribute('aria-controls', 'r-' + it.id);
+        m.append(el('span', 'mit', it.text), el('span', 'chev', '›'));
+        m.querySelector('.chev').setAttribute('aria-hidden', 'true');
+        const rc = el('div', 'rc'); rc.id = 'r-' + it.id;
+        const rci = el('div', 'rci'), rcb = el('div', 'rcb');
+        rcb.append(el('div', 'rcl', 'Where this comes from'));
+        if (it.receipt) { rcb.append(el('p', 'rcq', it.receipt.text), el('p', 'rcd', fmt(it.receipt.at))); }
+        else rcb.append(el('p', 'rcq', 'Axiom has no note of where this came from.'));
+        const act = el('div', 'rca');
+        [['wrong', 'Wrong'], ['outdated', 'Outdated']].forEach(([reason, name]) => {
+          const b = el('button', 'ta'); b.type = 'button'; b.setAttribute('aria-label', `Mark as ${name.toLowerCase()}: ${it.text}`);
+          b.append(el('span', null, name)); b.addEventListener('click', () => remove(li, it, reason)); act.appendChild(b);
+        });
+        rcb.appendChild(act); rci.appendChild(rcb); rc.appendChild(rci);
+        m.addEventListener('click', () => toggle(li, m));
+        li.append(m, rc); ul.appendChild(li);
+      });
+      sec.append(h, ul); sections.appendChild(sec);
+    });
+  }
+
+  function toggle(li, m) {
+    const open = !li.classList.contains('open');
+    sections.querySelectorAll('.mi.open').forEach((o) => { o.classList.remove('open'); o.querySelector('.mim').setAttribute('aria-expanded', 'false'); });
+    if (open) {
+      li.classList.add('open'); m.setAttribute('aria-expanded', 'true');
+      setTimeout(() => li.scrollIntoView({ block: 'nearest', behavior: reduce() ? 'auto' : 'smooth' }), reduce() ? 0 : 300);
+    }
+  }
+
+  // Split the sentence into words, group them by rendered line, and dissolve one line at a time.
+  function dissolveLines(li) {
+    const t = li.querySelector('.mit'), words = t.textContent.match(/\S+\s*/g) || [];
+    t.textContent = '';
+    const spans = words.map((w) => { const s = el('span', 'w', w); t.appendChild(s); return s; });
+    let line = -1, top = null;
+    spans.forEach((s) => { if (top === null || Math.abs(s.offsetTop - top) > 4) { line++; top = s.offsetTop; } s.style.setProperty('--wd', line * 170 + 'ms'); });
+    li.querySelector('.rc').style.opacity = 0; li.querySelector('.rc').style.transition = 'opacity .3s';
+    requestAnimationFrame(() => spans.forEach((s) => s.classList.add('gone')));
+    return (line + 1) * 170 + 650;
+  }
+
+  function collapse(node, ms) {
+    return new Promise((done) => {
+      if (reduce()) return done();
+      node.style.height = node.offsetHeight + 'px'; node.getBoundingClientRect();
+      node.style.transition = `height .55s var(--ease), padding .55s var(--ease), opacity .4s ${ms ? ms : 0}ms`;
+      node.style.height = '0px'; node.style.paddingTop = '0px'; node.style.paddingBottom = '0px'; node.style.opacity = '0';
+      setTimeout(done, 580);
+    });
+  }
+
+  async function remove(li, it, reason) {
+    const next = li.nextElementSibling || li.previousElementSibling, sec = li.closest('.ms');
+    li.querySelectorAll('button').forEach((b) => (b.disabled = true));
+    items = items.filter((x) => x.id !== it.id); total = items.length;
+    // the real app: POST /api/memory/:table/:id/wrong { reason }  ->  { ok: true }
+    if (!reduce()) { await new Promise((r) => setTimeout(r, dissolveLines(li))); }
+    const last = !li.parentElement.querySelector('.mi:not([data-id="' + it.id + '"])');
+    await collapse(last ? sec : li);
+    (last ? sec : li).remove();
+    setCount(total, true);
+    say('Removed. Axiom will not use it again.');
+    const f = (next && next.isConnected && next.querySelector('.mim')) || sections.querySelector('.mim') || $('back');
+    f.focus({ preventScroll: true });
+    if (!total) { $('mem').classList.add('isempty'); }
+  }
+
+  function say(msg) {
+    const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+  }
+
+  // Open: restart the grid drawing and the entrance. Empty: one plain line.
+  function open(list) {
+    const v = $('mem'); items = list.slice(); total = items.length;
+    v.classList.remove('isempty'); $('toast').classList.remove('show');
+    v.querySelectorAll('.grid i, .sum, .sub').forEach((n) => { n.style.animation = 'none'; n.offsetHeight; n.style.animation = ''; });
+    $('body').scrollTop = 0; shown = 0;
+    if (!total) { v.classList.add('isempty'); sections.textContent = ''; const e = $('emptyBox').firstElementChild; e.style.animation = 'none'; e.offsetHeight; e.style.animation = ''; return; }
+    build(); setCount(total, true);
+  }
+
+  function show(id) { document.querySelectorAll('.view').forEach((v) => v.classList.toggle('on', v.id === id)); }
+
+  $('goMem').addEventListener('click', () => { show('mem'); open(SAMPLE); });
+  $('back').addEventListener('click', () => show('menu'));
+  $('cReplay').addEventListener('click', () => { show('mem'); open(SAMPLE); });
+  $('cReset').addEventListener('click', () => { show('mem'); open(SAMPLE); });
+  $('cEmpty').addEventListener('click', () => { show('mem'); open([]); });
+  $('cMenu').addEventListener('click', () => show('menu'));
+  $('cRm').addEventListener('click', (e) => { simRm = !simRm; syncRm(); e.target.textContent = 'Reduce motion: ' + (simRm ? 'on' : 'off'); e.target.setAttribute('aria-pressed', simRm); });
+
+  open(new URLSearchParams(location.search).get('empty') === '1' ? [] : SAMPLE);
+})();
+</script>
+</body>
+</html>

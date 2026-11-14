@@ -10,6 +10,8 @@ import { READ_TALK_SCHEMA, readTalkMessages } from './prompts/readTalk.js'
 import { createRead } from './theRead.js'
 import { BANNED_PHRASES, norm, wordRx } from './ownWords.js'
 import { styleOf } from './prompts/style.js'
+import { loadTrackRecord } from './memory/trackRecord.js'
+import { loadBrief } from './memory/brief.js'
 
 export const MAX_NEW_SITUATIONS_PER_DAY = 5
 export const TEXT_MAX = 2000
@@ -108,6 +110,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
   async function assess({ userId, situation, turns, followUpsLeft }) {
     const conversation = turns.filter((t) => !t.filler).map((t) => ({ role: t.role, text: t.text }))
     const sources = founderTextsOf(turns)
+    const brief = await loadBrief(supabase, userId, sources.join('\n'))
     let problems = null
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       try {
@@ -118,7 +121,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
           maxCompletionTokens: 400,
           userId,
           usageContext: { step: 'followup', kind: 'situation_turn', situation_id: situation.id },
-          messages: situationMessages({ conversation, followUpsLeft }, problems),
+          messages: situationMessages({ conversation, followUpsLeft, brief }, problems),
         })
         const base = { topic: data.topic, title: data.title.trim() }
         if (followUpsLeft <= 0) return { ...base, enough: true, question: null }
@@ -285,6 +288,8 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
       situationId: situation.id,
       conversation: turns.filter((t) => !t.filler).map((t) => ({ role: t.role, text: t.text })),
       style: await styleOf(supabase, userId),
+      trackRecord: await loadTrackRecord(supabase, userId, log),
+      brief: await loadBrief(supabase, userId, founderTextsOf(turns).join('\n')),
       deps: { callStructured, userId, log },
     })
     const inserted = await supabase.from('reads').insert({
@@ -348,6 +353,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     const talk = [{ role: 'founder', text: row.closing_answer }, ...turns.filter(isReadTalk).map((t) => ({ role: t.role, text: t.text }))]
     const situationTalk = turns.filter((t) => !t.filler && !isReadTalk(t)).map((t) => ({ role: t.role, text: t.text }))
     const sources = [...founderTextsOf(turns), row.closing_answer]
+    const brief = await loadBrief(supabase, userId, sources.join('\n'))
     let problems = null
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       try {
@@ -358,7 +364,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
           maxCompletionTokens: 400,
           userId,
           usageContext: { step: 'followup', kind: 'read_talk', situation_id: situation.id },
-          messages: readTalkMessages({ situation: situationTalk, read: { headline: row.headline, body: row.body, closing_question: row.closing_question }, talk, questionsLeft: MAX_READ_QUESTIONS - asked }, problems),
+          messages: readTalkMessages({ situation: situationTalk, read: { headline: row.headline, body: row.body, closing_question: row.closing_question }, talk, questionsLeft: MAX_READ_QUESTIONS - asked, brief }, problems),
         })
         if (data.asked_to_learn) return null
         if (asked >= MIN_READ_QUESTIONS && data.knows_goal && data.knows_blocker && data.knows_detail) return null

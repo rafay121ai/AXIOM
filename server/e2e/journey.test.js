@@ -8,7 +8,7 @@ import { validateExperimentQuality } from '../experimentQuality.js'
 import { experimentOf } from '../journey/move/moveChecks.js'
 import { AXIOM_LINES } from '../journey/learn/moveOffer.js'
 import { AFTER_STORY_VERSION, SHARED_LINE, WITHDRAWN_LINE } from '../journey/report/wording.js'
-import { MODELS, STEPS } from '../config.js'
+import { MODELS, STEPS, modelForStep } from '../config.js'
 import { FOUNDER, OTHER, createWorld, keysIn, routesOf } from './harness.js'
 import {
   CHECK_IN_ANSWER, DISTRESS, FABRICATED_QUOTE, FIRST_READING, FOLLOWUP_ANSWER, FULL_ANSWERS, LEARN_AFTER_CARE, LEARN_OFFER,
@@ -31,10 +31,10 @@ test('a founder walks the whole journey', async (t) => {
 
   try {
     // ── Sign-up ───────────────────────────────────────────────────────────────
-    await t.test('sign-up: 13 answers saved one by one, resumed mid-way', async () => {
+    await t.test('sign-up: 14 answers saved one by one, resumed mid-way', async () => {
       const first = await founder('GET', '/api/signup')
       assert.equal(first.status, 200)
-      assert.equal(first.body.questions.length, 13)
+      assert.equal(first.body.questions.length, 14)
       assert.equal(first.body.next, 'stage')
       assert.equal(first.body.complete, false)
 
@@ -59,12 +59,12 @@ test('a founder walks the whole journey', async (t) => {
       assert.equal(last.body.complete, true)
       assert.equal(last.body.next, null)
       const [profile] = rows('founder_profiles')
-      assert.equal(Object.keys(profile.signup_answers).length, 13)
+      assert.equal(Object.keys(profile.signup_answers).length, 14)
       assert.equal(profile.country, 'Pakistan')
       assert.equal(modelCalls(), 0)
     })
 
-    await t.test('first reading from the 13 answers', async () => {
+    await t.test('first reading from the 14 answers', async () => {
       openai.script('first_reading', FIRST_READING)
       const res = await founder('POST', '/api/first-reading')
       assert.equal(res.status, 200)
@@ -93,7 +93,7 @@ test('a founder walks the whole journey', async (t) => {
       // The model still wants a third question; the server refuses it.
       const third = await founder('POST', `/api/situations/${ids.situation}/turn`, { text: TURN_3, client_turn_id: uuid(3) })
       assert.deepEqual([third.body.status, third.body.reply, third.body.follow_up_count, third.body.follow_ups_left], ['ready', null, 2, 0])
-      const lastPrompt = JSON.parse(openai.chatCalls('situation_turn').at(-1).payload.messages[1].content)
+      const lastPrompt = JSON.parse(openai.chatCalls('situation_turn').at(-1).payload.messages.findLast((m) => m.role === 'user').content)
       assert.equal(lastPrompt.follow_ups_left, 0)
       assert.equal(rows('situations')[0].follow_up_count, 2)
       assert.deepEqual(rows('situation_turns').map((r) => r.role), ['founder', 'axiom', 'founder', 'axiom', 'founder'])
@@ -288,6 +288,21 @@ test('a founder walks the whole journey', async (t) => {
 
       const story = await founder('GET', `/api/reports/${ids.report}/story`)
       assert.deepEqual(story.body.story, { story: PEER_STORY.story, lesson: PEER_STORY.lesson, outcome: 'done', stage: 'validating' })
+    })
+
+    await t.test('memory: one extraction for the report, nothing written when the model finds nothing, none on a repeat', async () => {
+      await w.idle()
+      assert.equal(openai.chatCalls('beliefs').length, 1)
+      assert.equal(openai.chatCalls('beliefs')[0].model, modelForStep('beliefs', {}))
+      // The sign-up seed (code only, self-reported) wrote its rows earlier; the extraction added none.
+      assert.ok(rows('founder_beliefs').every((r) => r.source === 'signup'))
+      assert.ok(rows('founder_traits').every((r) => r.origin === 'self_report'))
+      for (const table of ['founder_world', 'founder_vocabulary', 'founder_threads']) assert.equal(rows(table).length, 0, table)
+      assert.ok(rows('memory_evidence').every((r) => r.source_kind === 'signup'))
+      assert.deepEqual(rows('memory_runs').filter((r) => r.source_kind === 'report').map((r) => [r.source_id, r.mode, r.status]), [[ids.report, 'full', 'done']])
+      await founder('POST', `/api/moves/${ids.move}/report`, { outcome: 'done', note: REPORT_NOTE, client_turn_id: uuid(21) })
+      await w.idle()
+      assert.equal(openai.chatCalls('beliefs').length, 1)
     })
 
     await t.test('report: share, then withdraw, then share again', async () => {

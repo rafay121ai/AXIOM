@@ -313,3 +313,16 @@ ARCHITECTURE.md and need Rafay's decision, then a doc update:
   (read, learn, followup, move, care, report, memory; `server/llm.js`). The
   live CHECK rejects those until `20261101000009` is applied, so apply it
   before the new server goes live, or cost rows for the journey fail to insert.
+
+## Memory layer (Nov 9 2026): all four APPLIED to live on Nov 10 2026
+
+Written against the live schema dump audit/schema_live_2026-11-09.md. Apply in order, after `supabase db push --dry-run`, BEFORE the server code is merged and deployed (Render deploys from main). Rollback: `supabase/rollback/20261109_rollback.sql`, run only after the server code is rolled back.
+
+- `20261109000001_founder_memory.sql`: eight new server-only tables (founder_beliefs, founder_traits, founder_world, founder_vocabulary, founder_threads, memory_evidence, memory_runs, founder_corrections). RLS on, no policies, no client grants, cascade from auth.users. The trait list is a closed CHECK. No existing table changes.
+- `20261109000002_memory_usage_call_type.sql`: model_usage_logs.call_type also accepts `beliefs` (NOT VALID, 5 second lock timeout). Without it the extraction calls are not logged and the daily cost cap undercounts them.
+- `20261109000003_account_deletion_memory.sql`: delete_account is the live function plus deletes for the eight memory tables. It removes founder data: needs Rafay's explicit approval.
+- `20261109000004_founder_birthday.sql`: founder_profiles.birth_month and birth_day (nullable, both or neither, valid day for the month, no year). Additive change to an existing table. The birthday route returns an error until it is applied.
+
+Status Nov 10 2026: Rafay approved applying all four. Applied by SQL after a read-only check that live still matched the dump: 20261109000001, 20261109000002, 20261109000004 (verified: 8 tables with RLS and no policies or client grants, birthday columns, `beliefs` in the call_type check). 20261109000003 (delete_account) was blocked by the permission classifier and is NOT applied; the live function is unchanged (md5 cca1e9b4...). Until it is applied, account deletion still removes memory rows because they cascade from auth.users when the sign-in account is removed as the last step. The supabase_migrations history table has no rows for the applied files yet: record all four together once 3 is applied.
+
+Update Nov 10 2026: Rafay ran 20261109000003 (delete_account) by hand in the SQL editor and recorded all four versions in supabase_migrations.schema_migrations. Verified read-only afterwards: the live delete_account has 36 delete statements (the 28 it had plus the 8 memory tables), and only service_role can execute it; the history table lists all four versions. Nothing remains to apply for the memory layer. Rollback (supabase/rollback/20261109_rollback.sql) is still the way back: roll the server code back first.

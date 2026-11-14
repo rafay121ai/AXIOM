@@ -1,6 +1,7 @@
 // Prompt for one Situation turn: is this a new topic, and the next of the two
 // questions Axiom always asks before the Read (Rafay, Nov 9). The server counts
 // them and checks each one; the prompt is not the rule.
+import { briefMessages } from '../memory/brief.js'
 
 export const SITUATION_SCHEMA = Object.freeze({
   type: 'object',
@@ -30,9 +31,13 @@ export const SITUATION_PROMPT = [
 ].join('\n')
 
 // conversation: [{ role: 'founder'|'axiom', text }]
-export function situationMessages({ conversation, followUpsLeft }, retryProblems = null) {
+export const NEVER_ASK_KNOWN = { role: 'system', content: 'Never ask for something the past observations already answer.' }
+
+export function situationMessages({ conversation, followUpsLeft, brief = '' }, retryProblems = null) {
   const messages = [
     { role: 'system', content: SITUATION_PROMPT },
+    ...briefMessages(brief),
+    ...(brief ? [NEVER_ASK_KNOWN] : []),
     { role: 'user', content: JSON.stringify({ conversation, follow_ups_left: followUpsLeft }) },
   ]
   if (retryProblems?.length) {

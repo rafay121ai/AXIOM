@@ -170,6 +170,18 @@ test('the word cap cuts at a sentence and keeps the closing question', () => {
   assert.ok(cut.endsWith('What will you ask them for?'))
 })
 
+test('the lesson prompt carries this founder\'s brief once, before the user message', async () => {
+  const belief = (user_id, text) => ({ id: `b${user_id}`, user_id, belief: text, kind: 'fact', confidence: 0.6, status: 'active', created_at: '2026-11-01T00:00:00Z' })
+  const { chatCalls, close } = await started([learnReply()], { tables: { founder_beliefs: [belief(USER.id, 'Sells candles to shops'), belief(OTHER.id, 'Other founder secret')] } })
+  try {
+    const m = chatCalls()[0].payload.messages
+    const i = m.findIndex((x) => x.content.startsWith('Past observations about this founder.'))
+    assert.ok(i > 0 && m[i].content.includes('Sells candles to shops') && !JSON.stringify(m).includes('Other founder'))
+    assert.equal(JSON.stringify(m).split('Past observations about this founder.').length - 1, 1)
+    assert.equal(m[i + 2].role, 'user')
+  } finally { await close() }
+})
+
 // ── Full flow ────────────────────────────────────────────────────────────────
 
 test('full flow: lesson, two real replies, then the first move card', async () => {
@@ -224,6 +236,17 @@ test('asking what to do next brings the move at once, with no model call', async
     assert.equal(res.body.turn.text, AXIOM_LINES.intent)
     assert.equal(res.body.move_notice.text, 'Your move for the two clinics is ready.')
     assert.equal(chatCalls().length, 1)
+  } finally { await close() }
+})
+
+test('the saved first name wins over the sign-in name in Learn', async () => {
+  const { call, id, close } = await started([learnReply(), turnReply(), offerReply(), offerReply(), turnReply({ reply: 'The manager can say yes too, so the second clinic gets the same ask. Who at the second clinic can say yes?' })],
+    { tables: { users: [{ id: USER.id, email: USER.email, first_name: 'Sam' }] } })
+  try {
+    await sendTurn(call, id, REAL1, 1)
+    await sendTurn(call, id, REAL2, 2)
+    const second = await sendTurn(call, id, REAL3, 4)
+    assert.match(second.body.move_notice.text, /^It takes 10 minutes, Sam\./)
   } finally { await close() }
 })
 

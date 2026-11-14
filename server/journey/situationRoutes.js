@@ -8,6 +8,7 @@
 // through the care gate first. Another founder's situation is a plain 404.
 import rateLimit from 'express-rate-limit'
 import { bodyFields } from '../care/middleware.js'
+import { createRecentContext } from '../care/recentContext.js'
 import { isUuid } from '../writeValidation.js'
 import { createSituations, HttpError, TEXT_MAX } from './situations.js'
 
@@ -22,6 +23,7 @@ export function mountSituationRoutes(app, { supabase, care, cap, stored, callStr
   })
   const log = (what, detail) => console.error(`[Situations] ${what}`, detail?.message || detail?.problems || '')
   const service = createSituations({ supabase, callStructured, clock, log })
+  const earlier = createRecentContext({ supabase, log }).forSituation
 
   // Wraps a handler: 503 without a database, HttpError as its own status.
   const handle = (fn) => async (req, res) => {
@@ -54,7 +56,7 @@ export function mountSituationRoutes(app, { supabase, care, cap, stored, callStr
 
   app.get('/api/situations/:id', limiter(60), handle((req) => service.get(req.user.id, idParam(req))))
 
-  app.post('/api/situations/:id/turn', limiter(30), care.careHold, care.careGate(bodyFields('text')), cap(stored.situationTurn),
+  app.post('/api/situations/:id/turn', limiter(30), care.careHold, care.careGate(bodyFields('text'), earlier), cap(stored.situationTurn),
     handle((req) => service.turn({ userId: req.user.id, situationId: idParam(req), text: textOf(req), clientTurnId: clientTurnId(req) })))
 
   // Reads the stored situation; the founder sends no text here.
@@ -62,7 +64,7 @@ export function mountSituationRoutes(app, { supabase, care, cap, stored, callStr
     handle((req) => service.read({ userId: req.user.id, situationId: idParam(req) })))
 
   // Never blocked by the cost cap (it saves what the founder wrote); at the cap only the talk's question is skipped.
-  app.post('/api/situations/:id/read/answer', limiter(20), care.careHold, care.careGate(bodyFields('text')), cap.mark ?? ((_req, _res, next) => next()),
+  app.post('/api/situations/:id/read/answer', limiter(20), care.careHold, care.careGate(bodyFields('text'), earlier), cap.mark ?? ((_req, _res, next) => next()),
     handle((req) => {
       const skip = req.body?.skip === true
       if (skip) return service.answerRead({ userId: req.user.id, situationId: idParam(req), skip: true })

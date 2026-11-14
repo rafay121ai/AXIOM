@@ -24,6 +24,7 @@ import { HomeScreen } from './src/screens/HomeScreen';
 import { PastScreen } from './src/screens/PastScreen';
 import { AnswersScreen } from './src/screens/AnswersScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
+import { MemoryScreen } from './src/screens/MemoryScreen';
 import { LearnScreen } from './src/screens/LearnScreen';
 import { MoveScreen } from './src/screens/MoveScreen';
 import { ReportScreen } from './src/screens/ReportScreen';
@@ -37,7 +38,7 @@ import { colors, motion, fontFiles, space } from './src/theme';
 
 type Stage =
   | { name: 'signin' }
-  | { name: 'questions'; questions: Question[]; answers: Record<string, Answer>; startAt: string | null }
+  | { name: 'questions'; questions: Question[]; answers: Record<string, Answer>; startAt: string | null; signInName?: string }
   | { name: 'wait'; lines: string[] }
   | { name: 'reading'; reading: FirstReading }
   | { name: 'situation'; chat: Chat; opening: string; suggestion?: string }
@@ -46,6 +47,7 @@ type Stage =
   | { name: 'move'; source: MoveSource; back: Stage }
   | { name: 'home'; menu?: boolean }
   | { name: 'history' }
+  | { name: 'memory' }
   | { name: 'past'; id: string }
   | { name: 'settings' }
   | { name: 'answers'; startAt?: string }
@@ -53,7 +55,7 @@ type Stage =
   | { name: 'care'; message: string; help: CareHelp };
 
 // Screens with the faint gold wash instead of the construction grid.
-const QUIET: Stage['name'][] = ['home', 'history', 'past', 'settings', 'answers'];
+const QUIET: Stage['name'][] = ['home', 'history', 'memory', 'past', 'settings', 'answers'];
 
 const run = (anim: Animated.CompositeAnimation) => new Promise<void>((resolve) => anim.start(() => resolve()));
 
@@ -141,7 +143,9 @@ export default function App() {
     const signup = await api.getSignup();
     landing.current = signup.complete;
     signedUp.current = signup.complete;
-    goTo(signup.complete ? { name: 'home' } : { name: 'questions', questions: signup.questions, answers: signup.answers, startAt: signup.next });
+    if (signup.complete) return goTo({ name: 'home' });
+    const signInName = await api.getSignInName().catch(() => undefined);
+    goTo({ name: 'questions', questions: signup.questions, answers: signup.answers, startAt: signup.next, signInName });
   }, [goTo]);
 
   // A closed browser leaves the founder on the sign-in screen with nothing said; any other failure says so once.
@@ -218,7 +222,10 @@ export default function App() {
                 questions={stage.questions}
                 answers={stage.answers}
                 startAt={stage.startAt}
+                signInName={stage.signInName}
                 onSave={async (k, a) => route(await api.saveAnswer(k, a))}
+                onSaveName={async (name) => route(await api.saveName(name))}
+                onSaveBirthday={(month, day) => api.saveBirthday(month, day)}
                 onFinish={finish}
               />
             )}
@@ -298,6 +305,7 @@ export default function App() {
                 onOpen={async (target) => openDestination(await destinationOf(api, target))}
                 onPast={(id) => goTo({ name: 'past', id })}
                 onHistory={() => goTo({ name: 'history' })}
+                onMemory={() => goTo({ name: 'memory' })}
                 onSettings={() => goTo({ name: 'settings' })}
                 onCare={showCare}
                 menuOpen={stage.menu}
@@ -305,6 +313,13 @@ export default function App() {
             )}
             {stage.name === 'history' && (
               <HistoryScreen load={(q) => api.getHistory(q)} onOpen={(id) => goTo({ name: 'past', id })} onBack={() => goTo({ name: 'home' })} />
+            )}
+            {stage.name === 'memory' && (
+              <MemoryScreen
+                load={() => api.getMemory()}
+                remove={(item, reason) => api.markWrong(item.table, item.id, reason)}
+                onBack={() => goTo({ name: 'home', menu: true })}
+              />
             )}
             {stage.name === 'past' && (
               <PastScreen

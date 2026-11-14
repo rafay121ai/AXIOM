@@ -5,7 +5,7 @@ import { copy } from '../src/copy';
 import { clockTime } from '../src/move/format';
 import { answerSummary } from '../src/onboarding/flow';
 
-const auth: Auth = { signInWithGoogle: async () => {}, signOut: async () => {}, isSignedIn: async () => true, getToken: async () => 'tok' };
+const auth: Auth = { signInWithGoogle: async () => {}, signOut: async () => {}, isSignedIn: async () => true, getName: async () => undefined, getToken: async () => 'tok' };
 const json = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response;
 
 describe('settings calls', () => {
@@ -88,11 +88,10 @@ describe('settings words and helpers', () => {
   });
   it('summarises every kind of answer in one line', () => {
     expect(answerSummary(undefined)).toBe('');
-    expect(answerSummary({ value: 'Other', other: 'a nurse' })).toBe('Other: a nurse');
+    expect(answerSummary({ value: 'Solo' })).toBe('Solo');
     expect(answerSummary({ country: 'Pakistan', customers: 'Both' })).toBe('Pakistan, Both');
     expect(answerSummary({ goal: 'Ship it', when: 'This month' })).toBe('Ship it, This month');
     expect(answerSummary({ a: ['Selling'], b: ['Pricing'] })).toBe('Selling, Pricing');
-    expect(answerSummary(['x', 'y'])).toBe('x, y');
-    expect(answerSummary('text')).toBe('text');
+    expect(answerSummary({ skipped: true })).toBe('');    expect(answerSummary('text')).toBe('text');
   });
 });

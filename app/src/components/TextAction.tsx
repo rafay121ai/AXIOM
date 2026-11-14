@@ -1,12 +1,12 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { fonts, ink } from '../theme';
 
-type Props = { label: string; onPress: () => void; size?: number };
+type Props = { label: string; onPress: () => void; size?: number; accessibilityLabel?: string };
 
 /** A plain text action with a thin underline on hover and press ("Try again", "Skip this question"). No pill. */
-export function TextAction({ label, onPress, size = 13 }: Props) {
+export function TextAction({ label, onPress, size = 13, accessibilityLabel }: Props) {
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={styles.target}>
+    <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} onPress={onPress} style={styles.target}>
       {({ hovered, pressed }: { hovered?: boolean; pressed: boolean }) => (
         <View style={[styles.line, (hovered || pressed) && styles.active]}>
           <Text style={[styles.text, { fontSize: size }]}>{label}</Text>

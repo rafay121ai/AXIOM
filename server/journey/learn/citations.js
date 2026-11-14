@@ -85,9 +85,17 @@ export function validateCitations({ answer, evidence }) {
       else flags.push({ type: 'invented_page', detail: `${c.handle}: ${c.page}` })
     }
     if (c.quote) {
-      const v = verifyQuote(c.quote, row.text)
-      if (v.ok) source.quote = v.display
-      else flags.push({ type: 'unverified_quote', detail: `${c.handle}: ${String(c.quote).slice(0, 80)}` })
+      // Chapter and page come only from a lesson whose paragraphs hold the quote, never from the chunk or the model.
+      const inLesson = row.lesson ? verifyQuote(c.quote, row.lesson.paragraphs.join(' ')) : { ok: false }
+      const v = inLesson.ok ? inLesson : verifyQuote(c.quote, row.text)
+      if (v.ok) {
+        source.quote = v.display
+        if (inLesson.ok) {
+          const { chapter, page_start: lo, page_end: hi } = row.lesson
+          if (chapter) source.chapter = chapter
+          if (Number.isFinite(lo)) { source.page_start = lo; if (Number.isFinite(hi) && hi !== lo) source.page_end = hi }
+        }
+      } else flags.push({ type: 'unverified_quote', detail: `${c.handle}: ${String(c.quote).slice(0, 80)}` })
     }
     sources.push(source)
   }

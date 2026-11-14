@@ -1,7 +1,7 @@
 // First reading: built only from the founder's own sign-up answers. The model
 // writes it; ownWords.js checks it; a plain reading composed from the answers
 // replaces it if the model cannot get it right.
-import { QUESTIONS, answerStrings } from './questions.js'
+import { QUESTIONS, answerStrings, isSkip } from './questions.js'
 import { checkFirstReading } from './ownWords.js'
 import { FIRST_READING_SCHEMA, firstReadingMessages } from './prompts/firstReading.js'
 
@@ -11,21 +11,21 @@ import { FIRST_READING_SCHEMA, firstReadingMessages } from './prompts/firstReadi
 const NOTHING = 'nothing picked'
 const evidenceItems = (q, answer) => {
   switch (q.type) {
-    case 'single': return [{ question: q.title, answer: answer.other ? `${answer.value}: ${answer.other}` : answer.value }]
+    case 'single': return [{ question: q.title, answer: answer.value }]
     case 'where': return [
       { question: `${q.title} (${q.countryLabel})`, answer: answer.country },
       { question: `${q.title} (${q.customerLabel})`, answer: answer.customers },
     ]
     case 'goal': return [{ question: q.title, answer: `${answer.goal}, ${answer.date ?? answer.when}` }]
     case 'two': return [answer.a, answer.b].map((picks, i) => ({ question: `${q.title} (${q.groups[i].label})`, answer: picks.join(', ') || NOTHING }))
-    case 'multi': return [{ question: q.title, answer: answer.join(', ') }]
     default: return [{ question: q.title, answer }]
   }
 }
 
 // Evidence for the model, and the strings the checker compares against.
 export function buildEvidence(answers) {
-  const asked = QUESTIONS.filter((q) => Object.hasOwn(answers, q.key))
+  // A skipped optional question is left out.
+  const asked = QUESTIONS.filter((q) => Object.hasOwn(answers, q.key) && !isSkip(answers[q.key]))
   const evidence = asked.flatMap((q) => evidenceItems(q, answers[q.key]))
   return {
     evidence,
@@ -65,7 +65,9 @@ const AIM_FACT = {
 
 const joinList = (items) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`)
 
-// Safe reading from the answers alone. Contains no quote and no underline,
+// Safe reading from the answers alone. Time on it and what was tried are no longer asked:
+// they are used only when a founder who signed up earlier still has them.
+// Contains no quote and no underline,
 // and only numbers that are already in the option labels the founder picked.
 export function fallbackReading(answers) {
   const headline = STAGE_FACT[answers.stage?.value]

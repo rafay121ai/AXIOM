@@ -9,7 +9,7 @@ import { copy, failureLine } from '../src/copy';
 import { applyReply, newChat } from '../src/situation/chat';
 import { paragraphs } from '../src/situation/read';
 
-const auth: Auth = { signInWithGoogle: async () => {}, signOut: async () => {}, isSignedIn: async () => true, getToken: async () => 'tok' };
+const auth: Auth = { signInWithGoogle: async () => {}, signOut: async () => {}, isSignedIn: async () => true, getName: async () => undefined, getToken: async () => 'tok' };
 const reply = (r: Partial<SituationReply>): SituationReply => ({
   situation_id: 's1', status: 'follow_up', reply: 'A question?', follow_up_count: 1, follow_ups_left: 1, ...r,
 });

@@ -45,7 +45,7 @@ export const KNOWLEDGE_ROWS = [
   { id: uuid(903), pillar: 'move_people', title: 'The Mom Test', author: 'Rob Fitzpatrick', key_frameworks: 'Keep it casual and push for commitment.', similarity: 0.47 },
   { id: uuid(904), pillar: 'move_people', title: 'Never Split the Difference', author: 'Chris Voss', key_frameworks: 'No is the start of the negotiation, not the end of it. Most people hear no and stop.', similarity: 0.41 },
 ]
-export const VERIFIED_QUOTE = 'you have learned nothing'
+const VERIFIED_QUOTE = 'you have learned nothing'
 export const VERIFIED_QUOTE_SHOWN = '…you have learned nothing'
 // Not in the Never Split the Difference passage: the server must strip it.
 export const FABRICATED_QUOTE = 'Always split the difference with a buyer'

@@ -8,8 +8,6 @@ export type SingleQuestion = {
   title: string;
   sub?: string;
   options: string[];
-  /** The option that opens a typed answer, if any. */
-  otherOption?: string;
 };
 
 export type WhereQuestion = {
@@ -44,16 +42,6 @@ export type TwoQuestion = {
   groups: [{ label: string; options: string[] }, { label: string; options: string[] }];
 };
 
-export type MultiQuestion = {
-  type: 'multi';
-  key: string;
-  title: string;
-  sub?: string;
-  options: string[];
-  /** Picking this clears every other option, and the other way round. */
-  exclusive?: string;
-};
-
 export type TextQuestion = {
   type: 'text';
   key: string;
@@ -61,7 +49,10 @@ export type TextQuestion = {
   sub?: string;
   placeholder: string;
   minLength: number;
-  shortHint: string;
+  /** Absent on the optional questions: they have nothing to say under a short answer. */
+  shortHint?: string;
+  /** The founder may skip it. */
+  optional?: boolean;
 };
 
 export type Question =
@@ -69,17 +60,17 @@ export type Question =
   | WhereQuestion
   | GoalQuestion
   | TwoQuestion
-  | MultiQuestion
   | TextQuestion;
 
-export type SingleAnswer = { value: string; other?: string };
+export type SingleAnswer = { value: string };
 export type WhereAnswer = { country?: string; customers?: string };
 export type GoalAnswer = { goal?: string; when?: string; date?: string };
 export type TwoAnswer = { a: string[]; b: string[] };
-export type MultiAnswer = string[];
 export type TextAnswer = string;
+/** An optional question the founder skipped. */
+export type SkipAnswer = { skipped: true };
 
-export type Answer = SingleAnswer | WhereAnswer | GoalAnswer | TwoAnswer | MultiAnswer | TextAnswer;
+export type Answer = SingleAnswer | WhereAnswer | GoalAnswer | TwoAnswer | TextAnswer | SkipAnswer;
 
 /** Help as the server's care check sends it: one line and the website that lists helplines for every country. No phone numbers. */
 export type CareHelp = { line: string; url: string };
@@ -299,6 +290,12 @@ export type HistoryPage = {
 export type LockScreen = 'full' | 'short' | 'hidden';
 export type MentorStyle = 'calm' | 'direct' | 'hard';
 
+export type MemoryGroup = 'decide' | 'work' | 'business' | 'people' | 'open';
+export type MemoryTable = 'founder_beliefs' | 'founder_traits' | 'founder_world' | 'founder_vocabulary' | 'founder_threads';
+export type MemoryReason = 'wrong' | 'outdated';
+/** One line of "What Axiom thinks". The receipt text is the server's (the founder's own words, or "Your move: ..."); `at` is an ISO timestamp. */
+export type MemoryItem = { id: string; table: MemoryTable; group: MemoryGroup; text: string; receipt: { text: string; at: string } | null };
+
 /** Settings, as one page. The words under "share automatically" (`privacy.text`) are the server's. */
 export type Settings = {
   you: { name: string | null; email: string | null; country: string | null; timezone: string | null };
@@ -334,7 +331,7 @@ export type AccountRequest = { status: 'recorded' | 'pending_deletion' | 'cancel
 export type AccountExport = { message: string } & Record<string, unknown>;
 
 /** The sign-up as it stands: the questions, what the founder has answered, the key of the first unanswered one (null when all are), and whether every one is answered. */
-export type Signup = { questions: Question[]; answers: Record<string, Answer>; next: string | null; complete: boolean };
+export type Signup = { questions: Question[]; answers: Record<string, Answer>; next: string | null; complete: boolean; total: number };
 
 /** The kind of phone a reminder token belongs to. */
 export type PushPlatform = 'ios' | 'android';
@@ -346,6 +343,12 @@ export interface AxiomApi {
   isSignedIn(): Promise<boolean>;
   /** The onboarding questions in order, with the founder's saved answers. */
   getSignup(): Promise<Signup>;
+  /** The first name Google gave at sign-in, to fill the name screen. Undefined when there is none. */
+  getSignInName(): Promise<string | undefined>;
+  /** Saves the name Axiom uses (first word only). Screened. */
+  saveName(name: string): Promise<Screened>;
+  /** Saves the birthday: month (1 to 12) and day, never a year. */
+  saveBirthday(month: number, day: number): Promise<void>;
   /** Saves one answer as soon as it is given, so an interrupted founder can resume. Typed answers are screened. */
   saveAnswer(key: string, answer: Answer): Promise<Screened>;
   /** The first reading. Resolves once every saved answer has reached the server and the reading is written. */
@@ -402,6 +405,10 @@ export interface AxiomApi {
   getHistory(q: string): Promise<HistoryRow[]>;
   /** One past situation. */
   getHistoryPage(id: string): Promise<HistoryPage>;
+  /** What Axiom has learned about the founder, each line with where it came from. */
+  getMemory(): Promise<MemoryItem[]>;
+  /** Removes one line for good. Both reasons do the same for the founder; the server keeps the reason. Safe to send again. */
+  markWrong(table: MemoryTable, id: string, reason: MemoryReason): Promise<void>;
   /** The settings page. */
   getSettings(): Promise<Settings>;
   /** Saves some settings and returns the page as it now stands. */

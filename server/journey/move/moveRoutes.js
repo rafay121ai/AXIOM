@@ -4,6 +4,7 @@
 // penalises a move.
 import rateLimit from 'express-rate-limit'
 import { bodyFields } from '../../care/middleware.js'
+import { createRecentContext } from '../../care/recentContext.js'
 import { isUuid } from '../../writeValidation.js'
 import { HttpError, TEXT_MAX } from '../situations.js'
 import { createMoves } from './moveService.js'
@@ -54,7 +55,7 @@ export function mountMoveRoutes(app, { supabase, care, cap, stored, callStructur
       return service.commit({ userId: req.user.id, moveId: idParam(req), timeZone: timeZone ?? null })
     }))
 
-  app.post('/api/moves/:id/swap', limiter(5), care.careHold, care.careGate(bodyFields('reason')), cap(stored.swapReplay),
+  app.post('/api/moves/:id/swap', limiter(5), care.careHold, care.careGate(bodyFields('reason'), createRecentContext({ supabase, log }).forMove), cap(stored.swapReplay),
     handle((req) => {
       const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : ''
       if (!reason) bad('reason is required')

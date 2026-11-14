@@ -7,6 +7,7 @@ describe('Android back button', () => {
   it('goes up one level from the side screens', () => {
     expect(go({ name: 'history' })).toBe(H);
     expect(go({ name: 'settings' })).toBe(H);
+    expect(go({ name: 'memory' })).toBe(H);
     expect(go({ name: 'past' })).toBe(Hi);
     expect(go({ name: 'answers' })).toBe(S);
   });

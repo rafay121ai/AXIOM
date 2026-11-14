@@ -25,7 +25,7 @@ const COLUMNS = Object.freeze({
   consent_log: ['id', 'report_id', 'action', 'wording_version', 'decided_at'],
   care_events: ['id', 'level', 'created_at', 'resolved_at'],
   push_tokens: ['id', 'platform', 'timezone', 'created_at', 'updated_at'],
-  founder_profiles: ['stage', 'business_model', 'customer_markets', 'country', 'goal', 'deadline', 'report_time_local', 'timezone', 'open_answers', 'signup_answers', 'first_reading', 'created_at'],
+  founder_profiles: ['stage', 'business_model', 'customer_markets', 'country', 'goal', 'deadline', 'report_time_local', 'timezone', 'open_answers', 'signup_answers', 'first_reading', 'birth_month', 'birth_day', 'created_at'],
   sessions: ['id', 'onboarding_answers', 'axiom_profile', 'session_notes', 'concept_progress', 'created_at', 'last_active'], // never session_token
   conversation_threads: ['id', 'session_id', 'title', 'started_at', 'last_message_at', 'message_count', 'status', 'primary_pillar', 'created_at'],
   app_sessions: ['id', 'started_at', 'ended_at', 'duration_seconds', 'entry_point', 'messages_sent', 'device'],
@@ -36,6 +36,15 @@ const COLUMNS = Object.freeze({
   product_events: ['id', 'event', 'created_at'], // not properties: free-form, can hold ids
   messages: ['id', 'session_id', 'role', 'content', 'created_at'],
   personal_memories: ['id', 'type', 'content', 'importance', 'created_at'], // never the embedding
+  // What Axiom learned about the founder, superseded rows included. No user_id.
+  founder_beliefs: ['id', 'belief', 'kind', 'confidence', 'status', 'superseded_by', 'source', 'created_at', 'updated_at'],
+  founder_traits: ['id', 'dimension', 'value', 'confidence', 'origin', 'status', 'superseded_by', 'created_at', 'updated_at'],
+  founder_world: ['id', 'name', 'kind', 'role', 'mention_count', 'last_mentioned_at', 'status', 'created_at', 'updated_at'],
+  founder_vocabulary: ['id', 'term', 'meaning', 'confidence', 'mention_count', 'status', 'created_at', 'updated_at'],
+  founder_threads: ['id', 'title', 'kind', 'status', 'created_at', 'updated_at'],
+  memory_evidence: ['id', 'item_table', 'item_id', 'source_kind', 'snippet', 'created_at'],
+  memory_runs: ['id', 'source_kind', 'mode', 'status', 'created_at'],
+  founder_corrections: ['id', 'item_table', 'item_text', 'reason', 'created_at'],
   users: ['email', 'first_name', 'created_at'],
   user_settings: ['share_auto', 'morning_on', 'evening_on', 'lock_screen', 'quiet_start', 'quiet_end', 'keep_items', 'mentor_style', 'created_at'],
 })
@@ -99,6 +108,14 @@ export function createAccountExport({ supabase, clock }) {
       founder_lesson_log: await noIdOf('founder_lesson_log'),
       notification_log: await noIdOf('notification_log'),
       peer_unlocks: await mine('peer_unlocks', userId),
+      founder_beliefs: await mine('founder_beliefs', userId),
+      founder_traits: await mine('founder_traits', userId),
+      founder_world: await mine('founder_world', userId),
+      founder_vocabulary: await mine('founder_vocabulary', userId),
+      founder_threads: await mine('founder_threads', userId),
+      memory_evidence: await mine('memory_evidence', userId),
+      memory_runs: await mine('memory_runs', userId),
+      founder_corrections: await mine('founder_corrections', userId),
       product_events: await noIdOf('product_events'),
       devices: (await mine('push_tokens', userId)).map((d) => ({ ...noId(d), token: 'redacted' })),
     }

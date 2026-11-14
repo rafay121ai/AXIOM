@@ -1,14 +1,15 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import type { Ref } from 'react';
+import { Pressable, StyleSheet, Text, View, type ViewInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { copy } from '../copy';
 import { fonts, ink } from '../theme';
 
 // The top of History, a past situation and Settings: a back arrow and a serif title.
-export function PageHeader({ title, onBack }: { title?: string; onBack: () => void }) {
+export function PageHeader({ title, onBack, backRef }: { title?: string; onBack: () => void; backRef?: Ref<ViewInstance> }) {
   const insets = useSafeAreaInsets();
   return (
     <View style={[styles.head, { paddingTop: insets.top + 56 }]}>
-      <Pressable accessibilityRole="button" accessibilityLabel={copy.history.back} onPress={onBack} style={styles.back}>
+      <Pressable ref={backRef} accessibilityRole="button" accessibilityLabel={copy.history.back} onPress={onBack} style={styles.back}>
         <Text style={styles.arrow}>‹</Text>
       </Pressable>
       <Text accessibilityRole="header" style={styles.title}>{title ?? ''}</Text>

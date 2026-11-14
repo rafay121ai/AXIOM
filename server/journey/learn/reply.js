@@ -184,7 +184,7 @@ export function checkReply({ data, mode, evidence, founderTexts, asked = null })
 // Throws only when no usable reply exists after two attempts.
 export async function composeReply({ mode, step, context, evidence, founderTexts, usageContext, deps }) {
   // Author and title are shown so the lesson can name who taught it (Rafay, Nov 2); the server still checks every name.
-  const shown = evidence.map((e) => ({ handle: e.handle, author: e.author, title: e.source_title, text: e.text }))
+  const shown = evidence.map((e) => ({ handle: e.handle, author: e.author, title: e.source_title, text: e.text, ...(e.lesson ? { lesson: { idea: e.lesson.principle, when: e.lesson.applies_when, text: e.lesson.paragraphs.join(' ') } } : {}) }))
   const asked = mode === 'lesson' ? null : (context.learn ?? []).filter((t) => t.role === 'founder').at(-1)?.text ?? null
   let problems = null
   let fallback = null

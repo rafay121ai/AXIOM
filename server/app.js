@@ -138,6 +138,7 @@ export function createApp({
   app.use('/api/settings', requireAuth)
   app.use('/api/home', requireAuth)
   app.use('/api/history', requireAuth)
+  app.use('/api/memory', requireAuth)
   app.use('/api/account', requireAuth)
   app.use('/api/push', requireAuth)
   app.use('/api/loading-hint', requireAuth)
@@ -167,6 +168,7 @@ export function createApp({
     cap: dailyCapGate({ isCapped: isOverCap, isAdmin: isAdminUser }),
     callStructured: callStructuredForApp,
     clock,
+    lessonCites: env.LESSON_CITES === 'on',
     deleteOn: env.ACCOUNT_DELETE === 'on',
     // Test accounts (ADMIN_USER_IDS / ADMIN_EMAILS) skip the daily limit on new situations (Rafay, Nov 2).
     noDailyLimit: isAdminUser,

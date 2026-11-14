@@ -1,7 +1,7 @@
 import type { Auth } from './auth';
 import { createOutbox, type KeyValueStore, memoryStore } from './outbox';
 import { createSaveQueue, HttpError } from './queue';
-import type { AccountExport, AccountRequest, AxiomApi, Commitment, ConsentResult, ConsentState, DueReport, FirstReading, HistoryPage, HistoryRow, Home, LearnReply, LoadingQuote, MoveView, Read, ReadAnswerResult, ReportResult, Screened, Settings, Signup, SituationReply, SituationView, StoryReply, SwapResult } from './types';
+import type { AccountExport, AccountRequest, AxiomApi, Commitment, ConsentResult, ConsentState, DueReport, FirstReading, HistoryPage, HistoryRow, Home, LearnReply, LoadingQuote, MemoryItem, MoveView, Read, ReadAnswerResult, ReportResult, Screened, Settings, Signup, SituationReply, SituationView, StoryReply, SwapResult } from './types';
 
 const CODE_NAME = /^[a-z]+(_[a-z]+)*$/;
 
@@ -48,8 +48,13 @@ export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch
     signInWithGoogle: () => auth.signInWithGoogle(),
     isSignedIn: () => auth.isSignedIn(),
     async getSignup() {
-      const { questions, answers, next, complete } = await request<Signup>('GET', '/api/signup');
-      return { questions, answers, next, complete };
+      const { questions, answers, next, complete, total } = await request<Signup>('GET', '/api/signup');
+      return { questions, answers, next, complete, total };
+    },
+    getSignInName: () => auth.getName(),
+    saveName: (name) => sendWritten<Screened>('name', 'PUT', '/api/signup/name', { name }),
+    async saveBirthday(month, day) {
+      await sendWritten('birthday', 'PUT', '/api/signup/birthday', { month, day });
     },
     saveAnswer: (key, answer) => queue.save(key, answer),
     async getFirstReading() {
@@ -101,6 +106,13 @@ export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch
       return (await request<{ items: HistoryRow[] }>('GET', `/api/history?q=${encodeURIComponent(q)}`)).items;
     },
     getHistoryPage: (id) => request<HistoryPage>('GET', `/api/history/${id}`),
+    async getMemory() {
+      return (await request<{ items: MemoryItem[] }>('GET', '/api/memory')).items;
+    },
+    async markWrong(table, id, reason) {
+      // Direct, not through the outbox: a failed removal must never be retried and complete later, after the screen said it failed.
+      await request('POST', `/api/memory/${table}/${id}/wrong`, { reason });
+    },
     getSettings: () => request<Settings>('GET', '/api/settings'),
     updateSettings: (patch) => request<Settings>('PUT', '/api/settings', patch),
     requestExport: () => request<AccountExport>('POST', '/api/account/export'),

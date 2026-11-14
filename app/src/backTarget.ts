@@ -8,6 +8,7 @@ export function backTarget<S extends Back>(stage: S, home: S, settings: S, histo
   switch (stage.name) {
     case 'home': return 'exit';
     case 'history':
+    case 'memory':
     case 'settings': return home;
     case 'past': return history;
     case 'answers': return settings;

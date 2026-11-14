@@ -15,6 +15,7 @@ import { hasMoveRoom, NO_ROOM_LINE } from '../move/room.js'
 import { createSharing } from '../report/sharing.js'
 import { createFounderLessons } from '../report/founderLessons.js'
 import { styleOf } from '../prompts/style.js'
+import { loadBrief } from '../memory/brief.js'
 
 const SAY_MORE = 'Say a bit more.'
 export const LOCK_MS = 2 * 60 * 1000
@@ -42,7 +43,7 @@ export function turnView(row) {
   }
 }
 
-export function createLearn({ supabase, knowledgeSupabase = null, embed = null, callStructured, clock, log = () => {} }) {
+export function createLearn({ supabase, knowledgeSupabase = null, embed = null, callStructured, clock, log = () => {}, lessonCites = false }) {
   const sharing = createSharing({ supabase, clock })
   const founderLessons = createFounderLessons({ supabase, sharing, clock })
   const iso = () => new Date(clock.now()).toISOString()
@@ -103,7 +104,7 @@ export function createLearn({ supabase, knowledgeSupabase = null, embed = null, 
 
   // ── What the model is given ────────────────────────────────────────────────
 
-  // Built from this situation only; the sign-up answers feed only the first reading (Rafay, Nov 9).
+  // This situation, plus the brief from earlier ones; the conversation wins. Only the first reading uses the sign-up answers directly (Rafay, Nov 9).
   async function contextOf(situation, learnTurns) {
     const [situationTurns, read] = await Promise.all([situationTurnsOf(situation.id), readOf(situation.id)])
     const talkOf = (readTalk) => situationTurns.filter((t) => !t.filler && (t.result?.read_talk === true) === readTalk).map((t) => ({ role: t.role, text: t.text }))
@@ -136,10 +137,10 @@ export function createLearn({ supabase, knowledgeSupabase = null, embed = null, 
     // The library is searched with what the founder needs, written from everything they said, never their raw words.
     const query = given || !knowledgeSupabase || !embed ? ctx.query
       : (await searchNeed({ prompt: ctx.prompt, callStructured, userId, usageContext, log })) ?? ctx.query
-    const evidence = given ?? await retrieveEvidence({ knowledgeSupabase, embed, query, userId, usageContext, log })
+    const evidence = given ?? await retrieveEvidence({ knowledgeSupabase, embed, query, userId, usageContext, log, lessonCites })
     const reply = await composeReply({
       mode, step, evidence, founderTexts: ctx.founderTexts, usageContext,
-      context: { ...ctx.prompt, ...(tapped ? { tapped } : {}), style: await styleOf(supabase, userId) },
+      context: { ...ctx.prompt, ...(tapped ? { tapped } : {}), style: await styleOf(supabase, userId), brief: await loadBrief(supabase, userId, ctx.founderTexts.join('\n')) },
       deps: { callStructured, userId, log },
     })
     const row = await one(supabase.from('learn_turns').insert({

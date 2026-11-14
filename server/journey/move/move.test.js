@@ -142,7 +142,7 @@ const seed = ({ offers = [2], moves = [], timezone = 'Asia/Karachi' } = {}) => (
 })
 
 async function setup(script = [], opts = {}) {
-  const base = createFakeSupabase({ users: { tok: USER, tok2: OTHER }, tables: seed(opts) })
+  const base = createFakeSupabase({ users: { tok: USER, tok2: OTHER }, tables: { ...seed(opts), ...(opts.tables ?? {}) } })
   const openai = createFakeOpenAI(script)
   const clock = createFakeClock(NOW)
   const app = createApp({ env: ENV, supabase: withMoveKeys(base), openai, clock })
@@ -181,6 +181,19 @@ test('the move card: written once after an offer, checked, nothing server-only i
     assert.deepEqual(again.body, res.body)
     assert.equal(chatCalls().length, 1)
     assert.equal(rows('moves').length, 1)
+  } finally { await close() }
+})
+
+test('the move prompt carries this founder\'s brief once, after the track record, before the user message', async () => {
+  const belief = (user_id, text) => ({ id: `b${user_id}`, user_id, belief: text, kind: 'fact', confidence: 0.6, status: 'active', created_at: '2026-11-01T00:00:00Z' })
+  const { call, chatCalls, close } = await setup([moveJson()], { tables: { founder_beliefs: [belief(USER.id, 'Sells candles to shops'), belief(OTHER.id, 'Other founder secret')] } })
+  try {
+    assert.equal((await call('POST', `/api/learn/${LEARN}/move`)).status, 200)
+    const m = chatCalls()[0].payload.messages
+    const i = m.findIndex((x) => x.content.startsWith('Past observations about this founder.'))
+    assert.ok(i > 0 && m[i].content.includes('Sells candles to shops') && !JSON.stringify(m).includes('Other founder'))
+    assert.equal(JSON.stringify(m).split('Past observations about this founder.').length - 1, 1)
+    assert.equal(m[i + 1].role, 'user')
   } finally { await close() }
 })
 

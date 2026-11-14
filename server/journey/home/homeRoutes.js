@@ -11,6 +11,7 @@ import { createHome } from './homeService.js'
 import { SEARCH_MAX, createHistory } from './historyService.js'
 import { createAccount } from './accountService.js'
 import { createAccountExport } from './accountExport.js'
+import { createMemoryScreen } from '../memory/memoryScreen.js'
 import { cleanSettings, createSettings } from './settingsService.js'
 
 export function mountHomeRoutes(app, { supabase, care, callStructured, clock, links = {}, deleteOn = false }) {
@@ -28,6 +29,7 @@ export function mountHomeRoutes(app, { supabase, care, callStructured, clock, li
   const account = createAccount({ supabase, clock, deleteOn, log })
   const settings = createSettings({ supabase, clock, links, pendingDeletion: account.pending })
   const accountExport = createAccountExport({ supabase, clock })
+  const memory = createMemoryScreen({ supabase, clock })
 
   const handle = (fn) => async (req, res) => {
     if (!supabase) return res.status(503).json({ error: 'Service not configured' })
@@ -70,6 +72,15 @@ export function mountHomeRoutes(app, { supabase, care, callStructured, clock, li
     handle((req) => {
       if (!isUuid(req.params.id)) throw new HttpError(404, { error: 'Not found' })
       return history.detail({ userId: req.user.id, situationId: req.params.id })
+    }))
+
+  // What Axiom thinks: active memory in plain words, and "this is wrong". No model call.
+  app.get('/api/memory', limiter(60), handle((req) => memory.list(req.user.id)))
+
+  app.post('/api/memory/:table/:id/wrong', limiter(20),
+    handle((req) => {
+      if (!isUuid(req.params.id)) throw new HttpError(404, { error: 'Not found' })
+      return memory.markWrong({ userId: req.user.id, table: req.params.table, id: req.params.id, reason: req.body?.reason })
     }))
 
   app.get('/api/settings', limiter(60),

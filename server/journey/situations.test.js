@@ -560,8 +560,9 @@ test('a test account in ADMIN_USER_IDS is not held to the daily limit', async ()
 })
 
 // Live, Nov 9: a new situation about a different app got a Read built only on the
-// sign-up answers (the founder's main business), so it read as the old chat. Later
-// steps now see only the situation (Rafay: founders change ideas and pivot).
+// sign-up answers (the founder's main business), so it read as the old chat. Later steps
+// now also see the brief and track record, but the conversation wins and only the first
+// reading uses the sign-up answers directly (Rafay: founders change ideas and pivot).
 test('a Read that says nothing about this situation is sent back', () => {
   const answerTexts = ['I built this app earlier which helped people reflect on their thoughts. I built it end to end but never sold it.']
   const offTopic = {
