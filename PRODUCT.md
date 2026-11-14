@@ -442,8 +442,7 @@ not push the founder back into what they left off.
 
 ### Menu (side drawer)
 Slides in from the left, pushing the home aside. Divided by thin lines:
-Start something new, What's open, History, Paused, What Axiom thinks (title
-PENDING, see below), and the founder's name with Settings.
+Start something new, What's open, History, Paused, What Axiom thinks, and the founder's name with Settings.
 
 ### What Axiom thinks
 Opened only from the menu. Never pushed and shown nowhere else. It is the
@@ -457,10 +456,9 @@ Nothing shows a score, a confidence or an id. No undo. If nothing is learned
 yet, one line says so. Server: GET /api/memory and POST
 /api/memory/:table/:id/wrong (see ARCHITECTURE.md).
 
-PENDING (Rafay has not decided): (1) whether a founder-opened "mark wrong"
-control is allowed given the no-rating rule; (2) the copy of this screen has
-not been approved; (3) the title: Settings already has "What Axiom knows about
-you".
+Approved by Rafay (Nov 14 2026): the founder-opened "mark wrong" control (a
+removal, not a rating of Axiom), the copy in tasks/design/memory.md, and the
+title. Settings still has "What Axiom knows about you"; both titles stay.
 
 ### History
 A plain list of past situations, newest first, no day headings, separated by

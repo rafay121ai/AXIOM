@@ -740,3 +740,15 @@ Idea from Rafay: founder credits, and growth by referral. Not building until giv
 - Sign-up traits (review, Nov 9): what a founder picks at sign-up (how they decide, what they avoid, how they want hard things said) enters the prompts from day one at confidence 0.4 to 0.5, before any behaviour confirms it, because day-one personalisation is the goal. Behaviour can overturn it; a trait learned from behaviour needs 3 observations across 2 sources.
 - Memory release gate (review, Nov 9): the four supabase/migrations/20261109* files must be applied BEFORE this branch is merged (Render deploys from main). The account export, the birthday route and cost logging depend on them. Roll the server back before running the rollback SQL.
 - Dropped from the memory plan: the founder_brief table (nothing read it; the brief is built live by code). Threads older than 60 days stop appearing in the brief; nothing closes them.
+
+## Proactive Axiom: connected accounts UNPARKED (Rafay, Nov 10 2026)
+Replaces the PARKED entry above for Gmail, Calendar and Notion. Plan: tasks/connectors-plan.md. Not built.
+- Connectors: Gmail, Google Calendar, Notion, read only, through Composio. All three before demo day.
+- Connectors also teach Axiom about the founder with no extra questions. Facts are stored WITHOUT asking first (Rafay's call). Safeguards: tagged with source, shown on the memory screen, correctable, deleted with the account.
+- Significance has three lanes (People, Time, World) and can touch any situation. A signal is pushed because the founder should know it; an action is optional. A Move is offered only when a real one exists.
+- Newsletters: after Gmail connects, Axiom ranks them and asks which matter. Only those are watched.
+- Push cap: signals get their own 4 a day, on top of morning and evening (the old "at most 2 a day" now means scheduled pushes only). Extreme events may skip the cap, at most 2 a day, quiet hours kept unless the event is dated within 3 hours.
+- On disconnect, facts already learned are kept, with a separate delete button. Risk: Google's Limited Use rules for Gmail data; re-check before real founders connect.
+- Facts about unfamiliar people come only from the founder's own emails and notes. No general-knowledge line, no web search.
+- Gmail and Calendar are polling in Composio (minimum 2 minutes on managed auth), so signals are near, not real-time.
+- Gmail scopes (Rafay, Nov 10): Composio's managed Google app is blocked by Google for `gmail.readonly`, so development uses Composio's default scopes (including full mail access) on Rafay's own account only. Anyone else connects only through our own Google app with `gmail.readonly`. Details: tasks/connectors-plan.md.
