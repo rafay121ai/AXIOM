@@ -10,15 +10,12 @@ const count = (rows, test) => rows.filter(test).length
 // Non-zero pairs only, as "label n" or "n label".
 const parts = (pairs, numberFirst = false) => pairs.filter(([, n]) => n > 0).map(([label, n]) => (numberFirst ? `${n} ${label}` : `${label} ${n}`))
 
-// rows: [{ status, start_minutes, outcome, prediction_check }], one per move
-// that ended (reported, or closed with no report). Returns '' when there is
-// nothing to say.
+// rows: [{ start_minutes, outcome, prediction_check }], one per reported move.
+// A move closed with no report is left out: "Didn't" is what the founder chose,
+// and a missed report is no outcome (PRODUCT.md: it closes quietly, no strikes).
+// Returns '' when there is nothing to say.
 export function trackRecordText(rows) {
-  const moves = rows
-    // A move that closed with no report counts as one the founder did not do.
-    .map((r) => ({ ...r, outcome: r.outcome ?? (r.status === 'closed_no_report' ? 'didnt' : null) }))
-    .filter((r) => OUTCOMES.includes(r.outcome))
-    .slice(0, TRACK_MOVES)
+  const moves = rows.filter((r) => OUTCOMES.includes(r.outcome)).slice(0, TRACK_MOVES)
   if (moves.length === 0) return ''
 
   const done = moves.filter((m) => m.outcome === 'done')
@@ -47,8 +44,8 @@ export function trackRecordText(rows) {
 // exactly the one without it.
 export async function loadTrackRecord(supabase, userId, log = () => {}) {
   try {
-    const moves = await supabase.from('moves').select('id, status, start_minutes, created_at')
-      .eq('user_id', userId).in('status', ['reported', 'closed_no_report'])
+    const moves = await supabase.from('moves').select('id, start_minutes, created_at')
+      .eq('user_id', userId).eq('status', 'reported')
       .order('created_at', { ascending: false }).limit(TRACK_MOVES)
     if (moves.error) throw moves.error
     const list = moves.data ?? []
@@ -58,7 +55,7 @@ export async function loadTrackRecord(supabase, userId, log = () => {}) {
     if (reports.error) throw reports.error
     const byMove = new Map((reports.data ?? []).map((r) => [r.move_id, r]))
     return trackRecordText(list.map((m) => ({
-      status: m.status, start_minutes: m.start_minutes,
+      start_minutes: m.start_minutes,
       outcome: byMove.get(m.id)?.outcome ?? null, prediction_check: byMove.get(m.id)?.prediction_check ?? null,
     })))
   } catch (err) {

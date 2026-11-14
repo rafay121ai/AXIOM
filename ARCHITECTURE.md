@@ -232,8 +232,10 @@ migration files in the repo, applied only with Rafay's explicit approval.
 
 ### Old product tables (data kept, nothing writes to them)
 `sessions`, `messages`, `conversation_threads`, `app_sessions`, `experiments`,
-`personal_memories`, `product_events`, `users` (read for first names; nothing
-writes it now). `model_usage_logs` dates from then too and is still written. The new journey does not use `experiments`: moves live in their own table (`experiments.session_id` points
+`personal_memories`, `product_events` (data kept, nothing writes them).
+`users` is still used: the greeting, Settings and pushes read `first_name`, and
+sign-up (`saveName`) writes it; account deletion removes the row.
+`model_usage_logs` dates from then too and is still written. The new journey does not use `experiments`: moves live in their own table (`experiments.session_id` points
 at the old `sessions`). Knowledge sources, chunks and embeddings stay in the
 Knowledge project.
 

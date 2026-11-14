@@ -26,9 +26,10 @@ test('counts outcomes and predictions, skipping zeros and not_tested', () => {
   assert.doesNotMatch(text, /not_tested|unclear/)
 })
 
-test('a move closed with no report counts as one that was not done', () => {
-  const text = trackRecordText([{ status: 'closed_no_report', start_minutes: 5, outcome: null, prediction_check: null }])
-  assert.match(text, /^Last 1 move: 1 didn't\.$/m)
+test('a move closed with no report is not in the record: it is not a "didn\'t" the founder chose', () => {
+  assert.equal(trackRecordText([{ start_minutes: 5, outcome: null, prediction_check: null }]), '')
+  const text = trackRecordText([{ start_minutes: 5, outcome: null, prediction_check: null }, row('done', 'right', 3)])
+  assert.match(text, /^Last 1 move: 1 done\.$/m)
 })
 
 test('a pattern shows only when every skipped move took longer to start than every done move', () => {
@@ -61,7 +62,7 @@ const tables = () => ({
 
 test('loads only this founder, only moves that ended, across situations', async () => {
   const text = await loadTrackRecord(createFakeSupabase({ tables: tables() }), U)
-  assert.match(text, /^Last 2 moves: 1 done, 1 didn't\.$/m)
+  assert.match(text, /^Last 1 move: 1 done\.$/m)
   assert.match(text, /Predictions: right 1\./)
   assert.equal(await loadTrackRecord(createFakeSupabase({ tables: { moves: [], reports: [] } }), U), '')
 })
