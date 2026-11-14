@@ -435,7 +435,7 @@ test('migrations: CHECK lists match the values the server code uses', () => {
   assert.deepEqual(checkList(schema.notification_log.body, 'slot')?.sort(), ['evening', 'morning'])
   assert.deepEqual(checkList(journeySql, 'lock_screen')?.sort(), [...LOCK_SCREEN_MODES].sort())
   assert.deepEqual(checkList(journeySql, 'mentor_style')?.sort(), [...MENTOR_STYLES].sort())
-  // 'beliefs' is allowed by 20261109000002 (memory layer, not applied yet); every other step by 20261101000009.
+  // 'beliefs' is allowed by 20261109000002 (memory layer, applied to live Nov 10 2026); every other step by 20261101000009.
   const memoryCallTypes = all.find((f) => f.name.startsWith('20261109000002'))?.sql ?? ''
   const callTypes = [...(checkList(journeySql, 'call_type') ?? []), ...(checkList(stripSqlComments(memoryCallTypes), 'call_type') ?? [])]
   for (const t of [...USAGE_CALL_TYPES, ...STEPS]) assert.ok(callTypes.includes(t), `call_type check lacks ${t}`)
@@ -689,7 +689,7 @@ test('cross-check: every new table is used by the server or documented in the pl
 })
 
 
-// ── 4. The memory layer (supabase/migrations/20261109*, not applied yet) ─────
+// ── 4. The memory layer (supabase/migrations/20261109*, applied to live Nov 10 2026) ─────
 
 const memoryFiles = all.filter((f) => f.name.startsWith(MEMORY_PREFIX))
 const memoryFile = (part) => memoryFiles.find((f) => f.name.includes(part))

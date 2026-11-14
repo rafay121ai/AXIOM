@@ -259,7 +259,7 @@ Knowledge project.
 | notification_log   | The push cap and dedupe | id, user_id, kind (morning, quiet_check, evening, reminder), slot (morning, evening), local_day, status (sending, sent, failed), attempts, dedupe_key. Unique per founder, day and slot: at most 2 a day. |
 | care_events        | Private | id, user_id, level (unclear, clear), scope_id, created_at, resolved_at. No message text. |
 | account_requests   | Export and delete requests | id, user_id, kind (export, delete), status, delete_after |
-| founder_beliefs    | What Axiom learned: business facts, patterns, preferences (server only, memory layer, not yet applied) | id, user_id, belief (3 to 240), kind (fact, pattern, preference), confidence 0 to 1, status (active, superseded), superseded_by, source (signup, conversation, report) |
+| founder_beliefs    | What Axiom learned: business facts, patterns, preferences (server only, memory layer, applied to live Nov 10 2026) | id, user_id, belief (3 to 240), kind (fact, pattern, preference), confidence 0 to 1, status (active, superseded), superseded_by, source (signup, conversation, report) |
 | founder_traits     | How the founder decides, from a closed list the database enforces | id, user_id, dimension, value, confidence, origin (self_report, observed), status, superseded_by. One active per founder and dimension. |
 | founder_world      | People, companies, products, channels they mention | id, user_id, name (unique per founder, case-insensitive, while active), kind, role, mention_count, last_mentioned_at, status |
 | founder_vocabulary | Their shorthand | id, user_id, term (unique per founder, case-insensitive, while active), meaning, confidence, mention_count, status |
@@ -521,6 +521,7 @@ Names only; values live in Render (`render.yaml`) and a local `.env`.
 - `FRONTEND_URL` (required; the server stops without it), `FRONTEND_URLS`: allowed origins.
 - `ADMIN_USER_IDS`, `ADMIN_EMAILS`: test accounts that skip the daily situation limit.
 - `REVIEWER_USER_IDS`: who may use `/review`; empty turns the page off.
+- `LESSON_CITES`: `on` enables the Learn lesson pool (default off).
 - `EXPO_PUSH`: `on` starts the push scheduler (off today).
 - `EXPO_ACCESS_TOKEN`: Expo push sender token.
 - `ACCOUNT_DELETE`: `on` makes account deletion real (off today).
@@ -530,7 +531,7 @@ Names only; values live in Render (`render.yaml`) and a local `.env`.
 
 ## Deploy order (memory layer)
 The four `supabase/migrations/20261109*` files (and the rollback in
-`supabase/rollback/20261109_rollback.sql`) are written but **not applied**.
+`supabase/rollback/20261109_rollback.sql`) were applied to live on Nov 10 2026.
 They must be applied BEFORE the server code that uses them is deployed: the
 account export, the birthday route and cost logging depend on them. To roll
 back, roll the server code back first, then run the rollback SQL.

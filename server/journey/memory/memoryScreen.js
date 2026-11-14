@@ -9,7 +9,7 @@ export const GROUP_MAX = 12
 export const TABLES = Object.freeze(['founder_beliefs', 'founder_traits', 'founder_world', 'founder_vocabulary', 'founder_threads'])
 export const REASONS = Object.freeze(['wrong', 'outdated'])
 
-// NEW copy, one sentence per dimension and value (needs Rafay's approval).
+// NEW copy, one sentence per dimension and value (approved by Rafay Nov 14 2026).
 export const TRAIT_TEXT = Object.freeze({
   decision_speed: {
     fast: 'You decide fast and adjust later.',

@@ -159,8 +159,10 @@ export function createSignupHandlers({ supabase, clock }) {
     const checked = validateAnswer(question, req.body?.answer, { now: clock.now() })
     if (!checked.ok) return res.status(400).json({ error: checked.error })
     try {
+      const before = await store.load(req.user.id)
       const answers = await store.save(req.user.id, question.key, checked.value)
-      if (question.key === 'hard_truth') await store.saveMentorStyle(req.user.id, HARD_TRUTH_STYLE[checked.value.value])
+      // Set once, while sign-up is open: a later edit in Settings must not be overwritten by a re-save.
+      if (question.key === 'hard_truth' && !isComplete(before.answers, before.firstReading)) await store.saveMentorStyle(req.user.id, HARD_TRUTH_STYLE[checked.value.value])
       return res.json(view(answers, (await store.load(req.user.id)).firstReading))
     } catch (error) {
       console.error('[Signup] save failed', error?.message || error)

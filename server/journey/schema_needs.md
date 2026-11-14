@@ -530,12 +530,11 @@ signup_answers)`, `push_tokens` (is any device registered), `situations`,
 `account_requests` each time), else `null` (also null when ACCOUNT_DELETE is
 off). No other request detail is sent.
 
-## Memory layer (not applied)
+## Memory layer (applied to live Nov 10 2026)
 
 Eight server-only tables for what Axiom learns about a founder:
 `founder_beliefs`, `founder_traits`, `founder_world`, `founder_vocabulary`,
 `founder_threads`, `memory_evidence`, `memory_runs`, `founder_corrections` (`supabase/migrations/20261109000001`), plus the `beliefs`
 value for `model_usage_logs.call_type` (`20261109000002`) and their removal on
 account deletion (`20261109000003`). All access is in
-`server/journey/memory/memoryStore.js`; none of it runs against a database
-until the migrations are applied. The account export includes all eight. There is no stored brief: the prompt text is built live by code.
+`server/journey/memory/memoryStore.js`; the migrations are applied to live. The account export includes all eight. There is no stored brief: the prompt text is built live by code.

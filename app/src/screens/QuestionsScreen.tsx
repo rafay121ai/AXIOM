@@ -12,7 +12,7 @@ import { TextAction } from '../components/TextAction';
 import { GoldButton } from '../components/GoldButton';
 import { copy, failureLine } from '../copy';
 import {
-  autoAdvances, birthdayDone, daysIn, isDone, LEAD_STEPS, MONTHS, needsContinue, pickMonth, progressAt, SKIP, startIndex,
+  autoAdvances, birthdayDone, daysIn, isDone, LEAD_STEPS, MONTHS, needsContinue, openingIndex, pickMonth, progressAt, SKIP, startIndex,
   type Birthday,
 } from '../onboarding/flow';
 import { colors, goldGradient, ink, motion, space, type } from '../theme';
@@ -38,7 +38,7 @@ export function QuestionsScreen({ questions, answers: saved = {}, startAt, signI
   const insets = useSafeAreaInsets();
   // Name and birthday come before question 1, and only for a founder starting from nothing.
   const [lead] = useState(() => (Object.keys(saved).length === 0 && startIndex(questions, startAt) === 0 ? LEAD_STEPS : 0));
-  const [index, setIndex] = useState(() => lead + startIndex(questions, startAt));
+  const [index, setIndex] = useState(() => openingIndex(lead, questions, startAt));
   const [name, setName] = useState(signInName ?? '');
   const [birthday, setBirthday] = useState<Birthday>({});
   const [answers, setAnswers] = useState<Record<string, Answer>>(saved);

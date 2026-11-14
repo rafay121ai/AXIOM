@@ -1,7 +1,7 @@
 """Load one local book into the live Knowledge library: one wiki_sources row and its wiki_chunks passages.
 
-  python load_book_chunks.py --dry-run     # chunks the book and prints counts, sizes and a cost estimate; no network
-  python load_book_chunks.py               # writes to the LIVE Knowledge project (needs explicit instruction)
+  python load_book_chunks.py               # dry run (the default): chunks the book, prints counts, sizes and a cost estimate; no network
+  python load_book_chunks.py --apply       # writes to the LIVE Knowledge project (needs explicit instruction)
 
 Built for the books that have lessons but no live passages (first: The Psychology of Money, Nov 14). Passages are whole
 paragraphs from the extracted book, never split, never across a chapter, about 2,000 to 3,300 characters like the live
@@ -55,7 +55,7 @@ def passages(source_id: str) -> list[str]:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--source", default="money-game-books-psychology-of-money", choices=sorted(BOOKS))
-    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--apply", action="store_true", help="write to the live Knowledge project (default: dry run)")
     a = ap.parse_args()
     meta = BOOKS[a.source]
     texts = passages(a.source)
@@ -63,7 +63,7 @@ def main() -> int:
     est_tokens = sum(chars) / 4
     print(f"{a.source}: {len(texts)} passages, {min(chars)} to {max(chars)} chars (median {sorted(chars)[len(chars) // 2]}), "
           f"about {est_tokens / 1e3:.0f}k tokens, about ${est_tokens / 1e6 * 0.02:.4f} to embed")
-    if a.dry_run:
+    if not a.apply:
         return 0
 
     import requests

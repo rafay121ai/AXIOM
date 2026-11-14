@@ -95,6 +95,9 @@ export function startIndex(questions: Question[], next: string | null | undefine
 /** Name and birthday come before question 1, only for a founder who has answered nothing yet. */
 export const LEAD_STEPS = 2;
 
+/** Where the screen opens: on the name step for a new founder, at the first unanswered question when resuming. */
+export const openingIndex = (lead: number, questions: Question[], next: string | null | undefined) => (lead > 0 ? 0 : startIndex(questions, next));
+
 export const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const DAYS_IN = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 

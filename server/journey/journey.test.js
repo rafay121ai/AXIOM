@@ -375,6 +375,16 @@ test('hard_truth sets the Settings style, once, when it is saved; other answers 
   } finally { await close() }
 })
 
+test('a hard_truth re-save after sign-up is complete leaves mentor_style alone', async () => {
+  const { supabase, put, close } = await setup()
+  try {
+    await saveAll(put)
+    const style = supabase.rows('user_settings')[0].mentor_style
+    assert.equal((await put('hard_truth', { value: style === 'hard' ? 'Gently' : 'Blunt, no padding' })).status, 200)
+    assert.equal(supabase.rows('user_settings')[0].mentor_style, style)
+  } finally { await close() }
+})
+
 test('name: saves one first name to users.first_name, creating the row if needed; junk is refused', async () => {
   const { supabase, call, close } = await setup()
   try {

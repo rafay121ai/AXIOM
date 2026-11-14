@@ -1,4 +1,4 @@
-// The 14 sign-up questions (7 business, then 7 personal) and their server-side validation. Wording and
+// The 14 sign-up questions (6 business, 7 personal, then the business question `stuck`) and their server-side validation. Wording and
 // field names match app/src/api/fake.ts. The server owns the option lists:
 // an answer that is not one of them is refused.
 

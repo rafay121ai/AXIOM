@@ -1,7 +1,7 @@
 import { createFakeApi } from '../src/api/fake';
 import type { GoalQuestion, Question, TextQuestion, TwoQuestion, WhereQuestion } from '../src/api/types';
 import {
-  MAX_OPTIONS, autoAdvances, countrySuggestions, isDone, needsContinue, optionGroups, startIndex, tapSingle, tapTwo, SKIP, isSkip, pickMonth, birthdayDone, daysIn, progressAt,
+  MAX_OPTIONS, autoAdvances, countrySuggestions, isDone, needsContinue, optionGroups, startIndex, tapSingle, tapTwo, SKIP, isSkip, pickMonth, birthdayDone, daysIn, progressAt, openingIndex, LEAD_STEPS,
 } from '../src/onboarding/flow';
 import { clip, waitLines } from '../src/onboarding/waitLines';
 
@@ -162,5 +162,15 @@ describe('wait lines', () => {
   });
   it('marks a cut with no comma to cut at', () => {
     expect(clip('I am building a scheduling tool for independent physiotherapists in Lahore who lose a fifth of bookings.', 60)).toBe('I am building a scheduling tool for independent…');
+  });
+});
+
+describe('openingIndex', () => {
+  it('a new founder opens on the name step, then birthday, then question 1', () => {
+    expect(openingIndex(LEAD_STEPS, questions, null)).toBe(0); // index 0 is the name step, 1 the birthday, 2 is questions[0]
+    expect(questions[2 - LEAD_STEPS].key).toBe('stage');
+  });
+  it('a resuming founder opens at the first unanswered question, with no lead steps', () => {
+    expect(openingIndex(0, questions, 'building')).toBe(5);
   });
 });

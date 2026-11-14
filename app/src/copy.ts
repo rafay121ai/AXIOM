@@ -110,7 +110,7 @@ export const copy = {
     // the mock styles a withdraw link (.withdraw) but shows no words for it.
     takeDown: 'Take it down',
   },
-  // tasks/design/memory.md, "Copy": every string is new and waits for Rafay's approval. {n} is the count.
+  // tasks/design/memory.md, "Copy": every string is new; Rafay approved it Nov 14 2026. {n} is the count.
   memory: {
     title: 'What Axiom thinks',
     summaryOne: 'Axiom has learned {n} thing about you and your work.',
