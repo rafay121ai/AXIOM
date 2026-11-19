@@ -752,3 +752,5 @@ Replaces the PARKED entry above for Gmail, Calendar and Notion. Plan: tasks/conn
 - Facts about unfamiliar people come only from the founder's own emails and notes. No general-knowledge line, no web search.
 - Gmail and Calendar are polling in Composio (minimum 2 minutes on managed auth), so signals are near, not real-time.
 - Gmail scopes (Rafay, Nov 10): Composio's managed Google app is blocked by Google for `gmail.readonly`, so development uses Composio's default scopes (including full mail access) on Rafay's own account only. Anyone else connects only through our own Google app with `gmail.readonly`. Details: tasks/connectors-plan.md.
+
+- What Axiom thinks approved (Rafay, Nov 14 2026): the "mark wrong" removal control, the screen copy (tasks/design/memory.md), the grid draw-in on that screen, and the title (kept next to Settings' "What Axiom knows about you").
