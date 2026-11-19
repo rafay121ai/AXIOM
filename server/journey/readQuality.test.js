@@ -61,12 +61,13 @@ test('the first reading headline and body reach the Read and the Read talk promp
   const firstReading = { headline: 'Nobody pays yet, and you are building it.', body: 'Your week is short and your goal is big.', underlines: [] }
   const line = `Already said on the first reading, do not repeat it: ${firstReading.headline} ${firstReading.body}`
   const conversation = SAID.map((text) => ({ role: 'founder', text }))
+  const asked = [{ role: 'axiom', text: 'How many hours a week does the ordering take?' }, ...conversation]
   assert.ok(readMessages({ conversation, firstReading }).some((m) => m.role === 'system' && m.content === line))
   assert.ok(readTalkMessages({ talk: [], questionsLeft: 2, firstReading }).some((m) => m.role === 'system' && m.content === line))
   assert.equal(readMessages({ conversation }).some((m) => m.content.startsWith('Already said')), false)
   const sent = []
   const callStructured = async ({ messages }) => { sent.push(messages); return { data: CONFLICT } }
-  const out = await createRead({ conversation, deps: { callStructured, userId: 'u' }, situationId: 's', style: 'direct', brief: brief(SAID.join('\n')), firstReading })
+  const out = await createRead({ conversation: asked, deps: { callStructured, userId: 'u' }, situationId: 's', style: 'direct', brief: brief(SAID.join('\n')), firstReading })
   assert.equal(out.source, 'model')
   assert.ok(sent[0].some((m) => m.content === line))
 })

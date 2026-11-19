@@ -124,3 +124,8 @@ test('"Ill" typed for "I\'ll" is not sickness; ill after a verb of being still i
   assert.equal(isBlocked("I'm ill and tired"), true)
   assert.equal(isBlocked('feeling really ill'), true)
 })
+
+test('"ill" after falling, becoming or staying ill is sickness; "Ill" typed for "I\'ll" is not', () => {
+  for (const t of ['I fell ill last week', 'My cofounder fell ill', 'I am still ill', 'She became ill in March', 'I have been off ill', 'He is so ill']) assert.equal(isBlocked(t), true, t)
+  for (const t of ['Ill give other work to employees later', 'Ill do it tomorrow', 'I think so ill give it to Sam', 'Ill send the price']) assert.equal(isBlocked(t), false, t)
+})

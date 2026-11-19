@@ -10,11 +10,12 @@ import { moveMessages } from '../move/prompts/move.js'
 import { readMessages } from '../prompts/read.js'
 import { readTalkMessages } from '../prompts/readTalk.js'
 import { situationMessages } from '../prompts/situation.js'
-import { checkRead } from '../theRead.js'
+import { checkRead, createRead } from '../theRead.js'
+import { checkMove } from '../move/moveChecks.js'
 import { briefMessages, buildBriefText } from './brief.js'
-import { conflictProblem, findConflict, namesBoth, namesBothAndAsks, transcriptOf } from './conflicts.js'
+import { conflictProblem, earlierAllowed, findConflict, namesBoth, namesBothAndAsks, shiftText, transcriptOf } from './conflicts.js'
 import { applyExtraction } from './extractBeliefs.js'
-import { learnFromMessage } from './learnMessage.js'
+import { createMessageLearner, learnFromMessage } from './learnMessage.js'
 import { createMemoryStore } from './memoryStore.js'
 import { MESSAGE_SCHEMA } from './prompts/beliefs.js'
 
@@ -28,13 +29,13 @@ const turns = (...pairs) => pairs.map(([role, text]) => ({ role, text }))
 const hours = findConflict({ transcript: turns(['axiom', ASK], ['founder', '16']), earlier: EARLIER })
 
 test('a bare 16 after "how many hours" against "under 15 hours" is a conflict in hours', () => {
-  assert.deepEqual(hours, { earlier: EARLIER[0], nowText: '16 hours', earlierNumber: 15, nowNumber: 16 })
+  assert.deepEqual(hours, { earlier: EARLIER[0], earlierClause: 'under 15 hours', nowText: '16 hours', earlierNumber: 15, nowNumber: 16, strong: true })
 })
 
 test('a number word and a number with its own unit are found too', () => {
   const found = (text, question = ASK) => findConflict({ transcript: turns(['axiom', question], ['founder', text]), earlier: EARLIER })
   assert.equal(found('sixteen').nowNumber, 16)
-  assert.deepEqual(found('Im okay with working on it 16 hours a week', 'What is the plan?'), { earlier: EARLIER[0], nowText: 'Im okay with working on it 16 hours a week', earlierNumber: 15, nowNumber: 16 })
+  assert.deepEqual(found('Im okay with working on it 16 hours a week', 'What is the plan?'), { earlier: EARLIER[0], earlierClause: 'under 15 hours', nowText: 'Im okay with working on it 16 hours a week', earlierNumber: 15, nowNumber: 16, strong: true })
   assert.equal(found('Ordering takes 16 hours a week for me.', 'What changed?').nowNumber, 16)
 })
 
@@ -333,10 +334,131 @@ test('a Learn reply that still has a contrast or no closing question after the r
   const noQ = lesson('Rob Fitzpatrick says ask about their life. Ordering takes 16 hours a week of your life.')
   const plain = await run([noQ, noQ])
   assert.deepEqual(plain.sources, [])
-  assert.match(plain.text, /^I could not find a lesson on this that I trust, so I will not guess\. On .*: what is the next step, as you see it\?$/)
-  assert.equal(plain.text.match(/\?/g).length, 1)
+  assert.equal(plain.text, 'I do not have a lesson on this that I would stand behind yet. What is the next step you see?')
   // a failed second call after a hard failure also gets the repair
   const calls = [bad]
   const afterError = await composeReply({ mode: 'lesson', step: 'learn', evidence, founderTexts: said, earlierTexts: EARLIER, context: { brief, situation: [], read: null, learn: [] }, deps: { callStructured: async () => { if (calls.length) return { data: calls.shift() }; throw new Error('down') } } })
   assert.equal(contrastProblem(afterError.text), null)
+})
+
+// ── Slice 8: pre-merge review fixes ──────────────────────────────────────────
+
+test('goals, targets and one-off past numbers are not a change; the same measure still is', () => {
+  const none = (text, earlier, question = 'What is going on?') => assert.equal(findConflict({ transcript: turns(['axiom', question], ['founder', text]), earlier }), null, text)
+  none('I spent 3 hours on the pitch deck yesterday', ['Works under 15 hours a week'])
+  none('I need 10 customers by March', ['Has 2 customers'])
+  none('I have 1 customer who wants 40 orders', ['Has 2 customers'])
+  none('I want to reach 8 customers this month', ['Has 2 customers'])
+  none('Last week I put in 4 hours', ['Works under 15 hours a week'])
+  none('It takes 16 hours a month', ['Works 15 hours a week']) // another period is another measure
+  const found = findConflict({ transcript: turns(['founder', 'I have 3 customers now']), earlier: ['Has 2 customers'] })
+  assert.deepEqual([found.earlierNumber, found.nowNumber, found.strong], [2, 3, true])
+})
+
+test('strong: a bare answer to a unit question, or the same unit and the same period. weak: a period on one side only', () => {
+  assert.equal(hours.strong, true)
+  const week = (text, earlier) => findConflict({ transcript: turns(['founder', text]), earlier })
+  assert.equal(week('I can give 16 hours a week', ['Works under 15 hours a week']).strong, true)
+  // The sign-up line says "evenings and weekends", a weekly rhythm, so a typed "16 hours a week" is a strong change.
+  assert.equal(week('I can give 16 hours a week', EARLIER).strong, true)
+  assert.equal(week('I can give 16 hours a week', ['Works under 15 hours']).strong, false)
+  assert.equal(week('I can give 16 hours', ['Works under 15 hours a week']).strong, false)
+  assert.equal(week('I can give 16 hours', EARLIER).strong, false)
+  assert.equal(week('I can give 16 hours', ['Works under 15 hours']).strong, true)
+})
+
+test('only a strong conflict is enforced; a weak one is a notice with no retry and no fallback', async () => {
+  const WEAK = ['Works under 15 hours']
+  const weak = findConflict({ transcript: turns(['founder', 'Ordering takes 16 hours a week for me.']), earlier: WEAK })
+  assert.equal(weak.strong, false)
+  const miss = checkRead({ read, answerTexts: ['I order everything by hand and ordering takes my hours', 'Ordering takes 16 hours a week for me.'], earlierTexts: earlierAllowed(weak), conflict: weak })
+  assert.deepEqual(miss.problems.filter((p) => p === conflictProblem(weak)), [])
+  assert.deepEqual(checkReply({ data: lesson(MISS), mode: 'lesson', evidence, founderTexts: said, earlierTexts: earlierAllowed(weak), conflict: weak }).problems, [])
+  const sent = []
+  const callStructured = async ({ messages }) => { sent.push(messages); return { data: read } }
+  const out = await createRead({ conversation: turns(['founder', 'I order everything by hand and ordering takes my hours'], ['axiom', 'Hours?'], ['founder', 'Ordering takes 16 hours a week for me.']), deps: { callStructured, userId: 'u' }, situationId: 's', brief: `Earlier they said:\n- ${WEAK[0]}` })
+  assert.equal(sent.length, 1)
+  assert.equal(out.source, 'model')
+  assert.equal(noticeIn(sent[0]).length, 1) // the notice still reaches the prompt
+})
+
+test('said once across situations: a stored shift holding both numbers ends the notice', () => {
+  const shiftFact = 'Said works under 15 hours before, now says 16 hours a week.'
+  const t = turns(['founder', 'Ordering takes 16 hours a week for me.'])
+  assert.notEqual(findConflict({ transcript: t, earlier: EARLIER }), null)
+  assert.equal(findConflict({ transcript: t, earlier: [...EARLIER, shiftFact] }), null)
+  // another number is another change, and the shift line itself is never compared against
+  const other = findConflict({ transcript: turns(['founder', 'Ordering takes 20 hours a week for me.']), earlier: [...EARLIER, shiftFact] })
+  assert.equal(other.earlier, EARLIER[0])
+})
+
+test('a new situation after a stored shift is not told again; memory stores no second shift', async () => {
+  const { supabase, learn } = memory({ founder_beliefs: [
+    { id: OLD, user_id: A, belief: 'Works evenings and weekends, under 15 hours a week.', kind: 'fact', confidence: 0.5, source: 'signup', status: 'active', created_at: '2026-11-14T00:00:00Z', updated_at: '2026-11-14T00:00:00Z' },
+    { id: '00000000-0000-4000-8000-000000000501', user_id: A, belief: 'Said works evenings and weekends, under 15 hours a week before, now says 16 hours a week.', kind: 'fact', confidence: 0.5, source: 'conversation', status: 'active', created_at: '2026-11-15T00:00:00Z', updated_at: '2026-11-15T00:00:00Z' },
+  ] })
+  const facts = supabase.rows('founder_beliefs').map((b) => b.belief)
+  assert.equal(findConflict({ transcript: turns(['founder', 'I can do 16 hours a week on ordering.']), earlier: facts }), null)
+  await learn({}, { text: 'I can do 16 hours a week on ordering.', sourceId: '00000000-0000-4000-8000-000000000199' })
+  assert.equal(supabase.rows('founder_beliefs').length, 2)
+})
+
+test('an earlier line lends numbers only through the active conflict', () => {
+  assert.deepEqual(earlierAllowed(null), [])
+  assert.deepEqual(earlierAllowed(hours), ['under 15 hours'])
+  const lines = ['Evenings and weekends, under 15 hours', 'Has 40 customers waiting']
+  const text = (n) => `Under 15 hours before and now 16. Every other job waits for the ordering by hand, and ${n} customers wait.`
+  const readWith = (n) => ({ ...read, body: text(n), closing_question: 'What changed between the 15 and the 16 hours of ordering?' })
+  const answers = ['I order everything by hand and ordering takes my hours', '16']
+  assert.match(checkRead({ read: readWith(40), answerTexts: answers, earlierTexts: earlierAllowed(hours), conflict: hours }).problems.join(), /number is not in the answers: 40/)
+  assert.ok(lines.length === 2)
+  const reply = (n) => `You said under 15 hours before, and now 16 hours a week. Rob Fitzpatrick says ask about their life. ${n} people wait. What changed?`
+  assert.match(checkReply({ data: lesson(reply(40)), mode: 'lesson', evidence, founderTexts: said, earlierTexts: earlierAllowed(hours), conflict: hours }).problems.join(), /never gave: 40/)
+  const move = (n) => ({ title: 'Email the clinics', mission: `Cut the ordering from ${n} hours.`, success: 'Both reply.', words: '', checklist: ['Open the email'], prediction: 'One may not reply.', hypothesis: 'h', start_minutes: 5 })
+  assert.deepEqual(checkMove({ data: move(15), founderTexts: said, earlierTexts: earlierAllowed(hours) }).problems.filter((p) => /never gave/.test(p)), [])
+  assert.match(checkMove({ data: move(40), founderTexts: said, earlierTexts: earlierAllowed(hours) }).problems.join(), /never gave: 40/)
+})
+
+test('a blocked topic anywhere in the message stops the whole pass: nothing stored, no model call', async () => {
+  const { supabase, calls, learn } = memory()
+  const out = await learn(shift, { text: "my dad is in hospital so I'll only have 5 hours a week", context: async () => turns(['axiom', ASK]) })
+  assert.equal(out.status, 'skipped')
+  assert.equal(calls.length, 0)
+  assert.equal(supabase.rows('founder_beliefs').length, 1)
+  assert.equal(supabase.rows('memory_evidence').length, 0)
+})
+
+test('two quick messages from one founder run one after the other and store no duplicate fact', async () => {
+  const supabase = createFakeSupabase({ tables: { situations: [{ id: SIT, user_id: A, title: 'Ordering', status: 'open', created_at: '2026-11-17T00:00:00Z' }] } })
+  const order = []
+  let running = 0
+  let overlap = false
+  const callStructured = async () => {
+    running += 1
+    overlap ||= running > 1
+    order.push('start')
+    await new Promise((r) => setTimeout(r, 15))
+    order.push('end')
+    running -= 1
+    return { data: { ...EMPTY_MESSAGE, new_beliefs: [{ belief: 'Orders the products by hand.', kind: 'fact', snippet: 'I order the products by hand', shifts_from: '' }] }, model: 'm' }
+  }
+  const learner = createMessageLearner({ supabase, clock: createFakeClock(NOW), callStructured, userId: A })
+  const send = (sourceId) => learner({ sourceKind: 'situation', sourceId, situationId: SIT, text: 'I order the products by hand every week' })
+  const done = [send('00000000-0000-4000-8000-000000000201'), send('00000000-0000-4000-8000-000000000202')]
+  await Promise.all(done)
+  assert.equal(overlap, false)
+  assert.deepEqual(order, ['start', 'end', 'start', 'end'])
+  assert.equal(supabase.rows('founder_beliefs').length, 1)
+})
+
+test('the shift is plain third person, keeps both numbers and fits 240 characters; otherwise it is skipped', () => {
+  const c = (over) => ({ ...hours, ...over })
+  assert.equal(shiftText(c({ nowText: 'I can give 16 hours a week' })), 'Said evenings and weekends, under 15 hours before, now says can give 16 hours a week.')
+  assert.equal(shiftText(c({ nowText: 'my ordering takes me 16 hours' })), 'Said evenings and weekends, under 15 hours before, now says their ordering takes them 16 hours.')
+  assert.equal(shiftText(c({ nowText: 'so that I can order 16 hours' })), null) // an "I" left in the middle: no mixed person
+  const long = c({ earlier: `Your time on it: ${'evenings and weekends and some free days '.repeat(5)}under 15 hours ${'when the kids are asleep '.repeat(4)}`, nowText: `${'a long way around to say that ordering all of the products takes '.repeat(1)}16 hours a week ${'for the whole team and more '.repeat(1)}` })
+  const text = shiftText(long)
+  assert.ok(text.length <= 240, text.length)
+  assert.ok(/15/.test(text) && /16/.test(text), text)
+  assert.ok(!/\b(I|my|me)\b/.test(text))
 })

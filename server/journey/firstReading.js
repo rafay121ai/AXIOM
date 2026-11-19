@@ -93,6 +93,8 @@ export function fallbackReading(answers) {
 export async function createFirstReading({ answers, deps, grounding = null }) {
   const { evidence, answerTexts } = buildEvidence(answers)
   let problems = null
+  let grounded = false // same rule as the Read: checked once, and the last attempt is never turned down by it
+  let claims = []
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
       const { data } = await deps.callStructured({
@@ -108,8 +110,13 @@ export async function createFirstReading({ answers, deps, grounding = null }) {
       const verdict = checkFirstReading({ reading, answerTexts })
       if (verdict.ok) {
         // The sign-up answers are everything this reading may rest on.
-        const claims = grounding ? await unsupportedClaims({ read: reading, conversation: evidence.map((e) => ({ role: 'founder', text: `${e.question}: ${e.answer}` })), brief: '', grounding, deps }) : []
+        if (grounding && !grounded) claims = await unsupportedClaims({ read: reading, conversation: evidence.map((e) => ({ role: 'founder', text: `${e.question}: ${e.answer}` })), brief: '', grounding, deps })
+        grounded = true
         if (claims.length === 0) return { reading, source: 'model' }
+        if (attempt === 2) {
+          deps.log?.('grounding objected, shipped', { claims })
+          return { reading, source: 'model' }
+        }
         problems = claims.map((c) => `it claims something they did not say (${c}): say only what they answered or what follows from their numbers`)
       } else problems = verdict.problems
     } catch (err) {

@@ -20,6 +20,7 @@ const sentencesOf = (text) => String(text).split(/(?<=[.!?])\s+/)
 export const MIN_MESSAGE_WORDS = 4
 export const CONTEXT_TURNS = 6
 const inflight = new Set()
+const tails = new Map() // userId -> the last pass queued for that founder
 
 // closing: the founder's answer to the Read's question, whose last context turn is that question.
 // sourceKind: situation | read | learn | swap | move. sourceId: the turn id (read id for the closing answer, move id for a swap).
@@ -36,6 +37,7 @@ export async function learnFromMessage({
     // A short answer still counts when it holds a number ("16") or answers the Read's question; filler never does.
     const short = isFillerReply(typed, { minWords: MIN_MESSAGE_WORDS }) || stripFiller(typed).text.split(/\s+/).filter(Boolean).length < MIN_MESSAGE_WORDS
     if (isFillerReply(typed) || stripFiller(typed).text === '' || (short && !closing && numbersIn(typed).length === 0)) return { status: 'skipped' }
+    if (isBlocked(typed)) return { status: 'skipped' } // a blocked topic anywhere in the message: no pass, no model call
     const mem = store ?? createMemoryStore({ supabase, clock, log })
     if (await mem.hasEvidenceFrom(userId, sourceId)) return { status: 'skipped' }
 
@@ -74,9 +76,10 @@ export async function learnFromMessage({
     // from a fixed template, first, so the per-run cap never drops it. Same checks as any other write (care, blocked topics, corrections).
     const facts = beliefs.filter((b) => b.kind === 'fact')
     const conflict = findConflict({ transcript: [...turns, { role: 'founder', text: typed }], earlier: facts.map((b) => b.belief) })
-    // The shift holds only a clause of the message, so a blocked topic anywhere in the whole message stops it too.
-    const old = conflict && !isBlocked(typed) && facts.find((b) => b.belief === conflict.earlier)
-    const shift = old ? [{ belief: shiftText(conflict), kind: 'fact', snippet: typed.includes(conflict.nowText) ? conflict.nowText : typed.trim(), shifts_from: old.id }] : []
+    const old = conflict && facts.find((b) => b.belief === conflict.earlier)
+    const shiftBelief = old ? shiftText(conflict) : null
+    if (old && !shiftBelief) log('shift not stored: no plain third person text that fits', { earlierNumber: conflict.earlierNumber, nowNumber: conflict.nowNumber })
+    const shift = shiftBelief ? [{ belief: shiftBelief, kind: 'fact', snippet: typed.includes(conflict.nowText) ? conflict.nowText : typed.trim(), shifts_from: old.id }] : []
     const lastTurn = turns.at(-1)
     const question = lastTurn?.role === 'axiom' ? sentencesOf(lastTurn.text).findLast((s) => s.includes('?')) ?? '' : ''
     const written = await applyExtraction({
@@ -92,5 +95,14 @@ export async function learnFromMessage({
   }
 }
 
+// One pass at a time per founder, so two quick messages never read the same memory and write the same fact twice. The map holds only busy founders.
+function inTurn(userId, job) {
+  const run = (tails.get(userId) ?? Promise.resolve()).then(job)
+  const tail = run.catch(() => {})
+  tails.set(userId, tail)
+  tail.then(() => { if (tails.get(userId) === tail) tails.delete(userId) })
+  return run
+}
+
 // The function a screen calls after it accepted a founder message: scheduled, never awaited.
-export const createMessageLearner = (deps) => (args) => scheduleMemory(() => learnFromMessage({ ...deps, ...args }), deps.log)
+export const createMessageLearner = (deps) => (args) => scheduleMemory(() => inTurn(args.userId ?? deps.userId, () => learnFromMessage({ ...deps, ...args })), deps.log)

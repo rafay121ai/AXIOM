@@ -5,7 +5,7 @@ import { checkFirstReading, unquoteUnknown } from './ownWords.js'
 import { checkHook, threadKinds } from './hooks.js'
 import { stripFiller } from './filler.js'
 import { earlierLines } from './memory/brief.js'
-import { conflictProblem, findConflict, namesBothAndAsks } from './memory/conflicts.js'
+import { conflictProblem, earlierAllowed, findConflict, namesBothAndAsks } from './memory/conflicts.js'
 import { overCap } from './memory/extractBeliefs.js'
 import { READ_SCHEMA, readMessages } from './prompts/read.js'
 import { GROUNDING_SCHEMA, groundingMessages } from './prompts/readGrounding.js'
@@ -51,7 +51,7 @@ export function checkRead({ read, answerTexts, earlierTexts = [], conflict = nul
   if (threadKinds(`${read.headline} ${read.body}`, answerTexts).length === 0) {
     problems.push('the Read is not about this situation: build it on what they wrote here, in their words')
   }
-  if (conflict && !namesBothAndAsks(`${read.headline} ${read.body} ${read.closing_question}`, conflict)) problems.push(conflictProblem(conflict))
+  if (conflict?.strong && !namesBothAndAsks(`${read.headline} ${read.body} ${read.closing_question}`, conflict)) problems.push(conflictProblem(conflict))
   if (read.underlines !== undefined) problems.push('the Read has no underlines')
   const own = checkFirstReading({
     reading: { headline: read.headline, ...(fallback ? { body: `${read.body} ${read.closing_question}` } : { body: read.body, closing_question: read.closing_question }), underlines: [] },
@@ -73,6 +73,7 @@ const unquoted = (read, answerTexts) => ({
 // One cheap model call on a Read (or first reading) that passed the code checks: the claims in it that the founder's words, numbers and the brief do not
 // support (Rafay, Nov 19: invented motives got through every code check). Fail-open: no check at the daily cap, and any error or
 // unusable output passes the Read, so this can never stop a founder from getting one.
+export const GROUNDING_TIMEOUT_MS = 8000
 export async function unsupportedClaims({ read, conversation, brief, situationId, grounding, deps }) {
   try {
     if (await overCap(grounding.isCapped, deps.userId)) return []
@@ -81,6 +82,7 @@ export async function unsupportedClaims({ read, conversation, brief, situationId
       schema: GROUNDING_SCHEMA,
       schemaName: 'read_grounding',
       maxCompletionTokens: 300,
+      timeoutMs: GROUNDING_TIMEOUT_MS,
       userId: deps.userId,
       usageContext: { step: 'beliefs', kind: 'read_grounding', situation_id: situationId },
       messages: groundingMessages({ conversation, brief, read: { headline: read.headline, body: read.body, closing_question: read.closing_question ?? '' } }),
@@ -101,6 +103,8 @@ export async function createRead({ conversation, deps, situationId, style, track
   const earlierTexts = earlierLines(brief)
   const conflict = findConflict({ transcript: conversation, earlier: earlierTexts })
   let problems = null
+  let grounded = false // the check runs once: a rewrite that only fixes its objection ships unchecked, and the last attempt is never turned down by it
+  let claims = []
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
       const { data } = await deps.callStructured({
@@ -113,10 +117,15 @@ export async function createRead({ conversation, deps, situationId, style, track
         messages: readMessages({ conversation, style, trackRecord, brief, firstReading, conflict }, problems),
       })
       const read = unquoted(clean(data), founderTexts)
-      const verdict = checkRead({ read, answerTexts: founderTexts, earlierTexts, conflict })
+      const verdict = checkRead({ read, answerTexts: founderTexts, earlierTexts: earlierAllowed(conflict), conflict })
       if (verdict.ok) {
-        const claims = grounding ? await unsupportedClaims({ read, conversation, brief, situationId, grounding, deps }) : []
+        if (grounding && !grounded) claims = await unsupportedClaims({ read, conversation, brief, situationId, grounding, deps })
+        grounded = true
         if (claims.length === 0) return { read, source: 'model' }
+        if (attempt === 2) {
+          deps.log?.('grounding objected, shipped', { claims })
+          return { read, source: 'model' }
+        }
         problems = claims.map((c) => `it claims something they did not say (${c}): say only what they said or what follows from their numbers`)
       } else problems = verdict.problems
     } catch (err) {

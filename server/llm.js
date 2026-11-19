@@ -79,12 +79,15 @@ export async function callStructured({
   userId = null,
   usageContext = {},
   maxCompletionTokens = 1500,
+  timeoutMs = null,
   env = process.env,
   clock = { now: () => Date.now() },
 }) {
   const model = modelForStep(step, env)
   // Cost rows name the journey step (read, learn, move...), not "chat".
   const stepUsage = { ...usageContext, call_type: step }
+  // A per-call limit for a check that must fail open (the client's own timeout is 60 seconds); one signal covers a retry too.
+  const options = timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : undefined
   let problems = []
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -99,7 +102,7 @@ export async function callStructured({
         messages: attemptMessages,
         max_completion_tokens: maxCompletionTokens,
         response_format: { type: 'json_schema', json_schema: { name: schemaName, strict: true, schema: withoutLengths(schema) } },
-      })
+      }, options)
     } catch (err) {
       await logModelUsage({
         userId, usageContext: stepUsage, model, latencyMs: clock.now() - startedAt,

@@ -39,7 +39,7 @@ function setup(over = {}) {
 const shift = (extra = {}) => ({ new_beliefs: [{ belief: 'Said under 15 hours at sign-up, then 16 hours a week for ordering products.', kind: 'fact', snippet: '16 hours a week', shifts_from: OLD, ...extra }] })
 const texts = (supabase) => supabase.rows('founder_beliefs').map((b) => b.belief)
 // MSG changes the sign-up 15 to 16, so the server itself stores this shift, whatever the model proposes.
-const CODE_SHIFT = 'Said works evenings and weekends, under 15 hours a week before, now says Ordering the products from suppliers takes me 16 hours a week.'
+const CODE_SHIFT = 'Said works evenings and weekends, under 15 hours a week before, now says Ordering the products from suppliers takes them 16 hours a week.'
 
 test('15 then 16: the shift is stored, the old fact stays, and the next brief names both', async () => {
   const { supabase, calls, learn } = setup()

@@ -107,7 +107,7 @@ export function checkFact(fact, founderTexts) {
 
 // data: the model's output. Returns { reply, problems }. `reply` is the
 // cleaned version (every hard rule applied), used when the retry fails too.
-// earlierTexts: what the brief printed as earlier statements; their numbers may be named (a change), never quoted.
+// earlierTexts: the clause of the active conflict (earlierAllowed); its number may be named (a change), never quoted.
 export function checkReply({ data, mode, evidence, founderTexts, earlierTexts = [], asked = null, conflict = null }) {
   const problems = []
   const handles = new Map(evidence.map((e) => [e.handle, e]))
@@ -169,7 +169,7 @@ export function checkReply({ data, mode, evidence, founderTexts, earlierTexts = 
     problems.push(`too long: ${words(text)} words, the cap is ${WORD_CAP}`)
     text = capWords(text, WORD_CAP, { keepLast: QUESTION_MODES.has(mode) })
   }
-  if (conflict && !namesBothAndAsks(text, conflict)) problems.push(conflictProblem(conflict))
+  if (conflict?.strong && !namesBothAndAsks(text, conflict)) problems.push(conflictProblem(conflict))
   const contrast = contrastProblem(text)
   if (contrast) { problems.push(contrast); hard = true }
   if (text && threadKinds(text, founderTexts).length === 0) problems.push('nothing from this founder: use their own words, a number or a date they gave')
@@ -210,16 +210,11 @@ function repairText(text, mode) {
   return keep.length >= (closing ? 2 : 1) && !contrastProblem(out) && (!closing || keep.at(-1) === closing) ? out : null
 }
 
-// Last resort, in the founder's own plain words (voice: direct, no filler): no source, no teaching, nothing invented.
-// The same shape as the plain Read in theRead.js.
-function plainReply(mode, founderTexts) {
-  const own = founderTexts.map((t) => String(t).replace(/["“”„‟\[\]{}_*#`]/g, '').trim()).find((t) => words(t) >= 3) ?? ''
-  const snippet = own.split(/\s+/).slice(0, 8).join(' ').replace(/[\s,;:.!?\-–—]+$/, '')
-  const ask = QUESTION_MODES.has(mode)
-  const options = [snippet, ''].map((about) => (ask
-    ? `I could not find a lesson on this that I trust, so I will not guess. ${about ? `On ${about}: what` : 'What'} is the next step, as you see it?`
-    : `I could not find a passage that fits${about ? ` ${about}` : ' this'} well enough, so I will not guess.`))
-  const text = options.find((t) => !contrastProblem(t) && !hasBanned(t) && !TEASER.test(norm(t)))
+// Last resort (voice: direct, no filler): no source, no teaching, nothing pasted from the founder, nothing invented. Wording for Rafay's approval.
+function plainReply(mode) {
+  const text = QUESTION_MODES.has(mode)
+    ? 'I do not have a lesson on this that I would stand behind yet. What is the next step you see?'
+    : 'I do not have a passage that fits this well enough, so I will not guess.'
   return { text, sources: [], picture: null, follow_ups: [], move_subject: null, move_fact: null, flags: [] }
 }
 
@@ -239,7 +234,7 @@ export async function composeReply({ mode, step, context, evidence, founderTexts
     if (!last.hard) return last.reply
     const text = repairText(last.reply.text, mode)
     deps.log?.('learn reply repaired or replaced', { problems: last.problems, repaired: text !== null })
-    return text ? { ...last.reply, text } : plainReply(mode, founderTexts)
+    return text ? { ...last.reply, text } : plainReply(mode)
   }
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     let data

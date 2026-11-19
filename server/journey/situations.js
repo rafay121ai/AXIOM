@@ -400,7 +400,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
         const replyProblems = !reply ? ['the reply is empty: answer what they just said first']
           : reply.includes('?') ? ['the reply holds a question: one question only, in question']
             : threadKinds(reply, sources).length === 0 ? ['the reply says nothing of theirs: use their own words']
-              : conflict && !namesBothAndAsks(`${reply} ${question}`, conflict) ? [conflictProblem(conflict)]
+              : conflict?.strong && !namesBothAndAsks(`${reply} ${question}`, conflict) ? [conflictProblem(conflict)]
                 : contrastProblem(`${reply} ${question}`) ? [contrastProblem(`${reply} ${question}`)] : []
         if (verdict.ok && replyProblems.length === 0 && question.length <= 220) return `${reply} ${question}`
         problems = [...replyProblems, ...verdict.problems]

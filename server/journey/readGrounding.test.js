@@ -17,7 +17,7 @@ const GOOD = {
 }
 const INVENTED = { ...GOOD, body: 'Two clinics asked for it three weeks ago, and you are avoiding the price because you fear rejection. Every day makes it harder to send.' }
 
-function run({ reads, grounding = { unsupported: [] }, groundingError = false, capped = false, off = false }) {
+function run({ reads, grounding = { unsupported: [] }, groundingError = false, capped = false, off = false, log = () => {} }) {
   const calls = []
   const queue = [...reads]
   const callStructured = async (call) => {
@@ -29,7 +29,7 @@ function run({ reads, grounding = { unsupported: [] }, groundingError = false, c
     return { data: queue.shift() }
   }
   const result = createRead({
-    conversation: CONVERSATION, situationId: 's1', deps: { callStructured, userId: 'u1', log: () => {} },
+    conversation: CONVERSATION, situationId: 's1', deps: { callStructured, userId: 'u1', log },
     grounding: off ? null : { isCapped: async () => capped },
   })
   return { calls, result }
@@ -43,6 +43,7 @@ test('a supported Read passes after one cheap grounding call on the beliefs mode
   const judge = calls[1]
   assert.equal(judge.step, 'beliefs')
   assert.equal(judge.maxCompletionTokens, 300)
+  assert.equal(judge.timeoutMs, 8000) // slowness fails open
   assert.equal(judge.usageContext.kind, 'read_grounding')
   assert.deepEqual(Object.keys(JSON.parse(judge.messages.at(-1).content)), ['conversation', 'brief', 'read'])
 })
@@ -58,13 +59,23 @@ test('a Read with an invented motive is rejected, retried with the claim named, 
   })
   assert.equal(out.source, 'model')
   assert.equal(out.read.body, GOOD.body)
-  assert.deepEqual(calls.map((c) => c.schemaName), ['read', 'read_grounding', 'read', 'read_grounding'])
+  assert.deepEqual(calls.map((c) => c.schemaName), ['read', 'read_grounding', 'read']) // the check runs once
   assert.match(calls[2].messages.at(-1).content, /fear rejection/)
 })
 
-test('a Read still unsupported on the second try ends in the plain fallback', async () => {
-  const { result } = run({ reads: [INVENTED, INVENTED], grounding: { unsupported: ['fear rejection'] } })
+test('grounding alone never replaces a good Read on the last attempt: it ships and is logged', async () => {
+  const logs = []
+  const { result, calls } = run({ reads: [INVENTED, INVENTED], grounding: { unsupported: ['fear rejection'] }, log: (...a) => logs.push(a) })
+  assert.equal((await result).source, 'model')
+  assert.equal(calls.filter((c) => c.schemaName === 'read_grounding').length, 1)
+  assert.deepEqual(logs.find((l) => l[0] === 'grounding objected, shipped')?.[1], { claims: ['fear rejection'] })
+})
+
+test('a code-rule failure on the last attempt still falls back, and the fallback is logged', async () => {
+  const logs = []
+  const { result } = run({ reads: [{ ...INVENTED, body: 'Too short.' }, { ...INVENTED, body: 'Too short.' }], log: (...a) => logs.push(a) })
   assert.equal((await result).source, 'fallback')
+  assert.ok(logs.some((l) => l[0] === 'read fell back'))
 })
 
 test('the check fails open: an error, a bad output, or the daily cap lets the Read through', async () => {
@@ -88,7 +99,7 @@ const ANSWERS = { stage: { value: 'Someone is paying me' }, commitment: { value:
 const SUPPORTED = { headline: 'Someone pays you, and the week is short.', body: 'Someone is paying you while you give it evenings and weekends. Which part of the week could the paying customer have more of?', underlines: [] }
 const MOTIVE = { ...SUPPORTED, body: 'Someone is paying you while you give it evenings and weekends, protecting your freedom by avoiding commitment. Which part of the week could the paying customer have more of?' }
 
-function first({ readings, judge, capped = false, off = false }) {
+function first({ readings, judge, capped = false, off = false, log = () => {} }) {
   const calls = []
   const queue = [...readings]
   const verdicts = [...judge]
@@ -101,7 +112,7 @@ function first({ readings, judge, capped = false, off = false }) {
     }
     return { data: queue.shift() }
   }
-  return { calls, result: createFirstReading({ answers: ANSWERS, deps: { callStructured, userId: 'u1', log: () => {} }, grounding: off ? null : { isCapped: async () => capped } }) }
+  return { calls, result: createFirstReading({ answers: ANSWERS, deps: { callStructured, userId: 'u1', log }, grounding: off ? null : { isCapped: async () => capped } }) }
 }
 
 test('first reading: a supported reading passes after one grounding call', async () => {
@@ -121,6 +132,17 @@ test('first reading: an invented motive is rejected, then retried with the claim
   assert.equal(out.source, 'model')
   assert.equal(out.reading.body, SUPPORTED.body)
   assert.match(sent[2].messages.at(-1).content, /avoiding commitment/)
+})
+
+test('first reading: the judge runs once, and grounding alone never replaces a model reading', async () => {
+  const logs = []
+  const { calls, result } = first({ readings: [MOTIVE, MOTIVE], judge: [{ unsupported: ['avoiding commitment'] }], log: (...a) => logs.push(a) })
+  assert.equal((await result).source, 'model')
+  assert.deepEqual(calls, ['first_reading', 'read_grounding', 'first_reading'])
+  assert.ok(logs.some((l) => l[0] === 'grounding objected, shipped'))
+  const last = first({ readings: [{ ...SUPPORTED, body: 'You give it 99 hours a week.' }, MOTIVE], judge: [{ unsupported: ['avoiding commitment'] }], log: (...a) => logs.push(a) })
+  assert.equal((await last.result).source, 'model') // objection on the last attempt: shipped and logged
+  assert.deepEqual(last.calls, ['first_reading', 'first_reading', 'read_grounding'])
 })
 
 test('first reading: a failed judge, the cap and the kill switch all let the reading through', async () => {

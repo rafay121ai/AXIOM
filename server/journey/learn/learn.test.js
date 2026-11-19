@@ -230,6 +230,25 @@ test('full flow: lesson, two real replies, then the first move card', async () =
   } finally { await close() }
 })
 
+test('a failing offer ends in the plain fallback, and the Move is still offered', async () => {
+  const empty = offerReply({ reply: 'The price is not the problem, it is the silence of three weeks.' })
+  const { call, id, close } = await started([learnReply(), turnReply(), empty, empty])
+  try {
+    await sendTurn(call, id, REAL1, 1)
+    const t2 = await sendTurn(call, id, REAL2, 2)
+    assert.equal(t2.body.turn.text, 'I do not have a passage that fits this well enough, so I will not guess.')
+    assert.equal(t2.body.move_offer, 'first')
+    assert.equal(t2.body.move_notice.text, 'Your move for the two clinics is ready.') // the subject came from the lesson turn
+  } finally { await close() }
+  const bare = await started([learnReply({ move_subject: '', move_fact: '' }), turnReply(), empty, empty])
+  try {
+    await sendTurn(bare.call, bare.id, REAL1, 1)
+    const t2 = await sendTurn(bare.call, bare.id, REAL2, 2)
+    assert.equal(t2.body.move_offer, 'first')
+    assert.equal(t2.body.move_notice.text, 'Your move is ready.') // no subject at all: the plain notice, never an invented one
+  } finally { await bare.close() }
+})
+
 test('asking what to do next brings the move at once, with no model call', async () => {
   const { call, id, chatCalls, close } = await started([learnReply()])
   try {
