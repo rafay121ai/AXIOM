@@ -192,19 +192,33 @@ that:
 - Situation questions, the Read, the talk after it, Learn and the Move also
   see what Axiom has learned: beliefs, how the founder decides, people they
   mention, their shorthand and their ongoing threads.
-- The conversation always wins. Nothing old is ever a source of numbers,
-  dates or names; those come from what the founder writes in this situation.
-- Axiom never announces that it remembers.
+- The conversation always wins. Old statements are not a source of numbers,
+  dates or names, with one exception (Rafay, Nov 19): when the founder now
+  says something that differs from what they said before (a number, a date, a
+  plan, a choice), Axiom names both once, plainly, in their own words, and
+  asks what changed ("You said under 15 hours. Now you say 16. What
+  changed?"). A server check decides when this applies, not the prompt.
+- Axiom learns from every founder message, in the background, on every
+  screen, not only after a report (Rafay, Nov 19). A changed fact is kept next
+  to the earlier one as a "said X, now says Y" note.
+- Apart from that change note, Axiom never announces that it remembers.
 - Only how the founder works and decides is remembered. Never mood, health,
   money trouble, relationships, family, age, religion, politics, identity or
-  labels. Nothing is learned from care moments.
+  labels. Nothing is learned from care moments. If a care signal appears in a
+  situation, what was learned from that situation's messages is retired (kept
+  out of every prompt and screen, never deleted).
 
 Settings such as report time and time zone are not affected.
 
-- **Short:** about 5 sentences, appearing one at a time.
-- **Always three things:** one pattern they did not say outright, their own
-  words or a number or date, and a pointer into the next step.
-- **Names its basis** ("You wrote…", "you said…"). No evidence line under it.
+- **Short:** about 3 sentences, appearing one at a time.
+- **One pattern they did not say outright**, found by putting two answers side
+  by side, with at most one short quote from their own answers. It ends on one
+  specific question about what they wrote, never a generic "Next we work
+  on...".
+- **Never opens with "You wrote..." or "You said..." and never lists their
+  answers back** (Rafay, Nov 19). No evidence line under it. No markup. No
+  motive the founder did not state (a small second model call checks the claims
+  against their answers).
 - **No rating, ever.** No "That's right / Not quite", no feedback endpoint.
   If a founder had to mark it wrong, that could end the app on the spot.
 - At most two short phrases are underlined (thin line in the highlight
@@ -240,7 +254,12 @@ never pre-filled or locked.
 Axiom says plainly what is really happening in this situation.
 
 - **A plain headline** that states the finding in everyday words, then 3 to 4
-  short sentences. Appears one sentence at a time.
+  short sentences (2 to 3 since Nov 19). Appears one sentence at a time.
+- Leads with what the founder has not said. At most one quote of 8 words or
+  fewer; it never restates their last message, and the headline and closing
+  question carry no quote. Every claim must follow from their words, their
+  numbers or the brief (a small model call checks it; it never blocks the Read
+  if it fails).
 - Contains the thing they have not said, proof from their own words or
   numbers, and (only if real) the cost of waiting in their own date or number.
   The headline may only be built from things the founder said.
@@ -342,7 +361,9 @@ and more focused.
 - The mission, in the founder's own situation, in plain words.
 - What success looks like (yes or no).
 - The exact words to use.
-- A short checklist the founder ticks.
+- One first step, shown as "Start with" (takes under a minute, needs nobody
+  else, does not repeat the mission). It replaces the tickable checklist
+  (Rafay, Nov 19: the ticks were never saved or used).
 - Axiom's prediction of what will happen, which the report will check.
 - A commit button.
 

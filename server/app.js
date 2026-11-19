@@ -11,6 +11,7 @@ import { mountReviewRoutes } from './review/reviewRoutes.js'
 import { createSharing } from './journey/report/sharing.js'
 import { createEmbedder } from './journey/learn/retrieve.js'
 import { createCare } from './care/middleware.js'
+import { retireAfterCare } from './journey/memory/retireSituation.js'
 
 export const systemClock = Object.freeze({ now: () => Date.now() })
 
@@ -40,7 +41,11 @@ export function createApp({
     supabase: supabaseAdmin,
     callStructured: callStructuredForApp,
     clock,
-    onCare: careSharing && (({ userId }) => careSharing.takeDownForCare(userId)),
+    onCare: careSharing && (async ({ userId, level, scopeId, req }) => {
+      // First, in the background: what the per-message pass learned from this situation is retired. Never awaited.
+      retireAfterCare({ supabase: supabaseAdmin, userId, level, refs: [scopeId, req?.params?.id, req?.body?.situation_id], log: (what, err) => console.error(`[Memory] ${what}`, err?.message || '') })
+      await careSharing.takeDownForCare(userId)
+    }),
   })
   // Read by the push scheduler: no pushes while a care event is open.
   app.locals.isCareOpen = care.isCareOpen
