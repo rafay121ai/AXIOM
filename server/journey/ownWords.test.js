@@ -9,7 +9,7 @@ const { answerTexts } = buildEvidence(FULL_ANSWERS)
 const check = (reading) => checkFirstReading({ reading, answerTexts })
 const GOOD = {
   headline: 'The clinics asked for pricing and have heard nothing since.',
-  body: 'You wrote that you have a demo ready. You also wrote that "2 clinics that asked for pricing three weeks ago" are still waiting. The demo is not what is holding you back. Sending the price is.',
+  body: 'The demo is not what is holding you back. The "2 clinics that asked for pricing" are still waiting on you. Sending the price is.',
   underlines: ['asked for pricing'],
 }
 
@@ -18,7 +18,7 @@ test('golden pass: quote, number and underline all come from the answers', () =>
 })
 
 test('quote match ignores case, curly quotes and extra spaces', () => {
-  const r = { ...GOOD, body: GOOD.body.replace('"2 clinics that asked for pricing three weeks ago"', '“2  Clinics that asked for pricing THREE weeks ago”') }
+  const r = { ...GOOD, body: GOOD.body.replace('"2 clinics that asked for pricing"', '“2  Clinics that asked for PRICING”') }
   assert.equal(check(r).ok, true)
 })
 
@@ -98,7 +98,7 @@ test('fallback states only what was picked, never infers, and reads naturally fo
   const goals = QUESTIONS.find((q) => q.key === 'goal').goals
   for (const goal of goals) {
     const r = fallbackReading({ ...FULL_ANSWERS, goal: { goal, when: 'This month' } })
-    assert.match(r.body, /You are aiming (for|to) [a-z0-9 ]+ this month\./, r.body)
+    assert.match(r.body, /You are aiming (for|to) [a-z0-9 ]+\. Your deadline: this month\./, r.body)
     assert.ok(!/have not/.test(r.body) && /Next: what you wrote you are most stuck on\.$/.test(r.body))
     assert.ok(!/also told me/.test(r.body))
   }

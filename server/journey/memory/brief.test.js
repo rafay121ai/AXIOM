@@ -67,7 +67,8 @@ test('briefMessages: one system message with the framing', () => {
   assert.equal(rest.length, 0)
   assert.equal(m.role, 'system')
   assert.match(m.content, /^Past observations about this founder\. They may be outdated\. If anything in this conversation conflicts with them, the conversation wins\./)
-  assert.match(m.content, /Observations are never a source of numbers, dates or names\.\nHow they work:/)
+  assert.match(m.content, /If what the founder says now differs from something under "Earlier they said:" .* name both once, plainly and without blame, using only their words, and ask what changed\. Say nothing else about remembering\./)
+  assert.match(m.content, /never a source of numbers, dates or names\.\nHow they work:/)
 })
 
 const seed = () => createFakeSupabase({ tables: { founder_beliefs: [

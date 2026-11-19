@@ -69,9 +69,27 @@ export function unquoteUnknown(text, answerTexts) {
   return String(text ?? '').replace(/["\u201C]([^"\u201C\u201D]+)["\u201D]/g, (whole, inner) => (inAnswers(inner) || !reworded(inner) ? whole : inner))
 }
 
+const MAX_QUOTE_WORDS = 8
+const RESTATE_RUN = 6
+const wordsOf = (text) => norm(text).match(/[\p{L}\p{N}']+/gu) ?? []
+
+// A reading says what the founder has not said. It may carry one short quote and no longer run of their words.
+function restatingProblems(text, headline, body, answerTexts) {
+  const problems = []
+  if ([headline, body].some((t) => /^you (wrote|said)\b/.test(norm(t)))) problems.push('it opens with "You wrote" or "You said": lead with what they have not said')
+  const phrases = [...new Set(quotedPhrases(text).phrases)] // the same quote said twice is one quote
+  if (phrases.length > 1) problems.push('more than one quote: use at most one')
+  if (phrases.some((p) => wordsOf(p).length > MAX_QUOTE_WORDS)) problems.push(`a quote is longer than ${MAX_QUOTE_WORDS} words`)
+  const runs = (words) => words.slice(0, Math.max(0, words.length - RESTATE_RUN + 1)).map((_, i) => words.slice(i, i + RESTATE_RUN).join(' '))
+  const theirs = new Set(answerTexts.flatMap((a) => runs(wordsOf(a))))
+  if (runs(wordsOf(norm(text).replace(/"[^"]*"/g, ' '))).some((r) => theirs.has(r))) problems.push(`it repeats ${RESTATE_RUN} or more words in a row of what they wrote: say what they have not said`)
+  return problems
+}
+
 // reading: { headline, body, underlines }. answerTexts: every string the
-// founder typed or chose, one array item per answer. Returns { ok, problems }.
-export function checkFirstReading({ reading, answerTexts }) {
+// founder typed or chose, one array item per answer. earlierTexts: what they said before (sign-up),
+// the source of a number or a month but never of a quote. Returns { ok, problems }.
+export function checkFirstReading({ reading, answerTexts, earlierTexts = [] }) {
   const problems = []
   const corpus = answerTexts.map(norm).filter(Boolean)
   const inAnswers = inAnswersOf(answerTexts)
@@ -99,14 +117,16 @@ export function checkFirstReading({ reading, answerTexts }) {
   }
 
   // Numbers and months
-  const known = new Set(answerTexts.flatMap(numbersIn))
+  const known = new Set([...answerTexts, ...earlierTexts].flatMap(numbersIn))
   for (const n of new Set(numbersIn(text))) {
     if (!known.has(n)) problems.push(`number is not in the answers: ${n}`)
   }
-  const corpusJoined = corpus.join('\n')
+  const corpusJoined = [...corpus, ...earlierTexts.map(norm)].join('\n')
   for (const month of MONTHS) {
     if (wordRx(month).test(lower) && !wordRx(month).test(corpusJoined)) problems.push(`date is not in the answers: ${month}`)
   }
+
+  problems.push(...restatingProblems(text, reading.headline, reading.body, answerTexts))
 
   // Voice
   for (const banned of BANNED_PHRASES) {

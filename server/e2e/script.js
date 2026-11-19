@@ -21,13 +21,13 @@ export const situationVerdict = (over = {}) => ({
 
 export const FIRST_READING = {
   headline: 'The clinics asked for pricing and have heard nothing since.',
-  body: 'You wrote that you have a demo ready. You also wrote "I have not emailed the 2 clinics that asked for pricing three weeks ago". Nobody pays yet, and you are working evenings and weekends. Sending the price is the gap. We start there.',
+  body: 'Nobody pays yet, and the clinics that asked for pricing have heard nothing. You work evenings and weekends, so the price never gets written. Sending it is the gap, and we start there.',
   underlines: ['asked for pricing'],
 }
 
 export const READ = {
   headline: 'You have not sent the price the clinics asked for.',
-  body: 'You wrote "I have a demo ready". You also wrote that the clinics asked for pricing three weeks ago. Nobody has had an answer since then. That is the open gap.',
+  body: 'The clinics wanted a price three weeks back and have heard nothing. The demo is not what they are waiting on. Each week of silence makes the next email harder to write.',
   closing_question: 'Have you gone back to either of those clinics since the demo?',
 }
 export const READ_ANSWER = "No, I haven't gone back to either since the demo three weeks ago."

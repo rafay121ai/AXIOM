@@ -39,7 +39,7 @@ export function buildEvidence(answers) {
 const STAGE_FACT = {
   'Just an idea': 'You have an idea.',
   "I'm talking to people about it": 'You are talking to people about it.',
-  "I'm building it and nobody pays yet": 'You are building it, and nobody pays yet.',
+  "I'm building it and nobody pays yet": 'Nobody pays yet, and you are building it.',
   'Someone is paying me': 'Someone is paying you.',
   "It's growing": 'It is growing.',
 }
@@ -48,8 +48,8 @@ const TIME_FACT = {
   '1 to 2 years': 'for 1 to 2 years', 'More than 2 years': 'for more than 2 years',
 }
 const WEEK_FACT = {
-  'Full time': 'full time', 'Part time, 15 hours or more': 'part time, 15 hours or more',
-  'Evenings and weekends, under 15 hours': 'evenings and weekends, under 15 hours', 'On and off': 'on and off',
+  'Full time': 'full time', 'Part time, 15 hours or more': '15 hours or more, part time',
+  'Evenings and weekends, under 15 hours': 'under 15 hours, in evenings and weekends', 'On and off': 'on and off',
 }
 const TRIED_FACT = {
   'Talked to customers': 'talked to customers', 'Built a prototype': 'built a prototype',
@@ -81,7 +81,7 @@ export function fallbackReading(answers) {
   const sentences = [
     time || week ? `You have been on it${time ? ` ${time}` : ''}${week ? `, ${week}` : ''}.` : null,
     tried.length ? `So far you have ${joinList(tried)}.` : null,
-    aim && whenPhrase ? `${aim} ${whenPhrase}.` : null,
+    aim && whenPhrase ? `${aim}. Your deadline: ${whenPhrase}.` : null,
     'I could not read more into your answers than that just now, so I will not guess. Next: what you wrote you are most stuck on.',
   ].filter(Boolean)
   return { headline, body: sentences.join(' '), underlines: [] }

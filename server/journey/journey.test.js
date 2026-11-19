@@ -220,7 +220,7 @@ test('care gate: a clear signal in a free-text answer returns the care payload a
 
 const reading = (over = {}) => JSON.stringify({
   headline: 'The clinics asked for pricing and have heard nothing since.',
-  body: 'You wrote that you have a demo ready. You also wrote "I have not emailed the 2 clinics that asked for pricing three weeks ago". Nobody pays yet, and you are working evenings and weekends. Sending the price is the gap. We start there.',
+  body: 'Nobody pays yet, and the clinics that asked for pricing have heard nothing. You work evenings and weekends, so the price never gets written. Sending it is the gap, and we start there.',
   underlines: ['asked for pricing'],
   ...over,
 })
@@ -280,7 +280,7 @@ test('first reading: an invented quote is retried once with the problem named, t
     await saveAll(put)
     const res = await call('POST', '/api/first-reading')
     assert.equal(res.status, 200)
-    assert.match(res.body.body, /2 clinics/)
+    assert.match(res.body.body, /asked for pricing/)
     assert.equal(openai.calls.length, 2)
     const retryMessages = openai.calls[1].payload.messages
     assert.match(retryMessages.at(-1).content, /quoted words are not in the answers/)
@@ -298,7 +298,7 @@ test('first reading: two failures give the plain fallback, with no quote and no 
     assert.equal(openai.calls.length, 2)
     assert.deepEqual(res.body.underlines, [])
     assert.ok(!res.body.body.includes('"'))
-    assert.match(res.body.headline, /nobody pays yet/)
+    assert.match(res.body.headline, /nobody pays yet/i)
     assert.equal(supabase.rows('model_usage_logs').length, 2)
   } finally { await close() }
 })

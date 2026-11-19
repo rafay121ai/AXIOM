@@ -277,6 +277,17 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
       : [],
   })
 
+  // What the first reading said, so the Read does not repeat it. null when there is none or it cannot be read.
+  async function firstReadingOf(userId) {
+    try {
+      const { data } = await supabase.from('founder_profiles').select('first_reading').eq('user_id', userId).maybeSingle()
+      return data?.first_reading ?? null
+    } catch (err) {
+      log('first reading lookup failed', err)
+      return null
+    }
+  }
+
   async function read({ userId, situationId }) {
     const situation = await ownSituation(userId, situationId)
     const stored = await readOf(situation.id)
@@ -290,6 +301,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
       style: await styleOf(supabase, userId),
       trackRecord: await loadTrackRecord(supabase, userId, log),
       brief: await loadBrief(supabase, userId, founderTextsOf(turns).join('\n')),
+      firstReading: await firstReadingOf(userId),
       deps: { callStructured, userId, log },
     })
     const inserted = await supabase.from('reads').insert({
@@ -364,7 +376,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
           maxCompletionTokens: 400,
           userId,
           usageContext: { step: 'followup', kind: 'read_talk', situation_id: situation.id },
-          messages: readTalkMessages({ situation: situationTalk, read: { headline: row.headline, body: row.body, closing_question: row.closing_question }, talk, questionsLeft: MAX_READ_QUESTIONS - asked, brief }, problems),
+          messages: readTalkMessages({ situation: situationTalk, read: { headline: row.headline, body: row.body, closing_question: row.closing_question }, talk, questionsLeft: MAX_READ_QUESTIONS - asked, brief, firstReading: await firstReadingOf(userId) }, problems),
         })
         if (data.asked_to_learn) return null
         if (asked >= MIN_READ_QUESTIONS && data.knows_goal && data.knows_blocker && data.knows_detail) return null

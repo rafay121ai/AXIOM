@@ -752,3 +752,10 @@ Replaces the PARKED entry above for Gmail, Calendar and Notion. Plan: tasks/conn
 - Facts about unfamiliar people come only from the founder's own emails and notes. No general-knowledge line, no web search.
 - Gmail and Calendar are polling in Composio (minimum 2 minutes on managed auth), so signals are near, not real-time.
 - Gmail scopes (Rafay, Nov 10): Composio's managed Google app is blocked by Google for `gmail.readonly`, so development uses Composio's default scopes (including full mail access) on Rafay's own account only. Anyone else connects only through our own Google app with `gmail.readonly`. Details: tasks/connectors-plan.md.
+
+## Learn from every message, and say when something changed (Rafay, Nov 19 2026)
+- Memory must not depend on a Report. Many founders never report. Axiom learns from every founder message in every screen (Situation, Read, Read talk, Learn, Move, swap reason), not only at the end.
+- When a founder says something that differs from something they said before (a number, a date, a plan, a choice), the next question or the Read names both and asks what changed. Example: "You said under 15 hours at sign-up. Now you say 16. What changed?" Said once, plainly, never as an accusation, using only the founder's own typed words.
+- This narrows, and does not remove, "Axiom never announces that it remembers": the only thing Axiom may say it remembers is an earlier statement that conflicts with the current one. Everything else stays unannounced.
+- The Read and the first reading stop restating the founder. The Read leads with what the founder has not said; one short quote at most.
+- Reason: Rohaan's session (Nov 14) showed the first reading and the Read repeating his own words, and Axiom missing that his 16 hours for ordering exceeded his sign-up "under 15 hours".

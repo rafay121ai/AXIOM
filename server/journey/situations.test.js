@@ -76,7 +76,7 @@ const verdict = (over = {}) => JSON.stringify({
 const enough = () => verdict({ question: '' })
 const readReply = (over = {}) => JSON.stringify({
   headline: 'You have not sent the price the clinics asked for.',
-  body: 'You wrote "I have a demo ready". You also wrote that the clinics asked for pricing three weeks ago. Nobody has had an answer since then. That is the open gap.',
+  body: 'The clinics wanted a price three weeks back and have heard nothing. The demo is not what they are waiting on. Each week of silence makes the next email harder to write.',
   closing_question: 'Have you gone back to either of those clinics since the demo?',
   ...over,
 })
@@ -368,7 +368,7 @@ test('the Read: an invented quote is retried once with the problem named, then a
     const id = (await create(call, 1)).body.situation_id
     const res = await call('POST', `/api/situations/${id}/read`)
     assert.equal(res.status, 200)
-    assert.match(res.body.body, /I have a demo ready/)
+    assert.match(res.body.body, /The clinics wanted a price/)
     assert.match(openai.calls[3].payload.messages.at(-1).content, /quoted words are not in the answers/)
     assert.equal(rows('model_usage_logs').length, 4)
     assert.equal(rows('reads')[0].source, 'model')
@@ -411,7 +411,7 @@ test('the Read: two failures give the plain fallback, which quotes the founder a
     const res = await call('POST', `/api/situations/${id}/read`)
     assert.equal(res.status, 200)
     assert.equal(openai.calls.length, 4)
-    assert.match(res.body.body, /Here is what I have, in your words: "I have a demo ready but I have not emailed the clinics that asked for pricing three weeks ago"\./)
+    assert.match(res.body.body, /Here is what I have, in your words: "I have a demo ready but I have"\./)
     assert.equal(rows('reads')[0].source, 'fallback')
     assert.equal(rows('model_usage_logs').length, 4)
     const answerTexts = [...buildEvidence(FULL_ANSWERS).answerTexts, FIRST]
