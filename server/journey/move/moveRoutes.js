@@ -10,7 +10,7 @@ import { HttpError, TEXT_MAX } from '../situations.js'
 import { createMoves } from './moveService.js'
 import { validTimeZone } from './schedule.js'
 
-export function mountMoveRoutes(app, { supabase, care, cap, stored, callStructured, clock }) {
+export function mountMoveRoutes(app, { supabase, care, cap, stored, callStructured, clock, learn }) {
   const limiter = (max) => rateLimit({
     windowMs: 60 * 1000,
     max,
@@ -20,7 +20,7 @@ export function mountMoveRoutes(app, { supabase, care, cap, stored, callStructur
     legacyHeaders: false,
   })
   const log = (what, detail) => console.error(`[Move] ${what}`, detail?.message || detail?.problems || '')
-  const service = createMoves({ supabase, callStructured, clock, log })
+  const service = createMoves({ supabase, callStructured, clock, log, learn })
 
   const handle = (fn) => async (req, res) => {
     if (!supabase) return res.status(503).json({ error: 'Service not configured' })

@@ -3,13 +3,15 @@ import test from 'node:test'
 import { createApp } from '../app.js'
 import { createFakeClock, createFakeOpenAI, createFakeSupabase } from '../testing/fakes.js'
 import { FULL_ANSWERS } from './fixtures.js'
+import { EMPTY_BELIEFS } from '../e2e/harness.js'
+import { memoryIdle } from './memory/extractBeliefs.js'
 import { checkRead } from './theRead.js'
 import { buildEvidence } from './firstReading.js'
 import { MAX_NEW_SITUATIONS_PER_DAY } from './situations.js'
 
 const USER = { id: '11111111-1111-4111-8111-111111111111', email: 'founder@example.com' }
 const OTHER = { id: '22222222-2222-4222-8222-222222222222', email: 'other@example.com' }
-const ENV = { FRONTEND_URL: 'https://app.example.com' }
+const ENV = { FRONTEND_URL: 'https://app.example.com', LEARN_EVERY_MESSAGE: 'off' } // these tests count model calls; learnMessage.test.js covers memory
 const NOW = Date.parse('2026-10-26T09:00:00.000Z')
 const FIRST = 'I have a demo ready but I have not emailed the clinics that asked for pricing three weeks ago.'
 const uuid = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
@@ -43,13 +45,13 @@ function withUniqueKeys(supabase) {
   }
 }
 
-async function setup(script = [], { signedUp = true, env = ENV } = {}) {
+async function setup(script = [], { signedUp = true, env = ENV, byName = {} } = {}) {
   const base = createFakeSupabase({
     users: { tok: USER, tok2: OTHER },
     tables: signedUp ? { founder_profiles: [{ user_id: USER.id, signup_answers: FULL_ANSWERS }] } : {},
   })
   const supabase = withUniqueKeys(base)
-  const openai = createFakeOpenAI(script)
+  const openai = createFakeOpenAI(script, { byName })
   const app = createApp({ env, supabase, openai, clock: createFakeClock(NOW) })
   const server = app.listen(0)
   await new Promise((r) => server.once('listening', r))
@@ -582,4 +584,48 @@ test('later steps never send the sign-up answers to the model', async () => {
     await call('POST', `/api/situations/${id}/read`)
     for (const c of openai.calls) assert.ok(!c.payload.messages.some((m) => /sign_up_answers/.test(m.content)))
   } finally { await close() }
+})
+
+// Rafay, Nov 19: memory learns from every founder message, not only after a report. One message, one background pass.
+const { traits: _noTraits, ...EMPTY_FACTS } = EMPTY_BELIEFS
+const memoryReply = (...pairs) => JSON.stringify({ ...EMPTY_FACTS, new_beliefs: pairs.map(([belief, snippet]) => ({ belief, kind: 'fact', snippet, shifts_from: '' })) })
+
+test('memory: the first message, the Read answer and a Read talk reply are each remembered from their own source', async () => {
+  const TALK = 'I want both clinics to start a paid pilot this month.'
+  const byName = { beliefs_message: memoryReply(
+    ['Has a demo ready.', 'I have a demo ready'],
+    ['Has not contacted the clinics since the demo.', 'I have not contacted them since the demo'],
+    ['Wants both clinics on a paid pilot this month.', 'start a paid pilot this month'],
+  ) }
+  const { call, rows, close } = await setup([enough(), enough(), readReply(), talkLine(), allKnown()], { env: { FRONTEND_URL: 'https://app.example.com' }, byName })
+  try {
+    const id = (await create(call, 1)).body.situation_id
+    await call('POST', `/api/situations/${id}/read`)
+    await call('POST', `/api/situations/${id}/read/answer`, { text: ANSWER })
+    await call('POST', `/api/situations/${id}/read/answer`, { text: TALK })
+    await memoryIdle()
+    const talkTurn = rows('situation_turns').find((t) => t.text === TALK)
+    const firstTurn = rows('situation_turns').find((t) => t.text === FIRST)
+    assert.deepEqual(rows('memory_evidence').map((e) => [e.source_kind, e.source_id]).sort(), [
+      ['read', rows('reads')[0].id], ['read', talkTurn.id], ['situation', firstTurn.id],
+    ].sort())
+    assert.equal(rows('founder_beliefs').length, 3)
+    assert.equal(rows('memory_runs').length, 0)
+  } finally { await close() }
+})
+
+test('memory: a filler reply and a switched-off learner make no memory call', async () => {
+  const byName = { beliefs_message: memoryReply(['Has a demo ready.', 'I have a demo ready']) }
+  const filler = await setup([], { env: { FRONTEND_URL: 'https://app.example.com' }, byName })
+  try {
+    assert.equal((await create(filler.call, 1, 'ok')).body.status, 'say_more')
+    await memoryIdle()
+    assert.equal(filler.openai.calls.length, 0)
+  } finally { await filler.close() }
+  const off = await setup([enough(), enough()], { byName })
+  try {
+    await create(off.call, 1)
+    await memoryIdle()
+    assert.equal(off.rows('memory_evidence').length, 0)
+  } finally { await off.close() }
 })

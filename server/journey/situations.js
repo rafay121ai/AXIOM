@@ -45,7 +45,8 @@ const titleOk = (title, founderTexts) => {
 }
 const busy = () => new HttpError(409, { error: 'This turn is still being processed. Try again in a moment.', code: 'turn_busy' })
 
-export function createSituations({ supabase, callStructured, clock, log = () => {} }) {
+// learn: remembers one founder message in the background (memory/learnMessage.js); a no-op until wired.
+export function createSituations({ supabase, callStructured, clock, log = () => {}, learn = () => {} }) {
   const iso = () => new Date(clock.now()).toISOString()
   const one = async (query) => {
     const { data, error } = await query
@@ -70,6 +71,9 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
   const founderTextsOf = (turns) => turns.filter((t) => t.role === 'founder' && !t.filler).map((t) => t.text)
   // The talk after the Read lives in situation_turns, marked in result (Rafay, Nov 9).
   const isReadTalk = (t) => t.result?.read_talk === true
+  // Up to the last turns before this message, read only if the pass gets that far.
+  const contextOf = (situationId, exceptId, extra = []) => async () =>
+    [...(await turnsOf(situationId)).filter((t) => !t.filler && t.id !== exceptId).map((t) => ({ role: t.role, text: t.text })), ...extra]
 
   // ── Counting: the follow-up cap and the daily limit ────────────────────────
 
@@ -175,6 +179,8 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     try {
       const result = await decide({ userId, situation, text, clientTurnId, first })
       await one(supabase.from('situation_turns').update({ result }).eq('id', claim.data.id).select('id'))
+      // A topic change was already remembered by the new situation's own turn.
+      if (!result.started_new) learn({ userId, sourceKind: 'situation', sourceId: claim.data.id, situationId: situation.id, text, context: contextOf(situation.id, claim.data.id) })
       return result
     } catch (err) {
       // Free the turn id so the app can send it again.
@@ -331,13 +337,15 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
 
     if (!stored.closing_answer) {
       // First answer wins; a second tap that lost the race carries on with the stored one.
-      await one(supabase.from('reads').update({ closing_answer: text }).eq('id', stored.id).is('closing_answer', null).select('id'))
+      const won = await one(supabase.from('reads').update({ closing_answer: text }).eq('id', stored.id).is('closing_answer', null).select('id'))
+      if (won.length > 0) learn({ userId, sourceKind: 'read', sourceId: stored.id, situationId: situation.id, text, context: contextOf(situation.id, null, [{ role: 'axiom', text: stored.closing_question }]) })
     } else {
       const talk = (await turnsOf(situation.id)).filter(isReadTalk)
       // shortcut: a resend of the same text after a dropped reply is not stored twice; no client turn id on this route yet.
       const last = talk.at(-1)
       if (!(last?.role === 'founder' && last.text === text)) {
-        await one(supabase.from('situation_turns').insert({ situation_id: situation.id, role: 'founder', text, filler: false, result: { read_talk: true }, created_at: iso() }).select('id'))
+        const [added] = await one(supabase.from('situation_turns').insert({ situation_id: situation.id, role: 'founder', text, filler: false, result: { read_talk: true }, created_at: iso() }).select('id'))
+        if (added) learn({ userId, sourceKind: 'read', sourceId: added.id, situationId: situation.id, text, context: contextOf(situation.id, added.id) })
       }
     }
     await one(supabase.from('situations').update({ last_activity_at: iso() }).eq('id', situation.id).select('id'))

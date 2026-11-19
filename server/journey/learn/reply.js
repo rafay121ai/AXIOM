@@ -103,7 +103,8 @@ export function checkFact(fact, founderTexts) {
 
 // data: the model's output. Returns { reply, problems }. `reply` is the
 // cleaned version (every hard rule applied), used when the retry fails too.
-export function checkReply({ data, mode, evidence, founderTexts, asked = null }) {
+// earlierTexts: what the brief printed as earlier statements; their numbers may be named (a change), never quoted.
+export function checkReply({ data, mode, evidence, founderTexts, earlierTexts = [], asked = null }) {
   const problems = []
   const handles = new Map(evidence.map((e) => [e.handle, e]))
   const citations = (data.citations ?? []).map((c) => ({ handle: c.handle, ...(c.quote?.trim() ? { quote: c.quote } : {}) }))
@@ -132,7 +133,7 @@ export function checkReply({ data, mode, evidence, founderTexts, asked = null })
   // Another passage from a cited author or work is not "uncited": two passages from one book are common.
   const uncited = evidence.filter((e) => !sources.some((s) => s.handle === e.handle || sameText(s.author) === sameText(e.author) || sameText(s.book) === sameText(e.source_title)))
   const passageNumbers = new Set(evidence.filter((e) => sources.some((s) => s.handle === e.handle)).flatMap((e) => digitsIn(e.text)))
-  const ownNumbers = new Set(founderTexts.flatMap(digitsIn))
+  const ownNumbers = new Set([...founderTexts, ...earlierTexts].flatMap(digitsIn))
   const kept = []
   for (const sentence of sentencesOf(text)) {
     if (namesSource(sentence, uncited)) { problems.push('names an author or book it did not cite'); continue }
@@ -182,7 +183,7 @@ export function checkReply({ data, mode, evidence, founderTexts, asked = null })
 // founderTexts: every string the founder wrote or chose (sign-up, situation,
 // Read answer, Learn replies). deps: { callStructured, userId, log }.
 // Throws only when no usable reply exists after two attempts.
-export async function composeReply({ mode, step, context, evidence, founderTexts, usageContext, deps }) {
+export async function composeReply({ mode, step, context, evidence, founderTexts, earlierTexts = [], usageContext, deps }) {
   // Author and title are shown so the lesson can name who taught it (Rafay, Nov 2); the server still checks every name.
   const shown = evidence.map((e) => ({ handle: e.handle, author: e.author, title: e.source_title, text: e.text, ...(e.lesson ? { lesson: { idea: e.lesson.principle, when: e.lesson.applies_when, text: e.lesson.paragraphs.join(' ') } } : {}) }))
   const asked = mode === 'lesson' ? null : (context.learn ?? []).filter((t) => t.role === 'founder').at(-1)?.text ?? null
@@ -205,7 +206,7 @@ export async function composeReply({ mode, step, context, evidence, founderTexts
       if (fallback) return fallback
       throw err
     }
-    const verdict = checkReply({ data, mode, evidence, founderTexts, asked })
+    const verdict = checkReply({ data, mode, evidence, founderTexts, earlierTexts, asked })
     if (verdict.problems.length === 0) return verdict.reply
     if (verdict.reply.text) fallback = verdict.reply
     problems = verdict.problems

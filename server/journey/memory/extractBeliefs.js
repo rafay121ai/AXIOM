@@ -92,9 +92,10 @@ export async function applyExtraction({ store, userId, data, mode, founderTexts,
     return ok ? snippet : null
   }
   // The cleaned text to store, or null. Names must be the founder's own words, never Axiom's.
-  const textOf = (field, raw, sources) => {
+  // numberSources: more texts whose numbers and dates may appear (a shift names the old number); never for names or snippets.
+  const textOf = (field, raw, sources, numberSources = []) => {
     if (typeof raw !== 'string') return null
-    const checked = checkBeliefText({ text: raw, sourceTexts: sources, ownTexts: founderTexts, field })
+    const checked = checkBeliefText({ text: raw, sourceTexts: [...sources, ...numberSources], ownTexts: founderTexts, field })
     return checked.ok ? checked.text : null
   }
 
@@ -123,9 +124,11 @@ export async function applyExtraction({ store, userId, data, mode, founderTexts,
     return row && row.status === 'active' && !touched.has(row.id) && (full || row.kind === 'fact') ? row : null
   }
   // A new belief that passed every check, as a function that writes it (null when it did not pass).
-  const planBelief = ({ belief, kind, snippet: rawSnippet }) => {
+  const planBelief = ({ belief, kind, snippet: rawSnippet, shifts_from: from }) => {
     if (created >= MAX_NEW_PER_RUN || !['fact', 'pattern', 'preference'].includes(kind) || (!full && kind !== 'fact')) return null
-    const text = textOf('belief', belief, sourcesFor(kind))
+    // A shift ("said 15, now 16") may carry the old fact's numbers; only a per-message pass can name one.
+    const shifted = mode === 'message' && typeof from === 'string' ? byId.get(from) : null
+    const text = textOf('belief', belief, sourcesFor(kind), shifted?.status === 'active' && shifted.kind === 'fact' ? [shifted.belief] : [])
     const snippet = snippetOf(rawSnippet, sourcesFor(kind))
     if (!text || !snippet || corrected('founder_beliefs', text) || taken.has(squash(text))) return null
     taken.add(squash(text))
@@ -242,8 +245,9 @@ export async function applyExtraction({ store, userId, data, mode, founderTexts,
     })
   }
 
-  // Facts nobody touched for 90 days lose a little. updated_at stays, so the next run decays again.
-  for (const b of beliefs) {
+  // Facts nobody touched for 90 days lose a little. updated_at stays, so the next run decays again:
+  // a per-message pass runs far too often for that, so only the per-source passes decay.
+  for (const b of mode === 'message' ? [] : beliefs) {
     if (touched.has(b.id) || decayFact(b, nowMs) >= b.confidence) continue
     ops.push(() => store.updateBelief(userId, b.id, (cur) => ({ confidence: decayFact(cur, nowMs) }), { touch: false }))
   }

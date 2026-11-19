@@ -82,6 +82,7 @@ test('a founder walks the whole journey', async (t) => {
       ids.situation = opened.body.situation_id
 
       // The same send again (a retry) is answered from what is stored.
+      await w.idle()
       const calls = modelCalls()
       const replay = await founder('POST', '/api/situations', { text: SITUATION_TEXT, client_turn_id: uuid(1) })
       assert.deepEqual(replay.body, opened.body)
@@ -182,14 +183,16 @@ test('a founder walks the whole journey', async (t) => {
     })
 
     await t.test('learn: "what should I do next" brings the move at once, with no model call', async () => {
-      const calls = modelCalls()
+      await w.idle() // the earlier reply is still being remembered in the background
+      const replyCalls = () => openai.calls.filter((c) => c.step !== 'beliefs_message').length // remembering this message is a background call
+      const calls = replyCalls()
       const res = await founder('POST', `/api/learn/${ids.learn}/turn`, { text: WHAT_NEXT, client_turn_id: uuid(13) })
       assert.equal(res.body.move_offer, 'second')
       assert.equal(res.body.turn.text, AXIOM_LINES.intent)
       assert.deepEqual(res.body.move_notice, {
         kind: 'second', kicker: 'Still waiting', text: 'It takes 10 minutes, Amina. The two clinics have heard nothing from you for three weeks.',
       })
-      assert.equal(modelCalls(), calls)
+      assert.equal(replyCalls(), calls)
       const view = await founder('GET', `/api/learn/${ids.learn}`)
       assert.equal(view.body.offers_made, 2)
       assert.equal(view.body.offers_left, 0)

@@ -59,8 +59,9 @@ export const experimentOf = (move) => ({
 })
 
 // data: the model's output. founderTexts: every string the founder wrote or
-// chose. Returns { move, problems }; `move` is shown only when problems is empty.
-export function checkMove({ data, founderTexts }) {
+// chose. earlierTexts: earlier statements from the brief; their numbers may be named (a change). Returns { move, problems };
+// `move` is shown only when problems is empty.
+export function checkMove({ data, founderTexts, earlierTexts = [] }) {
   const problems = []
   const clean = (s) => stripFiller(String(s ?? '').trim()).text
   const move = {
@@ -89,7 +90,7 @@ export function checkMove({ data, founderTexts }) {
 
   // Own facts: numbers, deadlines, something from this founder.
   const all = [...Object.values(shown), move.words].join('\n')
-  const ownNumbers = new Set(founderTexts.flatMap(digitsIn))
+  const ownNumbers = new Set([...founderTexts, ...earlierTexts].flatMap(digitsIn))
   const unknown = digitsIn(all.replace(PLAN_MINUTES, ' ')).find((n) => !ownNumbers.has(n))
   if (unknown) problems.push(`a number the founder never gave: ${unknown}`)
   const corpus = founderTexts.map(norm).join('\n')
