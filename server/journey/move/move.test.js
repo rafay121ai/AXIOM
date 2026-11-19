@@ -3,7 +3,7 @@ import test from 'node:test'
 import { createApp } from '../../app.js'
 import { createFakeClock, createFakeOpenAI, createFakeSupabase } from '../../testing/fakes.js'
 import { FULL_ANSWERS } from '../fixtures.js'
-import { EMPTY_BELIEFS } from '../../e2e/harness.js'
+import { EMPTY_MESSAGE } from '../../e2e/harness.js'
 import { memoryIdle } from '../memory/extractBeliefs.js'
 import { checkMove, isRealSwapReason, NEED_REASON } from './moveChecks.js'
 import { reportDueAt, REPORT_WINDOW_MS } from './schedule.js'
@@ -396,8 +396,7 @@ test('a success that only says "see if" or "check whether" is sent back; a plain
 })
 
 // Rafay, Nov 19: the reason for a swap is a founder message and is remembered from the swapped move.
-const { traits: _noTraits, ...EMPTY_FACTS } = EMPTY_BELIEFS
-const memoryReply = (...pairs) => JSON.stringify({ ...EMPTY_FACTS, new_beliefs: pairs.map(([belief, snippet]) => ({ belief, kind: 'fact', snippet, shifts_from: '' })) })
+const memoryReply = (...pairs) => JSON.stringify({ ...EMPTY_MESSAGE, new_beliefs: pairs.map(([belief, snippet]) => ({ belief, kind: 'fact', snippet, shifts_from: '' })) })
 
 test('memory: the swap reason is remembered from the swapped move', async () => {
   const reason = 'I only have their email, not their phone numbers'

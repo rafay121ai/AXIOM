@@ -106,12 +106,12 @@ export const LEARN_PROMPT = [
 //   situation and learn: [{ role, text }];
 //   read: { headline, body, closing_question, founder_answer, skipped, talk_after: [{ role, text }] };
 //   evidence: [{ handle, text }] (never ids, authors or titles).
-export function learnMessages({ mode, situation, read, learn, evidence, tapped = null, style, brief = '' }, retryProblems = null) {
+export function learnMessages({ mode, situation, read, learn, evidence, tapped = null, style, brief = '', conflict = null }, retryProblems = null) {
   const messages = [
     { role: 'system', content: LEARN_PROMPT },
     ...(evidence.some((e) => e.lesson) ? [{ role: 'system', content: LESSON_NOTE }] : []),
     ...styleMessages(style),
-    ...briefMessages(brief),
+    ...briefMessages(brief, conflict),
     { role: 'system', content: `This turn: ${MODES[mode].join(' ')}` },
     {
       role: 'user',

@@ -28,11 +28,12 @@ const FACTS_PROPERTIES = {
   new_beliefs: list({ belief: str, kind: { type: 'string', enum: ['fact'] }, snippet: str }),
 }
 delete FACTS_PROPERTIES.traits
-// One message: facts only, and a new fact may name the active fact it shifts from ("" when it shifts from none).
+// One message: facts only, no supersede (the old fact stays), and a new fact may name the active fact it shifts from ("" when it shifts from none).
 const MESSAGE_PROPERTIES = {
   ...FACTS_PROPERTIES,
   new_beliefs: list({ belief: str, kind: { type: 'string', enum: ['fact'] }, snippet: str, shifts_from: str }),
 }
+delete MESSAGE_PROPERTIES.supersede
 
 const schemaOf = (properties) => Object.freeze({ type: 'object', additionalProperties: false, required: Object.keys(properties), properties })
 export const BELIEFS_SCHEMA = schemaOf(FULL_PROPERTIES)
@@ -46,7 +47,6 @@ const SHARED_RULES = [
   'Every item except threads needs a snippet: copy it word for word from the founder\'s own words (or from the move record where noted). If you cannot copy it, leave the item out.',
   'A name or a term goes in only if the founder typed it. Never use a name that only Axiom wrote.',
   'Never recreate anything listed under corrections: the founder marked it wrong.',
-  'Facts are about the business and can change. If a new fact contradicts an active fact, use supersede with that fact\'s id, and write the replacement.',
   'Use reinforce when this input shows an active item again, weaken when it points against one. Use ids from the input only.',
   'Never use he, she, him, her, his or hers: Axiom never assumes anyone\'s gender. Write about the founder without a pronoun.',
   'Write each belief as a short plain sentence that starts with a verb in the third person ("Sells to clinics.", "Says they drop plans when..."). Never write "the founder", and never use "they" for anyone but the founder.',
@@ -57,6 +57,7 @@ const SHARED_RULES = [
 const FULL_PROMPT = [
   'You keep Axiom\'s memory of one founder. Read one finished situation and say what is worth remembering.',
   ...SHARED_RULES,
+  'Facts are about the business and can change. If a new fact contradicts an active fact, use supersede with that fact\'s id, and write the replacement.',
   'Patterns are about how the founder works and decides, behaviour that survives a pivot. Snippets for patterns, preferences and traits may come from the founder\'s words or the move record.',
   'A trait is only how they work and decide, picked from the closed list in the schema. If none fits, output none.',
   'Threads: a goal, a bet or an open question that runs across situations, as a short title in the founder\'s terms.',
@@ -65,6 +66,7 @@ const FULL_PROMPT = [
 const FACTS_ONLY_PROMPT = [
   'You keep Axiom\'s memory of one founder. Read one situation that ended with no report and say which business facts are worth remembering.',
   ...SHARED_RULES,
+  'Facts are about the business and can change. If a new fact contradicts an active fact, use supersede with that fact\'s id, and write the replacement.',
   'Facts only. No patterns, no preferences, no traits, nothing about how the founder behaves.',
   'Threads: a goal, a bet or an open question that runs across situations, as a short title in the founder\'s terms.',
 ].join('\n')
@@ -73,9 +75,11 @@ const MESSAGE_PROMPT = [
   'You keep Axiom\'s memory of one founder. Read one new message the founder just wrote and say which business facts in it are worth remembering.',
   ...SHARED_RULES,
   'Facts only. No patterns, no preferences, no traits, nothing about how the founder behaves.',
-  'Worth remembering: what the business sells and to whom, people and companies the founder names (world, with what they do), their own shorthand (vocabulary), plans and choices they state, constraints they name, numbers with what they measure, open goals or questions (threads).',
+  'Worth remembering: what the business sells and to whom, people and companies the founder names (world, with what they do), their own shorthand (vocabulary), plans and choices they state, constraints they name, numbers with what they measure.',
+  'A plan or intention the founder states, even for later ("will hand some work to employees in future"), is a fact in their own words ("Plans to hand work to employees later."). An open question or decision the situation is about is a thread, as a title in the founder\'s terms ("Manual ordering or hand off the work").',
+  'A short answer to a question in "context" (a bare number) is a fact joined with what the question asked ("Can give 16 hours a week."), with the answer itself as the snippet.',
   'Only the new message is a source. "context" holds earlier turns of the same conversation, only so you understand the message: never copy a snippet from it and never store a fact that only the context says.',
-  'If the new message differs from an active fact in memory (a number, a date, a plan, a choice): when the new fact replaces the old one, use supersede. Otherwise keep the old fact and add a shift: a new belief with shifts_from set to the old fact\'s id, written as "Said <old> at sign-up or earlier, then <new> now" in plain words, using the old fact\'s number. Set shifts_from to "" for every other new belief.',
+  'Never replace or remove an active fact from a message; there is no supersede here. If the new message differs from an active fact (a number, a date, a plan, a choice), keep the old fact and add one new belief with shifts_from set to the old fact\'s id, written as "Said <old> at sign-up or earlier, then <new> now" in plain words, using the old fact\'s number. Set shifts_from to "" for every other new belief.',
   'Most messages give nothing. Return empty arrays then.',
 ].join('\n')
 

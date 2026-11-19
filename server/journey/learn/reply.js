@@ -11,6 +11,7 @@ import { checkPicture, numbersIn as numbersWithWords } from './pictures.js'
 import { stripFiller } from '../filler.js'
 import { checkHook, threadKinds } from '../hooks.js'
 import { BANNED_PHRASES, TEASER, norm, wordRx } from '../ownWords.js'
+import { conflictProblem, namesBoth } from '../memory/conflicts.js'
 import { LEARN_SCHEMA, learnMessages, MAX_FOLLOW_UPS, FOLLOW_UP_MAX } from './prompts/learn.js'
 
 export const WORD_CAP = 200
@@ -104,7 +105,7 @@ export function checkFact(fact, founderTexts) {
 // data: the model's output. Returns { reply, problems }. `reply` is the
 // cleaned version (every hard rule applied), used when the retry fails too.
 // earlierTexts: what the brief printed as earlier statements; their numbers may be named (a change), never quoted.
-export function checkReply({ data, mode, evidence, founderTexts, earlierTexts = [], asked = null }) {
+export function checkReply({ data, mode, evidence, founderTexts, earlierTexts = [], asked = null, conflict = null }) {
   const problems = []
   const handles = new Map(evidence.map((e) => [e.handle, e]))
   const citations = (data.citations ?? []).map((c) => ({ handle: c.handle, ...(c.quote?.trim() ? { quote: c.quote } : {}) }))
@@ -156,6 +157,7 @@ export function checkReply({ data, mode, evidence, founderTexts, earlierTexts = 
     problems.push(`too long: ${words(text)} words, the cap is ${WORD_CAP}`)
     text = capWords(text, WORD_CAP, { keepLast: QUESTION_MODES.has(mode) })
   }
+  if (conflict && !namesBoth(text, conflict)) problems.push(conflictProblem(conflict))
   if (text && threadKinds(text, founderTexts).length === 0) problems.push('nothing from this founder: use their own words, a number or a date they gave')
 
   let picture = null
@@ -183,7 +185,7 @@ export function checkReply({ data, mode, evidence, founderTexts, earlierTexts = 
 // founderTexts: every string the founder wrote or chose (sign-up, situation,
 // Read answer, Learn replies). deps: { callStructured, userId, log }.
 // Throws only when no usable reply exists after two attempts.
-export async function composeReply({ mode, step, context, evidence, founderTexts, earlierTexts = [], usageContext, deps }) {
+export async function composeReply({ mode, step, context, evidence, founderTexts, earlierTexts = [], conflict = null, usageContext, deps }) {
   // Author and title are shown so the lesson can name who taught it (Rafay, Nov 2); the server still checks every name.
   const shown = evidence.map((e) => ({ handle: e.handle, author: e.author, title: e.source_title, text: e.text, ...(e.lesson ? { lesson: { idea: e.lesson.principle, when: e.lesson.applies_when, text: e.lesson.paragraphs.join(' ') } } : {}) }))
   const asked = mode === 'lesson' ? null : (context.learn ?? []).filter((t) => t.role === 'founder').at(-1)?.text ?? null
@@ -199,14 +201,14 @@ export async function composeReply({ mode, step, context, evidence, founderTexts
         maxCompletionTokens: 1200,
         userId: deps.userId,
         usageContext,
-        messages: learnMessages({ mode, ...context, evidence: shown }, problems),
+        messages: learnMessages({ mode, ...context, conflict, evidence: shown }, problems),
       }))
     } catch (err) {
       deps.log?.('model call failed', err)
       if (fallback) return fallback
       throw err
     }
-    const verdict = checkReply({ data, mode, evidence, founderTexts, earlierTexts, asked })
+    const verdict = checkReply({ data, mode, evidence, founderTexts, earlierTexts, asked, conflict })
     if (verdict.problems.length === 0) return verdict.reply
     if (verdict.reply.text) fallback = verdict.reply
     problems = verdict.problems

@@ -27,16 +27,17 @@ export const SITUATION_PROMPT = [
   '- title: a plain title of 3 to 8 words for this situation, in the founder\'s own words.',
   '',
   'Use their own words, a number or a date from their messages in the question. Never ask for anything already in the conversation. One question only. No greeting, no acknowledgement, no comment on what they wrote, no advice.',
+  'Never assume something the founder did not say (for example that they did it before or stopped); ask what they did say.',
   'Voice: plain everyday words, short. No metaphors, no hypotheticals, no teaser ("want to know why?"). Never use: "great question", "certainly", "I understand", "that\'s interesting", "absolutely", "of course", "I\'d be happy to", "great". Never assume gender.',
 ].join('\n')
 
 // conversation: [{ role: 'founder'|'axiom', text }]
 export const NEVER_ASK_KNOWN = { role: 'system', content: 'Never ask for something the past observations already answer.' }
 
-export function situationMessages({ conversation, followUpsLeft, brief = '' }, retryProblems = null) {
+export function situationMessages({ conversation, followUpsLeft, brief = '', conflict = null }, retryProblems = null) {
   const messages = [
     { role: 'system', content: SITUATION_PROMPT },
-    ...briefMessages(brief),
+    ...briefMessages(brief, conflict),
     ...(brief ? [NEVER_ASK_KNOWN] : []),
     { role: 'user', content: JSON.stringify({ conversation, follow_ups_left: followUpsLeft }) },
   ]

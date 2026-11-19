@@ -16,6 +16,7 @@ import { createSharing } from '../report/sharing.js'
 import { createFounderLessons } from '../report/founderLessons.js'
 import { styleOf } from '../prompts/style.js'
 import { earlierLines, loadBrief } from '../memory/brief.js'
+import { findConflict, transcriptOf } from '../memory/conflicts.js'
 
 const SAY_MORE = 'Say a bit more.'
 export const LOCK_MS = 2 * 60 * 1000
@@ -141,6 +142,7 @@ export function createLearn({ supabase, knowledgeSupabase = null, embed = null, 
     const brief = await loadBrief(supabase, userId, ctx.founderTexts.join('\n'))
     const reply = await composeReply({
       mode, step, evidence, founderTexts: ctx.founderTexts, earlierTexts: earlierLines(brief), usageContext,
+      conflict: findConflict({ transcript: transcriptOf(ctx.prompt), earlier: earlierLines(brief) }),
       context: { ...ctx.prompt, ...(tapped ? { tapped } : {}), style: await styleOf(supabase, userId), brief },
       deps: { callStructured, userId, log },
     })

@@ -11,7 +11,8 @@ import { createRead } from './theRead.js'
 import { BANNED_PHRASES, norm, wordRx } from './ownWords.js'
 import { styleOf } from './prompts/style.js'
 import { loadTrackRecord } from './memory/trackRecord.js'
-import { loadBrief } from './memory/brief.js'
+import { earlierLines, loadBrief } from './memory/brief.js'
+import { conflictProblem, findConflict, namesBoth } from './memory/conflicts.js'
 
 export const MAX_NEW_SITUATIONS_PER_DAY = 5
 export const TEXT_MAX = 2000
@@ -115,6 +116,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     const conversation = turns.filter((t) => !t.filler).map((t) => ({ role: t.role, text: t.text }))
     const sources = founderTextsOf(turns)
     const brief = await loadBrief(supabase, userId, sources.join('\n'))
+    const conflict = findConflict({ transcript: conversation, earlier: earlierLines(brief) }) // notice only: a follow-up question is not forced to name it
     let problems = null
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       try {
@@ -125,7 +127,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
           maxCompletionTokens: 400,
           userId,
           usageContext: { step: 'followup', kind: 'situation_turn', situation_id: situation.id },
-          messages: situationMessages({ conversation, followUpsLeft, brief }, problems),
+          messages: situationMessages({ conversation, followUpsLeft, brief, conflict }, problems),
         })
         const base = { topic: data.topic, title: data.title.trim() }
         if (followUpsLeft <= 0) return { ...base, enough: true, question: null }
@@ -338,7 +340,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     if (!stored.closing_answer) {
       // First answer wins; a second tap that lost the race carries on with the stored one.
       const won = await one(supabase.from('reads').update({ closing_answer: text }).eq('id', stored.id).is('closing_answer', null).select('id'))
-      if (won.length > 0) learn({ userId, sourceKind: 'read', sourceId: stored.id, situationId: situation.id, text, context: contextOf(situation.id, null, [{ role: 'axiom', text: stored.closing_question }]) })
+      if (won.length > 0) learn({ userId, sourceKind: 'read', sourceId: stored.id, situationId: situation.id, text, closing: true, context: contextOf(situation.id, null, [{ role: 'axiom', text: stored.closing_question }]) })
     } else {
       const talk = (await turnsOf(situation.id)).filter(isReadTalk)
       // shortcut: a resend of the same text after a dropped reply is not stored twice; no client turn id on this route yet.
@@ -374,6 +376,8 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     const situationTalk = turns.filter((t) => !t.filler && !isReadTalk(t)).map((t) => ({ role: t.role, text: t.text }))
     const sources = [...founderTextsOf(turns), row.closing_answer]
     const brief = await loadBrief(supabase, userId, sources.join('\n'))
+    const earlier = earlierLines(brief)
+    const conflict = findConflict({ transcript: [...situationTalk, { role: 'axiom', text: row.closing_question }, ...talk], earlier })
     let problems = null
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       try {
@@ -384,7 +388,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
           maxCompletionTokens: 400,
           userId,
           usageContext: { step: 'followup', kind: 'read_talk', situation_id: situation.id },
-          messages: readTalkMessages({ situation: situationTalk, read: { headline: row.headline, body: row.body, closing_question: row.closing_question }, talk, questionsLeft: MAX_READ_QUESTIONS - asked, brief, firstReading: await firstReadingOf(userId) }, problems),
+          messages: readTalkMessages({ situation: situationTalk, read: { headline: row.headline, body: row.body, closing_question: row.closing_question }, talk, questionsLeft: MAX_READ_QUESTIONS - asked, brief, conflict, firstReading: await firstReadingOf(userId) }, problems),
         })
         if (data.asked_to_learn) return null
         if (asked >= MIN_READ_QUESTIONS && data.knows_goal && data.knows_blocker && data.knows_detail) return null
@@ -393,7 +397,8 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
         const verdict = checkHook({ text: question, sources })
         const replyProblems = !reply ? ['the reply is empty: answer what they just said first']
           : reply.includes('?') ? ['the reply holds a question: one question only, in question']
-            : threadKinds(reply, sources).length === 0 ? ['the reply says nothing of theirs: use their own words'] : []
+            : threadKinds(reply, sources).length === 0 ? ['the reply says nothing of theirs: use their own words']
+              : conflict && !namesBoth(`${reply} ${question}`, conflict) ? [conflictProblem(conflict)] : []
         if (verdict.ok && replyProblems.length === 0 && question.length <= 220) return `${reply} ${question}`
         problems = [...replyProblems, ...verdict.problems]
       } catch (err) {

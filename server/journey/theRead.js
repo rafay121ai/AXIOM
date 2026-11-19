@@ -5,6 +5,7 @@ import { checkFirstReading, unquoteUnknown } from './ownWords.js'
 import { checkHook, threadKinds } from './hooks.js'
 import { stripFiller } from './filler.js'
 import { earlierLines } from './memory/brief.js'
+import { conflictProblem, findConflict, namesBoth } from './memory/conflicts.js'
 import { READ_SCHEMA, readMessages } from './prompts/read.js'
 
 // First sentence of three words or more of what the founder wrote (so "Hi!"
@@ -41,12 +42,13 @@ const clean = (data) => {
 // situation. The closing question is held to the same own-words rules as the
 // body, and must be a real hook. A Read with nothing of theirs from this
 // situation read as an old chat for a new idea (live, Nov 9).
-export function checkRead({ read, answerTexts, earlierTexts = [] }) {
+export function checkRead({ read, answerTexts, earlierTexts = [], conflict = null }) {
   const problems = []
   if (read.body.length < 40) problems.push('body is too short')
   if (threadKinds(`${read.headline} ${read.body}`, answerTexts).length === 0) {
     problems.push('the Read is not about this situation: build it on what they wrote here, in their words')
   }
+  if (conflict && !namesBoth(`${read.headline} ${read.body} ${read.closing_question}`, conflict)) problems.push(conflictProblem(conflict))
   if (read.underlines !== undefined) problems.push('the Read has no underlines')
   const own = checkFirstReading({
     reading: { headline: read.headline, body: `${read.body} ${read.closing_question}`, underlines: [] },
@@ -72,6 +74,7 @@ const unquoted = (read, answerTexts) => ({
 export async function createRead({ conversation, deps, situationId, style, trackRecord = '', brief = '', firstReading = null }) {
   const founderTexts = conversation.filter((t) => t.role === 'founder').map((t) => t.text)
   const earlierTexts = earlierLines(brief)
+  const conflict = findConflict({ transcript: conversation, earlier: earlierTexts })
   let problems = null
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
@@ -82,10 +85,10 @@ export async function createRead({ conversation, deps, situationId, style, track
         maxCompletionTokens: 1200,
         userId: deps.userId,
         usageContext: { step: 'read', kind: 'read', situation_id: situationId },
-        messages: readMessages({ conversation, style, trackRecord, brief, firstReading }, problems),
+        messages: readMessages({ conversation, style, trackRecord, brief, firstReading, conflict }, problems),
       })
       const read = unquoted(clean(data), founderTexts)
-      const verdict = checkRead({ read, answerTexts: founderTexts, earlierTexts })
+      const verdict = checkRead({ read, answerTexts: founderTexts, earlierTexts, conflict })
       if (verdict.ok) return { read, source: 'model' }
       problems = verdict.problems
     } catch (err) {

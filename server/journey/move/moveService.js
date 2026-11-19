@@ -23,6 +23,7 @@ import { reportDueAt, REPORT_WINDOW_MS } from './schedule.js'
 import { styleOf } from '../prompts/style.js'
 import { loadTrackRecord } from '../memory/trackRecord.js'
 import { earlierLines, loadBrief } from '../memory/brief.js'
+import { findConflict, transcriptOf } from '../memory/conflicts.js'
 
 export const OPEN_STATUSES = Object.freeze(['draft', ...ACTIVE_STATUSES])
 const SWAPPABLE = new Set(['draft', 'committed'])
@@ -138,6 +139,7 @@ export function createMoves({ supabase, callStructured, clock, log = () => {}, l
     const trackRecord = await loadTrackRecord(supabase, userId, log)
     const founderTexts = swap ? [...ctx.founderTexts, swap.reason] : ctx.founderTexts
     const brief = await loadBrief(supabase, userId, ctx.founderTexts.join('\n'))
+    const conflict = findConflict({ transcript: transcriptOf(ctx.prompt), earlier: earlierLines(brief) }) // notice only: the move has no free sentence to hold both numbers
     let problems = null
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       let data
@@ -149,7 +151,7 @@ export function createMoves({ supabase, callStructured, clock, log = () => {}, l
           maxCompletionTokens: 900,
           userId,
           usageContext: { step: 'move', kind, situation_id: conversation.situation_id },
-          messages: moveMessages({ ...ctx.prompt, ...(swap ? { swap } : {}), style, trackRecord, brief }, problems),
+          messages: moveMessages({ ...ctx.prompt, ...(swap ? { swap } : {}), style, trackRecord, brief, conflict }, problems),
         }))
       } catch (err) {
         log('model call failed', err)

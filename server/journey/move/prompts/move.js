@@ -51,12 +51,12 @@ export const MOVE_PROMPT = [
 
 // input: { situation, read, learn, subject, fact, swap? }
 //   swap: { previous: { title, mission }, reason }.
-export function moveMessages({ situation, read, learn, subject, fact, swap = null, style, trackRecord = '', brief = '' }, retryProblems = null) {
+export function moveMessages({ situation, read, learn, subject, fact, swap = null, style, trackRecord = '', brief = '', conflict = null }, retryProblems = null) {
   const messages = [
     { role: 'system', content: MOVE_PROMPT },
     ...styleMessages(style),
     ...trackRecordMessages('move', trackRecord),
-    ...briefMessages(brief),
+    ...briefMessages(brief, conflict),
     {
       role: 'user',
       content: JSON.stringify({

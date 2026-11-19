@@ -4,7 +4,7 @@ import express from 'express'
 import { createApp } from '../../app.js'
 import { createFakeClock, createFakeOpenAI, createFakeSupabase } from '../../testing/fakes.js'
 import { FULL_ANSWERS } from '../fixtures.js'
-import { EMPTY_BELIEFS } from '../../e2e/harness.js'
+import { EMPTY_MESSAGE } from '../../e2e/harness.js'
 import { memoryIdle } from '../memory/extractBeliefs.js'
 import { mountLearnRoutes, createMemoryHintProvider } from './learnRoutes.js'
 import { evidenceFromRows, MAX_EVIDENCE } from './retrieve.js'
@@ -539,8 +539,7 @@ test('a typed reply and then a tapped suggestion bring the first move card on th
 })
 
 // Rafay, Nov 19: a real Learn reply is remembered from its own turn, in the background.
-const { traits: _noTraits, ...EMPTY_FACTS } = EMPTY_BELIEFS
-const memoryReply = (...pairs) => JSON.stringify({ ...EMPTY_FACTS, new_beliefs: pairs.map(([belief, snippet]) => ({ belief, kind: 'fact', snippet, shifts_from: '' })) })
+const memoryReply = (...pairs) => JSON.stringify({ ...EMPTY_MESSAGE, new_beliefs: pairs.map(([belief, snippet]) => ({ belief, kind: 'fact', snippet, shifts_from: '' })) })
 
 test('memory: a real Learn reply is remembered from its turn; a one-word reply is not', async () => {
   const byName = { beliefs_message: memoryReply(['Says the owner of the first clinic decides about buying.', 'the owner of the first clinic decides about buying']) }

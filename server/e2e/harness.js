@@ -39,6 +39,8 @@ export const UNIQUE = Object.freeze({
 export const EMPTY_BELIEFS = Object.freeze({ new_beliefs: [], reinforce: [], weaken: [], supersede: [], traits: [], world: [], vocabulary: [], threads: [] })
 // The facts-only schema has no traits field: a reply with one is refused and asked for again.
 const { traits: _noTraits, ...EMPTY_FACTS } = EMPTY_BELIEFS
+// One message has no supersede either: the old fact always stays.
+export const { supersede: _noSupersede, ...EMPTY_MESSAGE } = EMPTY_FACTS
 
 // OpenAI scripted per step. Journey calls send a json_schema name
 // (first_reading, situation_turn, read, learn_reply, move, report, care_check):
@@ -62,7 +64,7 @@ function createStepOpenAI() {
         async create(payload) {
           const step = payload.response_format?.json_schema?.name ?? 'unstructured'
           calls.push({ kind: 'chat', step, model: payload.model, payload })
-          if (!queues.get(step)?.length && step.startsWith('beliefs')) queues.set(step, [step.includes('facts_only') || step.includes('message') ? EMPTY_FACTS : EMPTY_BELIEFS])
+          if (!queues.get(step)?.length && step.startsWith('beliefs')) queues.set(step, [step.includes('message') ? EMPTY_MESSAGE : step.includes('facts_only') ? EMPTY_FACTS : EMPTY_BELIEFS])
           if (!queues.get(step)?.length) {
             unexpected.push(step)
             throw new Error(`StepOpenAI: nothing scripted for "${step}"`)

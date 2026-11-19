@@ -3,8 +3,9 @@ import test from 'node:test'
 import { createApp } from '../app.js'
 import { createFakeClock, createFakeOpenAI, createFakeSupabase } from '../testing/fakes.js'
 import { FULL_ANSWERS } from './fixtures.js'
-import { EMPTY_BELIEFS } from '../e2e/harness.js'
+import { EMPTY_MESSAGE } from '../e2e/harness.js'
 import { memoryIdle } from './memory/extractBeliefs.js'
+import { earlierLines, loadBrief } from './memory/brief.js'
 import { checkRead } from './theRead.js'
 import { buildEvidence } from './firstReading.js'
 import { MAX_NEW_SITUATIONS_PER_DAY } from './situations.js'
@@ -45,10 +46,10 @@ function withUniqueKeys(supabase) {
   }
 }
 
-async function setup(script = [], { signedUp = true, env = ENV, byName = {} } = {}) {
+async function setup(script = [], { signedUp = true, env = ENV, byName = {}, tables = {} } = {}) {
   const base = createFakeSupabase({
     users: { tok: USER, tok2: OTHER },
-    tables: signedUp ? { founder_profiles: [{ user_id: USER.id, signup_answers: FULL_ANSWERS }] } : {},
+    tables: { ...(signedUp ? { founder_profiles: [{ user_id: USER.id, signup_answers: FULL_ANSWERS }] } : {}), ...tables },
   })
   const supabase = withUniqueKeys(base)
   const openai = createFakeOpenAI(script, { byName })
@@ -67,7 +68,7 @@ async function setup(script = [], { signedUp = true, env = ENV, byName = {} } = 
   }
   const rows = (t) => base.rows(t)
   const close = () => new Promise((r) => server.close(r))
-  return { url, call: as('tok'), callOther: as('tok2'), openai, rows, close }
+  return { url, call: as('tok'), callOther: as('tok2'), openai, rows, close, db: base }
 }
 
 const verdict = (over = {}) => JSON.stringify({
@@ -587,8 +588,7 @@ test('later steps never send the sign-up answers to the model', async () => {
 })
 
 // Rafay, Nov 19: memory learns from every founder message, not only after a report. One message, one background pass.
-const { traits: _noTraits, ...EMPTY_FACTS } = EMPTY_BELIEFS
-const memoryReply = (...pairs) => JSON.stringify({ ...EMPTY_FACTS, new_beliefs: pairs.map(([belief, snippet]) => ({ belief, kind: 'fact', snippet, shifts_from: '' })) })
+const memoryReply = (...pairs) => JSON.stringify({ ...EMPTY_MESSAGE, new_beliefs: pairs.map(([belief, snippet]) => ({ belief, kind: 'fact', snippet, shifts_from: '' })) })
 
 test('memory: the first message, the Read answer and a Read talk reply are each remembered from their own source', async () => {
   const TALK = 'I want both clinics to start a paid pilot this month.'
@@ -628,4 +628,39 @@ test('memory: a filler reply and a switched-off learner make no memory call', as
     await memoryIdle()
     assert.equal(off.rows('memory_evidence').length, 0)
   } finally { await off.close() }
+})
+
+// Rafay, Nov 19 (real replay): sign-up said "under 15 hours", the Read answer was a bare "16". The server must name both.
+test('15 then a bare 16: the Read talk gets the notice and must name both, and memory keeps both numbers', async () => {
+  const OLD = uuid(900)
+  const SAID = 'I order the products myself, and it takes my hours at the weekends.'
+  const old = { id: OLD, user_id: USER.id, belief: 'Works evenings and weekends, under 15 hours a week.', kind: 'fact', confidence: 0.5, source: 'signup', status: 'active', created_at: '2026-10-20T00:00:00Z', updated_at: '2026-10-20T00:00:00Z' }
+  const read = readReply({
+    headline: 'Ordering everything yourself takes hours that nothing else gets.',
+    body: 'You order the products yourself at the weekends, so every other job waits. The hours the ordering takes decide what is left for the rest.',
+    closing_question: 'At the weekends, how many hours does the ordering take you?',
+  })
+  const missesNew = talkLine({ reply: 'Ordering at the weekends takes your hours.', question: 'What does the ordering involve each week?' })
+  const namesBothNumbers = talkLine({ reply: 'You said under 15 hours before, and now you say 16.', question: 'What changed in your weekends?' })
+  const shift = JSON.stringify({ ...EMPTY_MESSAGE, new_beliefs: [{ belief: 'Said under 15 hours at sign-up, then 16 hours a week now.', kind: 'fact', snippet: '16', shifts_from: OLD }] })
+  const { call, openai, rows, db, close } = await setup([enough(), enough(), read, missesNew, namesBothNumbers], { env: { FRONTEND_URL: 'https://app.example.com' }, byName: { beliefs_message: shift }, tables: { founder_beliefs: [old] } })
+  try {
+    const id = (await create(call, 1, SAID)).body.situation_id
+    await call('POST', `/api/situations/${id}/read`)
+    const res = await call('POST', `/api/situations/${id}/read/answer`, { text: '16' })
+    await memoryIdle()
+    const talk = openai.calls.filter((c) => c.payload.response_format.json_schema.name === 'read_talk')
+    assert.equal(talk.length, 2)
+    const notice = (c) => c.payload.messages.filter((m) => m.role === 'system' && m.content.startsWith('The founder said'))
+    assert.equal(notice(talk[0]).length, 1)
+    assert.match(notice(talk[0])[0].content, /and now says 16 hours\. Open by naming both/)
+    assert.match(talk[1].payload.messages.at(-1).content, /name both numbers, 15 and 16/)
+    assert.equal(res.body.reply, 'You said under 15 hours before, and now you say 16. What changed in your weekends?')
+    // memory: the bare 16 was learned, the old fact is still active, and the next brief holds both numbers
+    const facts = rows('founder_beliefs')
+    assert.equal(facts.length, 2)
+    assert.equal(facts.find((b) => b.id === OLD).status, 'active')
+    const lines = earlierLines(await loadBrief(db, USER.id, `${SAID}\n16`, NOW))
+    assert.ok(lines.some((l) => l.includes('under 15')) && lines.some((l) => l.includes('then 16')), lines.join('|'))
+  } finally { await close() }
 })

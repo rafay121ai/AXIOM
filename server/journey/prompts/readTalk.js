@@ -34,15 +34,15 @@ export const READ_TALK_PROMPT = [
   '- reply: one or two short sentences that answer what they just said: what it shows, in their own words. No praise, no advice yet, no question.',
   '- question: one question for the piece still missing (or, if nothing is missing, what would help most to know before the lesson), about what they just wrote, using their own words, a number or a date they gave.',
   '',
-  'Never ask for anything they already said. Never ask the Read\'s question again. One question only. No greeting, no acknowledgement ("got it", "thanks").',
+  'Never ask for anything they already said. Never ask the Read\'s question again. A bare number answers your last question; never reinterpret it as something else. One question only. No greeting, no acknowledgement ("got it", "thanks").',
   'Voice: plain everyday words, short. Direct, never harsh. No metaphors, no hypotheticals, no teaser ("want to know why?"). Never use: "great question", "certainly", "I understand", "that\'s interesting", "absolutely", "of course", "I\'d be happy to", "great". Never assume gender.',
 ].join('\n')
 
 // read: { headline, body, closing_question }; talk: [{ role: 'founder'|'axiom', text }], starting with their answer.
-export function readTalkMessages({ situation, read, talk, questionsLeft, brief = '', firstReading = null }, retryProblems = null) {
+export function readTalkMessages({ situation, read, talk, questionsLeft, brief = '', firstReading = null, conflict = null }, retryProblems = null) {
   const messages = [
     { role: 'system', content: READ_TALK_PROMPT },
-    ...briefMessages(brief),
+    ...briefMessages(brief, conflict),
     ...(brief ? [NEVER_ASK_KNOWN] : []),
     ...alreadySaidMessages(firstReading),
     { role: 'user', content: JSON.stringify({ situation, read, talk, questions_left: questionsLeft }) },

@@ -107,6 +107,8 @@ export function checkFirstReading({ reading, answerTexts, earlierTexts = [] }) {
     if (!inAnswers(phrase)) problems.push(`quoted words are not in the answers: "${phrase}"`)
   }
 
+  if (/[_*#`]/.test(text)) problems.push('markup characters (_ * # `) in the reading: plain words only')
+
   // Underlines
   if (reading.underlines.length > MAX_UNDERLINES) problems.push(`more than ${MAX_UNDERLINES} underlines`)
   const bodyLower = norm(reading.body)

@@ -11,7 +11,7 @@ import { STYLE_INSTRUCTIONS, styleMessages, styleOf } from './prompts/style.js'
 const sha = (s) => createHash('sha256').update(s).digest('hex')
 // Snapshot of the prompts as they were before styles existed.
 const OLD = {
-  read: '1fc7583a6e160420212ceab536653c0a48b9497bd8eaa7cdb8da6d4c52ba502b', // Nov 19: leads with what they have not said; no restating
+  read: '5ed3a0155609546865127e85caafa6c7ab000e5f8db210afc66bab86673e90a2', // Nov 19: no markup characters; only what the founder said or follows from their numbers
   learn: 'e8d32fe4608ed2e02e78b42f25223f5df1f5ed4d3019618da82534df64d8aeea', // Nov 9: facts only from this situation
   move: 'f5067dc172bcbd0f91565f449768d182f9969e951914b12e0073666685ffbafc', // Nov 2: words written for the reader; no "see if" success
   report: '6ce24f154ae001da47b70fddb78b7365b1d79fd8f9ecb8dea1622566694127a7',

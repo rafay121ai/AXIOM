@@ -25,7 +25,8 @@ export const READ_PROMPT = [
   'headline: one plain sentence that states that finding in everyday words. A finding, not a summary of their message.',
   'body: 2 to 3 short sentences. They hold the thing the founder has not said, and only if it is real, the cost of waiting in their own date or number. Never open with "You wrote" or "You said".',
   'You may quote at most once, in double quotation marks, with 8 words or fewer copied exactly from what the founder typed. Otherwise use your own words. Never repeat a run of 6 or more of their words. Never change or invent a quote. Use only numbers and dates that appear in what the founder wrote. Never add, convert or estimate one.',
-  'No underlines, emphasis or markup of any kind: plain words only.',
+  'No underlines, emphasis or markup of any kind: plain words only, no _ * # or backticks.',
+  'State only what the founder said or what follows directly from their numbers. Never name a motive, feeling or problem they did not say (for example \'to feel in control\', \'a margin problem\').',
   'closing_question: one real question the founder can answer in a reply box. It asks for a missing piece, is about something they said (use their words, a number or a date), and the answer will be used in the lesson. No yes/no teaser, no "want to see why?", no asking them to rate or confirm the Read.',
   '',
   'Voice: plain everyday words and short sentences. Direct and urgent, never harsh: hard on the situation, never on the person. No metaphors, no clever contrasts ("not X, but Y"), no hypotheticals. Specific to this founder only.',
@@ -39,12 +40,12 @@ export const alreadySaidMessages = (firstReading) => (firstReading?.headline ? [
 }] : [])
 
 // conversation: [{ role, text }]
-export function readMessages({ conversation, style, trackRecord = '', brief = '', firstReading = null }, retryProblems = null) {
+export function readMessages({ conversation, style, trackRecord = '', brief = '', firstReading = null, conflict = null }, retryProblems = null) {
   const messages = [
     { role: 'system', content: READ_PROMPT },
     ...styleMessages(style),
     ...trackRecordMessages('read', trackRecord),
-    ...briefMessages(brief),
+    ...briefMessages(brief, conflict),
     ...alreadySaidMessages(firstReading),
     { role: 'user', content: JSON.stringify({ conversation }) },
   ]

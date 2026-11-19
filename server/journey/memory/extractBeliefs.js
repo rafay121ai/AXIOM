@@ -87,7 +87,7 @@ export async function applyExtraction({ store, userId, data, mode, founderTexts,
   const snippetOf = (raw, sources) => {
     const snippet = cleanStoredText(raw)
     const [min, max] = LIMITS.snippet
-    const ok = typeof raw === 'string' && snippet.length >= min && snippet.length <= max && !isFillerReply(snippet, { minWords: 2 })
+    const ok = typeof raw === 'string' && snippet.length >= min && snippet.length <= max && !isFillerReply(snippet, { minWords: /\d/.test(snippet) ? 1 : 2 })
       && stripFiller(snippet).text !== '' && snippetInSource(snippet, sources) && !isBlocked(snippet)
     return ok ? snippet : null
   }
@@ -141,7 +141,8 @@ export async function applyExtraction({ store, userId, data, mode, founderTexts,
     }
   }
 
-  for (const s of rows(data.supersede)) {
+  // A message never replaces a fact: a changed number or plan adds a shift and the old fact stays, so a later screen can still name both.
+  for (const s of mode === 'message' ? [] : rows(data.supersede)) {
     const old = usable(s.id)
     if (!old || old.kind !== 'fact' || !snippetOf(s.replacement?.snippet, founderTexts)) continue
     const write = planBelief({ belief: s.replacement.belief, kind: 'fact', snippet: s.replacement.snippet })

@@ -8,6 +8,7 @@
 // already holding receipts is not run again, so a retried turn never counts twice.
 // Never throws, never delays the reply (scheduleMemory).
 import { isFillerReply, stripFiller } from '../filler.js'
+import { numbersIn } from '../learn/pictures.js'
 import { createSharing } from '../report/sharing.js'
 import { applyExtraction, overCap, scheduleMemory } from './extractBeliefs.js'
 import { createMemoryStore } from './memoryStore.js'
@@ -17,18 +18,21 @@ export const MIN_MESSAGE_WORDS = 4
 export const CONTEXT_TURNS = 6
 const inflight = new Set()
 
+// closing: the founder's answer to the Read's question, whose last context turn is that question.
 // sourceKind: situation | read | learn | swap | move. sourceId: the turn id (read id for the closing answer, move id for a swap).
 // context: async () => [{ role, text }], read only after the cheap checks pass.
 // Returns { status: 'done' | 'skipped' | 'skipped_care' | 'failed' }.
 export async function learnFromMessage({
-  supabase, store, callStructured, userId, sourceKind, sourceId, situationId, text, context = async () => [], log = () => {}, clock = { now: () => Date.now() }, isCapped = async () => false,
+  supabase, store, callStructured, userId, sourceKind, sourceId, situationId, text, closing = false, context = async () => [], log = () => {}, clock = { now: () => Date.now() }, isCapped = async () => false,
 }) {
   const key = `${userId}:${sourceKind}:${sourceId}`
   if (inflight.has(key)) return { status: 'skipped' }
   inflight.add(key)
   try {
     const typed = String(text ?? '')
-    if (isFillerReply(typed, { minWords: MIN_MESSAGE_WORDS }) || stripFiller(typed).text.split(/\s+/).filter(Boolean).length < MIN_MESSAGE_WORDS) return { status: 'skipped' }
+    // A short answer still counts when it holds a number ("16") or answers the Read's question; filler never does.
+    const short = isFillerReply(typed, { minWords: MIN_MESSAGE_WORDS }) || stripFiller(typed).text.split(/\s+/).filter(Boolean).length < MIN_MESSAGE_WORDS
+    if (isFillerReply(typed) || stripFiller(typed).text === '' || (short && !closing && numbersIn(typed).length === 0)) return { status: 'skipped' }
     const mem = store ?? createMemoryStore({ supabase, clock, log })
     if (await mem.hasEvidenceFrom(userId, sourceId)) return { status: 'skipped' }
 
