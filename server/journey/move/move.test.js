@@ -71,6 +71,15 @@ test('own facts, start, and only-variable rules', () => {
   assert.match(problemsOf({ prediction: 'One of the clinics will reply, of course.' }), /prediction is empty/)
 })
 
+test('a swap that rewords the old move is rejected; a different action passes', () => {
+  const previous = { title: MOVE.title, mission: MOVE.mission }
+  const reworded = { ...MOVE, title: 'Ask both clinics that asked about pricing for a call.', mission: 'Email the 2 clinics that asked about pricing and ask each for a call of 20 minutes.' }
+  assert.match(checkMove({ data: reworded, founderTexts: FOUNDER_TEXTS, previous }).problems.join(), /swap is the old move reworded/)
+  assert.ok(!checkMove({ data: reworded, founderTexts: FOUNDER_TEXTS }).problems.join().includes('reworded')) // only a swap is compared
+  const different = { ...MOVE, title: 'Ring the front desk of one clinic today.', mission: 'Phone the front desk of one clinic and ask who handles the pricing request.' }
+  assert.deepEqual(checkMove({ data: different, founderTexts: FOUNDER_TEXTS, previous }).problems, [])
+})
+
 test('a swap needs a real reason; "I\'m busy" is not one', () => {
   for (const r of ["I'm busy", 'busy', 'ok', 'no time', "I'm too tired", "don't feel like it"]) assert.equal(isRealSwapReason(r), false, r)
   for (const r of ['I only have their email', "The clinics' owner is away until Monday", "I'm busy today but I only have their phone numbers"]) assert.equal(isRealSwapReason(r), true, r)
@@ -296,8 +305,8 @@ test('commit uses the phone time zone when none is saved, and refuses a bad one'
 
 test('swap: once, only with a real reason, behind the care gate', async () => {
   const swapped = moveJson({
-    title: 'Email the clinics their pricing today.',
-    mission: 'Email the pricing to the 2 clinics that asked for it and ask each for a 20-minute call.',
+    title: 'Ring the front desk of one clinic today.',
+    mission: 'Phone the front desk of one clinic and ask who handles the pricing request.',
   })
   const { call, chatCalls, rows, close } = await setup([swapped], { moves: [draft(1, { learn_id: LEARN, situation_id: SIT })] })
   try {
@@ -401,7 +410,7 @@ const memoryReply = (...pairs) => JSON.stringify({ ...EMPTY_MESSAGE, new_beliefs
 test('memory: the swap reason is remembered from the swapped move', async () => {
   const reason = 'I only have their email, not their phone numbers'
   const byName = { beliefs_message: memoryReply(['Has the clinics emails and not their phone numbers.', 'I only have their email']) }
-  const { call, rows, close } = await setup([moveJson({ title: 'Email the clinics their pricing today.', mission: 'Email the pricing to the 2 clinics that asked for it and ask each for a 20-minute call.' })], { moves: [draft(1, { learn_id: LEARN, situation_id: SIT })], env: { FRONTEND_URL: 'https://app.example.com' }, byName })
+  const { call, rows, close } = await setup([moveJson({ title: 'Ring the front desk of one clinic today.', mission: 'Phone the front desk of one clinic and ask who handles the pricing request.' })], { moves: [draft(1, { learn_id: LEARN, situation_id: SIT })], env: { FRONTEND_URL: 'https://app.example.com' }, byName })
   try {
     assert.equal((await call('POST', `/api/moves/${uuid(301)}/swap`, { reason })).body.status, 'swapped')
     await memoryIdle()

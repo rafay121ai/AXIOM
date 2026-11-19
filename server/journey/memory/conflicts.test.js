@@ -12,7 +12,7 @@ import { readTalkMessages } from '../prompts/readTalk.js'
 import { situationMessages } from '../prompts/situation.js'
 import { checkRead } from '../theRead.js'
 import { briefMessages, buildBriefText } from './brief.js'
-import { conflictProblem, findConflict, namesBoth, transcriptOf } from './conflicts.js'
+import { conflictProblem, findConflict, namesBoth, namesBothAndAsks, transcriptOf } from './conflicts.js'
 import { applyExtraction } from './extractBeliefs.js'
 import { learnFromMessage } from './learnMessage.js'
 import { createMemoryStore } from './memoryStore.js'
@@ -68,19 +68,19 @@ const brief = 'Earlier they said:\n- Evenings and weekends, under 15 hours'
 const noticeIn = (messages) => messages.filter((m) => m.role === 'system' && m.content.startsWith('The founder said'))
 const sample = { situation: [], conversation: [], evidence: [], read: null, learn: [], subject: 's', fact: 'f', talk: [], questionsLeft: 1, followUpsLeft: 1, mode: 'offer', brief }
 
-test('the notice reaches the Situation, Read, Read talk, Learn and Move prompts, and only when there is a conflict', () => {
+test('the notice reaches the Situation, Read, Read talk and Learn prompts, and only when there is a conflict', () => {
   const builders = {
     situation: (conflict) => situationMessages({ ...sample, conflict }),
     read: (conflict) => readMessages({ ...sample, conflict }),
     readTalk: (conflict) => readTalkMessages({ ...sample, conflict }),
     learn: (conflict) => learnMessages({ ...sample, conflict }),
-    move: (conflict) => moveMessages({ ...sample, conflict }),
   }
   for (const [name, build] of Object.entries(builders)) {
     const [one] = noticeIn(build(hours))
     assert.equal(one.content, 'The founder said Evenings and weekends, under 15 hours before, and now says 16 hours. Open by naming both in one plain sentence using only those words, without blame, then ask what changed. Do not interpret or explain the new number.', name)
     assert.equal(noticeIn(build(null)).length, 0, name)
   }
+  assert.equal(noticeIn(moveMessages({ ...sample, conflict: hours })).length, 0) // the Move has no free sentence to hold it
   assert.deepEqual(briefMessages('', hours), [])
   assert.equal(briefMessages(brief).length, 1)
 })
@@ -195,4 +195,96 @@ test('a plan stated for later is stored as a fact and an open decision as a thre
   assert.equal(out.status, 'done')
   assert.ok(supabase.rows('founder_beliefs').some((b) => b.belief === 'Plans to hand work to employees later.'))
   assert.equal(supabase.rows('founder_threads').length, 1)
+})
+
+// ── Nov 19, run 2: the question, the shift, the invented unit ────────────────
+
+test('the notice is met only when a question follows the second number', () => {
+  assert.equal(namesBothAndAsks('You said under 15 hours before, and now 16. What changed?', hours), true)
+  assert.equal(namesBothAndAsks('Under 15 hours before and now 16, so why 16?', hours), true)
+  assert.equal(namesBothAndAsks('You said under 15 hours before, and now 16.', hours), false)
+  assert.equal(namesBothAndAsks('What about 15 hours? You now say 16.', hours), false) // the question came before the second number
+  assert.equal(namesBothAndAsks('What changed? Only 16 hours.', hours), false)
+})
+
+test('an offer or tapped answer may hold the one question that asks what changed; without a conflict it still may not', () => {
+  const reply = (text) => ({ reply: text, citations: [], follow_ups: [], picture_json: '', move_subject: '', move_fact: '' })
+  const check = (text, mode, conflict) => checkReply({ data: reply(text), mode, evidence: [], founderTexts: said, earlierTexts: EARLIER, conflict })
+  const asks = 'You said under 15 hours before, and now 16 hours a week. What changed?'
+  for (const mode of ['offer', 'followup']) {
+    assert.deepEqual(check(asks, mode, hours).problems, [], mode)
+    assert.ok(check('You said under 15 hours before, and now 16 hours a week. Your move is ready.', mode, hours).problems.includes(conflictProblem(hours)), mode)
+    assert.match(check(`${asks} Why? Really?`, mode, hours).problems.join(), /at most one question/, mode)
+    assert.deepEqual(check(asks, mode, null).problems, ['no question in this reply'], mode)
+  }
+})
+
+const contextOf = () => turns(['axiom', ASK])
+const shiftLine = 'Said under 15 hours at sign-up, then 16 hours a week now.'
+
+test('a changed number is stored as a shift by code, from a template, with the founder words as the receipt, once per source', async () => {
+  const { supabase, learn, calls } = memory({ founder_beliefs: [{ id: OLD, user_id: A, belief: 'Your time on it: evenings and weekends, under 15 hours.', kind: 'fact', confidence: 0.5, source: 'signup', status: 'active', created_at: '2026-11-14T00:00:00Z', updated_at: '2026-11-14T00:00:00Z' }] })
+  assert.equal((await learn({}, { context: async () => contextOf() })).status, 'done') // the model proposed nothing
+  const rows = supabase.rows('founder_beliefs')
+  const stored = rows.find((b) => b.id !== OLD)
+  assert.equal(stored.belief, 'Said evenings and weekends, under 15 hours before, now says 16 hours.')
+  assert.equal(stored.kind, 'fact')
+  assert.equal(stored.source, 'conversation')
+  assert.equal(rows.find((b) => b.id === OLD).status, 'active')
+  assert.deepEqual(supabase.rows('memory_evidence').map((e) => e.snippet), ['16'])
+  assert.equal((await learn({}, { context: async () => contextOf() })).status, 'skipped') // the same source again: nothing more
+  assert.equal(supabase.rows('founder_beliefs').length, 2)
+  assert.equal(calls.length, 1)
+  // the next brief shows the shift under "Earlier they said"
+  const brief = buildBriefText({ beliefs: supabase.rows('founder_beliefs'), currentText: 'I can spend 16 hours on ordering.', nowMs: NOW })
+  assert.match(brief, /Earlier they said:[\s\S]*now says 16 hours/)
+})
+
+test('the model proposing the same shift too stores one shift only', async () => {
+  const { supabase, learn } = memory()
+  await learn(shift, { context: async () => contextOf() })
+  assert.equal(supabase.rows('founder_beliefs').filter((b) => /16/.test(b.belief)).length, 1)
+})
+
+test('no shift is stored when a care event is open or the topic is blocked or the founder marked it wrong', async () => {
+  const care = memory({ care_events: [{ id: 'c1', user_id: A, level: 'clear', resolved_at: null, created_at: '2026-11-19T00:00:00Z' }] })
+  assert.equal((await care.learn({}, { context: async () => contextOf() })).status, 'skipped_care')
+  assert.equal(care.supabase.rows('founder_beliefs').length, 1)
+  const blocked = memory({ founder_beliefs: [{ id: OLD, user_id: A, belief: 'Your time on it: evenings, after the kids, under 15 hours.', kind: 'fact', confidence: 0.5, source: 'signup', status: 'active', created_at: '2026-11-14T00:00:00Z', updated_at: '2026-11-14T00:00:00Z' }] })
+  await blocked.learn({}, { context: async () => contextOf() })
+  assert.equal(blocked.supabase.rows('founder_beliefs').length, 1) // family: blocked, like any other write
+  const wrong = memory({ founder_beliefs: [{ id: OLD, user_id: A, belief: 'Your time on it: evenings and weekends, under 15 hours.', kind: 'fact', confidence: 0.5, source: 'signup', status: 'active', created_at: '2026-11-14T00:00:00Z', updated_at: '2026-11-14T00:00:00Z' }], founder_corrections: [{ id: 'k1', user_id: A, item_table: 'founder_beliefs', item_text: 'Said evenings and weekends, under 15 hours before, now says 16 hours.', reason: 'wrong', created_at: '2026-11-18T00:00:00Z' }] })
+  await wrong.learn({}, { context: async () => contextOf() })
+  assert.equal(wrong.supabase.rows('founder_beliefs').length, 1)
+})
+
+test('a bare number never gets a unit that neither the message nor its question holds', async () => {
+  const q = 'When you order products yourself, how long does one ordering session take?'
+  const ctx = async () => turns(['axiom', q])
+  const invented = memory({ founder_beliefs: [] })
+  await invented.learn({ new_beliefs: [{ belief: 'Ordering products takes 16 minutes per session.', kind: 'fact', snippet: '16', shifts_from: '' }] }, { context: ctx })
+  assert.equal(invented.supabase.rows('founder_beliefs').length, 0)
+  const fine = memory({ founder_beliefs: [] })
+  await fine.learn({ new_beliefs: [{ belief: 'Ordering takes 16 per session.', kind: 'fact', snippet: '16', shifts_from: '' }] }, { context: ctx })
+  assert.equal(fine.supabase.rows('founder_beliefs').length, 1)
+  const stated = memory({ founder_beliefs: [] })
+  await stated.learn({ new_beliefs: [{ belief: 'Can give 16 hours a week.', kind: 'fact', snippet: 'I can give 16 hours a week', shifts_from: '' }] }, { text: 'I can give 16 hours a week', context: ctx })
+  assert.equal(stated.supabase.rows('founder_beliefs').length, 1)
+  const asked = memory({ founder_beliefs: [] })
+  await asked.learn({ new_beliefs: [{ belief: 'Spends 16 minutes per session.', kind: 'fact', snippet: '16', shifts_from: '' }] }, { context: async () => turns(['axiom', 'How many minutes does one session take?']) })
+  assert.equal(asked.supabase.rows('founder_beliefs').length, 1) // the question said minutes
+})
+
+test('a stated plan for later is stored even when the founder types "Ill" for "I\'ll"; one decision becomes one thread, once', async () => {
+  const text = 'Ill give other work to employees further in the future to save time'
+  const { supabase, learn } = memory({ founder_beliefs: [] })
+  const out = {
+    new_beliefs: [{ belief: 'Plans to give other work to employees in the future to save time.', kind: 'fact', snippet: text, shifts_from: '' }],
+    threads: [{ title: 'Order manually or hand off the work', kind: 'open_question' }, { title: 'Hand off the ordering work or order manually', kind: 'open_question' }],
+  }
+  assert.equal((await learn(out, { text })).status, 'done')
+  assert.equal(supabase.rows('founder_beliefs').length, 1)
+  assert.equal(supabase.rows('founder_threads').length, 1) // two titles in one message: one thread
+  await learn(out, { text, sourceId: '00000000-0000-4000-8000-000000000102' })
+  assert.equal(supabase.rows('founder_threads').length, 1) // the reworded decision is the same open thread
 })

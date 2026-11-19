@@ -10,7 +10,7 @@
 // - Axiom's voice: no banned phrase, teaser, filler or quotation marks.
 import { validateExperimentQuality } from '../../experimentQuality.js'
 import { isFillerReply, stripFiller } from '../filler.js'
-import { threadKinds } from '../hooks.js'
+import { STOP, threadKinds } from '../hooks.js'
 import { BANNED_PHRASES, TEASER, norm, wordRx } from '../ownWords.js'
 
 export const MAX_START_MINUTES = 10
@@ -50,6 +50,15 @@ export function isRealSwapReason(text) {
   return words.length >= REASON_MIN_WORDS
 }
 
+// A swap must be a different move, not a rewording (live, Nov 19: "stays with you or moves to employees" for "stays inside your 16 hours").
+const SAME_MOVE_SHARE = 0.6
+const contentWords = (text) => new Set((norm(text).match(/[a-z0-9]{3,}/g) ?? []).filter((w) => !STOP.has(w)))
+export function isSameMove(move, previous) {
+  const now = contentWords(`${move.title} ${move.mission}`)
+  const before = contentWords(`${previous.title} ${previous.mission}`)
+  return now.size > 0 && [...now].filter((w) => before.has(w)).length / now.size >= SAME_MOVE_SHARE
+}
+
 // What the validator is given, from a move.
 export const experimentOf = (move) => ({
   hypothesis: move.hypothesis,
@@ -59,9 +68,10 @@ export const experimentOf = (move) => ({
 })
 
 // data: the model's output. founderTexts: every string the founder wrote or
-// chose. earlierTexts: earlier statements from the brief; their numbers may be named (a change). Returns { move, problems };
+// chose. earlierTexts: earlier statements from the brief; their numbers may be named (a change). previous: { title, mission } of the
+// move being swapped, or null. Returns { move, problems };
 // `move` is shown only when problems is empty.
-export function checkMove({ data, founderTexts, earlierTexts = [] }) {
+export function checkMove({ data, founderTexts, earlierTexts = [], previous = null }) {
   const problems = []
   const clean = (s) => stripFiller(String(s ?? '').trim()).text
   const move = {
@@ -108,6 +118,8 @@ export function checkMove({ data, founderTexts, earlierTexts = [] }) {
   if (DEPENDS_ON_OTHERS.test(norm(`${move.mission} ${move.checklist[0] ?? ''}`))) {
     problems.push('the founder must be able to start it alone, now: no waiting and no handing it to someone else')
   }
+
+  if (previous && isSameMove(move, previous)) problems.push('the swap is the old move reworded: write a different action built on the reason they gave, with new words')
 
   // The deterministic validator, unchanged.
   const verdict = validateExperimentQuality(experimentOf(move))

@@ -84,7 +84,9 @@ export const PERSONALITY_LABELS = Object.freeze([
 ])
 export const SENSITIVE = Object.freeze([
   // health and illness, diagnoses
-  /\b(health|healthy|sick|ill|illness|disease|cancer|diabet\w*|surgery|hospital\w*|medicat\w*|therap\w*|pregnan\w*|disabilit\w*|disabled|adhd|autis\w*|ocd|bipolar|diagnos\w*|injur\w*|chronic|burn ?out|burned out|burnt ?out)\b/,
+  /\b(health|healthy|sick|illness|disease|cancer|diabet\w*|surgery|hospital\w*|medicat\w*|therap\w*|pregnan\w*|disabilit\w*|disabled|adhd|autis\w*|ocd|bipolar|diagnos\w*|injur\w*|chronic|burn ?out|burned out|burnt ?out)\b/,
+  // "ill" alone is how many people type "I'll"; it counts as sickness only after a verb of being
+  /\b(?:am|is|are|was|were|be|been|feel|feeling|felt|got|get|getting|so|very|really|too|seriously|badly) ill\b|\bi'?m ill\b/,
   // mood
   /\b(depress\w*|anxi\w*|stress\w*|nervous|frustrat\w*|angry|overwhelm\w*|lonely|sad|panic\w*|mood\w*|hopeless|suicid\w*|self.harm\w*|grief|grieving|mental)\b/,
   // family and relationships

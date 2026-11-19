@@ -12,7 +12,7 @@ import { MAX_NEW_SITUATIONS_PER_DAY } from './situations.js'
 
 const USER = { id: '11111111-1111-4111-8111-111111111111', email: 'founder@example.com' }
 const OTHER = { id: '22222222-2222-4222-8222-222222222222', email: 'other@example.com' }
-const ENV = { FRONTEND_URL: 'https://app.example.com', LEARN_EVERY_MESSAGE: 'off' } // these tests count model calls; learnMessage.test.js covers memory
+const ENV = { FRONTEND_URL: 'https://app.example.com', LEARN_EVERY_MESSAGE: 'off', READ_GROUNDING: 'off' } // these tests count model calls; learnMessage.test.js covers memory, readGrounding.test.js the grounding check
 const NOW = Date.parse('2026-10-26T09:00:00.000Z')
 const FIRST = 'I have a demo ready but I have not emailed the clinics that asked for pricing three weeks ago.'
 const uuid = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
@@ -388,6 +388,23 @@ test('the Read: an invented number is retried with the problem named', async () 
   } finally { await close() }
 })
 
+test('the Read: the grounding check runs by default (usage logged) and READ_GROUNDING=off switches it off', async () => {
+  const names = (openai) => openai.calls.map((c) => c.payload.response_format.json_schema.name)
+  const on = await setup([enough(), enough(), readReply()], { env: { FRONTEND_URL: 'https://app.example.com', LEARN_EVERY_MESSAGE: 'off' }, byName: { read_grounding: JSON.stringify({ unsupported: [] }) } })
+  try {
+    const id = (await create(on.call, 1)).body.situation_id
+    assert.equal((await on.call('POST', `/api/situations/${id}/read`)).status, 200)
+    assert.equal(names(on.openai).filter((n) => n === 'read_grounding').length, 1)
+    assert.equal(on.rows('model_usage_logs').length, 4) // two follow-ups, the Read and the grounding check: every call is logged
+  } finally { await on.close() }
+  const off = await setup([enough(), enough(), readReply()])
+  try {
+    const id = (await create(off.call, 1)).body.situation_id
+    await off.call('POST', `/api/situations/${id}/read`)
+    assert.equal(names(off.openai).includes('read_grounding'), false)
+  } finally { await off.close() }
+})
+
 test('the Read check: banned phrase, teaser and a closing line that is not a question all fail', () => {
   const answerTexts = [...buildEvidence(FULL_ANSWERS).answerTexts, FIRST]
   const cases = [
@@ -418,7 +435,7 @@ test('the Read: two failures give the plain fallback, which quotes the founder a
     assert.equal(rows('reads')[0].source, 'fallback')
     assert.equal(rows('model_usage_logs').length, 4)
     const answerTexts = [...buildEvidence(FULL_ANSWERS).answerTexts, FIRST]
-    assert.equal(checkRead({ read: res.body, answerTexts }).ok, true)
+    assert.equal(checkRead({ read: res.body, answerTexts, fallback: true }).ok, true)
   } finally { await close() }
 })
 
@@ -597,7 +614,7 @@ test('memory: the first message, the Read answer and a Read talk reply are each 
     ['Has not contacted the clinics since the demo.', 'I have not contacted them since the demo'],
     ['Wants both clinics on a paid pilot this month.', 'start a paid pilot this month'],
   ) }
-  const { call, rows, close } = await setup([enough(), enough(), readReply(), talkLine(), allKnown()], { env: { FRONTEND_URL: 'https://app.example.com' }, byName })
+  const { call, rows, close } = await setup([enough(), enough(), readReply(), talkLine(), allKnown()], { env: { FRONTEND_URL: 'https://app.example.com', READ_GROUNDING: 'off' }, byName })
   try {
     const id = (await create(call, 1)).body.situation_id
     await call('POST', `/api/situations/${id}/read`)
@@ -643,7 +660,7 @@ test('15 then a bare 16: the Read talk gets the notice and must name both, and m
   const missesNew = talkLine({ reply: 'Ordering at the weekends takes your hours.', question: 'What does the ordering involve each week?' })
   const namesBothNumbers = talkLine({ reply: 'You said under 15 hours before, and now you say 16.', question: 'What changed in your weekends?' })
   const shift = JSON.stringify({ ...EMPTY_MESSAGE, new_beliefs: [{ belief: 'Said under 15 hours at sign-up, then 16 hours a week now.', kind: 'fact', snippet: '16', shifts_from: OLD }] })
-  const { call, openai, rows, db, close } = await setup([enough(), enough(), read, missesNew, namesBothNumbers], { env: { FRONTEND_URL: 'https://app.example.com' }, byName: { beliefs_message: shift }, tables: { founder_beliefs: [old] } })
+  const { call, openai, rows, db, close } = await setup([enough(), enough(), read, missesNew, namesBothNumbers], { env: { FRONTEND_URL: 'https://app.example.com', READ_GROUNDING: 'off' }, byName: { beliefs_message: shift }, tables: { founder_beliefs: [old] } })
   try {
     const id = (await create(call, 1, SAID)).body.situation_id
     await call('POST', `/api/situations/${id}/read`)
@@ -661,6 +678,6 @@ test('15 then a bare 16: the Read talk gets the notice and must name both, and m
     assert.equal(facts.length, 2)
     assert.equal(facts.find((b) => b.id === OLD).status, 'active')
     const lines = earlierLines(await loadBrief(db, USER.id, `${SAID}\n16`, NOW))
-    assert.ok(lines.some((l) => l.includes('under 15')) && lines.some((l) => l.includes('then 16')), lines.join('|'))
+    assert.ok(lines.some((l) => l.includes('under 15')) && lines.some((l) => l.includes('now says 16')), lines.join('|'))
   } finally { await close() }
 })

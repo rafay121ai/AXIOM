@@ -170,6 +170,7 @@ export function createApp({
     clock,
     lessonCites: env.LESSON_CITES === 'on',
     learnMessages: env.LEARN_EVERY_MESSAGE !== 'off', // on unless switched off
+    readGrounding: env.READ_GROUNDING !== 'off', // on unless switched off
     deleteOn: env.ACCOUNT_DELETE === 'on',
     // Test accounts (ADMIN_USER_IDS / ADMIN_EMAILS) skip the daily limit on new situations (Rafay, Nov 2).
     noDailyLimit: isAdminUser,

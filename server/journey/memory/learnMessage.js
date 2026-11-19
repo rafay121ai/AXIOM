@@ -3,17 +3,19 @@
 // Nov 19). One cheap model call proposes facts, people, shorthand, plans and
 // changes; applyExtraction checks every item against the NEW message only (the
 // earlier turns are context, never a source for a snippet). A changed fact keeps
-// the old one and adds a shift ("said under 15, then 16"), so the next prompt can
-// name both. No memory_runs row: that table is once per source and mode. A source
+// the old one and adds a shift ("said under 15, then 16"), written by code from a fixed template when the
+// conflict detector fires, so the next prompt can name both. No memory_runs row: that table is once per source and mode. A source
 // already holding receipts is not run again, so a retried turn never counts twice.
 // Never throws, never delays the reply (scheduleMemory).
 import { isFillerReply, stripFiller } from '../filler.js'
 import { numbersIn } from '../learn/pictures.js'
 import { createSharing } from '../report/sharing.js'
 import { applyExtraction, overCap, scheduleMemory } from './extractBeliefs.js'
+import { findConflict, shiftText } from './conflicts.js'
 import { createMemoryStore } from './memoryStore.js'
 import { MESSAGE_SCHEMA, beliefsMessages } from './prompts/beliefs.js'
 
+const sentencesOf = (text) => String(text).split(/(?<=[.!?])\s+/)
 export const MIN_MESSAGE_WORDS = 4
 export const CONTEXT_TURNS = 6
 const inflight = new Set()
@@ -42,8 +44,8 @@ export async function learnFromMessage({
     if (!situation || (await sharing.careTouched(userId, situation)) || (await sharing.careOpen(userId))) return { status: 'skipped_care' }
     if (await overCap(isCapped, userId)) return { status: 'skipped' }
 
-    const [beliefs, world, vocabulary, corrections, turns] = await Promise.all([
-      mem.activeBeliefs(userId), mem.activeWorld(userId), mem.activeVocabulary(userId), mem.corrections(userId), context(),
+    const [beliefs, world, vocabulary, corrections, turns, threads] = await Promise.all([
+      mem.activeBeliefs(userId), mem.activeWorld(userId), mem.activeVocabulary(userId), mem.corrections(userId), context(), mem.openThreads(userId),
     ])
     const input = {
       message: typed,
@@ -52,6 +54,7 @@ export async function learnFromMessage({
         beliefs: beliefs.filter((b) => b.kind === 'fact').map((b) => ({ id: b.id, belief: b.belief, kind: b.kind })),
         world: world.map((w) => ({ name: w.name, kind: w.kind, role: w.role })),
         vocabulary: vocabulary.map((v) => ({ term: v.term, meaning: v.meaning })),
+        threads: threads.map((t) => t.title),
       },
       corrections: corrections.map((c) => ({ item_text: c.item_text })),
     }
@@ -66,8 +69,16 @@ export async function learnFromMessage({
       messages: beliefsMessages({ mode: 'message', input }),
     })
     if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('memory output is not an object')
+    // The shift is written by code, not asked of the model: when the founder's number differs from a stored fact, the pair is stored
+    // from a fixed template, first, so the per-run cap never drops it. Same checks as any other write (care, blocked topics, corrections).
+    const facts = beliefs.filter((b) => b.kind === 'fact')
+    const conflict = findConflict({ transcript: [...turns, { role: 'founder', text: typed }], earlier: facts.map((b) => b.belief) })
+    const old = conflict && facts.find((b) => b.belief === conflict.earlier)
+    const shift = old ? [{ belief: shiftText(conflict), kind: 'fact', snippet: typed.includes(conflict.nowText) ? conflict.nowText : typed.trim(), shifts_from: old.id }] : []
+    const lastTurn = turns.at(-1)
+    const question = lastTurn?.role === 'axiom' ? sentencesOf(lastTurn.text).findLast((s) => s.includes('?')) ?? '' : ''
     const written = await applyExtraction({
-      store: mem, userId, data, mode: 'message', founderTexts: [typed], receipt: () => ({ sourceKind, sourceId }),
+      store: mem, userId, data: { ...data, new_beliefs: [...shift, ...(Array.isArray(data.new_beliefs) ? data.new_beliefs : [])] }, question, mode: 'message', founderTexts: [typed], receipt: () => ({ sourceKind, sourceId }),
       beliefSource: 'conversation', nowMs: clock.now(), corrections, log,
     })
     return { status: 'done', written }

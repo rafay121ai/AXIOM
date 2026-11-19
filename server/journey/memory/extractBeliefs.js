@@ -10,7 +10,7 @@
 // and never an earlier write twice. Confidence arithmetic lives in
 // beliefRules.js. Never throws (memory plan, Revision 2).
 import { isFillerReply, stripFiller } from '../filler.js'
-import { norm, wordRx } from '../ownWords.js'
+import { norm, numberUnits, unitStem, wordRx } from '../ownWords.js'
 import { createSharing } from '../report/sharing.js'
 import {
   LIMITS, MAX_NEW_PER_RUN, NEW_FACT_CONFIDENCE, NEW_PATTERN_CONFIDENCE, checkBeliefText, cleanStoredText, decayFact, isBlocked, isTraitValue,
@@ -20,6 +20,7 @@ import { createMemoryStore } from './memoryStore.js'
 import { BELIEFS_SCHEMA, FACTS_ONLY_SCHEMA, beliefsMessages } from './prompts/beliefs.js'
 
 const MAX_NEW_THREADS = 2
+const MAX_NEW_MESSAGE_THREADS = 1 // one message settles one open decision
 const VOCAB_CONFIDENCE = 0.5
 
 const squash = (t) => norm(t).replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
@@ -41,6 +42,12 @@ export const isCorrected = (corrections, table, text) => {
     if (s === old) return true
     return c.reason === 'wrong' && (table === 'founder_beliefs' || table === 'founder_threads') && rewordedFrom(s, old)
   })
+}
+// A stored belief may not give a number a unit or noun that neither the message nor the question it answered holds:
+// a bare "16" answering "how long does a session take" is not "16 minutes" (live, Nov 19).
+const addsUnit = (text, sources) => {
+  const known = new Set(sources.flatMap((s) => norm(s).match(/[a-z]+/g) ?? []).map(unitStem))
+  return numberUnits(text).some((p) => !known.has(p.unit))
 }
 const typedBy = (text, sources) => sources.some((s) => wordRx(norm(text)).test(norm(s)))
 
@@ -74,12 +81,12 @@ const rows = (x) => (Array.isArray(x) ? x.filter((i) => i && typeof i === 'objec
 
 // data: the model's output. founderTexts: what the founder wrote. moveTexts:
 // the move record (receipts for behaviour only, never names). receipt(snippet):
-// where the snippet came from, { sourceKind, sourceId?, sourceKey? }. cap: the
+// where the snippet came from, { sourceKind, sourceId?, sourceKey? }. question: the Axiom question a message answered (mode 'message'). cap: the
 // most a new belief may start at (the sign-up pass uses the self-report cap).
 // claim(): called once, after everything is checked and before the first write;
 // false (the run was already recorded by someone else) writes nothing.
 // Returns counts of what was written, or null when the claim was refused.
-export async function applyExtraction({ store, userId, data, mode, founderTexts, moveTexts = [], moveId = null, receipt, beliefSource, nowMs, corrections = [], cap = 1, claim = null, log = () => {} }) {
+export async function applyExtraction({ store, userId, data, mode, founderTexts, moveTexts = [], moveId = null, receipt, beliefSource, nowMs, corrections = [], question = '', cap = 1, claim = null, log = () => {} }) {
   const full = mode === 'full'
   const sourcesFor = (kind) => (kind === 'fact' ? founderTexts : [...founderTexts, ...moveTexts])
   const corrected = (table, text) => isCorrected(corrections, table, text)
@@ -105,6 +112,7 @@ export async function applyExtraction({ store, userId, data, mode, founderTexts,
   const counts = { ...(await store.evidenceCounts(userId, 'founder_beliefs')), ...(await store.evidenceCounts(userId, 'founder_traits')) }
   const traits = full ? await store.activeTraits(userId) : []
   const open = new Set((await store.openThreads(userId)).map((t) => squash(t.title)))
+  const openTitles = [...open]
 
   // Checking is pure: it decides what to write and changes nothing. `ops` are the writes, in order.
   const ops = []
@@ -112,6 +120,7 @@ export async function applyExtraction({ store, userId, data, mode, founderTexts,
   const taken = new Set(beliefs.map((b) => squash(b.belief)))
   const done = { beliefs: 0, traits: 0, world: 0, vocabulary: 0, threads: 0 }
   let created = 0
+  const shifts = new Set()
   // A snippet only in the move record is the move's, not the founder's words.
   const proof = (itemTable, itemId, snippet) => store.addEvidence([{
     userId, itemTable, itemId, snippet,
@@ -130,8 +139,10 @@ export async function applyExtraction({ store, userId, data, mode, founderTexts,
     const shifted = mode === 'message' && typeof from === 'string' ? byId.get(from) : null
     const text = textOf('belief', belief, sourcesFor(kind), shifted?.status === 'active' && shifted.kind === 'fact' ? [shifted.belief] : [])
     const snippet = snippetOf(rawSnippet, sourcesFor(kind))
-    if (!text || !snippet || corrected('founder_beliefs', text) || taken.has(squash(text))) return null
+    if (!text || !snippet || corrected('founder_beliefs', text) || taken.has(squash(text)) || (shifted && shifts.has(shifted.id))) return null
+    if (mode === 'message' && addsUnit(text, [...founderTexts, question, ...(shifted ? [shifted.belief] : [])])) return null
     taken.add(squash(text))
+    if (shifted) shifts.add(shifted.id) // one shift per old fact: the code's own comes first, the model's would only repeat it
     created += 1
     return async () => {
       const row = await store.insertBelief({ userId, belief: text, kind, source: beliefSource, confidence: Math.min(cap, kind === 'fact' ? NEW_FACT_CONFIDENCE : NEW_PATTERN_CONFIDENCE) })
@@ -237,8 +248,11 @@ export async function applyExtraction({ store, userId, data, mode, founderTexts,
   let threads = 0
   for (const t of rows(data.threads)) {
     const title = textOf('thread', t.title, founderTexts)
-    if (threads >= MAX_NEW_THREADS || !title || !['goal', 'bet', 'open_question'].includes(t.kind) || corrected('founder_threads', title) || open.has(squash(title))) continue
+    // A reworded open thread is the same thread (a message pass runs often and words the decision differently each time).
+    const again = open.has(squash(title ?? '')) || (mode === 'message' && openTitles.some((o) => rewordedFrom(squash(title ?? ''), o)))
+    if (threads >= (mode === 'message' ? MAX_NEW_MESSAGE_THREADS : MAX_NEW_THREADS) || !title || !['goal', 'bet', 'open_question'].includes(t.kind) || corrected('founder_threads', title) || again) continue
     open.add(squash(title))
+    openTitles.push(squash(title))
     threads += 1
     ops.push(async () => {
       await store.insertThread({ userId, title, kind: t.kind })

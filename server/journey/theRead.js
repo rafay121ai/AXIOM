@@ -5,8 +5,10 @@ import { checkFirstReading, unquoteUnknown } from './ownWords.js'
 import { checkHook, threadKinds } from './hooks.js'
 import { stripFiller } from './filler.js'
 import { earlierLines } from './memory/brief.js'
-import { conflictProblem, findConflict, namesBoth } from './memory/conflicts.js'
+import { conflictProblem, findConflict, namesBothAndAsks } from './memory/conflicts.js'
+import { overCap } from './memory/extractBeliefs.js'
 import { READ_SCHEMA, readMessages } from './prompts/read.js'
+import { GROUNDING_SCHEMA, groundingMessages } from './prompts/readGrounding.js'
 
 // First sentence of three words or more of what the founder wrote (so "Hi!"
 // is skipped), cut at a word, with quote marks removed so it can sit inside
@@ -42,16 +44,17 @@ const clean = (data) => {
 // situation. The closing question is held to the same own-words rules as the
 // body, and must be a real hook. A Read with nothing of theirs from this
 // situation read as an old chat for a new idea (live, Nov 9).
-export function checkRead({ read, answerTexts, earlierTexts = [], conflict = null }) {
+// fallback: our own plain Read, whose approved wording quotes the founder in the closing question (Rafay, Nov 3); a model Read may not.
+export function checkRead({ read, answerTexts, earlierTexts = [], conflict = null, fallback = false }) {
   const problems = []
   if (read.body.length < 40) problems.push('body is too short')
   if (threadKinds(`${read.headline} ${read.body}`, answerTexts).length === 0) {
     problems.push('the Read is not about this situation: build it on what they wrote here, in their words')
   }
-  if (conflict && !namesBoth(`${read.headline} ${read.body} ${read.closing_question}`, conflict)) problems.push(conflictProblem(conflict))
+  if (conflict && !namesBothAndAsks(`${read.headline} ${read.body} ${read.closing_question}`, conflict)) problems.push(conflictProblem(conflict))
   if (read.underlines !== undefined) problems.push('the Read has no underlines')
   const own = checkFirstReading({
-    reading: { headline: read.headline, body: `${read.body} ${read.closing_question}`, underlines: [] },
+    reading: { headline: read.headline, ...(fallback ? { body: `${read.body} ${read.closing_question}` } : { body: read.body, closing_question: read.closing_question }), underlines: [] },
     answerTexts,
     earlierTexts,
   })
@@ -67,11 +70,33 @@ const unquoted = (read, answerTexts) => ({
   closing_question: unquoteUnknown(read.closing_question, answerTexts),
 })
 
-// deps: { callStructured, userId, log }. Never throws: any model failure ends
+// One cheap model call on a Read that passed the code checks: the claims in it that the founder's words, numbers and the brief do not
+// support (Rafay, Nov 19: invented motives got through every code check). Fail-open: no check at the daily cap, and any error or
+// unusable output passes the Read, so this can never stop a founder from getting one.
+async function unsupportedClaims({ read, conversation, brief, situationId, grounding, deps }) {
+  try {
+    if (await overCap(grounding.isCapped, deps.userId)) return []
+    const { data } = await deps.callStructured({
+      step: 'beliefs',
+      schema: GROUNDING_SCHEMA,
+      schemaName: 'read_grounding',
+      maxCompletionTokens: 300,
+      userId: deps.userId,
+      usageContext: { step: 'beliefs', kind: 'read_grounding', situation_id: situationId },
+      messages: groundingMessages({ conversation, brief, read: { headline: read.headline, body: read.body, closing_question: read.closing_question } }),
+    })
+    return (Array.isArray(data?.unsupported) ? data.unsupported : []).filter((c) => typeof c === 'string' && c.trim()).map((c) => c.trim().slice(0, 120))
+  } catch (err) {
+    deps.log?.('read grounding check failed', err)
+    return []
+  }
+}
+
+// deps: { callStructured, userId, log }. grounding: { isCapped } turns the grounding check on (READ_GROUNDING=off passes null). Never throws: any model failure ends
 // in the fallback. Returns { read, source }.
 // Built from this situation; the brief and track record feed it as background, the conversation wins, and only the first
 // reading uses the sign-up answers directly (Rafay, Nov 9). trackRecord: how their recent moves went.
-export async function createRead({ conversation, deps, situationId, style, trackRecord = '', brief = '', firstReading = null }) {
+export async function createRead({ conversation, deps, situationId, style, trackRecord = '', brief = '', firstReading = null, grounding = null }) {
   const founderTexts = conversation.filter((t) => t.role === 'founder').map((t) => t.text)
   const earlierTexts = earlierLines(brief)
   const conflict = findConflict({ transcript: conversation, earlier: earlierTexts })
@@ -89,8 +114,11 @@ export async function createRead({ conversation, deps, situationId, style, track
       })
       const read = unquoted(clean(data), founderTexts)
       const verdict = checkRead({ read, answerTexts: founderTexts, earlierTexts, conflict })
-      if (verdict.ok) return { read, source: 'model' }
-      problems = verdict.problems
+      if (verdict.ok) {
+        const claims = grounding ? await unsupportedClaims({ read, conversation, brief, situationId, grounding, deps }) : []
+        if (claims.length === 0) return { read, source: 'model' }
+        problems = claims.map((c) => `it claims something they did not say (${c}): say only what they said or what follows from their numbers`)
+      } else problems = verdict.problems
     } catch (err) {
       deps.log?.('model call failed', err)
       problems = null

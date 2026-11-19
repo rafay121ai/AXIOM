@@ -54,7 +54,7 @@ test('fallback read with an empty founder text does not crash or invent', () => 
   assert.doesNotMatch(`${r.body} ${r.closing_question}`, /undefined|null/)
 })
 
-const readOk = (texts) => checkRead({ read: fallbackRead(texts), answerTexts: [...buildEvidence(FULL_ANSWERS).answerTexts, ...texts] })
+const readOk = (texts) => checkRead({ read: fallbackRead(texts), answerTexts: [...buildEvidence(FULL_ANSWERS).answerTexts, ...texts], fallback: true })
 
 test('fallback read: a long opening gives a whole question that passes checkRead', () => {
   const long = 'I have a demo ready for the clinics and they all asked for pricing three weeks ago but I keep putting off the email because I am afraid of the answer and so on and on'

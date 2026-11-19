@@ -14,7 +14,7 @@ import { scheduleMemory } from './memory/extractBeliefs.js'
 import { createMessageLearner } from './memory/learnMessage.js'
 import { seedFromSignup } from './memory/signupSeed.js'
 
-export function mountJourneyRoutes(app, { supabase, knowledgeSupabase = null, embed = null, care, cap, callStructured, clock, lessonCites = false, learnMessages = true, links = {}, deleteOn = false, noDailyLimit = () => false }) {
+export function mountJourneyRoutes(app, { supabase, knowledgeSupabase = null, embed = null, care, cap, callStructured, clock, lessonCites = false, learnMessages = true, readGrounding = true, links = {}, deleteOn = false, noDailyLimit = () => false }) {
   const limiter = (max) => rateLimit({
     windowMs: 60 * 1000,
     max,
@@ -31,7 +31,7 @@ export function mountJourneyRoutes(app, { supabase, knowledgeSupabase = null, em
     ? createMessageLearner({ supabase, callStructured, clock, isCapped: cap.isCapped, log: (what, detail) => console.error(`[Memory] ${what}`, detail?.message || '') })
     : () => {}
 
-  mountSituationRoutes(app, { supabase, care, cap, stored, callStructured, clock, learn, noDailyLimit })
+  mountSituationRoutes(app, { supabase, care, cap, stored, callStructured, clock, learn, readGrounding: readGrounding ? { isCapped: cap.isCapped } : null, noDailyLimit })
   mountLearnRoutes(app, { supabase, knowledgeSupabase, embed, care, cap, stored, callStructured, clock, learn, lessonCites })
   mountMoveRoutes(app, { supabase, care, cap, stored, callStructured, clock, learn })
   mountReportRoutes(app, { supabase, care, callStructured, clock, isCapped: cap.isCapped })

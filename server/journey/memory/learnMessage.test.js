@@ -38,6 +38,8 @@ function setup(over = {}) {
 }
 const shift = (extra = {}) => ({ new_beliefs: [{ belief: 'Said under 15 hours at sign-up, then 16 hours a week for ordering products.', kind: 'fact', snippet: '16 hours a week', shifts_from: OLD, ...extra }] })
 const texts = (supabase) => supabase.rows('founder_beliefs').map((b) => b.belief)
+// MSG changes the sign-up 15 to 16, so the server itself stores this shift, whatever the model proposes.
+const CODE_SHIFT = 'Said works evenings and weekends, under 15 hours a week before, now says Ordering the products from suppliers takes me 16 hours a week.'
 
 test('15 then 16: the shift is stored, the old fact stays, and the next brief names both', async () => {
   const { supabase, calls, learn } = setup()
@@ -50,7 +52,7 @@ test('15 then 16: the shift is stored, the old fact stays, and the next brief na
   assert.equal(old.status, 'active')
   const made = supabase.rows('founder_beliefs').find((b) => b.id !== OLD)
   assert.deepEqual([made.kind, made.source, made.status], ['fact', 'conversation', 'active'])
-  assert.deepEqual(supabase.rows('memory_evidence').map((e) => [e.source_kind, e.source_id, e.snippet]), [['situation', TURN, '16 hours a week']])
+  assert.deepEqual(supabase.rows('memory_evidence').map((e) => [e.source_kind, e.source_id, e.snippet]), [['situation', TURN, 'Ordering the products from suppliers takes me 16 hours a week']])
   assert.equal(supabase.rows('memory_runs').length, 0)
   const brief = await loadBrief(supabase, A, 'Ordering takes 16 hours every week and I plan to delegate it.', NOW)
   assert.ok(earlierLines(brief).includes(made.belief), brief)
@@ -61,7 +63,7 @@ test('the old number is allowed for a shift only: not without shifts_from, not f
   for (const out of [shift({ shifts_from: '' }), shift({ shifts_from: uuid(999) }), shift({ snippet: 'under 15 hours at sign-up' })]) {
     const { supabase, learn } = setup()
     await learn(out)
-    assert.deepEqual(texts(supabase), [SIGNUP_FACT])
+    assert.deepEqual(texts(supabase), [SIGNUP_FACT, CODE_SHIFT]) // only the code's own shift, never the model's
   }
 })
 
@@ -69,14 +71,14 @@ test('an invented number is rejected, even when the shift names the old one', as
   const { supabase, learn } = setup()
   await learn(shift({ belief: 'Said under 15 hours at sign-up, then 20 hours a week for ordering products.' }))
   await learn({ new_beliefs: [{ belief: 'Pays 40 dollars a month for ordering tools.', kind: 'fact', snippet: '16 hours a week', shifts_from: '' }] }, { sourceId: uuid(102) })
-  assert.deepEqual(texts(supabase), [SIGNUP_FACT])
+  assert.deepEqual(texts(supabase), [SIGNUP_FACT, CODE_SHIFT])
 })
 
 test('a snippet that is only in the earlier turns is rejected', async () => {
   const { supabase, learn } = setup()
   await learn({ new_beliefs: [{ belief: 'Sells candles to shops.', kind: 'fact', snippet: 'I sell candles to shops', shifts_from: '' }] },
     { context: async () => [{ role: 'founder', text: 'I sell candles to shops in the city.' }] })
-  assert.deepEqual(texts(supabase), [SIGNUP_FACT])
+  assert.deepEqual(texts(supabase), [SIGNUP_FACT, CODE_SHIFT])
 })
 
 test('the earlier turns reach the model as context, at most 6, next to the one message', async () => {
@@ -112,9 +114,10 @@ test('a failed model call writes nothing and does not throw', async () => {
 
 test('the same message twice stores once: a client retry never counts a reinforcement twice', async () => {
   const { supabase, calls, learn } = setup()
-  const again = { reinforce: [{ id: OLD, snippet: '16 hours a week' }] }
-  assert.equal((await learn(again)).status, 'done')
-  assert.equal((await learn(again)).status, 'skipped')
+  const again = { reinforce: [{ id: OLD, snippet: 'ordering the products from suppliers' }] }
+  const text = 'I keep ordering the products from suppliers myself.' // no changed number: the server stores no shift of its own
+  assert.equal((await learn(again, { text })).status, 'done')
+  assert.equal((await learn(again, { text })).status, 'skipped')
   assert.equal(calls.length, 1)
   assert.equal(supabase.rows('founder_beliefs')[0].confidence, 0.5) // a sign-up fact stays at the self-report cap
   assert.equal(supabase.rows('memory_evidence').length, 1)

@@ -10,8 +10,8 @@ import { validateCitations, cleanProse } from './citations.js'
 import { checkPicture, numbersIn as numbersWithWords } from './pictures.js'
 import { stripFiller } from '../filler.js'
 import { checkHook, threadKinds } from '../hooks.js'
-import { BANNED_PHRASES, TEASER, norm, wordRx } from '../ownWords.js'
-import { conflictProblem, namesBoth } from '../memory/conflicts.js'
+import { BANNED_PHRASES, TEASER, contrastProblem, norm, numberUnits, wordRx } from '../ownWords.js'
+import { conflictProblem, namesBothAndAsks } from '../memory/conflicts.js'
 import { LEARN_SCHEMA, learnMessages, MAX_FOLLOW_UPS, FOLLOW_UP_MAX } from './prompts/learn.js'
 
 export const WORD_CAP = 200
@@ -99,7 +99,8 @@ export function checkFact(fact, founderTexts) {
   if (!t || t.length > FACT_MAX || sentencesOf(t).length !== 1 || !/[.]$/.test(t) || QUOTE_MARKS.test(t)) return null
   if (!checkHook({ text: t, sources: founderTexts, requireQuestion: false }).ok || /\?/.test(t)) return null
   const ownNumbers = new Set(founderTexts.flatMap(numbersWithWords))
-  return numbersWithWords(t).every((n) => ownNumbers.has(n)) ? t : null
+  const ownPairs = new Set(founderTexts.flatMap(numberUnits).map((p) => `${p.number} ${p.unit}`))
+  return numbersWithWords(t).every((n) => ownNumbers.has(n)) && numberUnits(t).every((p) => ownPairs.has(`${p.number} ${p.unit}`)) ? t : null
 }
 
 // data: the model's output. Returns { reply, problems }. `reply` is the
@@ -135,6 +136,9 @@ export function checkReply({ data, mode, evidence, founderTexts, earlierTexts = 
   const uncited = evidence.filter((e) => !sources.some((s) => s.handle === e.handle || sameText(s.author) === sameText(e.author) || sameText(s.book) === sameText(e.source_title)))
   const passageNumbers = new Set(evidence.filter((e) => sources.some((s) => s.handle === e.handle)).flatMap((e) => digitsIn(e.text)))
   const ownNumbers = new Set([...founderTexts, ...earlierTexts].flatMap(digitsIn))
+  // A number keeps the unit the founder gave it: a bare "16" never becomes "16 hours" or "16 time" (live, Nov 19).
+  const ownPairs = new Set([...founderTexts, ...earlierTexts, ...(conflict ? [conflict.nowText] : []), ...evidence.filter((e) => sources.some((s) => s.handle === e.handle)).map((e) => e.text)]
+    .flatMap(numberUnits).map((p) => `${p.number} ${p.unit}`))
   const kept = []
   for (const sentence of sentencesOf(text)) {
     if (namesSource(sentence, uncited)) { problems.push('names an author or book it did not cite'); continue }
@@ -143,21 +147,27 @@ export function checkReply({ data, mode, evidence, founderTexts, earlierTexts = 
     if (TEASER.test(norm(sentence))) { problems.push('a teaser'); continue }
     const unknown = digitsIn(sentence).find((n) => !ownNumbers.has(n) && !passageNumbers.has(n))
     if (unknown) { problems.push(`a number the founder never gave: ${unknown}`); continue }
+    const loose = numberUnits(sentence).find((p) => !ownPairs.has(`${p.number} ${p.unit}`))
+    if (loose) { problems.push(`a number with a word the founder never put after it: ${loose.number} ${loose.unit}. Say the number the way they said it`); continue }
     kept.push(sentence)
   }
   text = stripFiller(kept.join(' ')).text
 
   const questions = (text.match(/\?/g) ?? []).length
   if (QUESTION_MODES.has(mode) && (questions !== 1 || !text.trim().endsWith('?'))) problems.push('it must end with exactly one plain question')
-  if (NO_QUESTION_MODES.has(mode) && questions > 0) {
-    problems.push('no question in this reply')
-    text = sentencesOf(text).filter((s) => !s.includes('?')).join(' ')
+  // An offer or follow-up holds no question, except the one that asks what changed when a number changed.
+  if (NO_QUESTION_MODES.has(mode) && questions > (conflict ? 1 : 0)) {
+    problems.push(conflict ? 'at most one question in this reply, the one that asks what changed' : 'no question in this reply')
+    const last = sentencesOf(text).findLast((s) => s.includes('?'))
+    text = sentencesOf(text).filter((s) => !s.includes('?') || (conflict && s === last)).join(' ')
   }
   if (words(text) > WORD_CAP) {
     problems.push(`too long: ${words(text)} words, the cap is ${WORD_CAP}`)
     text = capWords(text, WORD_CAP, { keepLast: QUESTION_MODES.has(mode) })
   }
-  if (conflict && !namesBoth(text, conflict)) problems.push(conflictProblem(conflict))
+  if (conflict && !namesBothAndAsks(text, conflict)) problems.push(conflictProblem(conflict))
+  const contrast = contrastProblem(text)
+  if (contrast) problems.push(contrast)
   if (text && threadKinds(text, founderTexts).length === 0) problems.push('nothing from this founder: use their own words, a number or a date they gave')
 
   let picture = null

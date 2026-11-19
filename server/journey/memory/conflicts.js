@@ -8,7 +8,7 @@ const WORDS = Object.keys(WORD_NUMBERS).filter((w) => WORD_NUMBERS[w] >= 1 && WO
 const NUMBER = new RegExp(`(\\$)?(\\d[\\d,]*(?:\\.\\d+)?)(?:\\s?(k|m)(?![A-Za-z]))?(%)?|\\b(${WORDS.join('|')})\\b`, 'gi')
 const SKIP = new Set(['a', 'an', 'the', 'of', 'per', 'more', 'new', 'about', 'or', 'to', 'and'])
 const UNITS = new Set(['hour', 'day', 'week', 'month', 'year', 'customer', 'client', 'order', 'user', 'people', 'employee', 'product', 'sale', 'lead', 'visit', 'call', 'minute'])
-const unitOf = (w) => (w ? w.toLowerCase().replace(/[^a-z]/g, '').replace(/^hrs?$/, 'hour').replace(/s$/, '') : null) || null
+export const unitOf = (w) => (w ? w.toLowerCase().replace(/[^a-z]/g, '').replace(/^hrs?$/, 'hour').replace(/s$/, '') : null) || null
 
 // [{ value, unit }] in the text. The unit is $ or %, or the next word (skipping "a", "of", "per"...); null when there is none.
 function numbers(text) {
@@ -67,7 +67,22 @@ export function namesBoth(text, conflict) {
   return found.includes(conflict.earlierNumber) && found.includes(conflict.nowNumber)
 }
 
-export const conflictProblem = (conflict) => `name both numbers, ${conflict.earlierNumber} and ${conflict.nowNumber}, in one plain sentence, and ask what changed`
+// The notice is met when both numbers are named and a question follows the second one (the question is what changed).
+export function namesBothAndAsks(text, conflict) {
+  const sentences = String(text).split(/(?<=[.!?])\s+/)
+  for (let i = 0; i < sentences.length; i += 1) {
+    if (namesBoth(sentences.slice(0, i + 1).join(' '), conflict)) return sentences.slice(i).some((s) => s.includes('?'))
+  }
+  return false
+}
+
+export const conflictProblem = (conflict) => `name both numbers, ${conflict.earlierNumber} and ${conflict.nowNumber}, in one plain sentence, then ask what changed as a question after them`
+
+// The shift as one stored fact, from a fixed template: the earlier belief without its label ("Your time on it: ..."), then the founder's words.
+export const shiftText = (conflict) => {
+  const before = conflict.earlier.replace(/^[^:]{1,40}:\s*/, '').replace(/[.\s]+$/, '')
+  return `Said ${/^[A-Z][a-z]/.test(before) ? before[0].toLowerCase() + before.slice(1) : before} before, now says ${conflict.nowText}.`
+}
 
 // The chronological conversation of one situation, from the prompt pieces Learn and Move hold.
 export const transcriptOf = ({ situation = [], read = null, learn = [] }) => [

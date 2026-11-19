@@ -83,9 +83,9 @@ export const MOVE = {
 }
 export const SWAPPED_MOVE = {
   ...MOVE,
-  title: 'Call both clinics that asked for pricing.',
-  mission: 'Call the 2 clinics that asked for pricing and ask each for a 20-minute call.',
-  checklist: ['Find the phone number of each clinic'],
+  title: 'Ring the front desk of one clinic today.',
+  mission: 'Phone the front desk of one clinic and ask who handles the pricing request.',
+  checklist: ['Find the phone number of that clinic'],
 }
 export const SWAP_REASON = 'I only have their phone numbers, not their email.'
 

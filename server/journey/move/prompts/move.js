@@ -43,7 +43,7 @@ export const MOVE_PROMPT = [
   '- hypothesis: "Tests whether ..." followed by the claim, using the same key words as success. Never shown to the founder.',
   '- No quotation marks and no question marks outside words.',
   '',
-  'If "swap" is present, the founder is changing an earlier move and said why it is wrong for them. Write a different move that respects that reason.',
+  'If "swap" is present, the founder is changing an earlier move and said why it is wrong for them. Write a different move, not the old one reworded: a different action, built on that reason, in new words. Do not reuse the previous title or mission wording.',
   '',
   'Voice: plain everyday words and short sentences. Direct, never harsh. The founder stays in control, never begging or pleading. No metaphors, no flattery, no chatbot language, no humour, no swearing.',
   'Never use: "great question", "certainly", "I understand", "that\'s interesting", "absolutely", "of course", "I\'d be happy to", "great". Never assume gender: use "you" or "they".',
@@ -51,12 +51,12 @@ export const MOVE_PROMPT = [
 
 // input: { situation, read, learn, subject, fact, swap? }
 //   swap: { previous: { title, mission }, reason }.
-export function moveMessages({ situation, read, learn, subject, fact, swap = null, style, trackRecord = '', brief = '', conflict = null }, retryProblems = null) {
+export function moveMessages({ situation, read, learn, subject, fact, swap = null, style, trackRecord = '', brief = '' }, retryProblems = null) {
   const messages = [
     { role: 'system', content: MOVE_PROMPT },
     ...styleMessages(style),
     ...trackRecordMessages('move', trackRecord),
-    ...briefMessages(brief, conflict),
+    ...briefMessages(brief),
     {
       role: 'user',
       content: JSON.stringify({

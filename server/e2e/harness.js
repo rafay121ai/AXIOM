@@ -64,6 +64,7 @@ function createStepOpenAI() {
         async create(payload) {
           const step = payload.response_format?.json_schema?.name ?? 'unstructured'
           calls.push({ kind: 'chat', step, model: payload.model, payload })
+          if (!queues.get(step)?.length && step === 'read_grounding') queues.set(step, [{ unsupported: [] }])
           if (!queues.get(step)?.length && step.startsWith('beliefs')) queues.set(step, [step.includes('message') ? EMPTY_MESSAGE : step.includes('facts_only') ? EMPTY_FACTS : EMPTY_BELIEFS])
           if (!queues.get(step)?.length) {
             unexpected.push(step)

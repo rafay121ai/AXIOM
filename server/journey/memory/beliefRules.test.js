@@ -117,3 +117,10 @@ test('every length limit matches the CHECK in the migration', () => {
   assert.deepEqual(LIMITS.thread, range('founder_threads_title_len'))
   assert.deepEqual(LIMITS.snippet, range('memory_evidence_snippet_len'))
 })
+
+test('"Ill" typed for "I\'ll" is not sickness; ill after a verb of being still is', () => {
+  assert.equal(isBlocked('Ill give other work to employees in the future'), false)
+  assert.equal(isBlocked('I am ill this week'), true)
+  assert.equal(isBlocked("I'm ill and tired"), true)
+  assert.equal(isBlocked('feeling really ill'), true)
+})

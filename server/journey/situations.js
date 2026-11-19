@@ -8,11 +8,11 @@ import { stripFiller, isFillerReply } from './filler.js'
 import { SITUATION_SCHEMA, situationMessages } from './prompts/situation.js'
 import { READ_TALK_SCHEMA, readTalkMessages } from './prompts/readTalk.js'
 import { createRead } from './theRead.js'
-import { BANNED_PHRASES, norm, wordRx } from './ownWords.js'
+import { BANNED_PHRASES, contrastProblem, norm, wordRx } from './ownWords.js'
 import { styleOf } from './prompts/style.js'
 import { loadTrackRecord } from './memory/trackRecord.js'
 import { earlierLines, loadBrief } from './memory/brief.js'
-import { conflictProblem, findConflict, namesBoth } from './memory/conflicts.js'
+import { conflictProblem, findConflict, namesBothAndAsks } from './memory/conflicts.js'
 
 export const MAX_NEW_SITUATIONS_PER_DAY = 5
 export const TEXT_MAX = 2000
@@ -47,7 +47,8 @@ const titleOk = (title, founderTexts) => {
 const busy = () => new HttpError(409, { error: 'This turn is still being processed. Try again in a moment.', code: 'turn_busy' })
 
 // learn: remembers one founder message in the background (memory/learnMessage.js); a no-op until wired.
-export function createSituations({ supabase, callStructured, clock, log = () => {}, learn = () => {} }) {
+// readGrounding: { isCapped } checks each Read for claims the founder never made (theRead.js); null is off.
+export function createSituations({ supabase, callStructured, clock, log = () => {}, learn = () => {}, readGrounding = null }) {
   const iso = () => new Date(clock.now()).toISOString()
   const one = async (query) => {
     const { data, error } = await query
@@ -311,6 +312,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
       brief: await loadBrief(supabase, userId, founderTextsOf(turns).join('\n')),
       firstReading: await firstReadingOf(userId),
       deps: { callStructured, userId, log },
+      grounding: readGrounding,
     })
     const inserted = await supabase.from('reads').insert({
       situation_id: situation.id, headline: made.headline, body: made.body,
@@ -398,7 +400,8 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
         const replyProblems = !reply ? ['the reply is empty: answer what they just said first']
           : reply.includes('?') ? ['the reply holds a question: one question only, in question']
             : threadKinds(reply, sources).length === 0 ? ['the reply says nothing of theirs: use their own words']
-              : conflict && !namesBoth(`${reply} ${question}`, conflict) ? [conflictProblem(conflict)] : []
+              : conflict && !namesBothAndAsks(`${reply} ${question}`, conflict) ? [conflictProblem(conflict)]
+                : contrastProblem(`${reply} ${question}`) ? [contrastProblem(`${reply} ${question}`)] : []
         if (verdict.ok && replyProblems.length === 0 && question.length <= 220) return `${reply} ${question}`
         problems = [...replyProblems, ...verdict.problems]
       } catch (err) {
