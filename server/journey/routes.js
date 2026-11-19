@@ -70,6 +70,7 @@ export function mountJourneyRoutes(app, { supabase, knowledgeSupabase = null, em
         const build = (async () => {
           const { reading, source } = await createFirstReading({
             answers,
+            grounding: readGrounding ? { isCapped: cap.isCapped } : null,
             deps: {
               callStructured,
               userId: req.user.id,

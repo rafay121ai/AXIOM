@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createFakeClock, createFakeSupabase } from '../../testing/fakes.js'
 import { EMPTY_MESSAGE } from '../../e2e/harness.js'
-import { checkFirstReading } from '../ownWords.js'
+import { checkFirstReading, contrastProblem } from '../ownWords.js'
 import { checkReply, composeReply } from '../learn/reply.js'
 import { learnMessages } from '../learn/prompts/learn.js'
 import { moveMessages } from '../move/prompts/move.js'
@@ -128,6 +128,8 @@ test('the first reading rejects markup characters, and the prompts say so', () =
   const check = (body) => checkFirstReading({ reading: reading(body), answerTexts: ['nobody pays yet'] })
   assert.match(check('Your week is *short* and your goal is big.').problems.join(), /markup/)
   assert.match(check('Your week is_short and your goal is big.').problems.join(), /markup/)
+  assert.match(check('[Asking for money] is the gap, and your goal is big.').problems.join(), /markup/)
+  assert.match(check('Your week is {short} and your goal is big.').problems.join(), /markup/)
   assert.ok(!check('Your week is short and your goal is big.').problems.join().includes('markup'))
 })
 
@@ -152,13 +154,13 @@ const shift = { new_beliefs: [{ belief: 'Said under 15 hours at sign-up, then 16
 test('the message schema has no supersede, and a supersede in the output is ignored: the old fact stays active', async () => {
   assert.equal('supersede' in MESSAGE_SCHEMA.properties, false)
   const { supabase, learn } = memory()
-  const out = await learn({ ...shift, supersede: [{ id: OLD, replacement: { belief: 'Works 16 hours a week.', snippet: '16' } }] })
+  const out = await learn({ ...shift, supersede: [{ id: OLD, replacement: { belief: 'Works 16 hours a week.', snippet: '16' } }] }, { context: async () => turns(['axiom', ASK]) })
   assert.equal(out.status, 'done')
   const rows = supabase.rows('founder_beliefs')
   assert.deepEqual(rows.map((b) => b.status), ['active', 'active'])
   const brief = buildBriefText({ beliefs: rows, currentText: 'Ordering takes 16 hours every week.', nowMs: NOW })
   assert.match(brief, /under 15 hours/)
-  assert.match(brief, /then 16 hours/)
+  assert.match(brief, /now says 16 hours/)
 })
 
 test('a report pass still supersedes (mode full is unchanged)', async () => {
@@ -287,4 +289,54 @@ test('a stated plan for later is stored even when the founder types "Ill" for "I
   assert.equal(supabase.rows('founder_threads').length, 1) // two titles in one message: one thread
   await learn(out, { text, sourceId: '00000000-0000-4000-8000-000000000102' })
   assert.equal(supabase.rows('founder_threads').length, 1) // the reworded decision is the same open thread
+})
+
+test('a bare answer takes its unit from the question, not from an earlier stored line (the model shift is dropped without one)', async () => {
+  const noQuestion = memory()
+  await noQuestion.learn(shift) // bare "16", no question: "hours" would come only from the old fact
+  assert.ok(!noQuestion.supabase.rows('founder_beliefs').some((b) => /16 hours/.test(b.belief)))
+  const withQuestion = memory()
+  await withQuestion.learn(shift, { context: async () => turns(['axiom', ASK]) })
+  assert.ok(withQuestion.supabase.rows('founder_beliefs').some((b) => /16 hours/.test(b.belief)))
+})
+
+test('the shift quotes only the clause around the number, at most 12 words', () => {
+  const found = (text) => findConflict({ transcript: turns(['axiom', 'What changed?'], ['founder', text]), earlier: EARLIER })
+  assert.equal(found('I looked at the whole thing last night and honestly I can do 16 hours a week, and then I will hire help').nowText, 'honestly I can do 16 hours a week')
+  assert.equal(found('Im okay with working on it 16 hours a week').nowText, 'Im okay with working on it 16 hours a week')
+  const long = found('so basically over the next few months with everything that is going on at home and work it is 16 hours a week at most').nowText
+  assert.ok(long.split(' ').length <= 12 && long.includes('16 hours'))
+})
+
+test('a conflict the Read talk named in a discarded reply is still named by the lesson (only seen Axiom turns count)', () => {
+  const transcript = turns(['axiom', ASK], ['founder', 'Im okay with working on it 16 hours a week'])
+  assert.ok(findConflict({ transcript, earlier: EARLIER }))
+  assert.equal(findConflict({ transcript: [...transcript, ...turns(['axiom', 'You said under 15 hours before, and now 16. What changed?'], ['founder', 'more time']) ], earlier: EARLIER }), null)
+})
+
+test('a follow-up chip that asks what changed is dropped when the reply already asked it', () => {
+  const data = { ...lesson(BOTH), follow_ups: ['What changed with the 16 hours?', 'How do I protect the time?'] }
+  const out = checkReply({ data, mode: 'lesson', evidence, founderTexts: said, earlierTexts: EARLIER, conflict: hours })
+  assert.deepEqual(out.reply.follow_ups, ['How do I protect the time?'])
+  assert.deepEqual(checkReply({ data, mode: 'lesson', evidence, founderTexts: said, earlierTexts: EARLIER }).reply.follow_ups, data.follow_ups)
+})
+
+test('a Learn reply that still has a contrast or no closing question after the retry never ships as is', async () => {
+  const bad = lesson('Rob Fitzpatrick says ask about their life. Ordering is not the problem, it is the 16 hours a week of your life. What will you ask first?')
+  const run = async (outputs, extra = {}) => composeReply({ mode: 'lesson', step: 'learn', evidence, founderTexts: said, earlierTexts: EARLIER, context: { brief, situation: [], read: null, learn: [] }, deps: { callStructured: async () => ({ data: outputs.shift() }) }, ...extra })
+  // repaired: the contrast sentence goes, the citation sentence and the question stay
+  const fixed = await run([bad, bad])
+  assert.equal(contrastProblem(fixed.text), null)
+  assert.match(fixed.text, /^Rob Fitzpatrick says ask about their life\. What will you ask first\?$/)
+  assert.equal(fixed.sources.length, 1)
+  // no closing question: the plain reply, no source, no contrast, one question
+  const noQ = lesson('Rob Fitzpatrick says ask about their life. Ordering takes 16 hours a week of your life.')
+  const plain = await run([noQ, noQ])
+  assert.deepEqual(plain.sources, [])
+  assert.match(plain.text, /^I could not find a lesson on this that I trust, so I will not guess\. On .*: what is the next step, as you see it\?$/)
+  assert.equal(plain.text.match(/\?/g).length, 1)
+  // a failed second call after a hard failure also gets the repair
+  const calls = [bad]
+  const afterError = await composeReply({ mode: 'lesson', step: 'learn', evidence, founderTexts: said, earlierTexts: EARLIER, context: { brief, situation: [], read: null, learn: [] }, deps: { callStructured: async () => { if (calls.length) return { data: calls.shift() }; throw new Error('down') } } })
+  assert.equal(contrastProblem(afterError.text), null)
 })

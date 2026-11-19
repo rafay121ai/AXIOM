@@ -11,7 +11,7 @@ import { STYLE_INSTRUCTIONS, styleMessages, styleOf } from './prompts/style.js'
 const sha = (s) => createHash('sha256').update(s).digest('hex')
 // Snapshot of the prompts as they were before styles existed.
 const OLD = {
-  read: '95c108b9731b5844d9488e2d51c4aeb1bfb299a840a08a5309adf1a803214d23', // Nov 19: no quote or 4-word run in the headline and closing question; no "not X, it is Y"
+  read: '50e663cae8fb8695c1fe5997961ae8688b782daeb90321e103118a71656b60da', // Nov 19: no quote or 4-word run in the headline and closing question; no "not X, it is Y"; no brackets
   learn: 'd04a02aaaa40cca1e283f0a90e3c428ff391405817de43d82c974cdb9eea6cca', // Nov 19: a bare number keeps the words the founder gave it
   move: '638208fc55357aa86e4866f32610a66ebf9033f660be7be304dab0cbe031e5a5', // Nov 19: a swap is a different move, not a rewording
   report: '6ce24f154ae001da47b70fddb78b7365b1d79fd8f9ecb8dea1622566694127a7',

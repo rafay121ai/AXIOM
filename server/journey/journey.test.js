@@ -8,7 +8,7 @@ import { fallbackReading, buildEvidence } from './firstReading.js'
 import { EMPTY_BELIEFS } from '../e2e/harness.js'
 
 const USER = { id: '11111111-1111-4111-8111-111111111111', email: 'founder@example.com' }
-const ENV = { FRONTEND_URL: 'https://app.example.com' }
+const ENV = { FRONTEND_URL: 'https://app.example.com', READ_GROUNDING: 'off' } // these count model calls; readGrounding.test.js covers the grounding check
 const NOW = Date.parse('2026-10-26T09:00:00.000Z')
 
 async function setup(script = [], tables = {}) {

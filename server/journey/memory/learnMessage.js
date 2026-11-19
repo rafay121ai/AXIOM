@@ -10,6 +10,7 @@
 import { isFillerReply, stripFiller } from '../filler.js'
 import { numbersIn } from '../learn/pictures.js'
 import { createSharing } from '../report/sharing.js'
+import { isBlocked } from './beliefRules.js'
 import { applyExtraction, overCap, scheduleMemory } from './extractBeliefs.js'
 import { findConflict, shiftText } from './conflicts.js'
 import { createMemoryStore } from './memoryStore.js'
@@ -73,7 +74,8 @@ export async function learnFromMessage({
     // from a fixed template, first, so the per-run cap never drops it. Same checks as any other write (care, blocked topics, corrections).
     const facts = beliefs.filter((b) => b.kind === 'fact')
     const conflict = findConflict({ transcript: [...turns, { role: 'founder', text: typed }], earlier: facts.map((b) => b.belief) })
-    const old = conflict && facts.find((b) => b.belief === conflict.earlier)
+    // The shift holds only a clause of the message, so a blocked topic anywhere in the whole message stops it too.
+    const old = conflict && !isBlocked(typed) && facts.find((b) => b.belief === conflict.earlier)
     const shift = old ? [{ belief: shiftText(conflict), kind: 'fact', snippet: typed.includes(conflict.nowText) ? conflict.nowText : typed.trim(), shifts_from: old.id }] : []
     const lastTurn = turns.at(-1)
     const question = lastTurn?.role === 'axiom' ? sentencesOf(lastTurn.text).findLast((s) => s.includes('?')) ?? '' : ''

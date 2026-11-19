@@ -141,7 +141,7 @@ export function checkFirstReading({ reading, answerTexts, earlierTexts = [] }) {
     if (!inAnswers(phrase)) problems.push(`quoted words are not in the answers: "${phrase}"`)
   }
 
-  if (/[_*#`]/.test(text)) problems.push('markup characters (_ * # `) in the reading: plain words only')
+  if (/[_*#`[\]{}]/.test(text)) problems.push('markup characters (_ * # ` [ ] { }) in the reading: plain words only')
   if (/\bunderlines?\b/.test(lower)) problems.push('the word "underline" is in the text: it is not for the founder to read')
   // A sign-up option label ("wait-and-collect-more") glued into prose: only a hyphenated word the founder typed may stay.
   for (const label of new Set(lower.match(/\b[a-z]+(?:-[a-z]+){2,}\b/g) ?? [])) {

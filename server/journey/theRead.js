@@ -70,10 +70,10 @@ const unquoted = (read, answerTexts) => ({
   closing_question: unquoteUnknown(read.closing_question, answerTexts),
 })
 
-// One cheap model call on a Read that passed the code checks: the claims in it that the founder's words, numbers and the brief do not
+// One cheap model call on a Read (or first reading) that passed the code checks: the claims in it that the founder's words, numbers and the brief do not
 // support (Rafay, Nov 19: invented motives got through every code check). Fail-open: no check at the daily cap, and any error or
 // unusable output passes the Read, so this can never stop a founder from getting one.
-async function unsupportedClaims({ read, conversation, brief, situationId, grounding, deps }) {
+export async function unsupportedClaims({ read, conversation, brief, situationId, grounding, deps }) {
   try {
     if (await overCap(grounding.isCapped, deps.userId)) return []
     const { data } = await deps.callStructured({
@@ -83,7 +83,7 @@ async function unsupportedClaims({ read, conversation, brief, situationId, groun
       maxCompletionTokens: 300,
       userId: deps.userId,
       usageContext: { step: 'beliefs', kind: 'read_grounding', situation_id: situationId },
-      messages: groundingMessages({ conversation, brief, read: { headline: read.headline, body: read.body, closing_question: read.closing_question } }),
+      messages: groundingMessages({ conversation, brief, read: { headline: read.headline, body: read.body, closing_question: read.closing_question ?? '' } }),
     })
     return (Array.isArray(data?.unsupported) ? data.unsupported : []).filter((c) => typeof c === 'string' && c.trim()).map((c) => c.trim().slice(0, 120))
   } catch (err) {

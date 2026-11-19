@@ -11,6 +11,7 @@
 // beliefRules.js. Never throws (memory plan, Revision 2).
 import { isFillerReply, stripFiller } from '../filler.js'
 import { norm, numberUnits, unitStem, wordRx } from '../ownWords.js'
+import { STOP } from '../hooks.js'
 import { createSharing } from '../report/sharing.js'
 import {
   LIMITS, MAX_NEW_PER_RUN, NEW_FACT_CONFIDENCE, NEW_PATTERN_CONFIDENCE, checkBeliefText, cleanStoredText, decayFact, isBlocked, isTraitValue,
@@ -45,6 +46,7 @@ export const isCorrected = (corrections, table, text) => {
 }
 // A stored belief may not give a number a unit or noun that neither the message nor the question it answered holds:
 // a bare "16" answering "how long does a session take" is not "16 minutes" (live, Nov 19).
+const topicWords = (s) => (norm(s).match(/[a-z]{4,}/g) ?? []).filter((w) => !STOP.has(w)).map(unitStem)
 const addsUnit = (text, sources) => {
   const known = new Set(sources.flatMap((s) => norm(s).match(/[a-z]+/g) ?? []).map(unitStem))
   return numberUnits(text).some((p) => !known.has(p.unit))
@@ -140,7 +142,9 @@ export async function applyExtraction({ store, userId, data, mode, founderTexts,
     const text = textOf('belief', belief, sourcesFor(kind), shifted?.status === 'active' && shifted.kind === 'fact' ? [shifted.belief] : [])
     const snippet = snippetOf(rawSnippet, sourcesFor(kind))
     if (!text || !snippet || corrected('founder_beliefs', text) || taken.has(squash(text)) || (shifted && shifts.has(shifted.id))) return null
-    if (mode === 'message' && addsUnit(text, [...founderTexts, question, ...(shifted ? [shifted.belief] : [])])) return null
+    // An earlier stored line may lend a unit only when it is about the same thing as the question or the message (shares a word).
+    const lent = shifted && [...founderTexts, question].some((s) => topicWords(s).some((w) => topicWords(shifted.belief).includes(w))) ? [shifted.belief] : []
+    if (mode === 'message' && addsUnit(text, [...founderTexts, question, ...lent])) return null
     taken.add(squash(text))
     if (shifted) shifts.add(shifted.id) // one shift per old fact: the code's own comes first, the model's would only repeat it
     created += 1

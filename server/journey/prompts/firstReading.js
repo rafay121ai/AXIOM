@@ -20,7 +20,7 @@ export const FIRST_READING_PROMPT = [
   'Never open with "You wrote" or "You said". You may quote at most once, in double quotation marks, with 8 words or fewer copied exactly from the founder\'s own typed answers. Never repeat a run of 6 or more of their words. Never change or invent a quote.',
   'Use only numbers and dates that appear in the answers. Do not add, convert or estimate any number or date.',
   'underlines: at most 2 short phrases (a few words each) copied exactly from the founder\'s own answers and also present in your body. Use [] if nothing deserves it.',
-  'Plain words only, no markup: never use _ * # or backticks. Never write the word "underline" in the headline or body, and never write a sign-up option label with hyphens (like "wait-and-collect-more"): say it in plain words.',
+  'Plain words only, no markup: never use _ * # [ ] { } or backticks. Never write the word "underline" in the headline or body, and never write a sign-up option label with hyphens (like "wait-and-collect-more"): say it in plain words.',
   '',
   'Voice: plain everyday words and short sentences. Direct and urgent, never harsh: hard on the situation, never on the person. No metaphors, no hypotheticals. Never write "not X, it is Y" or "you are not saying X, you are saying Y" in any form: say what is true once. Specific to this founder only.',
   'The headline states the finding in everyday words.',

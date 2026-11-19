@@ -62,11 +62,13 @@ export function capWords(text, cap = WORD_CAP, { keepLast = false } = {}) {
   return [...kept, ...(last ? [last] : [])].join(' ')
 }
 
-function cleanFollowUps(list) {
+// askedChange: the reply already asked what changed, so no chip asks it again.
+const ASKS_CHANGE = /\bwhat (?:has |had )?changed\b/
+function cleanFollowUps(list, askedChange = false) {
   const out = []
   for (const raw of Array.isArray(list) ? list : []) {
     const t = stripFiller(raw).text.trim()
-    if (!t || t.length > FOLLOW_UP_MAX || TEASER.test(norm(t)) || hasBanned(t) || QUOTE_MARKS.test(t)) continue
+    if (!t || t.length > FOLLOW_UP_MAX || TEASER.test(norm(t)) || hasBanned(t) || QUOTE_MARKS.test(t) || (askedChange && ASKS_CHANGE.test(norm(t)))) continue
     if (out.some((o) => norm(o) === norm(t))) continue
     out.push(t)
     if (out.length >= MAX_FOLLOW_UPS) break
@@ -153,8 +155,10 @@ export function checkReply({ data, mode, evidence, founderTexts, earlierTexts = 
   }
   text = stripFiller(kept.join(' ')).text
 
+  // Hard: what the sentence cleaning above cannot remove. If a retry does not fix these, the reply is repaired or replaced, never shipped.
+  let hard = false
   const questions = (text.match(/\?/g) ?? []).length
-  if (QUESTION_MODES.has(mode) && (questions !== 1 || !text.trim().endsWith('?'))) problems.push('it must end with exactly one plain question')
+  if (QUESTION_MODES.has(mode) && (questions !== 1 || !text.trim().endsWith('?'))) { problems.push('it must end with exactly one plain question'); hard = true }
   // An offer or follow-up holds no question, except the one that asks what changed when a number changed.
   if (NO_QUESTION_MODES.has(mode) && questions > (conflict ? 1 : 0)) {
     problems.push(conflict ? 'at most one question in this reply, the one that asks what changed' : 'no question in this reply')
@@ -167,7 +171,7 @@ export function checkReply({ data, mode, evidence, founderTexts, earlierTexts = 
   }
   if (conflict && !namesBothAndAsks(text, conflict)) problems.push(conflictProblem(conflict))
   const contrast = contrastProblem(text)
-  if (contrast) problems.push(contrast)
+  if (contrast) { problems.push(contrast); hard = true }
   if (text && threadKinds(text, founderTexts).length === 0) problems.push('nothing from this founder: use their own words, a number or a date they gave')
 
   let picture = null
@@ -182,13 +186,41 @@ export function checkReply({ data, mode, evidence, founderTexts, earlierTexts = 
     text,
     sources,
     picture,
-    follow_ups: mode === 'followup' ? [] : cleanFollowUps(data.follow_ups),
+    follow_ups: mode === 'followup' ? [] : cleanFollowUps(data.follow_ups, Boolean(conflict) && namesBothAndAsks(text, conflict)),
     move_subject: checkSubject(data.move_subject, founderTexts),
     move_fact: checkFact(data.move_fact, founderTexts),
     flags: verdict.flags,
   }
-  if (!text) problems.push('nothing usable is left in the reply')
-  return { reply, problems: [...new Set(problems)] }
+  if (!text) { problems.push('nothing usable is left in the reply'); hard = true }
+  return { reply, problems: [...new Set(problems)], hard }
+}
+
+// The reply with the sentences that carry a contrast dropped, the closing question kept; null when that leaves no valid reply.
+function repairText(text, mode) {
+  const sentences = sentencesOf(text)
+  const closing = QUESTION_MODES.has(mode) ? sentences.findLast((s) => s.endsWith('?')) : null
+  if (QUESTION_MODES.has(mode) && !closing) return null
+  const keep = []
+  for (const s of sentences) {
+    if (s.includes('?') && s !== closing) continue
+    if (s !== closing && contrastProblem([...keep, s, ...(closing ? [closing] : [])].join(' '))) continue
+    keep.push(s)
+  }
+  const out = keep.join(' ')
+  return keep.length >= (closing ? 2 : 1) && !contrastProblem(out) && (!closing || keep.at(-1) === closing) ? out : null
+}
+
+// Last resort, in the founder's own plain words (voice: direct, no filler): no source, no teaching, nothing invented.
+// The same shape as the plain Read in theRead.js.
+function plainReply(mode, founderTexts) {
+  const own = founderTexts.map((t) => String(t).replace(/["“”„‟\[\]{}_*#`]/g, '').trim()).find((t) => words(t) >= 3) ?? ''
+  const snippet = own.split(/\s+/).slice(0, 8).join(' ').replace(/[\s,;:.!?\-–—]+$/, '')
+  const ask = QUESTION_MODES.has(mode)
+  const options = [snippet, ''].map((about) => (ask
+    ? `I could not find a lesson on this that I trust, so I will not guess. ${about ? `On ${about}: what` : 'What'} is the next step, as you see it?`
+    : `I could not find a passage that fits${about ? ` ${about}` : ' this'} well enough, so I will not guess.`))
+  const text = options.find((t) => !contrastProblem(t) && !hasBanned(t) && !TEASER.test(norm(t)))
+  return { text, sources: [], picture: null, follow_ups: [], move_subject: null, move_fact: null, flags: [] }
 }
 
 // context: { signUp, situation, read, learn, tapped? } as the prompt takes it.
@@ -200,7 +232,15 @@ export async function composeReply({ mode, step, context, evidence, founderTexts
   const shown = evidence.map((e) => ({ handle: e.handle, author: e.author, title: e.source_title, text: e.text, ...(e.lesson ? { lesson: { idea: e.lesson.principle, when: e.lesson.applies_when, text: e.lesson.paragraphs.join(' ') } } : {}) }))
   const asked = mode === 'lesson' ? null : (context.learn ?? []).filter((t) => t.role === 'founder').at(-1)?.text ?? null
   let problems = null
-  let fallback = null
+  let last = null
+  // After the retry a reply that still breaks a hard rule is repaired, or replaced by the plain reply. Never shipped as is.
+  const finish = () => {
+    if (!last) return null
+    if (!last.hard) return last.reply
+    const text = repairText(last.reply.text, mode)
+    deps.log?.('learn reply repaired or replaced', { problems: last.problems, repaired: text !== null })
+    return text ? { ...last.reply, text } : plainReply(mode, founderTexts)
+  }
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     let data
     try {
@@ -215,15 +255,15 @@ export async function composeReply({ mode, step, context, evidence, founderTexts
       }))
     } catch (err) {
       deps.log?.('model call failed', err)
-      if (fallback) return fallback
+      const done = finish()
+      if (done) return done
       throw err
     }
     const verdict = checkReply({ data, mode, evidence, founderTexts, earlierTexts, asked, conflict })
     if (verdict.problems.length === 0) return verdict.reply
-    if (verdict.reply.text) fallback = verdict.reply
+    last = verdict
     problems = verdict.problems
   }
   deps.log?.('learn reply cleaned after retry', { problems })
-  if (fallback) return fallback
-  throw new Error('No usable Learn reply')
+  return finish()
 }

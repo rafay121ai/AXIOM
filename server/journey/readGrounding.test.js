@@ -2,6 +2,7 @@
 // the check fails open and is skipped at the daily cap. Fakes only, anonymised fixture.
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { createFirstReading } from './firstReading.js'
 import { createRead } from './theRead.js'
 
 const CONVERSATION = [
@@ -80,4 +81,52 @@ test('switched off: no grounding call at all', async () => {
   const { calls, result } = run({ reads: [GOOD], off: true })
   await result
   assert.deepEqual(calls.map((c) => c.schemaName), ['read'])
+})
+
+// The first reading uses the same check, with the sign-up answers as what the founder said.
+const ANSWERS = { stage: { value: 'Someone is paying me' }, commitment: { value: 'Evenings and weekends, under 15 hours' } }
+const SUPPORTED = { headline: 'Someone pays you, and the week is short.', body: 'Someone is paying you while you give it evenings and weekends. Which part of the week could the paying customer have more of?', underlines: [] }
+const MOTIVE = { ...SUPPORTED, body: 'Someone is paying you while you give it evenings and weekends, protecting your freedom by avoiding commitment. Which part of the week could the paying customer have more of?' }
+
+function first({ readings, judge, capped = false, off = false }) {
+  const calls = []
+  const queue = [...readings]
+  const verdicts = [...judge]
+  const callStructured = async (call) => {
+    calls.push(call.schemaName)
+    if (call.schemaName === 'read_grounding') {
+      const v = verdicts.shift()
+      if (v instanceof Error) throw v
+      return { data: v }
+    }
+    return { data: queue.shift() }
+  }
+  return { calls, result: createFirstReading({ answers: ANSWERS, deps: { callStructured, userId: 'u1', log: () => {} }, grounding: off ? null : { isCapped: async () => capped } }) }
+}
+
+test('first reading: a supported reading passes after one grounding call', async () => {
+  const { calls, result } = first({ readings: [SUPPORTED], judge: [{ unsupported: [] }] })
+  assert.equal((await result).source, 'model')
+  assert.deepEqual(calls, ['first_reading', 'read_grounding'])
+})
+
+test('first reading: an invented motive is rejected, then retried with the claim named', async () => {
+  const sent = []
+  const queue = [MOTIVE, SUPPORTED]
+  const verdicts = [{ unsupported: ['protecting your freedom by avoiding commitment'] }, { unsupported: [] }]
+  const out = await createFirstReading({
+    answers: ANSWERS, grounding: { isCapped: async () => false },
+    deps: { userId: 'u1', callStructured: async (c) => { sent.push(c); return { data: c.schemaName === 'read_grounding' ? verdicts.shift() : queue.shift() } } },
+  })
+  assert.equal(out.source, 'model')
+  assert.equal(out.reading.body, SUPPORTED.body)
+  assert.match(sent[2].messages.at(-1).content, /avoiding commitment/)
+})
+
+test('first reading: a failed judge, the cap and the kill switch all let the reading through', async () => {
+  for (const args of [{ judge: [new Error('boom')] }, { judge: [], capped: true }, { judge: [], off: true }]) {
+    const { calls, result } = first({ readings: [SUPPORTED], ...args })
+    assert.equal((await result).source, 'model')
+    assert.equal(calls.includes('read_grounding'), args.judge.length > 0)
+  }
 })

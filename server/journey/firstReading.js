@@ -3,6 +3,7 @@
 // replaces it if the model cannot get it right.
 import { QUESTIONS, answerStrings, isSkip } from './questions.js'
 import { checkFirstReading } from './ownWords.js'
+import { unsupportedClaims } from './theRead.js'
 import { FIRST_READING_SCHEMA, firstReadingMessages } from './prompts/firstReading.js'
 
 // What the model sees per answer. Our labels go in `question`, so every `answer` holds only what the founder
@@ -87,9 +88,9 @@ export function fallbackReading(answers) {
   return { headline, body: sentences.join(' '), underlines: [] }
 }
 
-// deps: { callStructured, userId, log }. Never throws: any model failure
-// ends in the fallback reading.
-export async function createFirstReading({ answers, deps }) {
+// deps: { callStructured, userId, log }. grounding: { isCapped } turns on the same invented-claim check as the Read (null is off).
+// Never throws: any model failure ends in the fallback reading.
+export async function createFirstReading({ answers, deps, grounding = null }) {
   const { evidence, answerTexts } = buildEvidence(answers)
   let problems = null
   for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -105,8 +106,12 @@ export async function createFirstReading({ answers, deps }) {
       })
       const reading = { headline: data.headline.trim(), body: data.body.trim(), underlines: data.underlines.map((u) => u.trim()) }
       const verdict = checkFirstReading({ reading, answerTexts })
-      if (verdict.ok) return { reading, source: 'model' }
-      problems = verdict.problems
+      if (verdict.ok) {
+        // The sign-up answers are everything this reading may rest on.
+        const claims = grounding ? await unsupportedClaims({ read: reading, conversation: evidence.map((e) => ({ role: 'founder', text: `${e.question}: ${e.answer}` })), brief: '', grounding, deps }) : []
+        if (claims.length === 0) return { reading, source: 'model' }
+        problems = claims.map((c) => `it claims something they did not say (${c}): say only what they answered or what follows from their numbers`)
+      } else problems = verdict.problems
     } catch (err) {
       deps.log?.('model call failed', err)
       problems = null

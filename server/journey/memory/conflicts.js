@@ -32,10 +32,15 @@ function questionUnit(question) {
   return named.length === 1 ? named[0] : null
 }
 
+// The clause around the number, at most 12 words, cut from the founder's own message so it stays a verbatim snippet.
+const CLAUSE_WORDS = 12
 const phraseOf = (message) => {
   const sentence = String(message).split(/(?<=[.!?\n])\s+/).find((s) => numbers(s).length > 0) ?? String(message)
-  const t = sentence.trim().replace(/[.!?]+$/, '')
-  return t.length <= 80 ? t : t.slice(0, 80).replace(/\s+\S*$/, '')
+  const clause = sentence.split(/[,;]|\s(?:and|but|so|because|which|while)\s/i).find((c) => numbers(c).length > 0) ?? sentence
+  const words = clause.trim().replace(/[.!?]+$/, '').split(/\s+/)
+  const at = Math.max(0, words.findIndex((w) => /\d/.test(w) || WORDS.includes(w.toLowerCase())))
+  const start = Math.min(Math.max(0, at - 6), Math.max(0, words.length - CLAUSE_WORDS))
+  return words.slice(start, start + CLAUSE_WORDS).join(' ')
 }
 
 // transcript: [{ role: 'founder' | 'axiom', text }] in order, the newest founder message being the new one.
