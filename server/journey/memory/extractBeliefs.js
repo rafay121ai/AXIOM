@@ -142,8 +142,10 @@ export async function applyExtraction({ store, userId, data, mode, founderTexts,
     const text = textOf('belief', belief, sourcesFor(kind), shifted?.status === 'active' && shifted.kind === 'fact' ? [shifted.belief] : [])
     const snippet = snippetOf(rawSnippet, sourcesFor(kind))
     if (!text || !snippet || corrected('founder_beliefs', text) || taken.has(squash(text)) || (shifted && shifts.has(shifted.id))) return null
-    // An earlier stored line may lend a unit only when it is about the same thing as the question or the message (shares a word).
-    const lent = shifted && [...founderTexts, question].some((s) => topicWords(s).some((w) => topicWords(shifted.belief).includes(w))) ? [shifted.belief] : []
+    // An earlier stored line may lend a unit only when it is about the same thing as the question or the message (shares a word),
+    // and never to a bare answer (3 words or fewer): its unit comes from the question or the message itself (replay 4: "16" became "16 hours").
+    const bare = founderTexts.join(' ').split(/\s+/).filter(Boolean).length <= 3
+    const lent = shifted && !bare && [...founderTexts, question].some((s) => topicWords(s).some((w) => topicWords(shifted.belief).includes(w))) ? [shifted.belief] : []
     if (mode === 'message' && addsUnit(text, [...founderTexts, question, ...lent])) return null
     taken.add(squash(text))
     if (shifted) shifts.add(shifted.id) // one shift per old fact: the code's own comes first, the model's would only repeat it

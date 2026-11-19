@@ -115,6 +115,8 @@ export function learnMessages({ mode, situation, read, learn, evidence, tapped =
     { role: 'system', content: `This turn: ${MODES[mode].join(' ')}` },
     // A changed number is the one case where an offer or tapped answer holds a question: the one that asks what changed (checked in reply.js).
     ...(conflict && (mode === 'offer' || mode === 'followup') ? [{ role: 'system', content: 'The exception to "no question": because a number changed, end this reply with one short question asking what changed, after both numbers.' }] : []),
+    // In a lesson or reply the one closing question is the what-changed question: the generic closing above does not apply.
+    ...(conflict && (mode === 'lesson' || mode === 'reply') ? [{ role: 'system', content: 'Because a number changed, the one question in this reply is the short one asking what changed, after both numbers, and it is the last sentence. This replaces the closing question above: ask no other question.' }] : []),
     {
       role: 'user',
       content: JSON.stringify({

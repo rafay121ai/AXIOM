@@ -14,6 +14,7 @@ import { isBlocked } from './beliefRules.js'
 import { applyExtraction, overCap, scheduleMemory } from './extractBeliefs.js'
 import { findConflict, shiftText } from './conflicts.js'
 import { createMemoryStore } from './memoryStore.js'
+import { ensureSituationThread } from './situationThread.js'
 import { MESSAGE_SCHEMA, beliefsMessages } from './prompts/beliefs.js'
 
 const sentencesOf = (text) => String(text).split(/(?<=[.!?])\s+/)
@@ -105,4 +106,7 @@ function inTurn(userId, job) {
 }
 
 // The function a screen calls after it accepted a founder message: scheduled, never awaited.
+// Once a situation's Read exists: its one open thread (situationThread.js), in the same per-founder queue.
+export const createThreadOpener = (deps) => (args) => scheduleMemory(() => inTurn(args.userId, () => ensureSituationThread({ ...deps, ...args })), deps.log)
+
 export const createMessageLearner = (deps) => (args) => scheduleMemory(() => inTurn(args.userId ?? deps.userId, () => learnFromMessage({ ...deps, ...args })), deps.log)

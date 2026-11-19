@@ -11,7 +11,7 @@ import { mountSharingRoutes } from './report/sharingRoutes.js'
 import { mountHomeRoutes } from './home/homeRoutes.js'
 import { createStoredAnswers } from './storedAnswers.js'
 import { scheduleMemory } from './memory/extractBeliefs.js'
-import { createMessageLearner } from './memory/learnMessage.js'
+import { createMessageLearner, createThreadOpener } from './memory/learnMessage.js'
 import { seedFromSignup } from './memory/signupSeed.js'
 
 export function mountJourneyRoutes(app, { supabase, knowledgeSupabase = null, embed = null, care, cap, callStructured, clock, lessonCites = false, learnMessages = true, readGrounding = true, links = {}, deleteOn = false, noDailyLimit = () => false }) {
@@ -30,8 +30,9 @@ export function mountJourneyRoutes(app, { supabase, knowledgeSupabase = null, em
   const learn = learnMessages
     ? createMessageLearner({ supabase, callStructured, clock, isCapped: cap.isCapped, log: (what, detail) => console.error(`[Memory] ${what}`, detail?.message || '') })
     : () => {}
+  const openThread = learnMessages ? createThreadOpener({ supabase, clock, log: (what, detail) => console.error(`[Memory] ${what}`, detail?.message || '') }) : () => {}
 
-  mountSituationRoutes(app, { supabase, care, cap, stored, callStructured, clock, learn, readGrounding: readGrounding ? { isCapped: cap.isCapped } : null, noDailyLimit })
+  mountSituationRoutes(app, { supabase, care, cap, stored, callStructured, clock, learn, openThread, readGrounding: readGrounding ? { isCapped: cap.isCapped } : null, noDailyLimit })
   mountLearnRoutes(app, { supabase, knowledgeSupabase, embed, care, cap, stored, callStructured, clock, learn, lessonCites })
   mountMoveRoutes(app, { supabase, care, cap, stored, callStructured, clock, learn })
   mountReportRoutes(app, { supabase, care, callStructured, clock, isCapped: cap.isCapped })

@@ -481,6 +481,22 @@ test('the talk after the Read replies, then asks; the line shown is reply plus q
   } finally { await close() }
 })
 
+// Replay 4: a bare number got "You said the part that takes the most time is ..., 16 units of time". Both are sent back.
+test('the talk after the Read never says "You said" about something they did not say, nor gives a number a unit they never put on it', async () => {
+  const invented = talkLine({ reply: 'You said the demo is the part that takes the most time, 5 units of time.', question: 'What does the 5 count?' })
+  const { call, openai, close } = await setup([enough(), enough(), readReply(), invented, talkLine()])
+  try {
+    const id = (await create(call, 1)).body.situation_id
+    await call('POST', `/api/situations/${id}/read`)
+    const res = await call('POST', `/api/situations/${id}/read/answer`, { text: 'No, I have not contacted them since the demo, 5.' })
+    assert.equal(res.body.reply, 'Three weeks since the demo and no word to the clinics. What do you want the clinics to do after the demo?')
+    const talk = openai.calls.filter((c) => c.payload.response_format.json_schema.name === 'read_talk')
+    assert.equal(talk.length, 2)
+    assert.match(talk[1].payload.messages.at(-1).content, /not something they said/)
+    assert.match(talk[1].payload.messages.at(-1).content, /never put after it: 5 unit/)
+  } finally { await close() }
+})
+
 test('the talk after the Read always asks once, even when everything is known after the first answer', async () => {
   const { call, close } = await setup([enough(), enough(), readReply(), allKnown(), allKnown()])
   try {
@@ -624,9 +640,10 @@ test('memory: the first message, the Read answer and a Read talk reply are each 
     const talkTurn = rows('situation_turns').find((t) => t.text === TALK)
     const firstTurn = rows('situation_turns').find((t) => t.text === FIRST)
     assert.deepEqual(rows('memory_evidence').map((e) => [e.source_kind, e.source_id]).sort(), [
-      ['read', rows('reads')[0].id], ['read', talkTurn.id], ['situation', firstTurn.id],
+      ['read', rows('reads')[0].id], ['read', talkTurn.id], ['situation', firstTurn.id], ['situation', id], // the last: the situation's own thread, made when the Read was created
     ].sort())
     assert.equal(rows('founder_beliefs').length, 3)
+    assert.deepEqual(rows('founder_threads').map((t) => [t.title, t.kind]), [[rows('situations')[0].title, 'open_question']])
     assert.equal(rows('memory_runs').length, 0)
   } finally { await close() }
 })

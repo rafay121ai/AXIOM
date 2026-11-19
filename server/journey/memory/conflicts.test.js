@@ -78,7 +78,7 @@ test('the notice reaches the Situation, Read, Read talk and Learn prompts, and o
   }
   for (const [name, build] of Object.entries(builders)) {
     const [one] = noticeIn(build(hours))
-    assert.equal(one.content, 'The founder said Evenings and weekends, under 15 hours before, and now says 16 hours. Open by naming both in one plain sentence using only those words, without blame, then ask what changed. Do not interpret or explain the new number.', name)
+    assert.equal(one.content, 'The founder said under 15 hours before, and now says 16 hours. Open by naming both in one plain sentence using only those words, without blame, then ask what changed. Do not interpret or explain the new number.', name)
     assert.equal(noticeIn(build(null)).length, 0, name)
   }
   assert.equal(noticeIn(moveMessages({ ...sample, conflict: hours })).length, 0) // the Move has no free sentence to hold it

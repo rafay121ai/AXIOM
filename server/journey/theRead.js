@@ -1,7 +1,7 @@
 // The Read: the model writes it from this situation; the brief and track record are background and the conversation wins (only the first reading uses the sign-up answers directly);
 // ownWords.js and hooks.js check it; one retry names the problems; a plain
 // read composed from the founder's own words replaces it if that fails.
-import { checkFirstReading, unquoteUnknown } from './ownWords.js'
+import { checkFirstReading, looseUnit, pairsOf, saidProblem, unquoteUnknown } from './ownWords.js'
 import { checkHook, threadKinds } from './hooks.js'
 import { stripFiller } from './filler.js'
 import { earlierLines } from './memory/brief.js'
@@ -59,6 +59,12 @@ export function checkRead({ read, answerTexts, earlierTexts = [], conflict = nul
     earlierTexts,
   })
   problems.push(...own.problems)
+  // Only what they said: no "You said ..." they did not say, no number with a word they never put after it.
+  const all = `${read.headline} ${read.body} ${read.closing_question}`
+  const said = saidProblem(all, [...answerTexts, ...earlierTexts])
+  if (said) problems.push(said)
+  const loose = looseUnit(all, pairsOf([...answerTexts, ...earlierTexts, ...(conflict ? [conflict.nowText] : [])]))
+  if (loose) problems.push(`a number with a word they never put after it: ${loose.number} ${loose.unit}. Say the number the way they said it`)
   problems.push(...checkHook({ text: read.closing_question, sources: answerTexts }).problems)
   return { ok: problems.length === 0, problems }
 }

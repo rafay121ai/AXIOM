@@ -32,6 +32,7 @@ export async function retireSituationMemory({ supabase, userId, situationId, log
     if ((await ok(supabase.from('situations').select('id').eq('id', situationId).eq('user_id', userId).limit(1))).length === 0) return { retired: 0 }
     const conversations = ids(await ok(supabase.from('learn_conversations').select('id').eq('situation_id', situationId).eq('user_id', userId)))
     const sources = new Set([
+      situationId, // the receipt of the situation's own thread
       ...ids(await ok(supabase.from('situation_turns').select('id').eq('situation_id', situationId))),
       ...ids(await ok(supabase.from('reads').select('id').eq('situation_id', situationId))),
       ...ids(await ok(supabase.from('moves').select('id').eq('situation_id', situationId).eq('user_id', userId))),

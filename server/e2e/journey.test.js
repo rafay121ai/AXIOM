@@ -300,8 +300,10 @@ test('a founder walks the whole journey', async (t) => {
       // The sign-up seed (code only, self-reported) wrote its rows earlier; the extraction added none.
       assert.ok(rows('founder_beliefs').every((r) => r.source === 'signup'))
       assert.ok(rows('founder_traits').every((r) => r.origin === 'self_report'))
-      for (const table of ['founder_world', 'founder_vocabulary', 'founder_threads']) assert.equal(rows(table).length, 0, table)
-      assert.ok(rows('memory_evidence').every((r) => r.source_kind === 'signup'))
+      for (const table of ['founder_world', 'founder_vocabulary']) assert.equal(rows(table).length, 0, table)
+      // The one thing written besides the seed: the situation's own open thread, made by code when its Read was created (once).
+      assert.deepEqual(rows('founder_threads').map((r) => [r.kind, r.status]), [['open_question', 'open']])
+      assert.ok(rows('memory_evidence').every((r) => r.source_kind === 'signup' || (r.source_kind === 'situation' && r.item_table === 'founder_threads')))
       assert.deepEqual(rows('memory_runs').filter((r) => r.source_kind === 'report').map((r) => [r.source_id, r.mode, r.status]), [[ids.report, 'full', 'done']])
       await founder('POST', `/api/moves/${ids.move}/report`, { outcome: 'done', note: REPORT_NOTE, client_turn_id: uuid(21) })
       await w.idle()

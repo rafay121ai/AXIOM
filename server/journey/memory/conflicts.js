@@ -108,14 +108,17 @@ export function namesBoth(text, conflict) {
   return found.includes(conflict.earlierNumber) && found.includes(conflict.nowNumber)
 }
 
-// The notice is met when both numbers are named and a question follows the second one (the question is what changed).
-export function namesBothAndAsks(text, conflict) {
+// The question that asks what changed: the first one at or after the sentence that completes both numbers. Null when there is none.
+export function changeQuestion(text, conflict) {
   const sentences = String(text).split(/(?<=[.!?])\s+/)
   for (let i = 0; i < sentences.length; i += 1) {
-    if (namesBoth(sentences.slice(0, i + 1).join(' '), conflict)) return sentences.slice(i).some((s) => s.includes('?'))
+    if (namesBoth(sentences.slice(0, i + 1).join(' '), conflict)) return sentences.slice(i).find((s) => s.includes('?')) ?? null
   }
-  return false
+  return null
 }
+
+// The notice is met when both numbers are named and a question follows the second one (the question is what changed).
+export const namesBothAndAsks = (text, conflict) => changeQuestion(text, conflict) !== null
 
 export const conflictProblem = (conflict) => `name both numbers, ${conflict.earlierNumber} and ${conflict.nowNumber}, in one plain sentence, then ask what changed as a question after them`
 

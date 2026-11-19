@@ -101,6 +101,8 @@ const NEGATION = String.raw`(?:\b(?:is|are|was|were|am) not|(?:'s|'re|'m) not|\b
 const CONTRAST = [
   new RegExp(`${NEGATION}[^.!?;]{1,40}?,? (?:but|rather|instead)\\b`, 'g'),
   new RegExp(`${NEGATION}[^.!?;]{1,50}?[.,;\u2014]\\s*(?:it|this|that|you|they|we|i)(?:'s|'re|'m| is| are| am)\\b`, 'g'),
+  // The softer form (replay 4): ", not what sounds workable". "not just/only" and a plain "I am not sure" do not match.
+  /,\s*not (?:what|how|who|when|where|whether|that|the way)\b/g,
 ]
 export function contrastProblem(text) {
   const t = norm(text)
@@ -114,10 +116,28 @@ export function contrastProblem(text) {
 }
 
 // [{ number: '16', unit: 'hour' }] for each digit number followed by a word ("16 hours a week"); function words after a number are no unit.
-const UNIT_SKIP = new Set(['a', 'an', 'the', 'of', 'per', 'more', 'new', 'about', 'or', 'to', 'and', 'in', 'on', 'at', 'for', 'by', 'with', 'from', 'is', 'are', 'as', 'but', 'so', 'then', 'times', 'out'])
+const UNIT_SKIP = new Set(['a', 'an', 'the', 'of', 'per', 'more', 'new', 'about', 'or', 'to', 'and', 'in', 'on', 'at', 'for', 'by', 'with', 'from', 'is', 'are', 'as', 'but', 'so', 'then', 'times', 'out', 'you', 'your', 'they', 'it', 'we', 'i', 'that', 'this', 'was', 'were', 'gave', 'said'])
 export const unitStem = (w) => w.replace(/^hrs?$/, 'hour').replace(/s$/, '')
 export const numberUnits = (text) => [...norm(text).matchAll(/(\d[\d,]*(?:\.\d+)?)(?:k|m)?\s+([a-z]+)/g)]
   .filter((m) => !UNIT_SKIP.has(m[2])).map((m) => ({ number: m[1].replace(/,/g, ''), unit: unitStem(m[2]) }))
+
+// The "16 hour" pairs in the texts, and the first number in `text` followed by a word the founder never put after it.
+export const pairsOf = (texts) => new Set(texts.flatMap(numberUnits).map((p) => `${p.number} ${p.unit}`))
+export const looseUnit = (text, pairs) => numberUnits(text).find((p) => !pairs.has(`${p.number} ${p.unit}`)) ?? null
+
+// "You said / wrote / told me / mentioned <clause>" must be something they said: at least 80% of the clause's content words
+// (numbers count) are in `sources`. Words that only point back ("before", "sign-up") do not count. Null when fine.
+const SAID = /\byou (?:said|wrote|told me|mentioned)\b(?: that)?\s+([^.!?;\n]+)/g
+const SAID_SKIP = new Set(['the', 'and', 'that', 'this', 'with', 'for', 'you', 'your', 'are', 'was', 'were', 'have', 'has', 'had', 'not', 'but', 'from', 'they', 'them', 'their', 'about', 'what', 'when', 'which', 'would', 'could', 'will', 'can', 'its', 'into', 'than', 'then', 'also', 'just', 'been', 'being', 'some', 'any', 'all', 'too', 'very', 'here', 'there', 'how', 'who', 'why', 'before', 'earlier', 'now', 'again', 'already', 'sign', 'signup', 'myself', 'yourself', 'week', 'weeks', 'weekly', 'day', 'days', 'daily', 'month', 'months', 'monthly']) // the period of a number is inferred ("evenings and weekends" is a week)
+const saidWords = (t) => (norm(t).match(/[\p{L}\p{N}']+/gu) ?? []).filter((w) => /\d/.test(w) || (w.length >= 3 && !SAID_SKIP.has(w))).map((w) => (/\d/.test(w) ? w : w.slice(0, 4)))
+export function saidProblem(text, sources) {
+  const theirs = new Set(sources.flatMap(saidWords))
+  for (const m of norm(text).matchAll(SAID)) {
+    const words = saidWords(m[1])
+    if (words.length > 0 && words.filter((w) => theirs.has(w)).length / words.length < 0.8) return `"You said ${m[1].split(' ').slice(0, 6).join(' ')}..." is not something they said: say only what they said, in their own words`
+  }
+  return null
+}
 
 // reading: { headline, body, underlines, closing_question? } (a Read has the closing question). answerTexts: every string the
 // founder typed or chose, one array item per answer. earlierTexts: what they said before (sign-up),

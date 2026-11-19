@@ -93,7 +93,7 @@ export function fallbackReading(answers) {
 export async function createFirstReading({ answers, deps, grounding = null }) {
   const { evidence, answerTexts } = buildEvidence(answers)
   let problems = null
-  let grounded = false // same rule as the Read: checked once, and the last attempt is never turned down by it
+  let grounded = false // checked once; only the last attempt's own objection turns a model reading down
   let claims = []
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
@@ -110,11 +110,14 @@ export async function createFirstReading({ answers, deps, grounding = null }) {
       const verdict = checkFirstReading({ reading, answerTexts })
       if (verdict.ok) {
         // The sign-up answers are everything this reading may rest on.
-        if (grounding && !grounded) claims = await unsupportedClaims({ read: reading, conversation: evidence.map((e) => ({ role: 'founder', text: `${e.question}: ${e.answer}` })), brief: '', grounding, deps })
+        const fresh = Boolean(grounding) && !grounded
+        if (fresh) claims = await unsupportedClaims({ read: reading, conversation: evidence.map((e) => ({ role: 'founder', text: `${e.question}: ${e.answer}` })), brief: '', grounding, deps })
         grounded = true
         if (claims.length === 0) return { reading, source: 'model' }
         if (attempt === 2) {
-          deps.log?.('grounding objected, shipped', { claims })
+          // Unlike the Read, a fresh objection on the last attempt is not shipped: the plain reading replaces it (replay 4).
+          if (fresh) { deps.log?.('grounding objected on the last attempt, plain reading used', { claims }); break }
+          deps.log?.('grounding objected, shipped', { claims }) // the rewrite of an objected first try ships unchecked
           return { reading, source: 'model' }
         }
         problems = claims.map((c) => `it claims something they did not say (${c}): say only what they answered or what follows from their numbers`)

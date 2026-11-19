@@ -134,15 +134,17 @@ test('first reading: an invented motive is rejected, then retried with the claim
   assert.match(sent[2].messages.at(-1).content, /avoiding commitment/)
 })
 
-test('first reading: the judge runs once, and grounding alone never replaces a model reading', async () => {
+test('first reading: the judge runs once, and a fresh objection on the last attempt uses the plain reading', async () => {
   const logs = []
   const { calls, result } = first({ readings: [MOTIVE, MOTIVE], judge: [{ unsupported: ['avoiding commitment'] }], log: (...a) => logs.push(a) })
   assert.equal((await result).source, 'model')
   assert.deepEqual(calls, ['first_reading', 'read_grounding', 'first_reading'])
   assert.ok(logs.some((l) => l[0] === 'grounding objected, shipped'))
   const last = first({ readings: [{ ...SUPPORTED, body: 'You give it 99 hours a week.' }, MOTIVE], judge: [{ unsupported: ['avoiding commitment'] }], log: (...a) => logs.push(a) })
-  assert.equal((await last.result).source, 'model') // objection on the last attempt: shipped and logged
+  // Changed in replay 4: a fresh objection on the last attempt of the FIRST reading is not shipped; the plain reading is used and logged.
+  assert.equal((await last.result).source, 'fallback')
   assert.deepEqual(last.calls, ['first_reading', 'first_reading', 'read_grounding'])
+  assert.ok(logs.some((l) => l[0] === 'grounding objected on the last attempt, plain reading used'))
 })
 
 test('first reading: a failed judge, the cap and the kill switch all let the reading through', async () => {
