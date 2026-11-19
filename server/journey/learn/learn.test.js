@@ -4,6 +4,8 @@ import express from 'express'
 import { createApp } from '../../app.js'
 import { createFakeClock, createFakeOpenAI, createFakeSupabase } from '../../testing/fakes.js'
 import { FULL_ANSWERS } from '../fixtures.js'
+import { EMPTY_MESSAGE } from '../../e2e/harness.js'
+import { memoryIdle } from '../memory/extractBeliefs.js'
 import { mountLearnRoutes, createMemoryHintProvider } from './learnRoutes.js'
 import { evidenceFromRows, MAX_EVIDENCE } from './retrieve.js'
 import { capWords, WORD_CAP } from './reply.js'
@@ -11,7 +13,7 @@ import { AXIOM_LINES } from './moveOffer.js'
 
 const USER = { id: '11111111-1111-4111-8111-111111111111', email: 'founder@example.com', user_metadata: { full_name: 'Rafay Essani' } }
 const OTHER = { id: '22222222-2222-4222-8222-222222222222', email: 'other@example.com' }
-const ENV = { FRONTEND_URL: 'https://app.example.com' }
+const ENV = { FRONTEND_URL: 'https://app.example.com', LEARN_EVERY_MESSAGE: 'off' } // these tests count model calls; learnMessage.test.js covers memory
 const NOW = Date.parse('2026-10-26T09:00:00.000Z')
 const SIT = '33333333-3333-4333-8333-333333333333'
 const FIRST = 'I have a demo ready but I have not emailed the 2 clinics that asked for pricing three weeks ago.'
@@ -85,13 +87,13 @@ function slow(openai, ms) {
 // What the library is searched with in these tests (the search-need call is not scripted).
 const SEARCH_NEED = 'how to get the first paying customers when early users went quiet after a demo'
 
-async function setup(script = [], { rows = ROWS, answered = true, delayMs = 0, tables = {}, unique = {} } = {}) {
+async function setup(script = [], { rows = ROWS, answered = true, delayMs = 0, tables = {}, unique = {}, env = ENV, byName = {} } = {}) {
   const base = createFakeSupabase({ users: { tok: USER, tok2: OTHER }, tables: { ...seed({ answered }), ...tables }, unique })
   const supabase = withUniqueKeys(base)
-  const openai = createFakeOpenAI(script, { byName: { learn_search: JSON.stringify({ need: SEARCH_NEED }) } })
+  const openai = createFakeOpenAI(script, { byName: { learn_search: JSON.stringify({ need: SEARCH_NEED }), ...byName } })
   if (delayMs) slow(openai, delayMs)
   const knowledge = fakeKnowledge(rows)
-  const app = createApp({ env: ENV, supabase, knowledgeSupabase: knowledge, openai, clock: createFakeClock(NOW) })
+  const app = createApp({ env, supabase, knowledgeSupabase: knowledge, openai, clock: createFakeClock(NOW) })
   const server = app.listen(0)
   await new Promise((r) => server.once('listening', r))
   const url = `http://127.0.0.1:${server.address().port}`
@@ -226,6 +228,25 @@ test('full flow: lesson, two real replies, then the first move card', async () =
     assert.equal(view.body.turns[4].move_offer, 'first')
     assert.ok(!JSON.stringify(view.body).match(/chunk|evidence|validation/))
   } finally { await close() }
+})
+
+test('a failing offer ends in the plain fallback, and the Move is still offered', async () => {
+  const empty = offerReply({ reply: 'The price is not the problem, it is the silence of three weeks.' })
+  const { call, id, close } = await started([learnReply(), turnReply(), empty, empty])
+  try {
+    await sendTurn(call, id, REAL1, 1)
+    const t2 = await sendTurn(call, id, REAL2, 2)
+    assert.equal(t2.body.turn.text, 'I do not have a passage that fits this well enough, so I will not guess.')
+    assert.equal(t2.body.move_offer, 'first')
+    assert.equal(t2.body.move_notice.text, 'Your move for the two clinics is ready.') // the subject came from the lesson turn
+  } finally { await close() }
+  const bare = await started([learnReply({ move_subject: '', move_fact: '' }), turnReply(), empty, empty])
+  try {
+    await sendTurn(bare.call, bare.id, REAL1, 1)
+    const t2 = await sendTurn(bare.call, bare.id, REAL2, 2)
+    assert.equal(t2.body.move_offer, 'first')
+    assert.equal(t2.body.move_notice.text, 'Your move is ready.') // no subject at all: the plain notice, never an invented one
+  } finally { await bare.close() }
 })
 
 test('asking what to do next brings the move at once, with no model call', async () => {
@@ -533,5 +554,23 @@ test('a typed reply and then a tapped suggestion bring the first move card on th
     assert.equal(tap.status, 200)
     assert.equal(tap.body.move_offer, 'first')
     assert.equal(tap.body.move_notice.kind, 'first')
+  } finally { await close() }
+})
+
+// Rafay, Nov 19: a real Learn reply is remembered from its own turn, in the background.
+const memoryReply = (...pairs) => JSON.stringify({ ...EMPTY_MESSAGE, new_beliefs: pairs.map(([belief, snippet]) => ({ belief, kind: 'fact', snippet, shifts_from: '' })) })
+
+test('memory: a real Learn reply is remembered from its turn; a one-word reply is not', async () => {
+  const byName = { beliefs_message: memoryReply(['Says the owner of the first clinic decides about buying.', 'the owner of the first clinic decides about buying']) }
+  const { call, id, rows, openai, close } = await started([learnReply(), turnReply()], { env: { FRONTEND_URL: 'https://app.example.com' }, byName })
+  try {
+    await sendTurn(call, id, REAL1, 1)
+    await memoryIdle()
+    const turn = rows('learn_turns').find((t) => t.role === 'founder')
+    assert.deepEqual(rows('memory_evidence').map((e) => [e.source_kind, e.source_id]), [['learn', turn.id]])
+    const calls = openai.calls.length
+    await sendTurn(call, id, 'ok', 2)
+    await memoryIdle()
+    assert.equal(openai.calls.length, calls)
   } finally { await close() }
 })

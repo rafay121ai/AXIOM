@@ -15,7 +15,8 @@ import { hasMoveRoom, NO_ROOM_LINE } from '../move/room.js'
 import { createSharing } from '../report/sharing.js'
 import { createFounderLessons } from '../report/founderLessons.js'
 import { styleOf } from '../prompts/style.js'
-import { loadBrief } from '../memory/brief.js'
+import { earlierLines, loadBrief } from '../memory/brief.js'
+import { earlierAllowed, findConflict, transcriptOf } from '../memory/conflicts.js'
 
 const SAY_MORE = 'Say a bit more.'
 export const LOCK_MS = 2 * 60 * 1000
@@ -43,7 +44,7 @@ export function turnView(row) {
   }
 }
 
-export function createLearn({ supabase, knowledgeSupabase = null, embed = null, callStructured, clock, log = () => {}, lessonCites = false }) {
+export function createLearn({ supabase, knowledgeSupabase = null, embed = null, callStructured, clock, log = () => {}, lessonCites = false, learn = () => {} }) {
   const sharing = createSharing({ supabase, clock })
   const founderLessons = createFounderLessons({ supabase, sharing, clock })
   const iso = () => new Date(clock.now()).toISOString()
@@ -138,9 +139,11 @@ export function createLearn({ supabase, knowledgeSupabase = null, embed = null, 
     const query = given || !knowledgeSupabase || !embed ? ctx.query
       : (await searchNeed({ prompt: ctx.prompt, callStructured, userId, usageContext, log })) ?? ctx.query
     const evidence = given ?? await retrieveEvidence({ knowledgeSupabase, embed, query, userId, usageContext, log, lessonCites })
+    const brief = await loadBrief(supabase, userId, ctx.founderTexts.join('\n'))
+    const conflict = findConflict({ transcript: transcriptOf(ctx.prompt), earlier: earlierLines(brief) })
     const reply = await composeReply({
-      mode, step, evidence, founderTexts: ctx.founderTexts, usageContext,
-      context: { ...ctx.prompt, ...(tapped ? { tapped } : {}), style: await styleOf(supabase, userId), brief: await loadBrief(supabase, userId, ctx.founderTexts.join('\n')) },
+      mode, step, evidence, founderTexts: ctx.founderTexts, earlierTexts: earlierAllowed(conflict), usageContext, conflict,
+      context: { ...ctx.prompt, ...(tapped ? { tapped } : {}), style: await styleOf(supabase, userId), brief },
       deps: { callStructured, userId, log },
     })
     const row = await one(supabase.from('learn_turns').insert({
@@ -240,6 +243,7 @@ export function createLearn({ supabase, knowledgeSupabase = null, embed = null, 
           : response(fresh, offers, { status: 'say_more', reply: SAY_MORE, turn: null, move_offer: 'none', move_notice: null })
         const result = real && answered.status === 'reply' ? { ...answered, ...(await founderCaseOf({ userId, conversation: fresh })) } : answered
         await one(supabase.from('learn_turns').update({ result }).eq('id', claim.data.id).select('id'))
+        if (real) learn({ userId, sourceKind: 'learn', sourceId: claim.data.id, situationId: conversation.situation_id, text, context: async () => turns.filter((t) => !t.filler && t.kind !== 'followup').map((t) => ({ role: t.role, text: t.text })) })
         return result
       } catch (err) {
         // Free the turn id so the app can send it again.

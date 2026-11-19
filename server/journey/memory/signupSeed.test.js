@@ -29,7 +29,7 @@ test('the code part writes self-reported rows capped at 0.5, with a receipt that
   const rows = supabase.rows('founder_beliefs')
   assert.ok(rows.length >= 10)
   assert.ok(rows.every((r) => r.source === 'signup' && r.confidence <= 0.5 && r.status === 'active'))
-  assert.ok(rows.filter((r) => r.kind === 'pattern').every((r) => r.confidence === 0.35))
+  assert.ok(rows.filter((r) => r.kind === 'pattern').every((r) => r.confidence === 0.4))
   assert.ok(rows.some((r) => r.belief === 'Says they drop plans when nobody is checking on them.'))
   assert.ok(rows.some((r) => r.belief === 'Says they avoid pricing.' && r.kind === 'pattern'))
   assert.ok(rows.some((r) => r.belief === 'Says they are better than most at building the product.'))

@@ -344,7 +344,25 @@ moves, 2 pushes a day.
 - Both are built by code from stored rows with a fixed template, never by a
   model (`server/journey/memory/`). They are background: the system message
   says the conversation always wins, and nothing in them is a source of
-  numbers, dates or names. Nothing is learned from care moments.
+  numbers, dates or names, except an earlier statement that conflicts with
+  what the founder now says (see PRODUCT.md, Nov 19). Nothing is learned from
+  care moments.
+- **Learning from every message** (`memory/learnMessage.js`): after each
+  accepted founder message (Situation, Read answer, Read talk, Learn, Move
+  swap reason) a background pass proposes facts, people, shorthand, plans and
+  threads. Every item is checked in code against the founder's own words.
+  Skipped, with no model call, for filler, messages under 4 words (unless they
+  hold a number or are the Read answer), care, the daily cap and blocked
+  topics. Passes run one after another per founder. No `memory_runs` row;
+  receipts in `memory_evidence` make a retried turn a no-op.
+- **Conflicts** (`memory/conflicts.js`): code compares the new message with the
+  earlier lines in the brief. A strong conflict (same measure and period, or a
+  bare answer to a question that states the unit) puts a notice in the prompt,
+  and the Read, Read talk and Learn replies must name both numbers and ask what
+  changed (retry, then fallback). A weak one is a prompt notice only. Once a
+  "said X, now says Y" note is stored, the pair is never raised again.
+- **Care retires memory**: when a care event is recorded, items learned only
+  from that situation's messages are set to superseded (threads to dropped).
 
 ### Calls per step
 | Step        | Calls |
@@ -359,6 +377,8 @@ moves, 2 pushes a day.
 | Report      | Deterministic write + a call for the reply text |
 | Review draft | 1 call when a reviewer asks for a draft of a shared story |
 | Care        | A fast classifier plus rules, before everything |
+| Memory (every founder message) | 1 background gpt-4.1-mini call (about $0.001), never blocks the reply |
+| Read and first reading grounding | 1 small call per Read or first reading (8 second timeout, fails open, same `beliefs` step so its cost is not separate in `model_usage_logs`) |
 | Memory (after a report) | 1 background extraction call (mode full), never blocks the report |
 | Memory (move closed, no report) | 1 background facts-only pass |
 | Memory (sign-up seed) | Tapped answers are seeded by code; 1 facts-only call over the written answers |
@@ -524,6 +544,8 @@ Names only; values live in Render (`render.yaml`) and a local `.env`.
 - `ADMIN_USER_IDS`, `ADMIN_EMAILS`: test accounts that skip the daily situation limit.
 - `REVIEWER_USER_IDS`: who may use `/review`; empty turns the page off.
 - `LESSON_CITES`: `on` enables the Learn lesson pool (default off).
+- `LEARN_EVERY_MESSAGE`: `off` turns the per-message memory pass off (default on).
+- `READ_GROUNDING`: `off` turns the Read and first reading grounding call off (default on).
 - `EXPO_PUSH`: `on` starts the push scheduler (off today).
 - `EXPO_ACCESS_TOKEN`: Expo push sender token.
 - `ACCOUNT_DELETE`: `on` makes account deletion real (off today).

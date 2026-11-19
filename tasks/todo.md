@@ -556,3 +556,59 @@ OpenAI returned `insufficient_quota` (no credits) on Nov 14, so nothing that emb
 
 ## Finding (Nov 14, real Learn trace on a new situation)
 - One book (Scaling Up) took 14 of the 20 closest passages, so after the 2-per-book rule only 4 books survived and the wider pool had 7 passages, not 10. Asking the search for 40 candidates instead of 20 gave a pool of 10 from 6 books (60 or 100 gave the same 6). Candidate count is `MATCH_COUNT = 20` in `server/journey/learn/retrieve.js`. Not changed yet: test on the 20 situations first.
+
+---
+
+# Plan v2 (Nov 19 2026): stop the repeats, make memory specific, proactive Axiom
+Status: Parts A and B are built on `feat/learn-every-message` (see Revision 1 below for what was actually built). Part C is not started. Steps below keep their original text; Revision 1 overrides B1 to B3.
+Basis: Rohaan's live session of Nov 14 (read-only dump), `server/journey/prompts/read.js`, `firstReading.js`, `memory/brief.js`, `tasks/connectors-plan.md`.
+
+## A. The Read repeats the founder (fix first)
+Cause found:
+- Both prompts tell the model to "name your basis" (You wrote..., You said...), and the checker (`checkRead` calls `checkFirstReading`) REQUIRES the founder's own words. So the first reading quotes six sign-up answers, and the Read opens by quoting his whole sentence. The "thing they have not said" is the first of three items, but the quoting is the only part the code enforces.
+- The Read never knows what the first reading already said.
+- The brief hides old facts that contain a number, date or proper noun the conversation did not repeat (`pastTheConversation`). That is why "evenings and weekends, under 15 hours" never reached the Read, and Axiom missed that 16 hours a week is more than his whole stated time.
+Steps (each checked off only after tests pass):
+- [ ] A1. Rafay approves the new Read rules (voice change, flag first): the Read leads with the new point (a conflict, a gap, a cost), uses at most one quote of 8 words or fewer, never restates the founder's last message, 2 to 3 sentences.
+- [ ] A2. Rewrite `prompts/read.js`, `prompts/firstReading.js` (3 sentences, one pattern from two answers, one short quote), and the fallback Read.
+- [ ] A3. Checker: reject a Read or first reading that repeats a run of 6 or more words from the founder's text beyond its one allowed quote, or that opens with "You wrote/You said". Keep the existing own-words and number checks.
+- [ ] A4. Pass the first reading's headline to the Read and the Read talk as "already said, do not repeat".
+- [ ] A5. DECISION for Rafay: let the Read compare the conversation with sign-up numbers the founder typed themselves (needed to catch 16 vs "under 15"). Reverses part of the Nov 9 rule that old numbers are never a source. Safe version: only sign-up answers, quoted, only when they conflict.
+- [ ] A6. Regression test from Rohaan's real text (anonymised fixture): old Read fails, new passes. Run voice-checker and the full server tests. One real model run to compare before and after (a few cents; needs Rafay's OK against the $6 cap).
+
+## B. Memory layer: what it does, what it misses
+Checked on Rohaan's live rows: 15 beliefs, 1 trait, 1 thread, all from sign-up. No people, no shorthand, no learned patterns.
+- Memory is extracted only after a Report (`reportService.js`). Rohaan never reported, so his 14 minutes taught Axiom nothing: the 16 hours, the plan to delegate later, buying by hand to control cost, why he swapped the move.
+- Sign-up patterns are stored at confidence 0.35, below the 0.4 use threshold, so "avoids asking for money" and "avoids talking to customers" (the sharpest thing about him) never reach a prompt.
+- Sign-up facts lose detail: "international shopping service brand" dropped "I source products from the world to Pakistan".
+- Care and the personality rule stay as they are: nothing from care moments; no mood, health, money trouble, family, age, religion, politics, identity.
+Steps:
+- [ ] B1. Learn from the session, not only the report: run the facts pass when a Move is committed and when Learn ends. Check first whether `memory_evidence.source_kind` and `memory_runs` have CHECK lists; if so, a migration plan based on a live dump, approved first.
+- [ ] B2. Extract specifics: what they sell and from where, who pays, numbers they gave (with the date), stated plans, constraints they name, their words for things. Every stored item keeps a verbatim snippet.
+- [ ] B3. DECISION for Rafay: let numbers and dates in stored facts reach the prompts when the conversation is on the same topic (topic match), instead of hiding all of them.
+- [ ] B4. Let sign-up "avoids" and "better than most" patterns reach the Read and Learn from day one (0.4), as decided for how-they-decide traits on Nov 9.
+- [ ] B5. A specificity test: replay Rohaan's session. Goal: after one situation the brief holds at least 3 items no other founder would share, each traceable to his words.
+- [ ] B6. Check the "What Axiom thinks" screen shows the new items and that "mark wrong" still removes them.
+
+## C. Proactive Axiom (the Muse / Dot / OpenClaw idea, for founders)
+Findings (Nov 19): Dot shut down Oct 5 2025. OpenClaw (was Clawdbot, Moltbot) is MIT licensed and open source, but is a self-hosted agent for one person with wide access to a machine, and researchers reported hundreds of malicious add-on skills. Well (wellapp.ai) is mostly ask-and-answer; its only scheduled skill is one morning message that sends nothing when nothing is due. "Muse": not identified.
+Decision proposed: do NOT put OpenClaw in the backend. Reasons: one user per install, broad shell and file access, many founders' mail in one process is a privacy risk, and we need only a scheduler, a significance check and push, which `connectors-plan.md` already designs on our Express server. We copy the idea (a regular "is anything worth telling this founder?" check), not the code.
+Steps:
+- [ ] C1. Proactive from memory first, no connectors: nudges from open threads, deadlines the founder gave (Rohaan's goal date), and moves left unreported, through the existing push scheduler. Rule: nothing worth saying means no push.
+- [ ] C2. Phase 0 of `connectors-plan.md`: Rafay reads which Gmail scopes Composio's auth config lists; choose paid Composio plan for the 10 demo users (free is 5 connections).
+- [ ] C3. Gmail and Calendar read-only, then Notion, then newsletters (existing phases). Signals use the 4-a-day cap; email text is data, never instructions.
+- [ ] C4. Later: action levels (what Axiom may do alone) only if Axiom ever writes anything.
+
+## Decisions needed from Rafay before code
+1. New Read rules (A1). 2. Sign-up numbers may be compared in the Read (A5). 3. Numbers and dates in memory may be used on topic (B3). 4. A possible migration for memory source kinds (B1). 5. Real model spend for A6. 6. No OpenClaw in the backend (C). 7. Which "Muse" you mean.
+
+## Revision 1 (Nov 19, Rafay): learn from every message; say when something changed
+Overrides B1 to B3 above. Findings that shape it: no migration is needed (memory_evidence already allows source kinds situation, read, learn, move, swap; founder_beliefs.source already allows 'conversation'; supersede already exists). `memory_runs` is once per (source, mode), so per-message learning does not write a run row.
+What was built (branch `feat/learn-every-message`, Slices 1 to 8; no live DB writes, fakes only). A changed fact does NOT supersede the old one: the old fact stays active and code adds a shift fact ("Said ... before, now says ...") beside it, so a later screen can name both.
+- [x] Slice 1, "Read quality": the Read and first reading stop restating the founder (one short quote at most, the first reading's text passed on as "already said"); the brief gains an "Earlier they said" section; a conflict detector in code (`memory/conflicts.js`) names a changed number once and asks what changed in the Situation, Read, Read talk and Learn prompts. The Move has no free sentence, so it gets no notice.
+- [x] Slice 2, "Learn every message": after each founder message a background pass (`memory/learnMessage.js`, gpt-4.1-mini, facts extractor) stores facts, people, shorthand, plans and threads, each with a verbatim snippet. Never delays the reply; skipped under the daily cap, during care and for blocked topics. Kill switch `LEARN_EVERY_MESSAGE=off`.
+- [x] Slice 3, specificity: sign-up patterns (avoids, strengths) usable from day one; richer sign-up facts; Rohaan's session replayed in tests.
+- [ ] Slice 4: "What Axiom thinks" shows shifts; mark wrong still works. NOT built.
+- [x] Slices 5 to 7: ask what changed, shift written by code from a fixed template, no invented units, grounded Read and first reading (one cheap model check for claims the founder never made; kill switch `READ_GROUNDING=off`; fails open), no contrasts, a failing Learn reply never ships as is, markup characters rejected, shorter shift, safer units. Move: one first step instead of a checklist (one-line change).
+- [x] Slice 8, pre-merge review fixes: the detector needs the same measure (period) and ignores goals, targets and one-off past numbers; only a STRONG conflict is enforced in code, a weak one is a prompt notice only; "said once" holds across situations through the stored shift; earlier numbers are allowed only for the active conflict; the health filter again blocks "fell ill" and friends but not the typo "Ill do it"; a blocked topic anywhere in a message skips the whole pass; the grounding check runs at most once, has an 8 second limit, and on the last attempt never replaces a Read (it is logged); per-founder queue for the message pass; shift text in plain third person within 240 characters; Learn fallback wording (needs Rafay's approval, see decisions.md).
+- [ ] Then C1 (proactive nudges from memory), after Rafay checks slices 1 to 3.

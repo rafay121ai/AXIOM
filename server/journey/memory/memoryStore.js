@@ -124,6 +124,10 @@ export function createMemoryStore({ supabase, clock = { now: () => Date.now() },
         source_id: r.sourceId ?? null, source_key: r.sourceKey ?? null, snippet: String(r.snippet).slice(0, 200), created_at: iso(),
       }))).select())
     },
+    // True when any receipt already comes from this source: a per-message pass is not run twice for the same message.
+    async hasEvidenceFrom(userId, sourceId) {
+      return ok(await q('memory_evidence', userId).eq('source_id', sourceId).limit(1)).length > 0
+    },
     // { [itemId]: { rows, sources } }: how many receipts, from how many different sources,
     // for the items of one table. Only the three columns it needs, bounded.
     async evidenceCounts(userId, itemTable) {

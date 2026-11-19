@@ -120,7 +120,7 @@ const FAKE_MOVE: MoveView = {
   mission: 'Message both clinics today and ask for a 20-minute follow-up call in the next 3 days.',
   success: 'Both give you a day and time. Yes or no.',
   words: "I'd like to show you what has changed since we last spoke. Can we book 20 minutes in the next 3 days?",
-  checklist: ['Open the last message from each clinic', 'Paste the wording and change one word to sound like you', 'Send it to both'],
+  checklist: ['Open the last message from each clinic'],
   prediction: 'My read: at least one of them will not answer. That is also an answer. Tonight tells us.',
   start_minutes: 10, can_swap: true, swapped_from: null, committed_at: null, report_due_at: null, report_time_local: null,
   time_zone: null, created_at: '2026-10-26T09:00:00.000Z',
@@ -130,7 +130,7 @@ const FAKE_SWAPPED: MoveView = {
   title: 'Email both clinics and ask for one concrete next step.',
   mission: 'Email both clinics today and ask for a 20-minute follow-up call in the next 3 days.',
   words: "I'd like to show you what has changed since we last spoke. Can we book 20 minutes in the next 3 days?",
-  checklist: ['Find the email of each clinic', 'Paste the wording and change one word to sound like you', 'Send it to both'],
+  checklist: ['Find the email of each clinic'],
 };
 const FAKE_REPORT_TIME = '20:00';
 const NEED_REASON = '"I\'m busy" isn\'t a reason I can work with. What makes this the wrong move?';

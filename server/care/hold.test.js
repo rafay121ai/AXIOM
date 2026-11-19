@@ -10,7 +10,7 @@ import { routesOf } from '../e2e/harness.js'
 
 const USER = { id: '11111111-1111-4111-8111-111111111111', email: 'founder@example.com' }
 const OTHER = { id: '22222222-2222-4222-8222-222222222222', email: 'other@example.com' }
-const ENV = { FRONTEND_URL: 'https://app.example.com' }
+const ENV = { FRONTEND_URL: 'https://app.example.com', LEARN_EVERY_MESSAGE: 'off' } // these tests count model calls; learnMessage.test.js covers memory
 const NOW = Date.parse('2026-10-26T09:00:00.000Z')
 const uuid = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 const SID = uuid(901)

@@ -15,7 +15,7 @@ export const bodyFields = (...names) => (req) => names.map((n) => req.body?.[n])
 
 const flatText = (value) => [].concat(value ?? []).filter((v) => typeof v === 'string' && v.trim()).join('\n')
 
-// onCare({ userId, level, scopeId }): runs whenever the gate stops a step, even
+// onCare({ userId, level, scopeId, req }): runs whenever the gate stops a step, even
 // when its event could not be recorded (the journey takes shares down there).
 export function createCare({ supabase, callStructured, clock = { now: () => Date.now() }, onCare = null } = {}) {
   const log = (what, err) => console.error(`[Care] ${what}`, err?.message || '')
@@ -116,7 +116,7 @@ export function createCare({ supabase, callStructured, clock = { now: () => Date
       }
       if (onCare) {
         try {
-          await onCare({ userId, level, scopeId })
+          await onCare({ userId, level, scopeId, req })
         } catch (err) {
           log('after-care step failed', err)
         }

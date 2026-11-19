@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { checkFirstReading, norm, quotedPhrases, unquoteUnknown } from './ownWords.js'
+import { checkFirstReading, contrastProblem, norm, numberUnits, quotedPhrases, unquoteUnknown } from './ownWords.js'
 import { fallbackReading } from './firstReading.js'
 import { FULL_ANSWERS } from './fixtures.js'
 import { buildEvidence } from './firstReading.js'
@@ -9,7 +9,7 @@ const { answerTexts } = buildEvidence(FULL_ANSWERS)
 const check = (reading) => checkFirstReading({ reading, answerTexts })
 const GOOD = {
   headline: 'The clinics asked for pricing and have heard nothing since.',
-  body: 'You wrote that you have a demo ready. You also wrote that "2 clinics that asked for pricing three weeks ago" are still waiting. The demo is not what is holding you back. Sending the price is.',
+  body: 'The demo is not what is holding you back. The "2 clinics that asked for pricing" are still waiting on you. Sending the price is.',
   underlines: ['asked for pricing'],
 }
 
@@ -18,7 +18,7 @@ test('golden pass: quote, number and underline all come from the answers', () =>
 })
 
 test('quote match ignores case, curly quotes and extra spaces', () => {
-  const r = { ...GOOD, body: GOOD.body.replace('"2 clinics that asked for pricing three weeks ago"', '“2  Clinics that asked for pricing THREE weeks ago”') }
+  const r = { ...GOOD, body: GOOD.body.replace('"2 clinics that asked for pricing"', '“2  Clinics that asked for PRICING”') }
   assert.equal(check(r).ok, true)
 })
 
@@ -98,7 +98,7 @@ test('fallback states only what was picked, never infers, and reads naturally fo
   const goals = QUESTIONS.find((q) => q.key === 'goal').goals
   for (const goal of goals) {
     const r = fallbackReading({ ...FULL_ANSWERS, goal: { goal, when: 'This month' } })
-    assert.match(r.body, /You are aiming (for|to) [a-z0-9 ]+ this month\./, r.body)
+    assert.match(r.body, /You are aiming (for|to) [a-z0-9 ]+\. Your deadline: this month\./, r.body)
     assert.ok(!/have not/.test(r.body) && /Next: what you wrote you are most stuck on\.$/.test(r.body))
     assert.ok(!/also told me/.test(r.body))
   }
@@ -108,7 +108,7 @@ test('fallback states only what was picked, never infers, and reads naturally fo
   assert.equal(talking.headline, 'You are talking to people about it.')
   assert.ok(!/no customer|nobody has bought/i.test(`${idea.headline} ${idea.body} ${talking.headline} ${talking.body}`))
   assert.throws(() => fallbackReading({ ...FULL_ANSWERS, stage: undefined }), /stage/)
-  for (const need of [/End the body on one plain question/, /No exclamation marks, no emoji, no jokes/, /I have what I need/]) {
+  for (const need of [/End the body on ONE specific question/, /No exclamation marks, no emoji, no jokes/, /I have what I need/]) {
     assert.match(FIRST_READING_PROMPT, need)
   }
 })
@@ -173,4 +173,51 @@ test('a quoted bare number: typed is fine; never typed, or only inside a bigger 
   assert.equal(run('40', money).length, 0)
   assert.equal(run('25', money).length, 0)
   assert.equal(run('5', money).length, 1)
+})
+
+// ── Nov 19, run 2 ─────────────────────────────────────────────────────────────
+
+test('contrast check: "not X, it is Y" in its forms is caught, even across a sentence break', () => {
+  for (const t of [
+    'The real block is not time, it is the moment you have to ask.',
+    'The block is not time. It is the ask.',
+    "You're not saying the price is wrong. You're saying nobody asked.",
+    "This isn't a pricing problem, it's a follow-up problem.",
+    'It is not the demo, but the silence after it.',
+    'This is not about money, rather about time.',
+  ]) assert.ok(contrastProblem(t), t)
+})
+
+test('contrast check: ordinary uses of "not" pass', () => {
+  for (const t of [
+    'The problem is not just price but also timing.',
+    'I am not sure, but the clinics asked for pricing.',
+    'If it is not working, you are stuck with the old list.',
+    'You have not emailed the clinics, you have only a demo.',
+    'Two clinics did not reply. They are waiting for a price.',
+    'It is not live yet.',
+  ]) assert.equal(contrastProblem(t), null, t)
+})
+
+test('the first reading and the Read reject the word underline, and a hyphenated label the founder never typed', () => {
+  const reading = (body) => ({ headline: 'Nobody pays yet, and you are building it.', body, underlines: [] })
+  assert.match(check(reading('This is growing on underlines: evenings and weekends, so the asks wait.')).problems.join(), /underline/)
+  assert.match(check(reading('The revenue push feels like something you will wait-and-collect-more on.')).problems.join(), /hyphenated label/)
+  assert.match(check(reading('The block is not time, it is the ask. Who will you ask first?')).problems.join(), /not X, it is Y/)
+  assert.deepEqual(check(reading('Evenings and weekends do not leave room for the asks. Who will you ask first?')).problems, [])
+})
+
+test('a Read headline and closing question carry no quote and no run of 4 founder words; the body keeps one quote', () => {
+  const said = ['I order the products by myself to know the cost', 'home responsibilities and personal stuff']
+  const read = { headline: 'Ordering by hand has no number on it yet.', body: 'You gave a reason but no count, and "to know the cost" is the only reason so far.', closing_question: 'How many hours does one ordering round take?', underlines: [] }
+  const run = (over) => checkFirstReading({ reading: { ...read, ...over }, answerTexts: said }).problems.join()
+  assert.equal(run({}), '')
+  assert.match(run({ headline: 'The "home responsibilities and personal stuff" is the reason.' }), /headline quotes the founder/)
+  assert.match(run({ closing_question: 'Is "home responsibilities" the reason?' }), /closing question quotes the founder/)
+  assert.match(run({ headline: 'You order the products by myself, still.' }), /headline repeats 4 or more words/)
+  assert.match(run({ closing_question: 'Do you order the products by yourself?' }), /closing question repeats 4/)
+})
+
+test('numberUnits finds the word after a digit number and skips function words', () => {
+  assert.deepEqual(numberUnits('It takes 16 minutes per session, 3 of them, and 2,000 customers'), [{ number: '16', unit: 'minute' }, { number: '2000', unit: 'customer' }])
 })

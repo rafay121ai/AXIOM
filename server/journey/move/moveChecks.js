@@ -10,7 +10,7 @@
 // - Axiom's voice: no banned phrase, teaser, filler or quotation marks.
 import { validateExperimentQuality } from '../../experimentQuality.js'
 import { isFillerReply, stripFiller } from '../filler.js'
-import { threadKinds } from '../hooks.js'
+import { STOP, threadKinds } from '../hooks.js'
 import { BANNED_PHRASES, TEASER, norm, wordRx } from '../ownWords.js'
 
 export const MAX_START_MINUTES = 10
@@ -50,6 +50,15 @@ export function isRealSwapReason(text) {
   return words.length >= REASON_MIN_WORDS
 }
 
+// A swap must be a different move, not a rewording (live, Nov 19: "stays with you or moves to employees" for "stays inside your 16 hours").
+const SAME_MOVE_SHARE = 0.6
+const contentWords = (text) => new Set((norm(text).match(/[a-z0-9]{3,}/g) ?? []).filter((w) => !STOP.has(w)))
+export function isSameMove(move, previous) {
+  const now = contentWords(`${move.title} ${move.mission}`)
+  const before = contentWords(`${previous.title} ${previous.mission}`)
+  return now.size > 0 && [...now].filter((w) => before.has(w)).length / now.size >= SAME_MOVE_SHARE
+}
+
 // What the validator is given, from a move.
 export const experimentOf = (move) => ({
   hypothesis: move.hypothesis,
@@ -59,8 +68,10 @@ export const experimentOf = (move) => ({
 })
 
 // data: the model's output. founderTexts: every string the founder wrote or
-// chose. Returns { move, problems }; `move` is shown only when problems is empty.
-export function checkMove({ data, founderTexts }) {
+// chose. earlierTexts: earlier statements from the brief; their numbers may be named (a change). previous: { title, mission } of the
+// move being swapped, or null. Returns { move, problems };
+// `move` is shown only when problems is empty.
+export function checkMove({ data, founderTexts, earlierTexts = [], previous = null }) {
   const problems = []
   const clean = (s) => stripFiller(String(s ?? '').trim()).text
   const move = {
@@ -68,7 +79,7 @@ export function checkMove({ data, founderTexts }) {
     mission: clean(data.mission),
     success: clean(data.success),
     words: String(data.words ?? '').trim().replace(/^["“”']+|["“”']+$/g, '').trim(),
-    checklist: (Array.isArray(data.checklist) ? data.checklist : []).map(clean).filter(Boolean),
+    checklist: (Array.isArray(data.checklist) ? data.checklist : []).map(clean).filter(Boolean).slice(0, 1),
     prediction: clean(data.prediction),
     hypothesis: String(data.hypothesis ?? '').trim(),
     start_minutes: data.start_minutes,
@@ -82,14 +93,14 @@ export function checkMove({ data, founderTexts }) {
     if (QUOTE_MARKS.test(text)) problems.push(`quotation marks in ${field}: put the exact wording only in words`)
     if (text.includes('?')) problems.push(`a question in ${field}: the move says what to do`)
   }
-  if (move.checklist.length < 2) problems.push('the checklist needs 2 to 4 steps')
+  if (move.checklist.length < 1) problems.push('the checklist needs one first step')
   if (!Number.isInteger(move.start_minutes) || move.start_minutes < 1 || move.start_minutes > MAX_START_MINUTES) {
     problems.push(`it must be startable within ${MAX_START_MINUTES} minutes`)
   }
 
   // Own facts: numbers, deadlines, something from this founder.
   const all = [...Object.values(shown), move.words].join('\n')
-  const ownNumbers = new Set(founderTexts.flatMap(digitsIn))
+  const ownNumbers = new Set([...founderTexts, ...earlierTexts].flatMap(digitsIn))
   const unknown = digitsIn(all.replace(PLAN_MINUTES, ' ')).find((n) => !ownNumbers.has(n))
   if (unknown) problems.push(`a number the founder never gave: ${unknown}`)
   const corpus = founderTexts.map(norm).join('\n')
@@ -107,6 +118,8 @@ export function checkMove({ data, founderTexts }) {
   if (DEPENDS_ON_OTHERS.test(norm(`${move.mission} ${move.checklist[0] ?? ''}`))) {
     problems.push('the founder must be able to start it alone, now: no waiting and no handing it to someone else')
   }
+
+  if (previous && isSameMove(move, previous)) problems.push('the swap is the old move reworded: write a different action built on the reason they gave, with new words')
 
   // The deterministic validator, unchanged.
   const verdict = validateExperimentQuality(experimentOf(move))

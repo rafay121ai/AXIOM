@@ -3,13 +3,15 @@ import test from 'node:test'
 import { createApp } from '../../app.js'
 import { createFakeClock, createFakeOpenAI, createFakeSupabase } from '../../testing/fakes.js'
 import { FULL_ANSWERS } from '../fixtures.js'
+import { EMPTY_MESSAGE } from '../../e2e/harness.js'
+import { memoryIdle } from '../memory/extractBeliefs.js'
 import { checkMove, isRealSwapReason, NEED_REASON } from './moveChecks.js'
 import { reportDueAt, REPORT_WINDOW_MS } from './schedule.js'
 import { NO_ROOM_LINE } from './room.js'
 
 const USER = { id: '11111111-1111-4111-8111-111111111111', email: 'founder@example.com' }
 const OTHER = { id: '22222222-2222-4222-8222-222222222222', email: 'other@example.com' }
-const ENV = { FRONTEND_URL: 'https://app.example.com' }
+const ENV = { FRONTEND_URL: 'https://app.example.com', LEARN_EVERY_MESSAGE: 'off' } // these tests count model calls; learnMessage.test.js covers memory
 const NOW = Date.parse('2026-10-26T09:00:00.000Z') // 2 pm in Karachi
 const HOUR = 60 * 60 * 1000
 const uuid = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
@@ -23,7 +25,7 @@ const MOVE = {
   mission: 'Email the 2 clinics that asked for pricing and ask each for a 20-minute call.',
   success: 'Both clinics reply with a day and time for the call.',
   words: 'I have the pricing you asked for. Can we book 20 minutes to go through it?',
-  checklist: ['Open the last email from each clinic', 'Paste the wording and make it sound like you', 'Send it to both clinics'],
+  checklist: ['Open the last email from each clinic'],
   prediction: 'At least one of the clinics will not reply. That is also an answer.',
   hypothesis: 'Tests whether the clinics will reply with a day and time when asked directly.',
   start_minutes: 5,
@@ -37,7 +39,16 @@ test('a move that keeps every rule passes the validator and the checks', () => {
   const { problems, validation, move } = checkMove({ data: MOVE, founderTexts: FOUNDER_TEXTS })
   assert.deepEqual(problems, [])
   assert.equal(validation.ok, true)
-  assert.equal(move.checklist.length, 3)
+  assert.equal(move.checklist.length, 1)
+})
+
+// Rafay, Nov 19: an earlier statement's number may be named in a move; an invented number may not.
+test('a number from an earlier statement is allowed in a move, an invented one is not', () => {
+  const data = (n) => ({ ...MOVE, mission: `Email the 2 clinics that asked for pricing and cut the ordering from ${n} hours.` })
+  const earlierTexts = ['Works evenings and weekends, under 15 hours a week.']
+  assert.match(checkMove({ data: data(15), founderTexts: FOUNDER_TEXTS }).problems.join(' | '), /never gave: 15/)
+  assert.deepEqual(checkMove({ data: data(15), founderTexts: FOUNDER_TEXTS, earlierTexts }).problems, [])
+  assert.match(checkMove({ data: data(14), founderTexts: FOUNDER_TEXTS, earlierTexts }).problems.join(' | '), /never gave: 14/)
 })
 
 test('the experiment validator rejects a move with no yes or no answer', () => {
@@ -58,6 +69,15 @@ test('own facts, start, and only-variable rules', () => {
   const cleaned = checkMove({ data: { ...MOVE, prediction: 'Absolutely, one of the clinics will not reply.' }, founderTexts: FOUNDER_TEXTS })
   assert.equal(cleaned.move.prediction, 'One of the clinics will not reply.')
   assert.match(problemsOf({ prediction: 'One of the clinics will reply, of course.' }), /prediction is empty/)
+})
+
+test('a swap that rewords the old move is rejected; a different action passes', () => {
+  const previous = { title: MOVE.title, mission: MOVE.mission }
+  const reworded = { ...MOVE, title: 'Ask both clinics that asked about pricing for a call.', mission: 'Email the 2 clinics that asked about pricing and ask each for a call of 20 minutes.' }
+  assert.match(checkMove({ data: reworded, founderTexts: FOUNDER_TEXTS, previous }).problems.join(), /swap is the old move reworded/)
+  assert.ok(!checkMove({ data: reworded, founderTexts: FOUNDER_TEXTS }).problems.join().includes('reworded')) // only a swap is compared
+  const different = { ...MOVE, title: 'Ring the front desk of one clinic today.', mission: 'Phone the front desk of one clinic and ask who handles the pricing request.' }
+  assert.deepEqual(checkMove({ data: different, founderTexts: FOUNDER_TEXTS, previous }).problems, [])
 })
 
 test('a swap needs a real reason; "I\'m busy" is not one', () => {
@@ -142,10 +162,11 @@ const seed = ({ offers = [2], moves = [], timezone = 'Asia/Karachi' } = {}) => (
 })
 
 async function setup(script = [], opts = {}) {
+  const { env = ENV, byName = {} } = opts
   const base = createFakeSupabase({ users: { tok: USER, tok2: OTHER }, tables: { ...seed(opts), ...(opts.tables ?? {}) } })
-  const openai = createFakeOpenAI(script)
+  const openai = createFakeOpenAI(script, { byName })
   const clock = createFakeClock(NOW)
-  const app = createApp({ env: ENV, supabase: withMoveKeys(base), openai, clock })
+  const app = createApp({ env, supabase: withMoveKeys(base), openai, clock })
   const server = app.listen(0)
   await new Promise((r) => server.once('listening', r))
   const url = `http://127.0.0.1:${server.address().port}`
@@ -284,8 +305,8 @@ test('commit uses the phone time zone when none is saved, and refuses a bad one'
 
 test('swap: once, only with a real reason, behind the care gate', async () => {
   const swapped = moveJson({
-    title: 'Email the clinics their pricing today.',
-    mission: 'Email the pricing to the 2 clinics that asked for it and ask each for a 20-minute call.',
+    title: 'Ring the front desk of one clinic today.',
+    mission: 'Phone the front desk of one clinic and ask who handles the pricing request.',
   })
   const { call, chatCalls, rows, close } = await setup([swapped], { moves: [draft(1, { learn_id: LEARN, situation_id: SIT })] })
   try {
@@ -381,4 +402,18 @@ test('a success that only says "see if" or "check whether" is sent back; a plain
   assert.match(problemsOf(`${MOVE.success.replace(/\.$/, '')}, and you can see if they answer faster.`), /plain yes or no/)
   assert.match(problemsOf('You check whether both clinics replied.'), /plain yes or no/)
   assert.doesNotMatch(problemsOf(MOVE.success), /plain yes or no/)
+})
+
+// Rafay, Nov 19: the reason for a swap is a founder message and is remembered from the swapped move.
+const memoryReply = (...pairs) => JSON.stringify({ ...EMPTY_MESSAGE, new_beliefs: pairs.map(([belief, snippet]) => ({ belief, kind: 'fact', snippet, shifts_from: '' })) })
+
+test('memory: the swap reason is remembered from the swapped move', async () => {
+  const reason = 'I only have their email, not their phone numbers'
+  const byName = { beliefs_message: memoryReply(['Has the clinics emails and not their phone numbers.', 'I only have their email']) }
+  const { call, rows, close } = await setup([moveJson({ title: 'Ring the front desk of one clinic today.', mission: 'Phone the front desk of one clinic and ask who handles the pricing request.' })], { moves: [draft(1, { learn_id: LEARN, situation_id: SIT })], env: { FRONTEND_URL: 'https://app.example.com' }, byName })
+  try {
+    assert.equal((await call('POST', `/api/moves/${uuid(301)}/swap`, { reason })).body.status, 'swapped')
+    await memoryIdle()
+    assert.deepEqual(rows('memory_evidence').map((e) => [e.source_kind, e.source_id]), [['swap', uuid(301)]])
+  } finally { await close() }
 })

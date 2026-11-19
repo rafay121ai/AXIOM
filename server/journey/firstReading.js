@@ -3,6 +3,7 @@
 // replaces it if the model cannot get it right.
 import { QUESTIONS, answerStrings, isSkip } from './questions.js'
 import { checkFirstReading } from './ownWords.js'
+import { unsupportedClaims } from './theRead.js'
 import { FIRST_READING_SCHEMA, firstReadingMessages } from './prompts/firstReading.js'
 
 // What the model sees per answer. Our labels go in `question`, so every `answer` holds only what the founder
@@ -39,7 +40,7 @@ export function buildEvidence(answers) {
 const STAGE_FACT = {
   'Just an idea': 'You have an idea.',
   "I'm talking to people about it": 'You are talking to people about it.',
-  "I'm building it and nobody pays yet": 'You are building it, and nobody pays yet.',
+  "I'm building it and nobody pays yet": 'Nobody pays yet, and you are building it.',
   'Someone is paying me': 'Someone is paying you.',
   "It's growing": 'It is growing.',
 }
@@ -48,8 +49,8 @@ const TIME_FACT = {
   '1 to 2 years': 'for 1 to 2 years', 'More than 2 years': 'for more than 2 years',
 }
 const WEEK_FACT = {
-  'Full time': 'full time', 'Part time, 15 hours or more': 'part time, 15 hours or more',
-  'Evenings and weekends, under 15 hours': 'evenings and weekends, under 15 hours', 'On and off': 'on and off',
+  'Full time': 'full time', 'Part time, 15 hours or more': '15 hours or more, part time',
+  'Evenings and weekends, under 15 hours': 'under 15 hours, in evenings and weekends', 'On and off': 'on and off',
 }
 const TRIED_FACT = {
   'Talked to customers': 'talked to customers', 'Built a prototype': 'built a prototype',
@@ -81,17 +82,19 @@ export function fallbackReading(answers) {
   const sentences = [
     time || week ? `You have been on it${time ? ` ${time}` : ''}${week ? `, ${week}` : ''}.` : null,
     tried.length ? `So far you have ${joinList(tried)}.` : null,
-    aim && whenPhrase ? `${aim} ${whenPhrase}.` : null,
+    aim && whenPhrase ? `${aim}. Your deadline: ${whenPhrase}.` : null,
     'I could not read more into your answers than that just now, so I will not guess. Next: what you wrote you are most stuck on.',
   ].filter(Boolean)
   return { headline, body: sentences.join(' '), underlines: [] }
 }
 
-// deps: { callStructured, userId, log }. Never throws: any model failure
-// ends in the fallback reading.
-export async function createFirstReading({ answers, deps }) {
+// deps: { callStructured, userId, log }. grounding: { isCapped } turns on the same invented-claim check as the Read (null is off).
+// Never throws: any model failure ends in the fallback reading.
+export async function createFirstReading({ answers, deps, grounding = null }) {
   const { evidence, answerTexts } = buildEvidence(answers)
   let problems = null
+  let grounded = false // checked once; only the last attempt's own objection turns a model reading down
+  let claims = []
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
       const { data } = await deps.callStructured({
@@ -105,8 +108,20 @@ export async function createFirstReading({ answers, deps }) {
       })
       const reading = { headline: data.headline.trim(), body: data.body.trim(), underlines: data.underlines.map((u) => u.trim()) }
       const verdict = checkFirstReading({ reading, answerTexts })
-      if (verdict.ok) return { reading, source: 'model' }
-      problems = verdict.problems
+      if (verdict.ok) {
+        // The sign-up answers are everything this reading may rest on.
+        const fresh = Boolean(grounding) && !grounded
+        if (fresh) claims = await unsupportedClaims({ read: reading, conversation: evidence.map((e) => ({ role: 'founder', text: `${e.question}: ${e.answer}` })), brief: '', grounding, deps })
+        grounded = true
+        if (claims.length === 0) return { reading, source: 'model' }
+        if (attempt === 2) {
+          // Unlike the Read, a fresh objection on the last attempt is not shipped: the plain reading replaces it (replay 4).
+          if (fresh) { deps.log?.('grounding objected on the last attempt, plain reading used', { claims }); break }
+          deps.log?.('grounding objected, shipped', { claims }) // the rewrite of an objected first try ships unchecked
+          return { reading, source: 'model' }
+        }
+        problems = claims.map((c) => `it claims something they did not say (${c}): say only what they answered or what follows from their numbers`)
+      } else problems = verdict.problems
     } catch (err) {
       deps.log?.('model call failed', err)
       problems = null

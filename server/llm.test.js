@@ -95,3 +95,12 @@ test('config: unknown step throws, limits are fixed', () => {
   assert.equal(LIMITS.MAX_ACTIVE_MOVES, 2)
   assert.equal(LIMITS.MAX_PUSH_PER_DAY, 2)
 })
+
+test('timeoutMs gives that call its own abort signal; without it the client default stands', async () => {
+  const timed = setup(['{"headline":"x"}'])
+  await timed.run({ timeoutMs: 8000 })
+  assert.ok(timed.openai.calls[0].options.signal instanceof AbortSignal)
+  const plain = setup(['{"headline":"x"}'])
+  await plain.run()
+  assert.equal(plain.openai.calls[0].options, undefined)
+})

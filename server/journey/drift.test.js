@@ -54,7 +54,7 @@ test('fallback read with an empty founder text does not crash or invent', () => 
   assert.doesNotMatch(`${r.body} ${r.closing_question}`, /undefined|null/)
 })
 
-const readOk = (texts) => checkRead({ read: fallbackRead(texts), answerTexts: [...buildEvidence(FULL_ANSWERS).answerTexts, ...texts] })
+const readOk = (texts) => checkRead({ read: fallbackRead(texts), answerTexts: [...buildEvidence(FULL_ANSWERS).answerTexts, ...texts], fallback: true })
 
 test('fallback read: a long opening gives a whole question that passes checkRead', () => {
   const long = 'I have a demo ready for the clinics and they all asked for pricing three weeks ago but I keep putting off the email because I am afraid of the answer and so on and on'
@@ -64,11 +64,11 @@ test('fallback read: a long opening gives a whole question that passes checkRead
   assert.deepEqual(readOk([long]), { ok: true, problems: [] })
 })
 
-test('fallback read: the follow-up clause appears only when there is a follow-up', () => {
+test('fallback read: one quote, said in the body and again in the closing question', () => {
   const a = 'Clinics asked for pricing and I stalled.'
-  assert.equal(fallbackRead([a]).body, 'Here is what I have, in your words: "Clinics asked for pricing and I stalled".\nNext is what authors have said about it, then one move you can start today.')
-  const w = fallbackRead([a, 'Two clinics.', 'I am afraid of the answer, but']).body
-  assert.match(w, /"Clinics asked for pricing and I stalled", and "I am afraid of the answer"\.\n/)
+  const r = fallbackRead([a, 'Two clinics.', 'I am afraid of the answer, but'])
+  assert.equal(r.body, 'Here is what I have, in your words: "Clinics asked for pricing and I stalled".\nNext is what authors have said about it, then one move you can start today.')
+  assert.match(r.closing_question, /^On "Clinics asked for pricing and I stalled": /)
   assert.deepEqual(readOk([a, 'Two clinics.', 'I am afraid of the answer, but']), { ok: true, problems: [] })
 })
 
@@ -82,7 +82,7 @@ test('first reading fallback never says "have not", has no comma before the dead
   for (const tried of [[], ['Launched it']]) {
     const reading = fallbackReading({ ...FULL_ANSWERS, tried })
     assert.doesNotMatch(reading.body, /have not/)
-    assert.match(reading.body, /You are aiming for your first 10 customers in 3 months\./)
+    assert.match(reading.body, /You are aiming for your first 10 customers\. Your deadline: in 3 months\./)
     assert.deepEqual(checkFirstReading({ reading, answerTexts: buildEvidence({ ...FULL_ANSWERS, tried }).answerTexts }), { ok: true, problems: [] })
   }
 })
@@ -107,12 +107,12 @@ test('no source file hard-codes the build office ports (8765, 8791)', () => {
   assert.deepEqual(hits, [])
 })
 
-test('fallback read: the closing question carries a shorter quote than the body', () => {
+test('fallback read: the quote is 8 words at most and the same in the body and the closing question', () => {
   const long = 'I have a demo ready for the clinics and they all asked for pricing three weeks ago but I keep putting off the email'
   const r = fallbackRead([long])
   const q = r.closing_question.match(/^On "(.+)": /)[1]
-  assert.ok(q.length <= 60 && long.startsWith(q), q)
-  assert.ok(r.body.includes(long))
+  assert.ok(q.split(' ').length <= 8 && long.startsWith(q), q)
+  assert.ok(r.body.includes(`"${q}"`))
   assert.deepEqual(readOk([long]), { ok: true, problems: [] })
 })
 

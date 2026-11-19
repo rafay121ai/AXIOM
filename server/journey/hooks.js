@@ -4,7 +4,7 @@
 // restating the founder as filler are rejected. Pure: no model, no I/O.
 import { BANNED_PHRASES, TEASER, norm, wordRx, quotedPhrases } from './ownWords.js'
 
-const STOP = new Set((
+export const STOP = new Set((
   'a an and are as at be been but by can could did do does for from had has have he her his how i if in into is it its me my no not of on or our she so ' +
   'that the their them then there they this to too us was we were what when where which who why will with would you your about just than very also ' +
   'any some more most other out up over only still yet'

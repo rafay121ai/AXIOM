@@ -10,7 +10,8 @@ import { validateCitations, cleanProse } from './citations.js'
 import { checkPicture, numbersIn as numbersWithWords } from './pictures.js'
 import { stripFiller } from '../filler.js'
 import { checkHook, threadKinds } from '../hooks.js'
-import { BANNED_PHRASES, TEASER, norm, wordRx } from '../ownWords.js'
+import { BANNED_PHRASES, TEASER, contrastProblem, looseUnit, norm, numberUnits, pairsOf, saidProblem, wordRx } from '../ownWords.js'
+import { changeQuestion, conflictProblem, namesBothAndAsks } from '../memory/conflicts.js'
 import { LEARN_SCHEMA, learnMessages, MAX_FOLLOW_UPS, FOLLOW_UP_MAX } from './prompts/learn.js'
 
 export const WORD_CAP = 200
@@ -61,11 +62,13 @@ export function capWords(text, cap = WORD_CAP, { keepLast = false } = {}) {
   return [...kept, ...(last ? [last] : [])].join(' ')
 }
 
-function cleanFollowUps(list) {
+// askedChange: the reply already asked what changed, so no chip asks it again.
+const ASKS_CHANGE = /\bwhat (?:has |had )?changed\b/
+function cleanFollowUps(list, askedChange = false) {
   const out = []
   for (const raw of Array.isArray(list) ? list : []) {
     const t = stripFiller(raw).text.trim()
-    if (!t || t.length > FOLLOW_UP_MAX || TEASER.test(norm(t)) || hasBanned(t) || QUOTE_MARKS.test(t)) continue
+    if (!t || t.length > FOLLOW_UP_MAX || TEASER.test(norm(t)) || hasBanned(t) || QUOTE_MARKS.test(t) || (askedChange && ASKS_CHANGE.test(norm(t)))) continue
     if (out.some((o) => norm(o) === norm(t))) continue
     out.push(t)
     if (out.length >= MAX_FOLLOW_UPS) break
@@ -98,12 +101,14 @@ export function checkFact(fact, founderTexts) {
   if (!t || t.length > FACT_MAX || sentencesOf(t).length !== 1 || !/[.]$/.test(t) || QUOTE_MARKS.test(t)) return null
   if (!checkHook({ text: t, sources: founderTexts, requireQuestion: false }).ok || /\?/.test(t)) return null
   const ownNumbers = new Set(founderTexts.flatMap(numbersWithWords))
-  return numbersWithWords(t).every((n) => ownNumbers.has(n)) ? t : null
+  const ownPairs = new Set(founderTexts.flatMap(numberUnits).map((p) => `${p.number} ${p.unit}`))
+  return numbersWithWords(t).every((n) => ownNumbers.has(n)) && numberUnits(t).every((p) => ownPairs.has(`${p.number} ${p.unit}`)) ? t : null
 }
 
 // data: the model's output. Returns { reply, problems }. `reply` is the
 // cleaned version (every hard rule applied), used when the retry fails too.
-export function checkReply({ data, mode, evidence, founderTexts, asked = null }) {
+// earlierTexts: the clause of the active conflict (earlierAllowed); its number may be named (a change), never quoted.
+export function checkReply({ data, mode, evidence, founderTexts, earlierTexts = [], asked = null, conflict = null }) {
   const problems = []
   const handles = new Map(evidence.map((e) => [e.handle, e]))
   const citations = (data.citations ?? []).map((c) => ({ handle: c.handle, ...(c.quote?.trim() ? { quote: c.quote } : {}) }))
@@ -132,7 +137,9 @@ export function checkReply({ data, mode, evidence, founderTexts, asked = null })
   // Another passage from a cited author or work is not "uncited": two passages from one book are common.
   const uncited = evidence.filter((e) => !sources.some((s) => s.handle === e.handle || sameText(s.author) === sameText(e.author) || sameText(s.book) === sameText(e.source_title)))
   const passageNumbers = new Set(evidence.filter((e) => sources.some((s) => s.handle === e.handle)).flatMap((e) => digitsIn(e.text)))
-  const ownNumbers = new Set(founderTexts.flatMap(digitsIn))
+  const ownNumbers = new Set([...founderTexts, ...earlierTexts].flatMap(digitsIn))
+  // A number keeps the unit the founder gave it: a bare "16" never becomes "16 hours" or "16 time" (live, Nov 19).
+  const ownPairs = pairsOf([...founderTexts, ...earlierTexts, ...(conflict ? [conflict.nowText] : []), ...evidence.filter((e) => sources.some((s) => s.handle === e.handle)).map((e) => e.text)])
   const kept = []
   for (const sentence of sentencesOf(text)) {
     if (namesSource(sentence, uncited)) { problems.push('names an author or book it did not cite'); continue }
@@ -141,20 +148,34 @@ export function checkReply({ data, mode, evidence, founderTexts, asked = null })
     if (TEASER.test(norm(sentence))) { problems.push('a teaser'); continue }
     const unknown = digitsIn(sentence).find((n) => !ownNumbers.has(n) && !passageNumbers.has(n))
     if (unknown) { problems.push(`a number the founder never gave: ${unknown}`); continue }
+    const loose = looseUnit(sentence, ownPairs)
+    if (loose) { problems.push(`a number with a word the founder never put after it: ${loose.number} ${loose.unit}. Say the number the way they said it`); continue }
+    const said = saidProblem(sentence, [...founderTexts, ...earlierTexts, ...(conflict ? [conflict.nowText] : [])])
+    if (said) { problems.push(said); continue }
     kept.push(sentence)
   }
   text = stripFiller(kept.join(' ')).text
 
+  // Hard: what the sentence cleaning above cannot remove. If a retry does not fix these, the reply is repaired or replaced, never shipped.
+  let hard = false
   const questions = (text.match(/\?/g) ?? []).length
-  if (QUESTION_MODES.has(mode) && (questions !== 1 || !text.trim().endsWith('?'))) problems.push('it must end with exactly one plain question')
-  if (NO_QUESTION_MODES.has(mode) && questions > 0) {
-    problems.push('no question in this reply')
-    text = sentencesOf(text).filter((s) => !s.includes('?')).join(' ')
+  if (QUESTION_MODES.has(mode) && (questions !== 1 || !text.trim().endsWith('?'))) {
+    problems.push(conflict?.strong ? 'it must end with exactly one plain question, and because a number changed that question is the one asking what changed' : 'it must end with exactly one plain question')
+    hard = true
+  }
+  // An offer or follow-up holds no question, except the one that asks what changed when a number changed.
+  if (NO_QUESTION_MODES.has(mode) && questions > (conflict ? 1 : 0)) {
+    problems.push(conflict ? 'at most one question in this reply, the one that asks what changed' : 'no question in this reply')
+    const last = sentencesOf(text).findLast((s) => s.includes('?'))
+    text = sentencesOf(text).filter((s) => !s.includes('?') || (conflict && s === last)).join(' ')
   }
   if (words(text) > WORD_CAP) {
     problems.push(`too long: ${words(text)} words, the cap is ${WORD_CAP}`)
     text = capWords(text, WORD_CAP, { keepLast: QUESTION_MODES.has(mode) })
   }
+  if (conflict?.strong && !namesBothAndAsks(text, conflict)) problems.push(conflictProblem(conflict))
+  const contrast = contrastProblem(text)
+  if (contrast) { problems.push(contrast); hard = true }
   if (text && threadKinds(text, founderTexts).length === 0) problems.push('nothing from this founder: use their own words, a number or a date they gave')
 
   let picture = null
@@ -169,25 +190,56 @@ export function checkReply({ data, mode, evidence, founderTexts, asked = null })
     text,
     sources,
     picture,
-    follow_ups: mode === 'followup' ? [] : cleanFollowUps(data.follow_ups),
+    follow_ups: mode === 'followup' ? [] : cleanFollowUps(data.follow_ups, Boolean(conflict) && namesBothAndAsks(text, conflict)),
     move_subject: checkSubject(data.move_subject, founderTexts),
     move_fact: checkFact(data.move_fact, founderTexts),
     flags: verdict.flags,
   }
-  if (!text) problems.push('nothing usable is left in the reply')
-  return { reply, problems: [...new Set(problems)] }
+  if (!text) { problems.push('nothing usable is left in the reply'); hard = true }
+  return { reply, problems: [...new Set(problems)], hard }
+}
+
+// The reply with the sentences that carry a contrast dropped and the closing question kept, last; null when that leaves no valid reply.
+// With a strong conflict the one question kept is the one that asks what changed (the generic closing goes), moved to the end.
+function repairText(text, mode, conflict) {
+  const sentences = sentencesOf(text)
+  const closing = QUESTION_MODES.has(mode) ? (conflict?.strong && changeQuestion(text, conflict)) || sentences.findLast((s) => s.endsWith('?')) : null
+  if (QUESTION_MODES.has(mode) && !closing) return null
+  const keep = []
+  for (const s of sentences) {
+    if (s.includes('?') || contrastProblem([...keep, s, ...(closing ? [closing] : [])].join(' '))) continue
+    keep.push(s)
+  }
+  const out = [...keep, ...(closing ? [closing] : [])].join(' ')
+  return keep.length >= 1 && !contrastProblem(out) ? out : null
+}
+
+// Last resort (voice: direct, no filler): no source, no teaching, nothing pasted from the founder, nothing invented. Wording for Rafay's approval.
+function plainReply(mode) {
+  const text = QUESTION_MODES.has(mode)
+    ? 'I do not have a lesson on this that I would stand behind yet. What is the next step you see?'
+    : 'I do not have a passage that fits this well enough, so I will not guess.'
+  return { text, sources: [], picture: null, follow_ups: [], move_subject: null, move_fact: null, flags: [] }
 }
 
 // context: { signUp, situation, read, learn, tapped? } as the prompt takes it.
 // founderTexts: every string the founder wrote or chose (sign-up, situation,
 // Read answer, Learn replies). deps: { callStructured, userId, log }.
 // Throws only when no usable reply exists after two attempts.
-export async function composeReply({ mode, step, context, evidence, founderTexts, usageContext, deps }) {
+export async function composeReply({ mode, step, context, evidence, founderTexts, earlierTexts = [], conflict = null, usageContext, deps }) {
   // Author and title are shown so the lesson can name who taught it (Rafay, Nov 2); the server still checks every name.
   const shown = evidence.map((e) => ({ handle: e.handle, author: e.author, title: e.source_title, text: e.text, ...(e.lesson ? { lesson: { idea: e.lesson.principle, when: e.lesson.applies_when, text: e.lesson.paragraphs.join(' ') } } : {}) }))
   const asked = mode === 'lesson' ? null : (context.learn ?? []).filter((t) => t.role === 'founder').at(-1)?.text ?? null
   let problems = null
-  let fallback = null
+  let last = null
+  // After the retry a reply that still breaks a hard rule is repaired, or replaced by the plain reply. Never shipped as is.
+  const finish = () => {
+    if (!last) return null
+    if (!last.hard) return last.reply
+    const text = repairText(last.reply.text, mode, conflict)
+    deps.log?.('learn reply repaired or replaced', { problems: last.problems, repaired: text !== null })
+    return text ? { ...last.reply, text } : plainReply(mode)
+  }
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     let data
     try {
@@ -198,19 +250,19 @@ export async function composeReply({ mode, step, context, evidence, founderTexts
         maxCompletionTokens: 1200,
         userId: deps.userId,
         usageContext,
-        messages: learnMessages({ mode, ...context, evidence: shown }, problems),
+        messages: learnMessages({ mode, ...context, conflict, evidence: shown }, problems),
       }))
     } catch (err) {
       deps.log?.('model call failed', err)
-      if (fallback) return fallback
+      const done = finish()
+      if (done) return done
       throw err
     }
-    const verdict = checkReply({ data, mode, evidence, founderTexts, asked })
+    const verdict = checkReply({ data, mode, evidence, founderTexts, earlierTexts, asked, conflict })
     if (verdict.problems.length === 0) return verdict.reply
-    if (verdict.reply.text) fallback = verdict.reply
+    last = verdict
     problems = verdict.problems
   }
   deps.log?.('learn reply cleaned after retry', { problems })
-  if (fallback) return fallback
-  throw new Error('No usable Learn reply')
+  return finish()
 }

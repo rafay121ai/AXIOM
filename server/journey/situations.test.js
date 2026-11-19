@@ -3,13 +3,16 @@ import test from 'node:test'
 import { createApp } from '../app.js'
 import { createFakeClock, createFakeOpenAI, createFakeSupabase } from '../testing/fakes.js'
 import { FULL_ANSWERS } from './fixtures.js'
+import { EMPTY_MESSAGE } from '../e2e/harness.js'
+import { memoryIdle } from './memory/extractBeliefs.js'
+import { earlierLines, loadBrief } from './memory/brief.js'
 import { checkRead } from './theRead.js'
 import { buildEvidence } from './firstReading.js'
 import { MAX_NEW_SITUATIONS_PER_DAY } from './situations.js'
 
 const USER = { id: '11111111-1111-4111-8111-111111111111', email: 'founder@example.com' }
 const OTHER = { id: '22222222-2222-4222-8222-222222222222', email: 'other@example.com' }
-const ENV = { FRONTEND_URL: 'https://app.example.com' }
+const ENV = { FRONTEND_URL: 'https://app.example.com', LEARN_EVERY_MESSAGE: 'off', READ_GROUNDING: 'off' } // these tests count model calls; learnMessage.test.js covers memory, readGrounding.test.js the grounding check
 const NOW = Date.parse('2026-10-26T09:00:00.000Z')
 const FIRST = 'I have a demo ready but I have not emailed the clinics that asked for pricing three weeks ago.'
 const uuid = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
@@ -43,13 +46,13 @@ function withUniqueKeys(supabase) {
   }
 }
 
-async function setup(script = [], { signedUp = true, env = ENV } = {}) {
+async function setup(script = [], { signedUp = true, env = ENV, byName = {}, tables = {} } = {}) {
   const base = createFakeSupabase({
     users: { tok: USER, tok2: OTHER },
-    tables: signedUp ? { founder_profiles: [{ user_id: USER.id, signup_answers: FULL_ANSWERS }] } : {},
+    tables: { ...(signedUp ? { founder_profiles: [{ user_id: USER.id, signup_answers: FULL_ANSWERS }] } : {}), ...tables },
   })
   const supabase = withUniqueKeys(base)
-  const openai = createFakeOpenAI(script)
+  const openai = createFakeOpenAI(script, { byName })
   const app = createApp({ env, supabase, openai, clock: createFakeClock(NOW) })
   const server = app.listen(0)
   await new Promise((r) => server.once('listening', r))
@@ -65,7 +68,7 @@ async function setup(script = [], { signedUp = true, env = ENV } = {}) {
   }
   const rows = (t) => base.rows(t)
   const close = () => new Promise((r) => server.close(r))
-  return { url, call: as('tok'), callOther: as('tok2'), openai, rows, close }
+  return { url, call: as('tok'), callOther: as('tok2'), openai, rows, close, db: base }
 }
 
 const verdict = (over = {}) => JSON.stringify({
@@ -76,7 +79,7 @@ const verdict = (over = {}) => JSON.stringify({
 const enough = () => verdict({ question: '' })
 const readReply = (over = {}) => JSON.stringify({
   headline: 'You have not sent the price the clinics asked for.',
-  body: 'You wrote "I have a demo ready". You also wrote that the clinics asked for pricing three weeks ago. Nobody has had an answer since then. That is the open gap.',
+  body: 'The clinics wanted a price three weeks back and have heard nothing. The demo is not what they are waiting on. Each week of silence makes the next email harder to write.',
   closing_question: 'Have you gone back to either of those clinics since the demo?',
   ...over,
 })
@@ -368,7 +371,7 @@ test('the Read: an invented quote is retried once with the problem named, then a
     const id = (await create(call, 1)).body.situation_id
     const res = await call('POST', `/api/situations/${id}/read`)
     assert.equal(res.status, 200)
-    assert.match(res.body.body, /I have a demo ready/)
+    assert.match(res.body.body, /The clinics wanted a price/)
     assert.match(openai.calls[3].payload.messages.at(-1).content, /quoted words are not in the answers/)
     assert.equal(rows('model_usage_logs').length, 4)
     assert.equal(rows('reads')[0].source, 'model')
@@ -383,6 +386,23 @@ test('the Read: an invented number is retried with the problem named', async () 
     await call('POST', `/api/situations/${id}/read`)
     assert.match(openai.calls[3].payload.messages.at(-1).content, /number is not in the answers: 40/)
   } finally { await close() }
+})
+
+test('the Read: the grounding check runs by default (usage logged) and READ_GROUNDING=off switches it off', async () => {
+  const names = (openai) => openai.calls.map((c) => c.payload.response_format.json_schema.name)
+  const on = await setup([enough(), enough(), readReply()], { env: { FRONTEND_URL: 'https://app.example.com', LEARN_EVERY_MESSAGE: 'off' }, byName: { read_grounding: JSON.stringify({ unsupported: [] }) } })
+  try {
+    const id = (await create(on.call, 1)).body.situation_id
+    assert.equal((await on.call('POST', `/api/situations/${id}/read`)).status, 200)
+    assert.equal(names(on.openai).filter((n) => n === 'read_grounding').length, 1)
+    assert.equal(on.rows('model_usage_logs').length, 4) // two follow-ups, the Read and the grounding check: every call is logged
+  } finally { await on.close() }
+  const off = await setup([enough(), enough(), readReply()])
+  try {
+    const id = (await create(off.call, 1)).body.situation_id
+    await off.call('POST', `/api/situations/${id}/read`)
+    assert.equal(names(off.openai).includes('read_grounding'), false)
+  } finally { await off.close() }
 })
 
 test('the Read check: banned phrase, teaser and a closing line that is not a question all fail', () => {
@@ -411,11 +431,11 @@ test('the Read: two failures give the plain fallback, which quotes the founder a
     const res = await call('POST', `/api/situations/${id}/read`)
     assert.equal(res.status, 200)
     assert.equal(openai.calls.length, 4)
-    assert.match(res.body.body, /Here is what I have, in your words: "I have a demo ready but I have not emailed the clinics that asked for pricing three weeks ago"\./)
+    assert.match(res.body.body, /Here is what I have, in your words: "I have a demo ready but I have"\./)
     assert.equal(rows('reads')[0].source, 'fallback')
     assert.equal(rows('model_usage_logs').length, 4)
     const answerTexts = [...buildEvidence(FULL_ANSWERS).answerTexts, FIRST]
-    assert.equal(checkRead({ read: res.body, answerTexts }).ok, true)
+    assert.equal(checkRead({ read: res.body, answerTexts, fallback: true }).ok, true)
   } finally { await close() }
 })
 
@@ -458,6 +478,22 @@ test('the talk after the Read replies, then asks; the line shown is reply plus q
     assert.deepEqual(res.body, { status: 'talk', situation_id: id, reply: 'Three weeks since the demo and no word to the clinics. What do you want the clinics to do after the demo?' })
     assert.equal(rows('reads')[0].answered_at, null)
     assert.deepEqual((await call('GET', `/api/situations/${id}`)).body.read.talk.map((t) => t.role), ['founder', 'axiom'])
+  } finally { await close() }
+})
+
+// Replay 4: a bare number got "You said the part that takes the most time is ..., 16 units of time". Both are sent back.
+test('the talk after the Read never says "You said" about something they did not say, nor gives a number a unit they never put on it', async () => {
+  const invented = talkLine({ reply: 'You said the demo is the part that takes the most time, 5 units of time.', question: 'What does the 5 count?' })
+  const { call, openai, close } = await setup([enough(), enough(), readReply(), invented, talkLine()])
+  try {
+    const id = (await create(call, 1)).body.situation_id
+    await call('POST', `/api/situations/${id}/read`)
+    const res = await call('POST', `/api/situations/${id}/read/answer`, { text: 'No, I have not contacted them since the demo, 5.' })
+    assert.equal(res.body.reply, 'Three weeks since the demo and no word to the clinics. What do you want the clinics to do after the demo?')
+    const talk = openai.calls.filter((c) => c.payload.response_format.json_schema.name === 'read_talk')
+    assert.equal(talk.length, 2)
+    assert.match(talk[1].payload.messages.at(-1).content, /not something they said/)
+    assert.match(talk[1].payload.messages.at(-1).content, /never put after it: 5 unit/)
   } finally { await close() }
 })
 
@@ -581,5 +617,84 @@ test('later steps never send the sign-up answers to the model', async () => {
     const id = (await create(call, 1)).body.situation_id
     await call('POST', `/api/situations/${id}/read`)
     for (const c of openai.calls) assert.ok(!c.payload.messages.some((m) => /sign_up_answers/.test(m.content)))
+  } finally { await close() }
+})
+
+// Rafay, Nov 19: memory learns from every founder message, not only after a report. One message, one background pass.
+const memoryReply = (...pairs) => JSON.stringify({ ...EMPTY_MESSAGE, new_beliefs: pairs.map(([belief, snippet]) => ({ belief, kind: 'fact', snippet, shifts_from: '' })) })
+
+test('memory: the first message, the Read answer and a Read talk reply are each remembered from their own source', async () => {
+  const TALK = 'I want both clinics to start a paid pilot this month.'
+  const byName = { beliefs_message: memoryReply(
+    ['Has a demo ready.', 'I have a demo ready'],
+    ['Has not contacted the clinics since the demo.', 'I have not contacted them since the demo'],
+    ['Wants both clinics on a paid pilot this month.', 'start a paid pilot this month'],
+  ) }
+  const { call, rows, close } = await setup([enough(), enough(), readReply(), talkLine(), allKnown()], { env: { FRONTEND_URL: 'https://app.example.com', READ_GROUNDING: 'off' }, byName })
+  try {
+    const id = (await create(call, 1)).body.situation_id
+    await call('POST', `/api/situations/${id}/read`)
+    await call('POST', `/api/situations/${id}/read/answer`, { text: ANSWER })
+    await call('POST', `/api/situations/${id}/read/answer`, { text: TALK })
+    await memoryIdle()
+    const talkTurn = rows('situation_turns').find((t) => t.text === TALK)
+    const firstTurn = rows('situation_turns').find((t) => t.text === FIRST)
+    assert.deepEqual(rows('memory_evidence').map((e) => [e.source_kind, e.source_id]).sort(), [
+      ['read', rows('reads')[0].id], ['read', talkTurn.id], ['situation', firstTurn.id], ['situation', id], // the last: the situation's own thread, made when the Read was created
+    ].sort())
+    assert.equal(rows('founder_beliefs').length, 3)
+    assert.deepEqual(rows('founder_threads').map((t) => [t.title, t.kind]), [[rows('situations')[0].title, 'open_question']])
+    assert.equal(rows('memory_runs').length, 0)
+  } finally { await close() }
+})
+
+test('memory: a filler reply and a switched-off learner make no memory call', async () => {
+  const byName = { beliefs_message: memoryReply(['Has a demo ready.', 'I have a demo ready']) }
+  const filler = await setup([], { env: { FRONTEND_URL: 'https://app.example.com' }, byName })
+  try {
+    assert.equal((await create(filler.call, 1, 'ok')).body.status, 'say_more')
+    await memoryIdle()
+    assert.equal(filler.openai.calls.length, 0)
+  } finally { await filler.close() }
+  const off = await setup([enough(), enough()], { byName })
+  try {
+    await create(off.call, 1)
+    await memoryIdle()
+    assert.equal(off.rows('memory_evidence').length, 0)
+  } finally { await off.close() }
+})
+
+// Rafay, Nov 19 (real replay): sign-up said "under 15 hours", the Read answer was a bare "16". The server must name both.
+test('15 then a bare 16: the Read talk gets the notice and must name both, and memory keeps both numbers', async () => {
+  const OLD = uuid(900)
+  const SAID = 'I order the products myself, and it takes my hours at the weekends.'
+  const old = { id: OLD, user_id: USER.id, belief: 'Works evenings and weekends, under 15 hours a week.', kind: 'fact', confidence: 0.5, source: 'signup', status: 'active', created_at: '2026-10-20T00:00:00Z', updated_at: '2026-10-20T00:00:00Z' }
+  const read = readReply({
+    headline: 'Ordering everything yourself takes hours that nothing else gets.',
+    body: 'You order the products yourself at the weekends, so every other job waits. The hours the ordering takes decide what is left for the rest.',
+    closing_question: 'At the weekends, how many hours does the ordering take you?',
+  })
+  const missesNew = talkLine({ reply: 'Ordering at the weekends takes your hours.', question: 'What does the ordering involve each week?' })
+  const namesBothNumbers = talkLine({ reply: 'You said under 15 hours before, and now you say 16.', question: 'What changed in your weekends?' })
+  const shift = JSON.stringify({ ...EMPTY_MESSAGE, new_beliefs: [{ belief: 'Said under 15 hours at sign-up, then 16 hours a week now.', kind: 'fact', snippet: '16', shifts_from: OLD }] })
+  const { call, openai, rows, db, close } = await setup([enough(), enough(), read, missesNew, namesBothNumbers], { env: { FRONTEND_URL: 'https://app.example.com', READ_GROUNDING: 'off' }, byName: { beliefs_message: shift }, tables: { founder_beliefs: [old] } })
+  try {
+    const id = (await create(call, 1, SAID)).body.situation_id
+    await call('POST', `/api/situations/${id}/read`)
+    const res = await call('POST', `/api/situations/${id}/read/answer`, { text: '16' })
+    await memoryIdle()
+    const talk = openai.calls.filter((c) => c.payload.response_format.json_schema.name === 'read_talk')
+    assert.equal(talk.length, 2)
+    const notice = (c) => c.payload.messages.filter((m) => m.role === 'system' && m.content.startsWith('The founder said'))
+    assert.equal(notice(talk[0]).length, 1)
+    assert.match(notice(talk[0])[0].content, /and now says 16 hours\. Open by naming both/)
+    assert.match(talk[1].payload.messages.at(-1).content, /name both numbers, 15 and 16/)
+    assert.equal(res.body.reply, 'You said under 15 hours before, and now you say 16. What changed in your weekends?')
+    // memory: the bare 16 was learned, the old fact is still active, and the next brief holds both numbers
+    const facts = rows('founder_beliefs')
+    assert.equal(facts.length, 2)
+    assert.equal(facts.find((b) => b.id === OLD).status, 'active')
+    const lines = earlierLines(await loadBrief(db, USER.id, `${SAID}\n16`, NOW))
+    assert.ok(lines.some((l) => l.includes('under 15')) && lines.some((l) => l.includes('now says 16')), lines.join('|'))
   } finally { await close() }
 })

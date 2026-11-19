@@ -69,9 +69,80 @@ export function unquoteUnknown(text, answerTexts) {
   return String(text ?? '').replace(/["\u201C]([^"\u201C\u201D]+)["\u201D]/g, (whole, inner) => (inAnswers(inner) || !reworded(inner) ? whole : inner))
 }
 
-// reading: { headline, body, underlines }. answerTexts: every string the
-// founder typed or chose, one array item per answer. Returns { ok, problems }.
-export function checkFirstReading({ reading, answerTexts }) {
+const MAX_QUOTE_WORDS = 8
+const RESTATE_RUN = 6
+const HEADLINE_RUN = 4 // the headline and the closing question carry no quote and no run this long of the founder's words
+const wordsOf = (text) => norm(text).match(/[\p{L}\p{N}']+/gu) ?? []
+const runs = (words, n) => words.slice(0, Math.max(0, words.length - n + 1)).map((_, i) => words.slice(i, i + n).join(' '))
+
+// A reading says what the founder has not said. The body may carry one short quote and no longer run of their words;
+// the headline and the closing question (a Read only) carry none.
+function restatingProblems(headline, body, closing, answerTexts) {
+  const problems = []
+  if ([headline, body].some((t) => /^you (wrote|said)\b/.test(norm(t)))) problems.push('it opens with "You wrote" or "You said": lead with what they have not said')
+  const phrases = [...new Set(quotedPhrases(body).phrases)] // the same quote said twice is one quote
+  if (phrases.length > 1) problems.push('more than one quote: use at most one')
+  if (phrases.some((p) => wordsOf(p).length > MAX_QUOTE_WORDS)) problems.push(`a quote is longer than ${MAX_QUOTE_WORDS} words`)
+  const theirs = (n) => new Set(answerTexts.flatMap((a) => runs(wordsOf(a), n)))
+  const unquoted = (t) => wordsOf(norm(t).replace(/"[^"]*"/g, ' '))
+  if (runs(unquoted(body), RESTATE_RUN).some((r) => theirs(RESTATE_RUN).has(r))) problems.push(`it repeats ${RESTATE_RUN} or more words in a row of what they wrote: say what they have not said`)
+  // Only a Read has a closing question; a first reading's headline may echo the option the founder picked.
+  for (const [name, t] of closing === null ? [] : [['headline', headline], ['closing question', closing]]) {
+    if (quotedPhrases(t).phrases.length > 0) problems.push(`the ${name} quotes the founder: use your own words there`)
+    else if (runs(wordsOf(t), HEADLINE_RUN).some((r) => theirs(HEADLINE_RUN).has(r))) problems.push(`the ${name} repeats ${HEADLINE_RUN} or more words in a row of what they wrote: use your own words there`)
+  }
+  return problems
+}
+
+// "Not X, it is Y" in any form, even across a sentence break ("You are not saying X. You are saying Y."). Rafay, Nov 19:
+// the clever contrast reads as a trick. Low false positives first: "not just X but also Y", "not sure, but" and a
+// condition ("if it is not working, you are stuck") pass.
+const NEGATION = String.raw`(?:\b(?:is|are|was|were|am) not|(?:'s|'re|'m) not|\b(?:isn|aren|wasn|weren)'t)\b(?! (?:just|only|merely|simply|sure|yet|quite)\b)`
+const CONTRAST = [
+  new RegExp(`${NEGATION}[^.!?;]{1,40}?,? (?:but|rather|instead)\\b`, 'g'),
+  new RegExp(`${NEGATION}[^.!?;]{1,50}?[.,;\u2014]\\s*(?:it|this|that|you|they|we|i)(?:'s|'re|'m| is| are| am)\\b`, 'g'),
+  // The softer form (replay 4): ", not what sounds workable". "not just/only" and a plain "I am not sure" do not match.
+  /,\s*not (?:what|how|who|when|where|whether|that|the way)\b/g,
+]
+export function contrastProblem(text) {
+  const t = norm(text)
+  for (const rx of CONTRAST) {
+    for (const m of t.matchAll(rx)) {
+      const sentence = t.slice(0, m.index).split(/[.!?;]/).pop()
+      if (!/\b(if|when|unless|once|since|because|while|until|whether)\b/.test(sentence)) return 'a "not X, it is Y" contrast: say what is true once, plainly, without the contrast'
+    }
+  }
+  return null
+}
+
+// [{ number: '16', unit: 'hour' }] for each digit number followed by a word ("16 hours a week"); function words after a number are no unit.
+const UNIT_SKIP = new Set(['a', 'an', 'the', 'of', 'per', 'more', 'new', 'about', 'or', 'to', 'and', 'in', 'on', 'at', 'for', 'by', 'with', 'from', 'is', 'are', 'as', 'but', 'so', 'then', 'times', 'out', 'you', 'your', 'they', 'it', 'we', 'i', 'that', 'this', 'was', 'were', 'gave', 'said'])
+export const unitStem = (w) => w.replace(/^hrs?$/, 'hour').replace(/s$/, '')
+export const numberUnits = (text) => [...norm(text).matchAll(/(\d[\d,]*(?:\.\d+)?)(?:k|m)?\s+([a-z]+)/g)]
+  .filter((m) => !UNIT_SKIP.has(m[2])).map((m) => ({ number: m[1].replace(/,/g, ''), unit: unitStem(m[2]) }))
+
+// The "16 hour" pairs in the texts, and the first number in `text` followed by a word the founder never put after it.
+export const pairsOf = (texts) => new Set(texts.flatMap(numberUnits).map((p) => `${p.number} ${p.unit}`))
+export const looseUnit = (text, pairs) => numberUnits(text).find((p) => !pairs.has(`${p.number} ${p.unit}`)) ?? null
+
+// "You said / wrote / told me / mentioned <clause>" must be something they said: at least 80% of the clause's content words
+// (numbers count) are in `sources`. Words that only point back ("before", "sign-up") do not count. Null when fine.
+const SAID = /\byou (?:said|wrote|told me|mentioned)\b(?: that)?\s+([^.!?;\n]+)/g
+const SAID_SKIP = new Set(['the', 'and', 'that', 'this', 'with', 'for', 'you', 'your', 'are', 'was', 'were', 'have', 'has', 'had', 'not', 'but', 'from', 'they', 'them', 'their', 'about', 'what', 'when', 'which', 'would', 'could', 'will', 'can', 'its', 'into', 'than', 'then', 'also', 'just', 'been', 'being', 'some', 'any', 'all', 'too', 'very', 'here', 'there', 'how', 'who', 'why', 'before', 'earlier', 'now', 'again', 'already', 'sign', 'signup', 'myself', 'yourself', 'week', 'weeks', 'weekly', 'day', 'days', 'daily', 'month', 'months', 'monthly']) // the period of a number is inferred ("evenings and weekends" is a week)
+const saidWords = (t) => (norm(t).match(/[\p{L}\p{N}']+/gu) ?? []).filter((w) => /\d/.test(w) || (w.length >= 3 && !SAID_SKIP.has(w))).map((w) => (/\d/.test(w) ? w : w.slice(0, 4)))
+export function saidProblem(text, sources) {
+  const theirs = new Set(sources.flatMap(saidWords))
+  for (const m of norm(text).matchAll(SAID)) {
+    const words = saidWords(m[1])
+    if (words.length > 0 && words.filter((w) => theirs.has(w)).length / words.length < 0.8) return `"You said ${m[1].split(' ').slice(0, 6).join(' ')}..." is not something they said: say only what they said, in their own words`
+  }
+  return null
+}
+
+// reading: { headline, body, underlines, closing_question? } (a Read has the closing question). answerTexts: every string the
+// founder typed or chose, one array item per answer. earlierTexts: what they said before (sign-up),
+// the source of a number or a month but never of a quote. Returns { ok, problems }.
+export function checkFirstReading({ reading, answerTexts, earlierTexts = [] }) {
   const problems = []
   const corpus = answerTexts.map(norm).filter(Boolean)
   const inAnswers = inAnswersOf(answerTexts)
@@ -79,7 +150,8 @@ export function checkFirstReading({ reading, answerTexts }) {
   if (!reading || typeof reading.headline !== 'string' || typeof reading.body !== 'string' || !Array.isArray(reading.underlines)) {
     return { ok: false, problems: ['reading has the wrong shape'] }
   }
-  const text = `${reading.headline}\n${reading.body}`
+  const closing = typeof reading.closing_question === 'string' ? reading.closing_question : null
+  const text = `${reading.headline}\n${reading.body}\n${closing ?? ''}`
   const lower = norm(text)
 
   // Quotes
@@ -88,6 +160,15 @@ export function checkFirstReading({ reading, answerTexts }) {
   for (const phrase of phrases) {
     if (!inAnswers(phrase)) problems.push(`quoted words are not in the answers: "${phrase}"`)
   }
+
+  if (/[_*#`[\]{}]/.test(text)) problems.push('markup characters (_ * # ` [ ] { }) in the reading: plain words only')
+  if (/\bunderlines?\b/.test(lower)) problems.push('the word "underline" is in the text: it is not for the founder to read')
+  // A sign-up option label ("wait-and-collect-more") glued into prose: only a hyphenated word the founder typed may stay.
+  for (const label of new Set(lower.match(/\b[a-z]+(?:-[a-z]+){2,}\b/g) ?? [])) {
+    if (!inAnswers(label)) problems.push(`a hyphenated label that is not theirs: ${label}. Use plain words`)
+  }
+  const contrast = contrastProblem(text)
+  if (contrast) problems.push(contrast)
 
   // Underlines
   if (reading.underlines.length > MAX_UNDERLINES) problems.push(`more than ${MAX_UNDERLINES} underlines`)
@@ -99,14 +180,16 @@ export function checkFirstReading({ reading, answerTexts }) {
   }
 
   // Numbers and months
-  const known = new Set(answerTexts.flatMap(numbersIn))
+  const known = new Set([...answerTexts, ...earlierTexts].flatMap(numbersIn))
   for (const n of new Set(numbersIn(text))) {
     if (!known.has(n)) problems.push(`number is not in the answers: ${n}`)
   }
-  const corpusJoined = corpus.join('\n')
+  const corpusJoined = [...corpus, ...earlierTexts.map(norm)].join('\n')
   for (const month of MONTHS) {
     if (wordRx(month).test(lower) && !wordRx(month).test(corpusJoined)) problems.push(`date is not in the answers: ${month}`)
   }
+
+  problems.push(...restatingProblems(reading.headline, reading.body, closing, answerTexts))
 
   // Voice
   for (const banned of BANNED_PHRASES) {

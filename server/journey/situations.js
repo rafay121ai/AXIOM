@@ -8,10 +8,11 @@ import { stripFiller, isFillerReply } from './filler.js'
 import { SITUATION_SCHEMA, situationMessages } from './prompts/situation.js'
 import { READ_TALK_SCHEMA, readTalkMessages } from './prompts/readTalk.js'
 import { createRead } from './theRead.js'
-import { BANNED_PHRASES, norm, wordRx } from './ownWords.js'
+import { BANNED_PHRASES, contrastProblem, looseUnit, norm, pairsOf, saidProblem, wordRx } from './ownWords.js'
 import { styleOf } from './prompts/style.js'
 import { loadTrackRecord } from './memory/trackRecord.js'
-import { loadBrief } from './memory/brief.js'
+import { earlierLines, loadBrief } from './memory/brief.js'
+import { conflictProblem, earlierAllowed, findConflict, namesBothAndAsks } from './memory/conflicts.js'
 
 export const MAX_NEW_SITUATIONS_PER_DAY = 5
 export const TEXT_MAX = 2000
@@ -45,7 +46,16 @@ const titleOk = (title, founderTexts) => {
 }
 const busy = () => new HttpError(409, { error: 'This turn is still being processed. Try again in a moment.', code: 'turn_busy' })
 
-export function createSituations({ supabase, callStructured, clock, log = () => {} }) {
+// The reply claims nothing they did not say: no invented "You said ...", no number with a word they never put after it.
+const ownWordsProblems = (text, sources, ownPairs) => {
+  const said = saidProblem(text, sources)
+  const loose = looseUnit(text, ownPairs)
+  return [...(said ? [said] : []), ...(loose ? [`a number with a word they never put after it: ${loose.number} ${loose.unit}. Say the number the way they said it`] : [])]
+}
+
+// learn: remembers one founder message in the background (memory/learnMessage.js); openThread: stores the situation's one open thread once its Read exists; both no-ops until wired.
+// readGrounding: { isCapped } checks each Read for claims the founder never made (theRead.js); null is off.
+export function createSituations({ supabase, callStructured, clock, log = () => {}, learn = () => {}, openThread = () => {}, readGrounding = null }) {
   const iso = () => new Date(clock.now()).toISOString()
   const one = async (query) => {
     const { data, error } = await query
@@ -70,6 +80,9 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
   const founderTextsOf = (turns) => turns.filter((t) => t.role === 'founder' && !t.filler).map((t) => t.text)
   // The talk after the Read lives in situation_turns, marked in result (Rafay, Nov 9).
   const isReadTalk = (t) => t.result?.read_talk === true
+  // Up to the last turns before this message, read only if the pass gets that far.
+  const contextOf = (situationId, exceptId, extra = []) => async () =>
+    [...(await turnsOf(situationId)).filter((t) => !t.filler && t.id !== exceptId).map((t) => ({ role: t.role, text: t.text })), ...extra]
 
   // ── Counting: the follow-up cap and the daily limit ────────────────────────
 
@@ -111,6 +124,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     const conversation = turns.filter((t) => !t.filler).map((t) => ({ role: t.role, text: t.text }))
     const sources = founderTextsOf(turns)
     const brief = await loadBrief(supabase, userId, sources.join('\n'))
+    const conflict = findConflict({ transcript: conversation, earlier: earlierLines(brief) }) // notice only: a follow-up question is not forced to name it
     let problems = null
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       try {
@@ -121,7 +135,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
           maxCompletionTokens: 400,
           userId,
           usageContext: { step: 'followup', kind: 'situation_turn', situation_id: situation.id },
-          messages: situationMessages({ conversation, followUpsLeft, brief }, problems),
+          messages: situationMessages({ conversation, followUpsLeft, brief, conflict }, problems),
         })
         const base = { topic: data.topic, title: data.title.trim() }
         if (followUpsLeft <= 0) return { ...base, enough: true, question: null }
@@ -175,6 +189,8 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     try {
       const result = await decide({ userId, situation, text, clientTurnId, first })
       await one(supabase.from('situation_turns').update({ result }).eq('id', claim.data.id).select('id'))
+      // A topic change was already remembered by the new situation's own turn.
+      if (!result.started_new) learn({ userId, sourceKind: 'situation', sourceId: claim.data.id, situationId: situation.id, text, context: contextOf(situation.id, claim.data.id) })
       return result
     } catch (err) {
       // Free the turn id so the app can send it again.
@@ -277,6 +293,17 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
       : [],
   })
 
+  // What the first reading said, so the Read does not repeat it. null when there is none or it cannot be read.
+  async function firstReadingOf(userId) {
+    try {
+      const { data } = await supabase.from('founder_profiles').select('first_reading').eq('user_id', userId).maybeSingle()
+      return data?.first_reading ?? null
+    } catch (err) {
+      log('first reading lookup failed', err)
+      return null
+    }
+  }
+
   async function read({ userId, situationId }) {
     const situation = await ownSituation(userId, situationId)
     const stored = await readOf(situation.id)
@@ -290,7 +317,9 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
       style: await styleOf(supabase, userId),
       trackRecord: await loadTrackRecord(supabase, userId, log),
       brief: await loadBrief(supabase, userId, founderTextsOf(turns).join('\n')),
+      firstReading: await firstReadingOf(userId),
       deps: { callStructured, userId, log },
+      grounding: readGrounding,
     })
     const inserted = await supabase.from('reads').insert({
       situation_id: situation.id, headline: made.headline, body: made.body,
@@ -299,6 +328,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     if (inserted.error?.code === '23505') return { situation_id: situation.id, ...readView(await readOf(situation.id)) }
     if (inserted.error) throw inserted.error
     await one(supabase.from('situations').update({ last_activity_at: iso() }).eq('id', situation.id).select('id'))
+    openThread({ userId, situationId: situation.id })
     return { situation_id: situation.id, ...readView(inserted.data) }
   }
 
@@ -319,13 +349,15 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
 
     if (!stored.closing_answer) {
       // First answer wins; a second tap that lost the race carries on with the stored one.
-      await one(supabase.from('reads').update({ closing_answer: text }).eq('id', stored.id).is('closing_answer', null).select('id'))
+      const won = await one(supabase.from('reads').update({ closing_answer: text }).eq('id', stored.id).is('closing_answer', null).select('id'))
+      if (won.length > 0) learn({ userId, sourceKind: 'read', sourceId: stored.id, situationId: situation.id, text, closing: true, context: contextOf(situation.id, null, [{ role: 'axiom', text: stored.closing_question }]) })
     } else {
       const talk = (await turnsOf(situation.id)).filter(isReadTalk)
       // shortcut: a resend of the same text after a dropped reply is not stored twice; no client turn id on this route yet.
       const last = talk.at(-1)
       if (!(last?.role === 'founder' && last.text === text)) {
-        await one(supabase.from('situation_turns').insert({ situation_id: situation.id, role: 'founder', text, filler: false, result: { read_talk: true }, created_at: iso() }).select('id'))
+        const [added] = await one(supabase.from('situation_turns').insert({ situation_id: situation.id, role: 'founder', text, filler: false, result: { read_talk: true }, created_at: iso() }).select('id'))
+        if (added) learn({ userId, sourceKind: 'read', sourceId: added.id, situationId: situation.id, text, context: contextOf(situation.id, added.id) })
       }
     }
     await one(supabase.from('situations').update({ last_activity_at: iso() }).eq('id', situation.id).select('id'))
@@ -354,6 +386,9 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     const situationTalk = turns.filter((t) => !t.filler && !isReadTalk(t)).map((t) => ({ role: t.role, text: t.text }))
     const sources = [...founderTextsOf(turns), row.closing_answer]
     const brief = await loadBrief(supabase, userId, sources.join('\n'))
+    const earlier = earlierLines(brief)
+    const conflict = findConflict({ transcript: [...situationTalk, { role: 'axiom', text: row.closing_question }, ...talk], earlier })
+    const ownPairs = pairsOf([...sources, ...earlierAllowed(conflict), ...(conflict ? [conflict.nowText] : [])])
     let problems = null
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       try {
@@ -364,7 +399,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
           maxCompletionTokens: 400,
           userId,
           usageContext: { step: 'followup', kind: 'read_talk', situation_id: situation.id },
-          messages: readTalkMessages({ situation: situationTalk, read: { headline: row.headline, body: row.body, closing_question: row.closing_question }, talk, questionsLeft: MAX_READ_QUESTIONS - asked, brief }, problems),
+          messages: readTalkMessages({ situation: situationTalk, read: { headline: row.headline, body: row.body, closing_question: row.closing_question }, talk, questionsLeft: MAX_READ_QUESTIONS - asked, brief, conflict, firstReading: await firstReadingOf(userId) }, problems),
         })
         if (data.asked_to_learn) return null
         if (asked >= MIN_READ_QUESTIONS && data.knows_goal && data.knows_blocker && data.knows_detail) return null
@@ -373,7 +408,9 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
         const verdict = checkHook({ text: question, sources })
         const replyProblems = !reply ? ['the reply is empty: answer what they just said first']
           : reply.includes('?') ? ['the reply holds a question: one question only, in question']
-            : threadKinds(reply, sources).length === 0 ? ['the reply says nothing of theirs: use their own words'] : []
+            : threadKinds(reply, sources).length === 0 ? ['the reply says nothing of theirs: use their own words']
+              : conflict?.strong && !namesBothAndAsks(`${reply} ${question}`, conflict) ? [conflictProblem(conflict)]
+                : contrastProblem(`${reply} ${question}`) ? [contrastProblem(`${reply} ${question}`)] : ownWordsProblems(`${reply} ${question}`, [...sources, ...earlierAllowed(conflict), ...(conflict ? [conflict.nowText] : [])], ownPairs)
         if (verdict.ok && replyProblems.length === 0 && question.length <= 220) return `${reply} ${question}`
         problems = [...replyProblems, ...verdict.problems]
       } catch (err) {

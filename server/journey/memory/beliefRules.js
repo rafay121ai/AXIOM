@@ -15,6 +15,9 @@ const PATTERN_FEW_EVIDENCE_CAP = 0.5
 const FACT_DECAY_DAYS = 90
 const FACT_DECAY_STEP = 0.1
 export const USE_THRESHOLD = 0.4
+// Sign-up answers are the founder's own words about themselves, so they are usable a little below what behaviour has to earn (old rows were stored at 0.35).
+export const SIGNUP_USE_THRESHOLD = 0.35
+export const isUsable = (row) => row.confidence >= (row.source === 'signup' ? SIGNUP_USE_THRESHOLD : USE_THRESHOLD)
 export const TRAIT_MIN_OBSERVATIONS = 3
 export const TRAIT_MIN_SITUATIONS = 2
 export const SELF_REPORT_CAP = 0.5
@@ -81,7 +84,9 @@ export const PERSONALITY_LABELS = Object.freeze([
 ])
 export const SENSITIVE = Object.freeze([
   // health and illness, diagnoses
-  /\b(health|healthy|sick|ill|illness|disease|cancer|diabet\w*|surgery|hospital\w*|medicat\w*|therap\w*|pregnan\w*|disabilit\w*|disabled|adhd|autis\w*|ocd|bipolar|diagnos\w*|injur\w*|chronic|burn ?out|burned out|burnt ?out)\b/,
+  /\b(health|healthy|sick|illness|disease|cancer|diabet\w*|surgery|hospital\w*|medicat\w*|therap\w*|pregnan\w*|disabilit\w*|disabled|adhd|autis\w*|ocd|bipolar|diagnos\w*|injur\w*|chronic|burn ?out|burned out|burnt ?out)\b/,
+  // "ill" alone is how many people type "I'll" ("Ill do it tomorrow"); it counts as sickness after a verb of being or falling, unless a plain verb follows it
+  /\b(?:am|is|are|was|were|be|been|feel|feeling|felt|got|get|getting|fell|fall|falls|fallen|falling|became|become|becomes|becoming|still|off|so|very|really|too|seriously|badly) ill\b(?! (?:do|give|be|have|get|go|send|see|call|take|make|try|let|just|ask|need|handle|hire|check|talk|work|start|finish|share|tell|pay|order|buy|hand|delegate|add|write|find|help|put|run|reach|come|follow|pick|focus|spend|use)\b)|\bi'?m ill\b/,
   // mood
   /\b(depress\w*|anxi\w*|stress\w*|nervous|frustrat\w*|angry|overwhelm\w*|lonely|sad|panic\w*|mood\w*|hopeless|suicid\w*|self.harm\w*|grief|grieving|mental)\b/,
   // family and relationships

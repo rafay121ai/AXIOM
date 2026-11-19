@@ -77,3 +77,13 @@ test('a reply to a question about an author must answer from that author', () =>
   assert.ok(!checkReply({ data: answer, mode: 'reply', evidence: two, founderTexts: founder, asked }).problems.some((p) => p.includes('asked about')))
   assert.ok(!checkReply({ data: dodge, mode: 'reply', evidence: two, founderTexts: founder, asked: 'What should I ask first?' }).problems.some((p) => p.includes('asked about')))
 })
+
+// Rafay, Nov 19: Axiom may name an earlier statement once ("you said under 15 hours"), so its number is allowed; an invented one is not.
+test('a number from an earlier statement is allowed in a reply, an invented one is not', () => {
+  const said = ['I need 16 hours a week for ordering products and I have a prototype']
+  const data = (n) => ({ reply: `You said under ${n} hours at sign-up and now 16 hours a week for ordering products. What changed?`, citations: [] })
+  const check = (n, earlierTexts) => checkReply({ data: data(n), mode: 'reply', evidence: [], founderTexts: said, earlierTexts }).problems
+  assert.ok(check(15, []).some((p) => p.includes('number the founder never gave: 15')))
+  assert.deepEqual(check(15, ['Works evenings and weekends, under 15 hours a week.']), [])
+  assert.ok(check(14, ['Works evenings and weekends, under 15 hours a week.']).some((p) => p.includes('never gave: 14')))
+})

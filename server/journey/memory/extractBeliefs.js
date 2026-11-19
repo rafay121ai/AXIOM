@@ -10,7 +10,8 @@
 // and never an earlier write twice. Confidence arithmetic lives in
 // beliefRules.js. Never throws (memory plan, Revision 2).
 import { isFillerReply, stripFiller } from '../filler.js'
-import { norm, wordRx } from '../ownWords.js'
+import { norm, numberUnits, unitStem, wordRx } from '../ownWords.js'
+import { STOP } from '../hooks.js'
 import { createSharing } from '../report/sharing.js'
 import {
   LIMITS, MAX_NEW_PER_RUN, NEW_FACT_CONFIDENCE, NEW_PATTERN_CONFIDENCE, checkBeliefText, cleanStoredText, decayFact, isBlocked, isTraitValue,
@@ -20,6 +21,7 @@ import { createMemoryStore } from './memoryStore.js'
 import { BELIEFS_SCHEMA, FACTS_ONLY_SCHEMA, beliefsMessages } from './prompts/beliefs.js'
 
 const MAX_NEW_THREADS = 2
+const MAX_NEW_MESSAGE_THREADS = 1 // one message settles one open decision
 const VOCAB_CONFIDENCE = 0.5
 
 const squash = (t) => norm(t).replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
@@ -41,6 +43,13 @@ export const isCorrected = (corrections, table, text) => {
     if (s === old) return true
     return c.reason === 'wrong' && (table === 'founder_beliefs' || table === 'founder_threads') && rewordedFrom(s, old)
   })
+}
+// A stored belief may not give a number a unit or noun that neither the message nor the question it answered holds:
+// a bare "16" answering "how long does a session take" is not "16 minutes" (live, Nov 19).
+const topicWords = (s) => (norm(s).match(/[a-z]{4,}/g) ?? []).filter((w) => !STOP.has(w)).map(unitStem)
+const addsUnit = (text, sources) => {
+  const known = new Set(sources.flatMap((s) => norm(s).match(/[a-z]+/g) ?? []).map(unitStem))
+  return numberUnits(text).some((p) => !known.has(p.unit))
 }
 const typedBy = (text, sources) => sources.some((s) => wordRx(norm(text)).test(norm(s)))
 
@@ -74,12 +83,12 @@ const rows = (x) => (Array.isArray(x) ? x.filter((i) => i && typeof i === 'objec
 
 // data: the model's output. founderTexts: what the founder wrote. moveTexts:
 // the move record (receipts for behaviour only, never names). receipt(snippet):
-// where the snippet came from, { sourceKind, sourceId?, sourceKey? }. cap: the
+// where the snippet came from, { sourceKind, sourceId?, sourceKey? }. question: the Axiom question a message answered (mode 'message'). cap: the
 // most a new belief may start at (the sign-up pass uses the self-report cap).
 // claim(): called once, after everything is checked and before the first write;
 // false (the run was already recorded by someone else) writes nothing.
 // Returns counts of what was written, or null when the claim was refused.
-export async function applyExtraction({ store, userId, data, mode, founderTexts, moveTexts = [], moveId = null, receipt, beliefSource, nowMs, corrections = [], cap = 1, claim = null, log = () => {} }) {
+export async function applyExtraction({ store, userId, data, mode, founderTexts, moveTexts = [], moveId = null, receipt, beliefSource, nowMs, corrections = [], question = '', cap = 1, claim = null, log = () => {} }) {
   const full = mode === 'full'
   const sourcesFor = (kind) => (kind === 'fact' ? founderTexts : [...founderTexts, ...moveTexts])
   const corrected = (table, text) => isCorrected(corrections, table, text)
@@ -87,14 +96,15 @@ export async function applyExtraction({ store, userId, data, mode, founderTexts,
   const snippetOf = (raw, sources) => {
     const snippet = cleanStoredText(raw)
     const [min, max] = LIMITS.snippet
-    const ok = typeof raw === 'string' && snippet.length >= min && snippet.length <= max && !isFillerReply(snippet, { minWords: 2 })
+    const ok = typeof raw === 'string' && snippet.length >= min && snippet.length <= max && !isFillerReply(snippet, { minWords: /\d/.test(snippet) ? 1 : 2 })
       && stripFiller(snippet).text !== '' && snippetInSource(snippet, sources) && !isBlocked(snippet)
     return ok ? snippet : null
   }
   // The cleaned text to store, or null. Names must be the founder's own words, never Axiom's.
-  const textOf = (field, raw, sources) => {
+  // numberSources: more texts whose numbers and dates may appear (a shift names the old number); never for names or snippets.
+  const textOf = (field, raw, sources, numberSources = []) => {
     if (typeof raw !== 'string') return null
-    const checked = checkBeliefText({ text: raw, sourceTexts: sources, ownTexts: founderTexts, field })
+    const checked = checkBeliefText({ text: raw, sourceTexts: [...sources, ...numberSources], ownTexts: founderTexts, field })
     return checked.ok ? checked.text : null
   }
 
@@ -104,6 +114,7 @@ export async function applyExtraction({ store, userId, data, mode, founderTexts,
   const counts = { ...(await store.evidenceCounts(userId, 'founder_beliefs')), ...(await store.evidenceCounts(userId, 'founder_traits')) }
   const traits = full ? await store.activeTraits(userId) : []
   const open = new Set((await store.openThreads(userId)).map((t) => squash(t.title)))
+  const openTitles = [...open]
 
   // Checking is pure: it decides what to write and changes nothing. `ops` are the writes, in order.
   const ops = []
@@ -111,6 +122,7 @@ export async function applyExtraction({ store, userId, data, mode, founderTexts,
   const taken = new Set(beliefs.map((b) => squash(b.belief)))
   const done = { beliefs: 0, traits: 0, world: 0, vocabulary: 0, threads: 0 }
   let created = 0
+  const shifts = new Set()
   // A snippet only in the move record is the move's, not the founder's words.
   const proof = (itemTable, itemId, snippet) => store.addEvidence([{
     userId, itemTable, itemId, snippet,
@@ -123,12 +135,20 @@ export async function applyExtraction({ store, userId, data, mode, founderTexts,
     return row && row.status === 'active' && !touched.has(row.id) && (full || row.kind === 'fact') ? row : null
   }
   // A new belief that passed every check, as a function that writes it (null when it did not pass).
-  const planBelief = ({ belief, kind, snippet: rawSnippet }) => {
+  const planBelief = ({ belief, kind, snippet: rawSnippet, shifts_from: from }) => {
     if (created >= MAX_NEW_PER_RUN || !['fact', 'pattern', 'preference'].includes(kind) || (!full && kind !== 'fact')) return null
-    const text = textOf('belief', belief, sourcesFor(kind))
+    // A shift ("said 15, now 16") may carry the old fact's numbers; only a per-message pass can name one.
+    const shifted = mode === 'message' && typeof from === 'string' ? byId.get(from) : null
+    const text = textOf('belief', belief, sourcesFor(kind), shifted?.status === 'active' && shifted.kind === 'fact' ? [shifted.belief] : [])
     const snippet = snippetOf(rawSnippet, sourcesFor(kind))
-    if (!text || !snippet || corrected('founder_beliefs', text) || taken.has(squash(text))) return null
+    if (!text || !snippet || corrected('founder_beliefs', text) || taken.has(squash(text)) || (shifted && shifts.has(shifted.id))) return null
+    // An earlier stored line may lend a unit only when it is about the same thing as the question or the message (shares a word),
+    // and never to a bare answer (3 words or fewer): its unit comes from the question or the message itself (replay 4: "16" became "16 hours").
+    const bare = founderTexts.join(' ').split(/\s+/).filter(Boolean).length <= 3
+    const lent = shifted && !bare && [...founderTexts, question].some((s) => topicWords(s).some((w) => topicWords(shifted.belief).includes(w))) ? [shifted.belief] : []
+    if (mode === 'message' && addsUnit(text, [...founderTexts, question, ...lent])) return null
     taken.add(squash(text))
+    if (shifted) shifts.add(shifted.id) // one shift per old fact: the code's own comes first, the model's would only repeat it
     created += 1
     return async () => {
       const row = await store.insertBelief({ userId, belief: text, kind, source: beliefSource, confidence: Math.min(cap, kind === 'fact' ? NEW_FACT_CONFIDENCE : NEW_PATTERN_CONFIDENCE) })
@@ -138,7 +158,8 @@ export async function applyExtraction({ store, userId, data, mode, founderTexts,
     }
   }
 
-  for (const s of rows(data.supersede)) {
+  // A message never replaces a fact: a changed number or plan adds a shift and the old fact stays, so a later screen can still name both.
+  for (const s of mode === 'message' ? [] : rows(data.supersede)) {
     const old = usable(s.id)
     if (!old || old.kind !== 'fact' || !snippetOf(s.replacement?.snippet, founderTexts)) continue
     const write = planBelief({ belief: s.replacement.belief, kind: 'fact', snippet: s.replacement.snippet })
@@ -233,8 +254,11 @@ export async function applyExtraction({ store, userId, data, mode, founderTexts,
   let threads = 0
   for (const t of rows(data.threads)) {
     const title = textOf('thread', t.title, founderTexts)
-    if (threads >= MAX_NEW_THREADS || !title || !['goal', 'bet', 'open_question'].includes(t.kind) || corrected('founder_threads', title) || open.has(squash(title))) continue
+    // A reworded open thread is the same thread (a message pass runs often and words the decision differently each time).
+    const again = open.has(squash(title ?? '')) || (mode === 'message' && openTitles.some((o) => rewordedFrom(squash(title ?? ''), o)))
+    if (threads >= (mode === 'message' ? MAX_NEW_MESSAGE_THREADS : MAX_NEW_THREADS) || !title || !['goal', 'bet', 'open_question'].includes(t.kind) || corrected('founder_threads', title) || again) continue
     open.add(squash(title))
+    openTitles.push(squash(title))
     threads += 1
     ops.push(async () => {
       await store.insertThread({ userId, title, kind: t.kind })
@@ -242,8 +266,9 @@ export async function applyExtraction({ store, userId, data, mode, founderTexts,
     })
   }
 
-  // Facts nobody touched for 90 days lose a little. updated_at stays, so the next run decays again.
-  for (const b of beliefs) {
+  // Facts nobody touched for 90 days lose a little. updated_at stays, so the next run decays again:
+  // a per-message pass runs far too often for that, so only the per-source passes decay.
+  for (const b of mode === 'message' ? [] : beliefs) {
     if (touched.has(b.id) || decayFact(b, nowMs) >= b.confidence) continue
     ops.push(() => store.updateBelief(userId, b.id, (cur) => ({ confidence: decayFact(cur, nowMs) }), { touch: false }))
   }
