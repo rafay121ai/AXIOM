@@ -770,3 +770,6 @@ Replaces the PARKED entry above for Gmail, Calendar and Notion. Plan: tasks/conn
   - Lesson and reply turns: "I do not have a lesson on this that I would stand behind yet. What is the next step you see?"
   - Offer and follow-up turns: "I do not have a passage that fits this well enough, so I will not guess."
 - PRODUCT.md and ARCHITECTURE.md updated to match: learning from every message, the change note, care retirement, the shorter first reading and Read, the grounding calls, the "Start with" step, and the two kill switches (LEARN_EVERY_MESSAGE, READ_GROUNDING).
+
+- What Axiom thinks approved (Rafay, Nov 14 2026): the "mark wrong" removal control, the screen copy (tasks/design/memory.md), the grid draw-in on that screen, and the title (kept next to Settings' "What Axiom knows about you").
+- What Axiom thinks shows a change note as "You said A before, now you say B" (Nov 19 2026, from the conflict step; "mark wrong" works on it like any item).

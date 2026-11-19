@@ -309,3 +309,11 @@ test('receipt wording: quoted words, your move, you picked', async () => {
   assert.equal(r['You sell soap.'], '"x"') // another founder's move title is never read
   assert.equal(r['You sell tea.'], null)
 })
+
+test('toSecondPerson: a change note reads as what the founder said before and says now', () => {
+  assert.equal(
+    toSecondPerson('Said evenings and weekends, under 15 hours before, now says Im okay with working on it 16 hours a week.'),
+    'You said evenings and weekends, under 15 hours before, now you say Im okay with working on it 16 hours a week.',
+  )
+  assert.equal(toSecondPerson('Says they avoid asking for money.'), 'You say you avoid asking for money.')
+})

@@ -63,6 +63,8 @@ const SUBJECT_THEY = /\bthey\b/gi
 export function toSecondPerson(text) {
   const t = cleanStoredText(text)
   if (t.startsWith(IN_THEIR_WORDS)) return `You said: "${t.slice(IN_THEIR_WORDS.length)}"`
+  // A change note from the conflict step: "Said A before, now says B." The founder's own words stay as they are; only the frame changes.
+  if (/^Said .+ before, now says .+/.test(t)) return t.replace(/^Said /, 'You said ').replace(', now says ', ', now you say ')
   if (PLURAL_THIRD.test(t) || (t.match(SUBJECT_THEY) ?? []).length > 1) return t
   const open = OPENINGS.find(([rx]) => rx.test(t))
   if (open) return OTHER_SUBJECT.test(t) || (open[1] === 'Your ' && SUBJECT_THEY.test(t)) ? t : swapPronouns(t.replace(open[0], open[1]))
