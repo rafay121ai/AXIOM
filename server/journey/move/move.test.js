@@ -25,7 +25,7 @@ const MOVE = {
   mission: 'Email the 2 clinics that asked for pricing and ask each for a 20-minute call.',
   success: 'Both clinics reply with a day and time for the call.',
   words: 'I have the pricing you asked for. Can we book 20 minutes to go through it?',
-  checklist: ['Open the last email from each clinic', 'Paste the wording and make it sound like you', 'Send it to both clinics'],
+  checklist: ['Open the last email from each clinic'],
   prediction: 'At least one of the clinics will not reply. That is also an answer.',
   hypothesis: 'Tests whether the clinics will reply with a day and time when asked directly.',
   start_minutes: 5,
@@ -39,7 +39,7 @@ test('a move that keeps every rule passes the validator and the checks', () => {
   const { problems, validation, move } = checkMove({ data: MOVE, founderTexts: FOUNDER_TEXTS })
   assert.deepEqual(problems, [])
   assert.equal(validation.ok, true)
-  assert.equal(move.checklist.length, 3)
+  assert.equal(move.checklist.length, 1)
 })
 
 // Rafay, Nov 19: an earlier statement's number may be named in a move; an invented number may not.

@@ -69,7 +69,7 @@ export function checkMove({ data, founderTexts, earlierTexts = [] }) {
     mission: clean(data.mission),
     success: clean(data.success),
     words: String(data.words ?? '').trim().replace(/^["“”']+|["“”']+$/g, '').trim(),
-    checklist: (Array.isArray(data.checklist) ? data.checklist : []).map(clean).filter(Boolean),
+    checklist: (Array.isArray(data.checklist) ? data.checklist : []).map(clean).filter(Boolean).slice(0, 1),
     prediction: clean(data.prediction),
     hypothesis: String(data.hypothesis ?? '').trim(),
     start_minutes: data.start_minutes,
@@ -83,7 +83,7 @@ export function checkMove({ data, founderTexts, earlierTexts = [] }) {
     if (QUOTE_MARKS.test(text)) problems.push(`quotation marks in ${field}: put the exact wording only in words`)
     if (text.includes('?')) problems.push(`a question in ${field}: the move says what to do`)
   }
-  if (move.checklist.length < 2) problems.push('the checklist needs 2 to 4 steps')
+  if (move.checklist.length < 1) problems.push('the checklist needs one first step')
   if (!Number.isInteger(move.start_minutes) || move.start_minutes < 1 || move.start_minutes > MAX_START_MINUTES) {
     problems.push(`it must be startable within ${MAX_START_MINUTES} minutes`)
   }

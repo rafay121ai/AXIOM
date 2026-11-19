@@ -36,7 +36,7 @@ const LEAVE_MS = 1400;
 type Reminder = 'none' | 'ask' | 'yes' | 'no' | 'refused';
 
 // The Move: a solid sheet that slides up over the chat. Mission, what success looks like, the words to use,
-// a checklist, Axiom's prediction, Commit, and a quiet "Change this move" that works once.
+// the first step, Axiom's prediction, Commit, and a quiet "Change this move" that works once.
 export function MoveScreen({ open, commit, swap, loadHint, push, onClose, onDone, onCare }: Props) {
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
@@ -44,7 +44,6 @@ export function MoveScreen({ open, commit, swap, loadHint, push, onClose, onDone
   const slide = useRef(new Animated.Value(height)).current;
   const [move, setMove] = useState<MoveView | null>(null);
   const [hint, setHint] = useState<LoadingQuote | null>(null);
-  const [ticked, setTicked] = useState<number[]>([]);
   const [busy, setBusy] = useState(false);
   const [changing, setChanging] = useState(false);
   const [reason, setReason] = useState('');
@@ -147,7 +146,6 @@ export function MoveScreen({ open, commit, swap, loadHint, push, onClose, onDone
       if (res.care) return;
       if (res.status === 'need_reason') return setSay(res.reply);
       setMove(res.move);
-      setTicked([]);
       setChanging(false);
       setReason('');
       setSay(null);
@@ -163,7 +161,6 @@ export function MoveScreen({ open, commit, swap, loadHint, push, onClose, onDone
     return () => clearTimeout(t);
   }, [reminder]);
 
-  const tick = (n: number) => setTicked((t) => (t.includes(n) ? t.filter((i) => i !== n) : [...t, n]));
   const committed = move?.report_time_local ? move : null;
 
   return (
@@ -190,12 +187,7 @@ export function MoveScreen({ open, commit, swap, loadHint, push, onClose, onDone
                   </Section>
                 )}
                 <Section label={copy.move.checklist}>
-                  {move.checklist.map((item, n) => (
-                    <Pressable key={n} accessibilityRole="checkbox" accessibilityState={{ checked: ticked.includes(n) }} onPress={() => tick(n)} style={styles.item}>
-                      <View style={[styles.box, ticked.includes(n) && styles.boxOn]}>{ticked.includes(n) && <View style={styles.tick} />}</View>
-                      <Text style={[styles.itemText, ticked.includes(n) && styles.itemDone]}>{item}</Text>
-                    </Pressable>
-                  ))}
+                  <Text style={styles.itemText}>{move.checklist[0]}</Text>
                 </Section>
                 <Text style={styles.prediction}>{move.prediction}</Text>
                 {committed?.report_time_local ? (
@@ -284,12 +276,7 @@ const styles = StyleSheet.create({
   words: { paddingVertical: 14, paddingHorizontal: 16, borderLeftWidth: 2, borderLeftColor: colors.goldFrom, backgroundColor: ink(0.05) },
   wordsText: { fontFamily: fonts.serif, fontSize: 17, lineHeight: 25.5, color: '#f1f1ef' },
   wordsNote: { fontFamily: fonts.sans, fontSize: 11, letterSpacing: 0.9, color: ink(0.45), marginTop: 8 },
-  item: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44, paddingVertical: 8, borderTopWidth: 1, borderTopColor: ink(0.1) },
-  box: { width: 16, height: 16, borderRadius: 5, borderWidth: 1, borderColor: ink(0.35) },
-  boxOn: { backgroundColor: colors.goldFrom, borderColor: 'transparent' },
-  tick: { position: 'absolute', left: 5, top: 1.5, width: 4, height: 8, borderColor: colors.onGold, borderRightWidth: 1.5, borderBottomWidth: 1.5, transform: [{ rotate: '45deg' }] },
   itemText: { flex: 1, fontFamily: fonts.sans, fontSize: 15, lineHeight: 21, color: ink(0.85) },
-  itemDone: { opacity: 0.5, textDecorationLine: 'line-through' },
   prediction: { fontFamily: fonts.serif, fontStyle: 'italic', fontSize: 16, lineHeight: 24, color: ink(0.8), marginVertical: 24 },
   committed: { fontFamily: fonts.serif, fontSize: 16, lineHeight: 25, color: ink(0.8), textAlign: 'center', paddingTop: 10 },
   ask: { alignItems: 'center', marginTop: 22, paddingTop: 18, borderTopWidth: 1, borderTopColor: ink(0.12) },

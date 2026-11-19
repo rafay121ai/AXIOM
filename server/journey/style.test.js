@@ -13,7 +13,7 @@ const sha = (s) => createHash('sha256').update(s).digest('hex')
 const OLD = {
   read: '1fc7583a6e160420212ceab536653c0a48b9497bd8eaa7cdb8da6d4c52ba502b', // Nov 19: leads with what they have not said; no restating
   learn: 'e8d32fe4608ed2e02e78b42f25223f5df1f5ed4d3019618da82534df64d8aeea', // Nov 9: facts only from this situation
-  move: '5bc5dd8f50ac0b9a5b879d1ec42935c0b9b37fcbd8545670037991ed4171ca2a', // Nov 2: words written for the reader; no "see if" success
+  move: 'f5067dc172bcbd0f91565f449768d182f9969e951914b12e0073666685ffbafc', // Nov 2: words written for the reader; no "see if" success
   report: '6ce24f154ae001da47b70fddb78b7365b1d79fd8f9ecb8dea1622566694127a7',
 }
 const base = { signUp: [], conversation: [], situation: [], read: null, learn: [], evidence: [], subject: 's', fact: 'f', move: {}, outcome: 'done', note: 'n' }

@@ -76,7 +76,7 @@ export const MOVE = {
   mission: 'Email the 2 clinics that asked for pricing and ask each for a 20-minute call.',
   success: 'Both clinics reply with a day and time for the call.',
   words: 'I have the pricing you asked for. Can we book 20 minutes to go through it?',
-  checklist: ['Open the last email from each clinic', 'Paste the wording and make it sound like you', 'Send it to both clinics'],
+  checklist: ['Open the last email from each clinic'],
   prediction: 'At least one of the clinics will not reply. That is also an answer.',
   hypothesis: 'Tests whether the clinics will reply with a day and time when asked directly.',
   start_minutes: 5,
@@ -85,7 +85,7 @@ export const SWAPPED_MOVE = {
   ...MOVE,
   title: 'Call both clinics that asked for pricing.',
   mission: 'Call the 2 clinics that asked for pricing and ask each for a 20-minute call.',
-  checklist: ['Find the phone number of each clinic', 'Call both clinics'],
+  checklist: ['Find the phone number of each clinic'],
 }
 export const SWAP_REASON = 'I only have their phone numbers, not their email.'
 
