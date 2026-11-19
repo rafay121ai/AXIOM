@@ -560,7 +560,7 @@ OpenAI returned `insufficient_quota` (no credits) on Nov 14, so nothing that emb
 ---
 
 # Plan v2 (Nov 19 2026): stop the repeats, make memory specific, proactive Axiom
-Status: PLAN ONLY. Nothing below is built. New branch off `main` (not `feat/memory-layer`).
+Status: Parts A and B are built on `feat/learn-every-message` (see Revision 1 below for what was actually built). Part C is not started. Steps below keep their original text; Revision 1 overrides B1 to B3.
 Basis: Rohaan's live session of Nov 14 (read-only dump), `server/journey/prompts/read.js`, `firstReading.js`, `memory/brief.js`, `tasks/connectors-plan.md`.
 
 ## A. The Read repeats the founder (fix first)
@@ -604,9 +604,11 @@ Steps:
 
 ## Revision 1 (Nov 19, Rafay): learn from every message; say when something changed
 Overrides B1 to B3 above. Findings that shape it: no migration is needed (memory_evidence already allows source kinds situation, read, learn, move, swap; founder_beliefs.source already allows 'conversation'; supersede already exists). `memory_runs` is once per (source, mode), so per-message learning does not write a run row.
-Build order (one builder at a time, each ends with tests and my review; no live DB writes, no real model calls without approval):
-- [ ] Slice 1, "Read quality": A1 to A4 (stop the repeats) plus the change callout: the brief gains an "Earlier they said" section (facts from stored memory that share a topic word with the current conversation, numbers and dates allowed), the own-words checker accepts those earlier numbers, and the Situation, Read, Read talk, Learn and Move prompts name a conflict once and ask what changed.
-- [ ] Slice 2, "Learn every message": after each founder message, a background pass (gpt-4.1-mini, existing facts extractor) stores facts, people, shorthand, plans and changes, each with a verbatim snippet. A changed fact supersedes the old one and the shift is kept as its own item, so the brief can say "said under 15, now 16". Never delays the reply; skipped under the daily cap and during care.
-- [ ] Slice 3, specificity: sign-up patterns (avoids, strengths) usable from day one; richer sign-up facts; replay Rohaan's session and check the brief holds 3 or more items unique to him.
-- [ ] Slice 4: "What Axiom thinks" shows shifts; mark wrong still works.
+What was built (branch `feat/learn-every-message`, Slices 1 to 8; no live DB writes, fakes only). A changed fact does NOT supersede the old one: the old fact stays active and code adds a shift fact ("Said ... before, now says ...") beside it, so a later screen can name both.
+- [x] Slice 1, "Read quality": the Read and first reading stop restating the founder (one short quote at most, the first reading's text passed on as "already said"); the brief gains an "Earlier they said" section; a conflict detector in code (`memory/conflicts.js`) names a changed number once and asks what changed in the Situation, Read, Read talk and Learn prompts. The Move has no free sentence, so it gets no notice.
+- [x] Slice 2, "Learn every message": after each founder message a background pass (`memory/learnMessage.js`, gpt-4.1-mini, facts extractor) stores facts, people, shorthand, plans and threads, each with a verbatim snippet. Never delays the reply; skipped under the daily cap, during care and for blocked topics. Kill switch `LEARN_EVERY_MESSAGE=off`.
+- [x] Slice 3, specificity: sign-up patterns (avoids, strengths) usable from day one; richer sign-up facts; Rohaan's session replayed in tests.
+- [ ] Slice 4: "What Axiom thinks" shows shifts; mark wrong still works. NOT built.
+- [x] Slices 5 to 7: ask what changed, shift written by code from a fixed template, no invented units, grounded Read and first reading (one cheap model check for claims the founder never made; kill switch `READ_GROUNDING=off`; fails open), no contrasts, a failing Learn reply never ships as is, markup characters rejected, shorter shift, safer units. Move: one first step instead of a checklist (one-line change).
+- [x] Slice 8, pre-merge review fixes: the detector needs the same measure (period) and ignores goals, targets and one-off past numbers; only a STRONG conflict is enforced in code, a weak one is a prompt notice only; "said once" holds across situations through the stored shift; earlier numbers are allowed only for the active conflict; the health filter again blocks "fell ill" and friends but not the typo "Ill do it"; a blocked topic anywhere in a message skips the whole pass; the grounding check runs at most once, has an 8 second limit, and on the last attempt never replaces a Read (it is logged); per-founder queue for the message pass; shift text in plain third person within 240 characters; Learn fallback wording (needs Rafay's approval, see decisions.md).
 - [ ] Then C1 (proactive nudges from memory), after Rafay checks slices 1 to 3.
