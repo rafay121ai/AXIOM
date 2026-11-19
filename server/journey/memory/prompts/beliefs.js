@@ -89,6 +89,7 @@ export const beliefsMessages = ({ mode, input }) => [
 const SIGNUP_PROMPT = [
   'You keep Axiom\'s memory of one founder. Read their written sign-up answers.',
   ...SHARED_RULES,
+  'Keep what makes the founder specific. A fact about what they build or sell keeps what it is, where it comes from or goes, who it is for, and how they do it, whenever they said so: "I source products from the world to Pakistan" becomes "Sources products from the world to Pakistan.", never just "Builds a shopping service." One fact per distinct thing they said, each whole, using their own words for places and things. A short answer about who works on it ("Me myself and I") is a fact too ("Works alone.").',
   'Facts only. People the founder named go in world with what they do. Shorthand only the founder typed goes in vocabulary with its meaning. Open questions or goals in the stuck and goal answers go in threads. Leave reinforce, weaken and supersede empty.',
 ].join('\n')
 

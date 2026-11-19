@@ -6,7 +6,7 @@
 import { deadlineFor } from '../signup.js'
 import { isSkip } from '../questions.js'
 import { createSharing } from '../report/sharing.js'
-import { IN_THEIR_WORDS, NEW_PATTERN_CONFIDENCE, SELF_REPORT_CAP, checkBeliefText, cleanStoredText, snippetInSource } from './beliefRules.js'
+import { IN_THEIR_WORDS, SELF_REPORT_CAP, USE_THRESHOLD, checkBeliefText, cleanStoredText, snippetInSource } from './beliefRules.js'
 import { applyExtraction, isCorrected, overCap } from './extractBeliefs.js'
 import { createMemoryStore } from './memoryStore.js'
 import { FACTS_ONLY_SCHEMA, signupMessages } from './prompts/beliefs.js'
@@ -33,6 +33,8 @@ const CUSTOMERS = {
   'Mostly abroad': 'Your customers are mostly abroad.',
   'Both': 'Your customers are in your own country and abroad.',
 }
+// A pattern the founder tapped at sign-up starts usable, so it shapes the first prompts (day-one personalisation).
+const SIGNUP_PATTERN_CONFIDENCE = USE_THRESHOLD
 const low = (s) => s.charAt(0).toLowerCase() + s.slice(1)
 const written = (v) => (typeof v === 'string' && !isSkip(v) && v.trim() ? v.trim() : null)
 
@@ -87,7 +89,7 @@ export async function seedFromSignup({ supabase, store, callStructured, userId, 
           try {
             const row = await mem.insertBelief({
               userId, belief: r.text, kind: r.kind, source: 'signup',
-              confidence: r.kind === 'pattern' ? NEW_PATTERN_CONFIDENCE : SELF_REPORT_CAP,
+              confidence: r.kind === 'pattern' ? SIGNUP_PATTERN_CONFIDENCE : SELF_REPORT_CAP,
             })
             await proof('founder_beliefs', row.id, r.key, r.snippet)
           } catch (err) {

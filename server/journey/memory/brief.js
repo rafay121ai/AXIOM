@@ -4,7 +4,7 @@
 import { norm, wordRx } from '../ownWords.js'
 import { STOP } from '../hooks.js'
 import { createMemoryStore } from './memoryStore.js'
-import { TRAIT_MIN_OBSERVATIONS, TRAIT_MIN_SITUATIONS, USE_THRESHOLD, cleanStoredText, properNouns } from './beliefRules.js'
+import { TRAIT_MIN_OBSERVATIONS, TRAIT_MIN_SITUATIONS, cleanStoredText, isUsable, properNouns } from './beliefRules.js'
 
 export const BRIEF_MAX_CHARS = 900
 const EARLIER = 'Earlier they said:'
@@ -32,6 +32,23 @@ function pastTheConversation(text, currentText) {
   return (text.match(/\d+/g) ?? []).some((d) => !digits.has(d)) || (text.match(WHEN) ?? []).some((w) => !said(w)) || properNouns(text).some((w) => !said(w))
 }
 
+// A sign-up strength and a sign-up avoid pattern read as one line, built from their stored texts by a fixed template (no model).
+const STRENGTH = /^Says they are better than most at (.+)\.$/
+const AVOIDS = /^Says they avoid (.+)\.$/
+const joined = (xs) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}` : xs[0])
+function pairTension(patterns) {
+  const pick = (rx) => patterns.filter((b) => b.source === 'signup' && rx.test(cleanStoredText(b.belief)))
+  const strengths = pick(STRENGTH)
+  const avoids = pick(AVOIDS)
+  if (strengths.length === 0 || avoids.length === 0) return { tension: null, rest: patterns }
+  const part = (list, rx) => joined(list.map((b) => cleanStoredText(b.belief).match(rx)[1]))
+  const used = new Set([...strengths, ...avoids])
+  return {
+    tension: { text: `Better than most at ${part(strengths, STRENGTH)}, and avoids ${part(avoids, AVOIDS)}.` },
+    rest: patterns.filter((b) => !used.has(b)),
+  }
+}
+
 // Content words of 4+ letters, so a stored fact on the same topic as the conversation can be found.
 const topicWords = (text) => new Set((norm(text).match(/\p{L}{4,}/gu) ?? []).filter((w) => !STOP.has(w)))
 
@@ -48,7 +65,7 @@ export function earlierLines(brief) {
 // Each list is the founder's rows. evidenceCounts: { [itemId]: { rows, sources } } for traits.
 export function buildBriefText({ beliefs = [], traits = [], world = [], vocabulary = [], threads = [], evidenceCounts = {}, currentText = '', nowMs = Date.now() }) {
   const active = (list) => list.filter((r) => r.status === 'active')
-  const usable = (r) => r.confidence >= USE_THRESHOLD
+  const usable = isUsable
   // Sign-up self-report traits are used from day one at confidence >= 0.4 (day-one personalisation, decisions.md Nov 9);
   // behaviour can overturn them. A trait learned from behaviour needs 3 observations across 2 sources.
   const trusted = (t) => {
@@ -56,10 +73,12 @@ export function buildBriefText({ beliefs = [], traits = [], world = [], vocabula
     return t.origin === 'self_report' || (e.rows >= TRAIT_MIN_OBSERVATIONS && e.sources >= TRAIT_MIN_SITUATIONS)
   }
   const fresh = (t) => !(nowMs - Date.parse(t.updated_at) > THREAD_MAX_AGE_DAYS * 86400000)
+  const { tension, rest } = pairTension(active(beliefs).filter((b) => b.kind !== 'fact' && usable(b)))
   const work = [
-    ...active(beliefs).filter((b) => b.kind !== 'fact' && usable(b)).map((b) => ({ confidence: b.confidence, text: b.belief })),
+    ...rest.map((b) => ({ confidence: b.confidence, text: b.belief })),
     ...active(traits).filter((t) => usable(t) && trusted(t)).map((t) => ({ confidence: t.confidence, text: `${words(t.dimension)}: ${words(t.value)}` })),
-  ].sort(byConfidence).slice(0, 5).map((x) => x.text)
+  ].sort(byConfidence)
+  const workLines = [...(tension ? [tension] : []), ...work].slice(0, 5).map((x) => x.text) // the tension line first, so the cap never drops it
   const facts = active(beliefs).filter((b) => b.kind === 'fact' && usable(b) && !pastTheConversation(cleanStoredText(b.belief), currentText)).sort(newest).slice(0, 5).map((b) => b.belief)
   // The same facts when they share a topic word with the conversation, even with numbers, dates or names it does not repeat:
   // the founder may have changed their mind, and Axiom may say so once.
@@ -68,7 +87,7 @@ export function buildBriefText({ beliefs = [], traits = [], world = [], vocabula
   const said = (name) => name && wordRx(name).test(currentText)
   const entries = [
     ...earlier.map((text) => ['earlier', text]), // first, so the character cap never drops a possible change
-    ...work.map((text) => ['work', text]),
+    ...workLines.map((text) => ['work', text]),
     ...facts.map((text) => ['facts', text]),
     ...active(world).filter((w) => said(w.name)).map((w) => ['world', `${w.name} (${w.kind}${w.role ? `, ${w.role}` : ''})`]),
     ...active(vocabulary).filter((v) => said(v.term)).map((v) => ['vocab', `${v.term}: ${v.meaning}`]),

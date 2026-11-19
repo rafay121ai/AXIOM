@@ -15,6 +15,9 @@ const PATTERN_FEW_EVIDENCE_CAP = 0.5
 const FACT_DECAY_DAYS = 90
 const FACT_DECAY_STEP = 0.1
 export const USE_THRESHOLD = 0.4
+// Sign-up answers are the founder's own words about themselves, so they are usable a little below what behaviour has to earn (old rows were stored at 0.35).
+export const SIGNUP_USE_THRESHOLD = 0.35
+export const isUsable = (row) => row.confidence >= (row.source === 'signup' ? SIGNUP_USE_THRESHOLD : USE_THRESHOLD)
 export const TRAIT_MIN_OBSERVATIONS = 3
 export const TRAIT_MIN_SITUATIONS = 2
 export const SELF_REPORT_CAP = 0.5

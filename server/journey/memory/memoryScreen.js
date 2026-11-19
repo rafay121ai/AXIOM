@@ -2,7 +2,7 @@
 // "this is wrong" control. Reads and the retire step only; no model, and nothing
 // internal (confidence, user_id, sources) leaves here. Code-made wording, no model text.
 import { HttpError } from '../situations.js'
-import { IN_THEIR_WORDS, USE_THRESHOLD, cleanStoredText } from './beliefRules.js'
+import { IN_THEIR_WORDS, cleanStoredText, isUsable } from './beliefRules.js'
 import { createMemoryStore } from './memoryStore.js'
 
 export const GROUP_MAX = 12
@@ -81,7 +81,7 @@ const TYPED_SIGNUP = new Set(['building', 'stuck', 'contrarian', 'people'])
 
 export function createMemoryScreen({ supabase, clock }) {
   const store = createMemoryStore({ supabase, clock })
-  const usable = (r) => r.confidence >= USE_THRESHOLD
+  const usable = isUsable
 
   // The receipt as the screen shows it: the founder's words in quotes, "Your move: title", or "You picked: label".
   async function receiptsFor(userId, evidence) {
