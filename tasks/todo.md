@@ -638,7 +638,7 @@ Branch: new `feat/memory-nudges` off main.
 
 ## Steps
 - [x] N1. Read-only live check: are `20261109*` and `20261101000007` applied; current `notification_log_kind_check` definition. Migration plan from that dump. Gate: Rafay approves applying.
-- [x] N2. (file written, NOT applied) Migration: add `nudge` to the kind CHECK, with rollback; `migrations.test.js` follows `PUSH_KINDS`. migration-checker agent.
+- [x] N2. (APPLIED to live Nov 20, Rafay's yes) Migration: add `nudge` to the kind CHECK, with rollback; `migrations.test.js` follows `PUSH_KINDS`. migration-checker agent.
 - [x] N3. Server: `due.js` builds nudge items from the goal and threads; `policy.js` adds the kind, slot, switch, 3-day spacing; `compose.js` the copy; scheduler loads goal and threads only for founders with nothing else due.
 - [x] N4. Tests with fakes (`push.test.js`): each trigger sends once; nothing worth saying sends nothing; priority under the move and quiet_check; 3-day spacing; cap of 2 and slot hold with two schedulers; care, quiet hours, pause, deletion; a nudge named after another founder's goal fails the specificity test; banned phrases and teasers.
 - [x] N5. No app change: the app has no push-tap handler, so any tap opens the app and a returning founder lands on home.
@@ -665,4 +665,5 @@ File `supabase/migrations/20261120000001_push_kind_nudge.sql`, the pattern of `2
 - `push/due.js` goal and thread nudges (only when nothing else wants the morning); `push/policy.js` kind `nudge`, morning slot and switch, 3-day spacing; `push/compose.js` the approved lines (the thread title is quoted as stored, since titles are imperatives); `push/scheduler.js` finds founders by goal date (a day either side) and quiet open threads.
 - Dropped from the plan: "thread not the title of an active move". The morning priority already keeps a move or quiet situation first; exact title matches between threads and moves do not happen.
 - Tests: 11 new in `push/push.test.js`; full server suite 827 of 827 pass.
-- Left: voice check, Rafay's approval to apply `20261120000001`, N7 and N8 (blocked: 0 push tokens live).
+- Voice check clean. `20261120000001` applied to live Nov 20 and recorded in the migration history; verified read-only (kind check lists nudge, NOT VALID; 0 rows). Committed on `feat/memory-nudges`, not pushed, not deployed.
+- Left: N7 and N8 (blocked: 0 push tokens live).

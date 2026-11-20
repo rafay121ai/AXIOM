@@ -2,7 +2,8 @@
 -- own memory (their sign-up goal date a week away, or an open thread gone
 -- quiet). server/push/policy.js PUSH_KINDS.
 --
--- NOT APPLIED. Written Nov 20 2026 after a read-only check of live main
+-- APPLIED to main on Nov 20 2026 (Rafay's yes), recorded in
+-- supabase_migrations.schema_migrations. Written Nov 20 2026 after a read-only check of live main
 -- (zmzrrmqqxqzmmfovpqjt): the live check matched 20261101000007 exactly and
 -- the table held 0 rows (tasks/todo.md, "N1 result").
 --
