@@ -773,3 +773,6 @@ Replaces the PARKED entry above for Gmail, Calendar and Notion. Plan: tasks/conn
 
 - What Axiom thinks approved (Rafay, Nov 14 2026): the "mark wrong" removal control, the screen copy (tasks/design/memory.md), the grid draw-in on that screen, and the title (kept next to Settings' "What Axiom knows about you").
 - What Axiom thinks shows a change note as "You said A before, now you say B" (Nov 19 2026, from the conflict step; "mark wrong" works on it like any item).
+
+## Nov 20 2026: nudge thread line keeps the title in quotes (Rafay)
+The full thread nudge reads `Rafay, where are you with "<thread title>"?`, the title verbatim in quotes, instead of the approved second-person form. Reason: thread titles are stored as imperatives ("Get Shifa Clinic to sign"), and rewording them breaks the grammar or the meaning. The short line stays as approved.
