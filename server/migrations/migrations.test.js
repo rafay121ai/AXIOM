@@ -431,7 +431,9 @@ const checkList = (sql, column) => {
 }
 
 test('migrations: CHECK lists match the values the server code uses', () => {
-  assert.deepEqual(checkList(schema.notification_log.body, 'kind')?.sort(), [...PUSH_KINDS].sort())
+  // 20261120000001 re-adds the kind check with 'nudge'; the latest definition wins.
+  const nudgeKinds = all.find((f) => f.name.startsWith('20261120000001'))?.sql ?? ''
+  assert.deepEqual((checkList(stripSqlComments(nudgeKinds), 'kind') ?? checkList(schema.notification_log.body, 'kind'))?.sort(), [...PUSH_KINDS].sort())
   assert.deepEqual(checkList(schema.notification_log.body, 'slot')?.sort(), ['evening', 'morning'])
   assert.deepEqual(checkList(journeySql, 'lock_screen')?.sort(), [...LOCK_SCREEN_MODES].sort())
   assert.deepEqual(checkList(journeySql, 'mentor_style')?.sort(), [...MENTOR_STYLES].sort())

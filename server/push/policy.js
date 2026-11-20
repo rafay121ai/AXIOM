@@ -10,19 +10,22 @@
 // - only for something real: a move title, or a situation title, by id;
 // - one reminder per move, only after its check-in push went out and while the
 //   report is unanswered; after that, nothing (the move closes quietly);
+// - a nudge (from the founder's own goal date or open thread) takes the
+//   morning slot, and at most one every NUDGE_SPACING_MS;
 // - never the same push twice (dedupe key), a send Expo clearly refused
 //   retried at most MAX_ATTEMPTS times on the same log row.
 import { LIMITS } from '../config.js'
 import { localParts, localToUtc, validTimeZone } from '../journey/move/schedule.js'
 import { normalizeReportTime } from '../writeValidation.js'
 
-export const PUSH_KINDS = Object.freeze(['morning', 'quiet_check', 'evening', 'reminder'])
+export const PUSH_KINDS = Object.freeze(['morning', 'quiet_check', 'evening', 'reminder', 'nudge'])
 export const DAY_MS = 24 * 60 * 60 * 1000
 export const PAUSE_AFTER_MS = 14 * DAY_MS
 export const QUIET_AFTER_MS = 3 * DAY_MS
 export const MORNING_TIME = '08:00'
 export const MORNING_WINDOW_MS = 4 * 60 * 60 * 1000
 export const MAX_ATTEMPTS = 3
+export const NUDGE_SPACING_MS = 3 * DAY_MS
 export const DEFAULT_QUIET_HOURS = Object.freeze({ start: '22:00', end: '06:00' })
 
 // Log rows that hold a place in the day: a send in flight (it may have reached
@@ -31,8 +34,8 @@ export const COUNTING_STATUSES = Object.freeze(['sending', 'sent'])
 
 // The day's two places. notification_log keeps one counting row per founder,
 // local day and slot (a partial unique index), so the cap holds in the database.
-export const SLOT = Object.freeze({ morning: 'morning', quiet_check: 'morning', evening: 'evening', reminder: 'evening' })
-const SWITCH = Object.freeze({ morning: 'morning_on', quiet_check: 'morning_on', evening: 'evening_on', reminder: 'evening_on' })
+export const SLOT = Object.freeze({ morning: 'morning', quiet_check: 'morning', evening: 'evening', reminder: 'evening', nudge: 'morning' })
+const SWITCH = Object.freeze({ morning: 'morning_on', quiet_check: 'morning_on', evening: 'evening_on', reminder: 'evening_on', nudge: 'morning_on' })
 const MOVE_KINDS = new Set(['morning', 'evening', 'reminder'])
 
 export const zoneOf = (zone) => (validTimeZone(zone) ? zone : 'UTC')
@@ -72,6 +75,7 @@ const text = (v) => typeof v === 'string' && v.trim().length > 0
 function isReal(kind, item) {
   if (!item || !text(item.key)) return false
   if (MOVE_KINDS.has(kind)) return text(item.moveId) && text(item.title)
+  if (kind === 'nudge') return ['goal', 'thread'].includes(item.nudge) && text(item.text)
   return text(item.situationId) && text(item.situationTitle)
 }
 
@@ -80,7 +84,7 @@ function isReal(kind, item) {
 // now: ms. log: this founder's notification_log rows (recent).
 // care: false only when the care lookup answered "no open event".
 // kind: one of PUSH_KINDS. item: { key, dueAt, expiresAt, moveId?, title?,
-//   reported?, situationId?, situationTitle? }
+//   reported?, situationId?, situationTitle?, nudge? ('goal' | 'thread'), text? }
 // Returns { send: true, localDay, slot, retry } (retry: the failed row to
 // reuse, or null) or { send: false, reason }.
 export function decidePush({ founder, now, log = [], care, kind, item }) {
@@ -102,6 +106,9 @@ export function decidePush({ founder, now, log = [], care, kind, item }) {
 
   const prior = log.find((r) => r.dedupe_key === item.key) ?? null
   if (prior && (prior.status !== 'failed' || (prior.attempts ?? 1) >= MAX_ATTEMPTS)) return no('already_sent')
+  if (kind === 'nudge' && log.some((r) => r.kind === 'nudge' && COUNTING_STATUSES.includes(r.status) && now - Date.parse(r.created_at) < NUDGE_SPACING_MS)) {
+    return no('nudge_spacing')
+  }
   if (kind === 'reminder' && !log.some((r) => r.dedupe_key === `evening:${item.moveId}` && r.status === 'sent')) {
     return no('no_check_in_push')
   }

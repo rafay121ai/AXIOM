@@ -10,13 +10,14 @@
 // A full line that would break a voice rule (a banned phrase or a teaser in
 // stored text, or too long for a lock screen) falls back to the short line.
 import { BANNED_PHRASES, TEASER, norm, wordRx } from '../journey/ownWords.js'
+import { NUDGE_GOAL_DAYS } from './due.js'
 
 export const LOCK_SCREEN_MODES = Object.freeze(['full', 'short', 'hidden'])
 export const DEFAULT_LOCK_SCREEN = 'short'
 export const HIDDEN_BODY = 'Axiom'
 export const MAX_BODY = 160
 
-const OPENS = Object.freeze({ morning: 'move', evening: 'report', reminder: 'report', quiet_check: 'situation' })
+const OPENS = Object.freeze({ morning: 'move', evening: 'report', reminder: 'report', quiet_check: 'situation', nudge: 'home' })
 
 const clean = (s) => String(s ?? '').replace(/\s+/g, ' ').trim()
 const sentence = (s) => clean(s).replace(/[.!?\s]+$/, '')
@@ -49,6 +50,13 @@ export const PUSH_WORDING = Object.freeze({
     full: ({ name, situationTitle }) => lead(name, `where are you with ${lowerFirst(sentence(situationTitle))}?`), // (new)
     short: ({ name }) => lead(name, 'where are you with what we talked about?'), // (new)
   },
+  // Approved Nov 20 (tasks/todo.md, C1). The thread title stays in the founder's words, in quotes.
+  nudge: {
+    full: ({ name, nudge, text }) => (nudge === 'goal'
+      ? `${lead(name, `${NUDGE_GOAL_DAYS} days to ${lowerFirst(sentence(text))}.`)} Where are you?`
+      : lead(name, `where are you with "${sentence(text.replace(/["“”]/g, ''))}"?`)),
+    short: ({ name, nudge }) => lead(name, nudge === 'goal' ? 'your goal date is a week away.' : 'one of your open questions has gone quiet.'),
+  },
 })
 
 // Problems that keep a line off a lock screen.
@@ -71,13 +79,15 @@ export function composePush({ kind, item, name = null, lockScreen = DEFAULT_LOCK
     title: clean(item.title),
     subject: item.subject ? sentence(item.subject) : null,
     situationTitle: clean(item.situationTitle),
+    nudge: item.nudge ?? null,
+    text: clean(item.text),
   }
   let body = HIDDEN_BODY
   if (mode !== 'hidden') {
     const short = wording.short(fields)
     const full = mode === 'full' ? wording.full(fields) : null
     body = full && voiceProblems(full).length === 0 ? full : short
-    if (voiceProblems(body).length > 0) body = wording.short({ name: null })
+    if (voiceProblems(body).length > 0) body = wording.short({ ...fields, name: null })
   }
   const data = { kind, open: OPENS[kind] }
   if (item.moveId) data.move_id = item.moveId

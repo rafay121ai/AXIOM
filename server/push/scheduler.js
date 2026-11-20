@@ -1,5 +1,6 @@
 // The push scheduler. tick() finds the founders with something real due (an
-// open move, or an open situation gone quiet), asks decidePush for each
+// open move, an open situation gone quiet, a sign-up goal date a week away, or
+// an open thread gone quiet), asks decidePush for each
 // possible push, and sends the ones it allows. Everything is injected (clock,
 // supabase, sender, isCareOpen), so tests run it with fakes. Started only from
 // index.js, never from createApp.
@@ -19,8 +20,8 @@
 import { ACTIVE_STATUSES } from '../journey/move/room.js'
 import { founderFirstName } from '../journey/home/name.js'
 import { loadStates, statusOf } from '../journey/home/state.js'
-import { decidePush, PAUSE_AFTER_MS, QUIET_AFTER_MS } from './policy.js'
-import { duePushes } from './due.js'
+import { DAY_MS, decidePush, PAUSE_AFTER_MS, QUIET_AFTER_MS } from './policy.js'
+import { duePushes, NUDGE_GOAL_DAYS, NUDGE_THREAD_QUIET_MS } from './due.js'
 import { composePush } from './compose.js'
 import { reminderSettingsOf } from './settings.js'
 import { createPushTokens } from './tokens.js'
@@ -48,16 +49,16 @@ export function createPushScheduler({ supabase, sender, clock, isCareOpen, nameO
 
   // Every row of a query, a page at a time (keyset on id), so the row cap of
   // one response never drops a founder.
-  async function everyRow(build) {
+  async function everyRow(build, key = 'id') {
     const rows = []
     let after = null
     for (;;) {
       let query = build()
-      if (after !== null) query = query.gt('id', after)
-      const page = await one(query.order('id', { ascending: true }).limit(pageSize))
+      if (after !== null) query = query.gt(key, after)
+      const page = await one(query.order(key, { ascending: true }).limit(pageSize))
       rows.push(...page)
       if (page.length < pageSize) return rows
-      after = page[page.length - 1].id
+      after = page[page.length - 1][key]
     }
   }
 
@@ -123,7 +124,7 @@ export function createPushScheduler({ supabase, sender, clock, isCareOpen, nameO
     return { delivered, unknown, error }
   }
 
-  async function forFounder({ userId, now, moves, quietSituations, summary }) {
+  async function forFounder({ userId, now, moves, quietSituations, goal, threads, summary }) {
     const [devices, profileRow, latest] = await Promise.all([
       tokens.forUser(userId),
       one(supabase.from('founder_profiles').select('timezone').eq('user_id', userId).maybeSingle()),
@@ -145,7 +146,7 @@ export function createPushScheduler({ supabase, sender, clock, isCareOpen, nameO
       .sort((a, b) => Date.parse(b.last_activity_at) - Date.parse(a.last_activity_at))[0] ?? null
     // Only what is due right now goes on; the morning push depends on the
     // founder's zone, so this cannot be filtered in the query.
-    const pushes = duePushes({ now, timeZone, lastActivityAt, quietSituation, moves })
+    const pushes = duePushes({ now, timeZone, lastActivityAt, quietSituation, moves, goal, threads })
       .filter(({ item }) => now >= item.dueAt && now < item.expiresAt)
     if (pushes.length === 0) return
 
@@ -205,19 +206,30 @@ export function createPushScheduler({ supabase, sender, clock, isCareOpen, nameO
   async function tick() {
     const now = clock.now()
     const summary = { sent: 0, failed: 0, unknown: 0, paused_for_care: 0, founders: 0 }
-    const [moves, quiet, leaving] = await Promise.all([
+    const day = (offset) => iso(now + offset * DAY_MS).slice(0, 10)
+    const [moves, quiet, leaving, goals, threads] = await Promise.all([
       everyRow(() => supabase.from('moves').select('id, user_id, situation_id, learn_id, title, status, committed_at, report_due_at, closes_at, time_zone')
         .in('status', ACTIVE_STATUSES).gt('closes_at', iso(now))),
       everyRow(() => supabase.from('situations').select('id, user_id, title, status, last_activity_at')
         .eq('status', 'open').lte('last_activity_at', iso(now - QUIET_AFTER_MS)).gt('last_activity_at', iso(now - PAUSE_AFTER_MS))),
       // A founder who asked for deletion gets no more pushes.
       everyRow(() => supabase.from('account_requests').select('id, user_id').eq('kind', 'delete').in('status', ['queued', 'pending', 'deleting'])),
+      // Nudges. A day either side, because the founder's local day decides (due.js).
+      everyRow(() => supabase.from('founder_profiles').select('user_id, deadline, signup_answers')
+        .gte('deadline', day(NUDGE_GOAL_DAYS - 1)).lte('deadline', day(NUDGE_GOAL_DAYS + 1)), 'user_id'),
+      everyRow(() => supabase.from('founder_threads').select('id, user_id, title, updated_at')
+        .eq('status', 'open').lte('updated_at', iso(now - NUDGE_THREAD_QUIET_MS))),
     ])
     const deleting = new Set(leaving.map((r) => r.user_id))
     const byFounder = new Map()
-    const of = (userId) => byFounder.get(userId) ?? byFounder.set(userId, { moves: [], quietSituations: [] }).get(userId)
+    const of = (userId) => byFounder.get(userId) ?? byFounder.set(userId, { moves: [], quietSituations: [], goal: null, threads: [] }).get(userId)
     for (const m of moves) of(m.user_id).moves.push(m)
     for (const s of quiet) of(s.user_id).quietSituations.push(s)
+    for (const t of threads) of(t.user_id).threads.push(t)
+    for (const p of goals) {
+      const text = p.signup_answers?.goal?.goal
+      if (typeof text === 'string' && text.trim()) of(p.user_id).goal = { text: text.trim(), date: String(p.deadline).slice(0, 10) }
+    }
     for (const [userId, rows] of byFounder) {
       if (deleting.has(userId)) continue
       summary.founders += 1

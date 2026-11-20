@@ -3,9 +3,9 @@ import test from 'node:test'
 import { createApp } from '../app.js'
 import { createFakeClock, createFakeOpenAI, createFakePushSender, createFakeSupabase } from '../testing/fakes.js'
 import { BANNED_PHRASES, TEASER, norm, wordRx } from '../journey/ownWords.js'
-import { decidePush, inQuietHours, localDay, PAUSE_AFTER_MS, DAY_MS } from './policy.js'
+import { decidePush, inQuietHours, localDay, PAUSE_AFTER_MS, DAY_MS, NUDGE_SPACING_MS } from './policy.js'
 import { composePush, HIDDEN_BODY, LOCK_SCREEN_MODES, PUSH_WORDING } from './compose.js'
-import { duePushes } from './due.js'
+import { duePushes, NUDGE_THREAD_QUIET_MS } from './due.js'
 import { createPushScheduler } from './scheduler.js'
 import { cleanTokenPayload, EXPO_TOKEN_RX } from './tokens.js'
 import { founderFirstName } from '../journey/home/name.js'
@@ -196,6 +196,7 @@ const ITEMS = {
   reminder: { moveId: MOVE_ID, situationId: SIT, title: 'Ask both clinics that asked for pricing for a call.', subject: 'the two clinics' },
   morning: { moveId: MOVE_ID, situationId: SIT, title: 'Ask both clinics that asked for pricing for a call.', subject: 'the two clinics' },
   quiet_check: { situationId: SIT, situationTitle: 'Pricing emails to clinics' },
+  nudge: { nudge: 'thread', text: 'Get both clinics to agree on pricing' },
 }
 
 test('compose: the approved push, the name inside, and the three lock-screen modes', () => {
@@ -651,4 +652,137 @@ test('the Expo sender reads tickets and flags a device that is gone', async () =
   // A clear refusal: retried later.
   const refused = createExpoSender({ fetchImpl: reply(400, { errors: [{ code: 'VALIDATION_ERROR' }] }) })
   assert.deepEqual(await refused.send({ to: TOKEN, body: 'b' }), { ok: false, unknown: false, invalidToken: false, error: 'VALIDATION_ERROR' })
+})
+
+// ── Nudges from memory (C1) ─────────────────────────────────────────────────
+
+// Karachi: 8 am local on Nov 20 is 03:00Z. The goal date is a week ahead.
+const NOW = T('2026-11-20T03:00:00Z')
+const GOAL = { text: '20 paying clinics', date: '2026-11-27' }
+const THREAD = { id: uuid(500), user_id: USER.id, title: 'Get Shifa Clinic to sign', status: 'open', updated_at: at(NOW - 8 * DAY_MS) }
+
+test('due: a goal date exactly a week ahead and a thread quiet for 7 days give nudges, freshest thread first', () => {
+  const older = { ...THREAD, id: uuid(501), title: 'Find a cheaper way to reach schools', updated_at: at(NOW - 20 * DAY_MS) }
+  const got = duePushes({ now: NOW, timeZone: 'Asia/Karachi', goal: GOAL, threads: [older, THREAD] })
+  assert.deepEqual(got.map((p) => [p.kind, p.item.nudge, p.item.text]), [
+    ['nudge', 'goal', '20 paying clinics'], ['nudge', 'thread', 'Get Shifa Clinic to sign'], ['nudge', 'thread', 'Find a cheaper way to reach schools'],
+  ])
+  assert.equal(got[0].item.key, 'nudge:goal:2026-11-27')
+  assert.equal(got[1].item.key, `nudge:thread:${THREAD.id}:${THREAD.updated_at}`)
+  // Six or eight days ahead, or a thread touched within the week: nothing.
+  for (const date of ['2026-11-26', '2026-11-28']) assert.equal(duePushes({ now: NOW, timeZone: 'Asia/Karachi', goal: { ...GOAL, date } }).length, 0)
+  assert.equal(duePushes({ now: NOW, timeZone: 'Asia/Karachi', threads: [{ ...THREAD, updated_at: at(NOW - NUDGE_THREAD_QUIET_MS + HOUR) }] }).length, 0)
+})
+
+test('due: a move or a quiet situation keeps the morning; no nudge is offered', () => {
+  const m = move({ committed_at: at(NOW - 2 * HOUR), report_due_at: at(NOW + 12 * HOUR), closes_at: at(NOW + 40 * HOUR) })
+  const withMove = duePushes({ now: NOW, timeZone: 'Asia/Karachi', moves: [m], goal: GOAL, threads: [THREAD] })
+  assert.equal(withMove.some((p) => p.kind === 'nudge'), false)
+  const quiet = duePushes({ now: NOW, timeZone: 'Asia/Karachi', quietSituation: { id: SIT, title: 'Pricing' }, lastActivityAt: at(NOW - 4 * DAY_MS), goal: GOAL, threads: [THREAD] })
+  assert.deepEqual(quiet.map((p) => p.kind), ['quiet_check'])
+})
+
+test('policy: a nudge takes the morning slot, follows the morning switch, and waits 3 days after the last one', () => {
+  const item = { key: 'nudge:goal:2026-11-27', dueAt: NOW, expiresAt: NOW + 4 * HOUR, nudge: 'goal', text: '20 paying clinics' }
+  const f = founder({ lastActivityAt: at(NOW - DAY_MS) })
+  const go = (over = {}) => decidePush({ founder: f, now: NOW, log: [], care: false, kind: 'nudge', item, ...over })
+  assert.equal(go().send, true)
+  assert.equal(go().slot, 'morning')
+  const sent = (daysAgo, kind = 'nudge') => ({ kind, status: 'sent', dedupe_key: `x${daysAgo}`, local_day: localDay(NOW - daysAgo * DAY_MS, 'Asia/Karachi'), created_at: at(NOW - daysAgo * DAY_MS) })
+  assert.equal(go({ log: [sent(2)] }).reason, 'nudge_spacing')
+  assert.equal(go({ log: [sent(NUDGE_SPACING_MS / DAY_MS)] }).send, true)
+  assert.equal(go({ log: [{ ...sent(0, 'morning'), created_at: at(NOW - HOUR) }] }).reason, 'slot_used')
+  assert.equal(go({ founder: { ...f, settings: { ...f.settings, morning_on: false } } }).reason, 'off')
+  assert.equal(go({ item: { ...item, text: ' ' } }).reason, 'nothing_real')
+  assert.equal(go({ item: { ...item, nudge: 'other' } }).reason, 'nothing_real')
+  assert.equal(go({ care: true }).reason, 'care')
+  assert.equal(go({ founder: { ...f, lastActivityAt: at(NOW - PAUSE_AFTER_MS) } }).reason, 'paused')
+})
+
+test('compose: the approved nudge lines, in the founder\'s own words, open home', () => {
+  const goal = { nudge: 'goal', text: '20 paying clinics' }
+  const full = (item, name = 'Rafay') => composePush({ kind: 'nudge', item, name, lockScreen: 'full' })
+  assert.equal(full(goal).body, 'Rafay, 7 days to 20 paying clinics. Where are you?')
+  assert.equal(full(goal, null).body, '7 days to 20 paying clinics. Where are you?')
+  assert.equal(full({ nudge: 'thread', text: 'Get Shifa Clinic to sign' }).body, 'Rafay, where are you with "Get Shifa Clinic to sign"?')
+  assert.equal(full({ nudge: 'thread', text: 'Decide on "Plan B" pricing.' }).body, 'Rafay, where are you with "Decide on Plan B pricing"?')
+  assert.equal(composePush({ kind: 'nudge', item: goal, name: 'Rafay' }).body, 'Rafay, your goal date is a week away.')
+  assert.equal(composePush({ kind: 'nudge', item: ITEMS.nudge, name: 'Rafay' }).body, 'Rafay, one of your open questions has gone quiet.')
+  assert.deepEqual(full(goal).data, { kind: 'nudge', open: 'home' })
+  // A stored goal holding a banned phrase falls back to the short line.
+  assert.equal(full({ nudge: 'goal', text: 'a great launch' }).body, 'Rafay, your goal date is a week away.')
+})
+
+const nudgeSetup = ({ threads = [THREAD], profile = {}, profiles = [], settings = [{ user_id: USER.id, lock_screen: 'full' }], situations = [], ...opts } = {}) => schedulerSetup({
+  moves: [], settings, start: NOW,
+  // Active a day ago: not quiet (no quiet_check), not paused.
+  situations: [{ id: SIT, user_id: USER.id, title: 'Pricing emails to clinics', status: 'open', last_activity_at: at(NOW - DAY_MS) }, ...situations],
+  tables: {
+    founder_profiles: [{ user_id: USER.id, timezone: 'Asia/Karachi', report_time_local: null, deadline: null, signup_answers: {}, ...profile }, ...profiles],
+    founder_threads: threads,
+  },
+  ...opts,
+})
+
+test('scheduler: one thread nudge in the morning, none the next two days, then the next thread', async () => {
+  const second = { ...THREAD, id: uuid(501), title: 'Find a cheaper way to reach schools', updated_at: at(NOW - 10 * DAY_MS) }
+  const s = nudgeSetup({ threads: [THREAD, second] })
+  const days = []
+  for (let d = 0; d < 4; d += 1) {
+    // The founder stays active (a situation touched yesterday), so no quiet_check takes the morning.
+    await s.supabase.from('situations').update({ last_activity_at: at(NOW + (d - 1) * DAY_MS) }).eq('id', SIT)
+    for (let t = NOW - 3 * HOUR + d * DAY_MS; t < NOW + 12 * HOUR + d * DAY_MS; t += 30 * MIN) {
+      s.clock.set(t)
+      await s.scheduler.tick()
+    }
+    days.push(s.sender.sent.length)
+  }
+  assert.deepEqual(days, [1, 1, 1, 2])
+  assert.deepEqual(s.sender.sent.map((m) => m.body), [
+    'Rafay, where are you with "Get Shifa Clinic to sign"?',
+    'Rafay, where are you with "Find a cheaper way to reach schools"?',
+  ])
+  assert.deepEqual(s.log().map((r) => [r.kind, r.slot, r.status, r.move_id, r.situation_id]), [['nudge', 'morning', 'sent', null, null], ['nudge', 'morning', 'sent', null, null]])
+})
+
+test('scheduler: the goal nudge goes out a week before the sign-up goal date, in the founder\'s words', async () => {
+  const s = nudgeSetup({ threads: [], profile: { deadline: '2026-11-27', signup_answers: { goal: { goal: '20 paying clinics', when: 'This month', date: '2026-11-27' } } } })
+  await s.scheduler.tick()
+  assert.deepEqual(s.sender.sent.map((m) => m.body), ['Rafay, 7 days to 20 paying clinics. Where are you?'])
+  assert.equal(s.log()[0].dedupe_key, 'nudge:goal:2026-11-27')
+})
+
+test('scheduler: each founder is nudged about their own thread only', async () => {
+  const s = nudgeSetup({
+    threads: [THREAD, { ...THREAD, id: uuid(502), user_id: OTHER.id, title: 'Hire a second baker' }],
+    tokens: [
+      { id: uuid(1), token: TOKEN, user_id: USER.id, platform: 'ios', timezone: 'Asia/Karachi', updated_at: at(NOW) },
+      { id: uuid(2), token: TOKEN2, user_id: OTHER.id, platform: 'ios', timezone: 'Asia/Karachi', updated_at: at(NOW) },
+    ],
+    situations: [{ id: uuid(101), user_id: OTHER.id, title: 'Bakery hours', status: 'open', last_activity_at: at(NOW - DAY_MS) }],
+    profiles: [{ user_id: OTHER.id, timezone: 'Asia/Karachi', deadline: null, signup_answers: {} }],
+    settings: [{ user_id: USER.id, lock_screen: 'full' }, { user_id: OTHER.id, lock_screen: 'full' }],
+  })
+  await s.scheduler.tick()
+  const to = Object.fromEntries(s.sender.sent.map((m) => [m.to, m.body]))
+  assert.match(to[TOKEN], /Shifa Clinic/)
+  assert.doesNotMatch(to[TOKEN], /baker/)
+  assert.match(to[TOKEN2], /second baker/)
+  assert.doesNotMatch(to[TOKEN2], /Shifa/)
+})
+
+test('scheduler: no nudge while care is open, after 14 quiet days, or twice from two schedulers', async () => {
+  const care = nudgeSetup({ care: async () => true })
+  await care.scheduler.tick()
+  assert.equal(care.sender.sent.length, 0)
+
+  const paused = nudgeSetup()
+  await paused.supabase.from('situations').update({ last_activity_at: at(NOW - 15 * DAY_MS) }).eq('id', SIT)
+  await paused.scheduler.tick()
+  assert.equal(paused.sender.sent.length, 0)
+
+  const twice = nudgeSetup()
+  await Promise.all([twice.scheduler.tick(), twice.make().tick(), twice.scheduler.tick()])
+  assert.equal(twice.sender.sent.length, 1)
+  assert.equal(twice.log().length, 1)
 })

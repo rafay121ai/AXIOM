@@ -612,3 +612,57 @@ What was built (branch `feat/learn-every-message`, Slices 1 to 8; no live DB wri
 - [x] Slices 5 to 7: ask what changed, shift written by code from a fixed template, no invented units, grounded Read and first reading (one cheap model check for claims the founder never made; kill switch `READ_GROUNDING=off`; fails open), no contrasts, a failing Learn reply never ships as is, markup characters rejected, shorter shift, safer units. Move: one first step instead of a checklist (one-line change).
 - [x] Slice 8, pre-merge review fixes: the detector needs the same measure (period) and ignores goals, targets and one-off past numbers; only a STRONG conflict is enforced in code, a weak one is a prompt notice only; "said once" holds across situations through the stored shift; earlier numbers are allowed only for the active conflict; the health filter again blocks "fell ill" and friends but not the typo "Ill do it"; a blocked topic anywhere in a message skips the whole pass; the grounding check runs at most once, has an 8 second limit, and on the last attempt never replaces a Read (it is logged); per-founder queue for the message pass; shift text in plain third person within 240 characters; Learn fallback wording (needs Rafay's approval, see decisions.md).
 - [ ] Then C1 (proactive nudges from memory), after Rafay checks slices 1 to 3.
+
+# Plan (Nov 20): C1, nudges from memory (PLAN ONLY, nothing built)
+Decided (Rafay, Nov 20): nudges SHARE the two existing push slots. Still at most 2 pushes a day.
+Branch: new `feat/memory-nudges` off main.
+
+## Found in the code (Nov 20)
+- Two of the three C1 ideas already exist: an unreported move gets the evening check-in and one reminder (`push/due.js`), and a situation quiet for 3 days gets `quiet_check`. Nothing new to build for them.
+- What is new: (1) the sign-up goal date coming up (`founder_profiles` answers, `deadlineFor`), (2) an open thread (`founder_threads`: goal, bet, open_question) left untouched. Threads have no due date, so the only real deadline is the sign-up goal.
+- CORRECTION to what I said on Nov 20: sharing slots avoids a slot change, but `notification_log.kind` has a CHECK list (`morning, quiet_check, evening, reminder`, migration `20261101000007`). A new kind `nudge` needs a small migration (add it to that list; same drop and re-add NOT VALID with lock_timeout as `20261101000009`). Reusing `quiet_check` would avoid it but mislabels the log: not proposed.
+- `founder_threads` comes from the memory-layer migrations (`20261109*`). VERIFY read-only whether they are live; if not, they go first (already planned).
+
+## Rules (enforced in code, in policy.js and due.js)
+- Kind `nudge`, morning slot, `morning_on` switch. Only when nothing else wants the morning: a move's morning push, then `quiet_check`, then a nudge.
+- At most one nudge every 3 days per founder. Dedupe per item: the goal nudge once per goal date; a thread nudge once per quiet stretch (key holds the thread's `updated_at`).
+- Goal: one nudge 7 days before the goal date. None after the date.
+- Thread: open, untouched 7 days or more, and not the title of an active move or the quiet situation already being pushed.
+- Every existing rule holds: care pause, quiet hours, 14 days inactive pauses all, deleted accounts, no device, cap of 2, log row before send.
+- Text from fixed templates with stored words only, no model call ($0). Lock-screen modes as today.
+
+## Copy (NEW, needs Rafay's approval before it ships)
+- goal, full: "Rafay, 7 days to {goal}. Where are you?"  short: "Rafay, your goal date is a week away."
+- thread, full: "Rafay, where are you with {thread, second person}?"  short: "Rafay, one of your open questions has gone quiet."
+- Tap opens the home screen. Check what the app does with a new `open` value first.
+
+## Steps
+- [x] N1. Read-only live check: are `20261109*` and `20261101000007` applied; current `notification_log_kind_check` definition. Migration plan from that dump. Gate: Rafay approves applying.
+- [x] N2. (file written, NOT applied) Migration: add `nudge` to the kind CHECK, with rollback; `migrations.test.js` follows `PUSH_KINDS`. migration-checker agent.
+- [x] N3. Server: `due.js` builds nudge items from the goal and threads; `policy.js` adds the kind, slot, switch, 3-day spacing; `compose.js` the copy; scheduler loads goal and threads only for founders with nothing else due.
+- [x] N4. Tests with fakes (`push.test.js`): each trigger sends once; nothing worth saying sends nothing; priority under the move and quiet_check; 3-day spacing; cap of 2 and slot hold with two schedulers; care, quiet hours, pause, deletion; a nudge named after another founder's goal fails the specificity test; banned phrases and teasers.
+- [x] N5. No app change: the app has no push-tap handler, so any tap opens the app and a returning founder lands on home.
+- [ ] N6. voice-checker on the new copy. Full server and app tests.
+- [ ] N7. Dry run on live data, read only: print who would get which nudge and why; send nothing. Needs Rafay's OK.
+- [ ] N8. One real push to Rafay's phone only. Needs Rafay's yes and a build that can receive pushes.
+
+## N1 result (Nov 20, read-only check of live main `zmzrrmqqxqzmmfovpqjt`; nothing written)
+- Applied live: every migration up to `20261109000004` (memory layer included). `founder_threads` exists live, RLS on, kinds goal, bet, open_question; statuses open, done, dropped.
+- `notification_log_kind_check` live = `kind in ('morning','quiet_check','evening','reminder')`, validated. Slot check `morning, evening`. Unique (user_id, dedupe_key) and partial unique (user_id, local_day, slot) while sending or sent. Same as the repo file.
+- Live counts: notification_log 0 rows, push_tokens 0, open threads 1, profiles with a sign-up goal 3.
+- FINDING: no device has ever registered for pushes, and no push has ever been sent live. Until a real build registers a token, no founder can get any push, nudge or not. That is the blocker for N7 and N8, not the code.
+
+## Migration plan for N2 (written, NOT applied; needs Rafay's approval)
+File `supabase/migrations/20261120000001_push_kind_nudge.sql`, the pattern of `20261101000009`:
+- `set lock_timeout = '5s'`; drop `notification_log_kind_check` if exists; re-add it as `kind in ('morning','quiet_check','evening','reminder','nudge') not valid`; reset lock_timeout. Idempotent.
+- Every value allowed before stays allowed. No data changes. The table has 0 rows, so the lock is instant.
+- No new column: a nudge row keeps move_id and situation_id null; the dedupe key names the goal or the thread.
+- Rollback: re-add the four-value check from `20261101000007` (safe while no nudge row exists; otherwise delete nudge rows first, with approval).
+- `migrations.test.js` already compares the check list with `PUSH_KINDS`, so adding `nudge` to `PUSH_KINDS` and the file together keeps it green.
+- Deploy order: migration first, then server code.
+
+## Built (Nov 20, uncommitted on the working tree; not applied, not deployed)
+- `push/due.js` goal and thread nudges (only when nothing else wants the morning); `push/policy.js` kind `nudge`, morning slot and switch, 3-day spacing; `push/compose.js` the approved lines (the thread title is quoted as stored, since titles are imperatives); `push/scheduler.js` finds founders by goal date (a day either side) and quiet open threads.
+- Dropped from the plan: "thread not the title of an active move". The morning priority already keeps a move or quiet situation first; exact title matches between threads and moves do not happen.
+- Tests: 11 new in `push/push.test.js`; full server suite 827 of 827 pass.
+- Left: voice check, Rafay's approval to apply `20261120000001`, N7 and N8 (blocked: 0 push tokens live).
