@@ -326,3 +326,13 @@ Written against the live schema dump audit/schema_live_2026-11-09.md. Apply in o
 Status Nov 10 2026: Rafay approved applying all four. Applied by SQL after a read-only check that live still matched the dump: 20261109000001, 20261109000002, 20261109000004 (verified: 8 tables with RLS and no policies or client grants, birthday columns, `beliefs` in the call_type check). 20261109000003 (delete_account) was blocked by the permission classifier and is NOT applied; the live function is unchanged (md5 cca1e9b4...). Until it is applied, account deletion still removes memory rows because they cascade from auth.users when the sign-in account is removed as the last step. The supabase_migrations history table has no rows for the applied files yet: record all four together once 3 is applied.
 
 Update Nov 10 2026: Rafay ran 20261109000003 (delete_account) by hand in the SQL editor and recorded all four versions in supabase_migrations.schema_migrations. Verified read-only afterwards: the live delete_account has 36 delete statements (the 28 it had plus the 8 memory tables), and only service_role can execute it; the history table lists all four versions. Nothing remains to apply for the memory layer. Rollback (supabase/rollback/20261109_rollback.sql) is still the way back: roll the server code back first.
+
+## Memory nudges (Nov 20 2026): APPLIED to live on Nov 20 2026
+
+Written after a read-only check of live main on Nov 20 (tasks/todo.md, "N1 result"): the live `notification_log_kind_check` matched `20261101000007` and the table held 0 rows.
+
+- `20261120000001_push_kind_nudge.sql`: notification_log.kind also accepts `nudge` (NOT VALID, 5 second lock timeout). Every earlier value stays allowed; no column or data change. Rollback is in the file header (re-add the four-value check, only while no `nudge` row exists).
+
+Apply BEFORE the server code that sends nudges is deployed (Render deploys from main): without it the scheduler's log insert for a nudge fails the CHECK, the nudge is skipped and logged as "founder skipped", and the other pushes are unaffected. Needs Rafay's explicit approval.
+
+Status Nov 20 2026: Rafay approved applying. Re-checked live first (check unchanged, 0 rows, version not recorded), then ran the file's statements and recorded version 20261120000001 in supabase_migrations.schema_migrations in one transaction. Verified read-only afterwards: the kind check lists nudge and is NOT VALID; the slot, status and attempts checks are unchanged.

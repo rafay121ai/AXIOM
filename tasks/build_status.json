@@ -1,6 +1,6 @@
 {
-  "updated": "2026-10-31T17:08:23+05:00",
-  "headline": "Build complete: every screen and the server, on fakes. Nothing applied, pushed or spent",
+  "updated": "2026-11-20T16:53:51+05:00",
+  "headline": "C1 nudges from memory built on fakes (827 server tests pass). Migration written, not applied",
   "phase": "Server",
   "now": {
     "what": "Done. Waiting for Rafay",
@@ -96,9 +96,9 @@
     "maxRuns": 3
   },
   "tests": {
-    "passing": 535,
+    "passing": 827,
     "failing": 0,
-    "last": "journey/server npm test (local loopback allowed; fakes only)"
+    "last": "server suite after C1 nudges"
   },
   "next_stop": {
     "name": "B4 Situation and Read",
@@ -116,14 +116,6 @@
     "Supabase deployment waiting for authenticated main-project connection in Codex; CLI has no access token"
   ],
   "events": [
-    {
-      "t": "2026-10-30T15:14:46+05:00",
-      "text": "B10 is done: Nine migration files and a plain-English plan, written and statically checked, NOT applied. Independent migration check running"
-    },
-    {
-      "t": "2026-10-30T15:14:46+05:00",
-      "text": "helper builder: reported (files only, 19 static checks, b67e94e)"
-    },
     {
       "t": "2026-10-30T15:14:46+05:00",
       "text": "helper migration-checker: running"
@@ -275,6 +267,14 @@
     {
       "t": "2026-10-31T17:08:23+05:00",
       "text": "Server verification passed 535/535; live migrations remain pending authenticated access"
+    },
+    {
+      "t": "2026-11-20T16:49:36+05:00",
+      "text": "C1 nudges: goal date and quiet-thread pushes in the morning slot; migration 20261120000001 written, not applied; live has 0 push tokens"
+    },
+    {
+      "t": "2026-11-20T16:53:51+05:00",
+      "text": "Migration 20261120000001 (push kind nudge) applied to live and verified; C1 committed on feat/memory-nudges"
     }
   ],
   "rate_limit": {

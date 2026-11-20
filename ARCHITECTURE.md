@@ -258,7 +258,7 @@ Knowledge project.
 | founder_lesson_log | Author lessons already shown | id, user_id, source_key (unique per founder), slot (1 or 2) |
 | user_settings      | Settings | user_id, share_auto (default false), morning_on, evening_on, lock_screen (full, short, hidden), quiet_start, quiet_end, mentor_style (calm, direct, hard), keep_items, last_greeting |
 | push_tokens        | Devices | id, user_id, token (unique), platform (ios, android), timezone |
-| notification_log   | The push cap and dedupe | id, user_id, kind (morning, quiet_check, evening, reminder), slot (morning, evening), local_day, status (sending, sent, failed), attempts, dedupe_key. Unique per founder, day and slot: at most 2 a day. |
+| notification_log   | The push cap and dedupe | id, user_id, kind (morning, quiet_check, evening, reminder, nudge), slot (morning, evening), local_day, status (sending, sent, failed), attempts, dedupe_key. Unique per founder, day and slot: at most 2 a day. |
 | care_events        | Private | id, user_id, level (unclear, clear), scope_id, created_at, resolved_at. No message text. |
 | account_requests   | Export and delete requests | id, user_id, kind (export, delete), status, delete_after |
 | founder_beliefs    | What Axiom learned: business facts, patterns, preferences (server only, memory layer, applied to live Nov 10 2026) | id, user_id, belief (3 to 240), kind (fact, pattern, preference), confidence 0 to 1, status (active, superseded), superseded_by, source (signup, conversation, report) |
@@ -495,7 +495,11 @@ loaded.
 - **Push** (Expo push to iOS and Android) from `server/push/`. The morning move
   and the evening check-in. **At most 2 a day** per founder, one per slot,
   recorded in `notification_log`. If nothing is due, nothing is sent. The
-  "quiet for 3 days" check replaces the morning one.
+  "quiet for 3 days" check replaces the morning one. When neither wants the
+  morning, a **nudge** from memory may take it: the sign-up goal date exactly a
+  week away, or an open thread untouched for 7 to 21 days whose situation is
+  not reported or closed. At most one nudge every 3 days; fixed templates, no
+  model call.
 - Fires at the founder's local time (timezone stored per founder) and respects
   quiet hours. Failed sends are retried up to 3 attempts.
 - The lock-screen text follows the founder's setting (full names the move,

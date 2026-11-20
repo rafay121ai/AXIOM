@@ -504,7 +504,9 @@ plan before it is built.
 ## Pushes
 - **At most 2 scheduled pushes a day.** Normally the morning move and the evening check-in. (Proactive signals have their own cap of 4 a day, planned: see "Proactive Axiom".) If
   nothing is due, no push. The "quiet for 3 days" check replaces the morning
-  one. Quiet hours.
+  one. When neither is due, the morning may carry a nudge from what the founder
+  told Axiom: their goal date a week away, or an open thread quiet for a week
+  (never one already reported). At most one nudge every 3 days. Quiet hours.
 - The name appears inside most pushes. Each one names something real.
 - Lock screen shows Short by default (founder choice).
 - Pushes stop completely while the care screen is up.
