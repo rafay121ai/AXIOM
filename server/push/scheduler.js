@@ -21,7 +21,7 @@ import { ACTIVE_STATUSES } from '../journey/move/room.js'
 import { founderFirstName } from '../journey/home/name.js'
 import { loadStates, statusOf } from '../journey/home/state.js'
 import { DAY_MS, decidePush, PAUSE_AFTER_MS, QUIET_AFTER_MS } from './policy.js'
-import { duePushes, NUDGE_GOAL_DAYS, NUDGE_THREAD_QUIET_MS } from './due.js'
+import { duePushes, NUDGE_GOAL_DAYS, NUDGE_THREAD_MAX_QUIET_MS, NUDGE_THREAD_QUIET_MS } from './due.js'
 import { composePush } from './compose.js'
 import { reminderSettingsOf } from './settings.js'
 import { createPushTokens } from './tokens.js'
@@ -124,6 +124,23 @@ export function createPushScheduler({ supabase, sender, clock, isCareOpen, nameO
     return { delivered, unknown, error }
   }
 
+  // A thread made from a situation stays open after that situation is reported
+  // or closed. Ask the same rule History uses, so a nudge never asks about
+  // something that is done. Read only: the stored thread is not changed.
+  async function openThreads(userId, threads, now) {
+    if (threads.length === 0) return threads
+    const links = await one(supabase.from('memory_evidence').select('item_id, source_id').eq('user_id', userId)
+      .eq('item_table', 'founder_threads').eq('source_kind', 'situation').in('item_id', threads.map((t) => t.id)))
+    const situationIds = [...new Set(links.map((l) => l.source_id).filter(Boolean))]
+    if (situationIds.length === 0) return threads
+    const situations = await one(supabase.from('situations').select('id, user_id, title, status, last_activity_at').eq('user_id', userId).in('id', situationIds))
+    const states = await loadStates(supabase, userId, situations)
+    const open = new Set(situations.filter((s) => statusOf(s, states.get(s.id), now) === 'open').map((s) => s.id))
+    // A link to a situation that is gone counts as not open.
+    const done = new Set(links.filter((l) => l.source_id && !open.has(l.source_id)).map((l) => l.item_id))
+    return threads.filter((t) => !done.has(t.id))
+  }
+
   async function forFounder({ userId, now, moves, quietSituations, goal, threads, summary }) {
     const [devices, profileRow, latest] = await Promise.all([
       tokens.forUser(userId),
@@ -146,7 +163,7 @@ export function createPushScheduler({ supabase, sender, clock, isCareOpen, nameO
       .sort((a, b) => Date.parse(b.last_activity_at) - Date.parse(a.last_activity_at))[0] ?? null
     // Only what is due right now goes on; the morning push depends on the
     // founder's zone, so this cannot be filtered in the query.
-    const pushes = duePushes({ now, timeZone, lastActivityAt, quietSituation, moves, goal, threads })
+    const pushes = duePushes({ now, timeZone, lastActivityAt, quietSituation, moves, goal, threads: await openThreads(userId, threads, now) })
       .filter(({ item }) => now >= item.dueAt && now < item.expiresAt)
     if (pushes.length === 0) return
 
@@ -218,7 +235,7 @@ export function createPushScheduler({ supabase, sender, clock, isCareOpen, nameO
       everyRow(() => supabase.from('founder_profiles').select('user_id, deadline, signup_answers')
         .gte('deadline', day(NUDGE_GOAL_DAYS - 1)).lte('deadline', day(NUDGE_GOAL_DAYS + 1)), 'user_id'),
       everyRow(() => supabase.from('founder_threads').select('id, user_id, title, updated_at')
-        .eq('status', 'open').lte('updated_at', iso(now - NUDGE_THREAD_QUIET_MS))),
+        .eq('status', 'open').lte('updated_at', iso(now - NUDGE_THREAD_QUIET_MS)).gt('updated_at', iso(now - NUDGE_THREAD_MAX_QUIET_MS))),
     ])
     const deleting = new Set(leaving.map((r) => r.user_id))
     const byFounder = new Map()

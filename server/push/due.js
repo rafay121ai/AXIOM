@@ -17,6 +17,8 @@ import { DAY_MS, MORNING_TIME, MORNING_WINDOW_MS, QUIET_AFTER_MS, localDay, loca
 export const REMINDER_LEAD_MS = 60 * 60 * 1000
 export const NUDGE_GOAL_DAYS = 7
 export const NUDGE_THREAD_QUIET_MS = 7 * DAY_MS
+// Threads never close on their own; past this they are not offered again, which keeps every tick small.
+export const NUDGE_THREAD_MAX_QUIET_MS = 21 * DAY_MS
 
 const ms = (iso) => Date.parse(iso ?? '')
 
@@ -49,7 +51,7 @@ export function duePushes({ now, timeZone, moves = [], quietSituation = null, la
       pushes.push({ kind: 'nudge', item: { key: `nudge:goal:${goal.date}`, ...morning, nudge: 'goal', text: goal.text } })
     }
     threads
-      .filter((t) => now - ms(t.updated_at) >= NUDGE_THREAD_QUIET_MS)
+      .filter((t) => now - ms(t.updated_at) >= NUDGE_THREAD_QUIET_MS && now - ms(t.updated_at) < NUDGE_THREAD_MAX_QUIET_MS)
       .sort((a, b) => ms(b.updated_at) - ms(a.updated_at))
       .forEach((t) => pushes.push({ kind: 'nudge', item: { key: `nudge:thread:${t.id}:${t.updated_at}`, ...morning, nudge: 'thread', text: t.title } }))
   }

@@ -78,3 +78,6 @@
 - A builder that nears a usage limit sets `status.py rate waiting <reset>` and writes its step into todo.md first (see the Oct 26 lesson); a resumed builder reads git status and the plan, and does not redo files that already exist.
 - Nov 9: replacing a block of situations.js by slicing from one function's comment to the next function also deleted the helpers that sat between them (startSituation and the turn code), and 95 tests failed. When a script swaps a range, print what it removes first, or swap only the exact old text.
 - Nov 9: lessons missed (Lean Startup and "time to reflect" for "should I sell my old app?") because the library was searched with the founder's raw words, which match passages sharing a word rather than the need. Search with a written statement of the need (learn/searchNeed.js).
+
+## Nov 20 2026: a push about a stored item must check the item is still live
+Threads are made from every situation's title and nothing closes them, so the first nudge build would have asked a founder about a situation they had already reported Done. Rule: any push or prompt built from stored memory checks the source's current status (the same `statusOf` History uses) before it speaks; quiet_check already did, the new kind did not. Regression test: push.test.js "no nudge about a thread whose situation is already reported".

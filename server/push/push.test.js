@@ -786,3 +786,28 @@ test('scheduler: no nudge while care is open, after 14 quiet days, or twice from
   assert.equal(twice.sender.sent.length, 1)
   assert.equal(twice.log().length, 1)
 })
+
+test('scheduler: no nudge about a thread whose situation is already reported; an open one still goes', async () => {
+  const DONE_SIT = uuid(110)
+  const OPEN_SIT = uuid(111)
+  const doneThread = { ...THREAD, id: uuid(510), title: 'Pricing emails to clinics', updated_at: at(NOW - 8 * DAY_MS) }
+  const openThread = { ...THREAD, id: uuid(511), title: 'Hire a part-time nurse', updated_at: at(NOW - 9 * DAY_MS) }
+  const evidence = (thread, sit) => ({ id: thread.id, user_id: USER.id, item_table: 'founder_threads', item_id: thread.id, source_kind: 'situation', source_id: sit, snippet: thread.title })
+  const s = nudgeSetup({
+    threads: [doneThread, openThread],
+    situations: [
+      { id: DONE_SIT, user_id: USER.id, title: 'Pricing emails to clinics', status: 'open', last_activity_at: at(NOW - 8 * DAY_MS) },
+      { id: OPEN_SIT, user_id: USER.id, title: 'Hire a part-time nurse', status: 'open', last_activity_at: at(NOW - 9 * DAY_MS) },
+    ],
+  })
+  await s.supabase.from('memory_evidence').insert([evidence(doneThread, DONE_SIT), evidence(openThread, OPEN_SIT)])
+  await s.supabase.from('reports').insert({ id: uuid(600), user_id: USER.id, situation_id: DONE_SIT, outcome: 'done', created_at: at(NOW - 7 * DAY_MS) })
+  await s.scheduler.tick()
+  assert.deepEqual(s.sender.sent.map((m) => m.body), ['Rafay, where are you with "Hire a part-time nurse"?'])
+})
+
+test('scheduler: a thread quiet for 21 days or more is not offered again', async () => {
+  const s = nudgeSetup({ threads: [{ ...THREAD, updated_at: at(NOW - 21 * DAY_MS) }] })
+  await s.scheduler.tick()
+  assert.equal(s.sender.sent.length, 0)
+})
