@@ -3,7 +3,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { buildBriefText, briefMessages, earlierLines } from './memory/brief.js'
-import { checkFirstReading } from './ownWords.js'
+import { checkFirstReading, looseUnit, pairsOf } from './ownWords.js'
+import { checkFact } from './learn/reply.js'
 import { checkRead, createRead } from './theRead.js'
 import { readMessages } from './prompts/read.js'
 import { readTalkMessages } from './prompts/readTalk.js'
@@ -97,4 +98,17 @@ test('the Read still turns down a long restated run, an invented unit and a numb
   assert.match(unit.problems.join(), /18 customer/)
   const invented = checkRead({ read: { ...base, body: 'Payments go on in 5 weeks. None of the 18 has been asked what they would pay, so each plan is a guess.' }, answerTexts: BOXING })
   assert.match(invented.problems.join(), /number is not in the answers: 5/)
+})
+
+test('spelled numbers: "twenty-five" is 25, "no one" and "zero" give no number, and "18 left" is a unit', () => {
+  const base = { headline: 'You are choosing a price plan before asking anyone who uses it.', closing_question: 'Which of the 18 could you ask about price this week?' }
+  assert.match(checkRead({ read: { ...base, body: 'Only 5 customers signed up, and none of the 18 has been asked what they would pay.' }, answerTexts: ['Twenty-five customers signed up.', ...BOXING] }).problems.join(), /number is not in the answers: 5|5 customer/)
+  assert.equal(looseUnit('25 customers signed up', pairsOf(['Twenty-five customers signed up.'])), null)
+  const first = checkFirstReading({ reading: { headline: 'Nobody pays yet.', body: 'Only 1 person has tried the paid plan and 0 have converted, so the price is untested.', underlines: [] }, answerTexts: ['No one has paid yet. I have zero data on price and launch soon.'] })
+  assert.match(first.problems.join(), /number is not in the answers: 1/)
+  assert.ok(looseUnit('18 left last month.', pairsOf(BOXING)))
+})
+
+test('a Learn fact accepts "2 weeks" when the founder typed "two weeks", like the Read', () => {
+  assert.equal(checkFact('Payments go on in 2 weeks.', ["I'm turning on payments in two weeks."]), 'Payments go on in 2 weeks.')
 })

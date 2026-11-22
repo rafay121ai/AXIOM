@@ -41,10 +41,16 @@ export function quotedPhrases(text) {
 }
 
 // A founder's spelled numbers count as digits ("two weeks" is "2 weeks"), so a Read may write either. Founder side only:
-// Axiom's own "one move" must not become a number it has to source.
-const SPELLED = Object.entries(WORD_NUMBERS).filter(([w, n]) => Number.isInteger(n) && n <= 90 && !['once', 'twice', 'dozen'].includes(w))
+// Axiom's own "one move" must not become a number it has to source. "one" and "zero" stay words ("no one", "the one
+// thing"), and "twenty-five" is 25, never 20 and 5.
+const SPELLED = Object.entries(WORD_NUMBERS).filter(([w, n]) => Number.isInteger(n) && n >= 2 && n <= 90 && !['twice', 'dozen'].includes(w))
+const TENS = SPELLED.filter(([, n]) => n >= 20 && n % 10 === 0).map(([w]) => w)
+const ONES = SPELLED.filter(([, n]) => n < 10).map(([w]) => w).concat('one')
+const compoundRx = new RegExp(`(?<![a-z])(${TENS.join('|')})[- ](${ONES.join('|')})(?![a-z])`, 'g')
 const spelledRx = new RegExp(`(?<![a-z])(${SPELLED.map(([w]) => w).join('|')})(?![a-z])`, 'g')
-export const withDigits = (text) => norm(text).replace(spelledRx, (w) => String(WORD_NUMBERS[w]))
+export const withDigits = (text) => norm(text)
+  .replace(compoundRx, (_, tens, ones) => String(WORD_NUMBERS[tens] + WORD_NUMBERS[ones]))
+  .replace(spelledRx, (w) => String(WORD_NUMBERS[w]))
 
 const numbersIn = (text) =>
   [...norm(text).matchAll(/\d[\d,]*(?:\.\d+)?/g)].map((m) => m[0].replace(/,/g, '').replace(/\.$/, ''))
@@ -78,7 +84,7 @@ export function unquoteUnknown(text, answerTexts) {
 }
 
 const MAX_QUOTE_WORDS = 8
-const RESTATE_RUN = MAX_QUOTE_WORDS // a run longer than the longest allowed quote restates them; shorter ones carry a fact ("train three or more times a week")
+const RESTATE_RUN = MAX_QUOTE_WORDS // a run as long as the longest allowed quote restates them; shorter ones carry a fact ("train three or more times a week")
 const HEADLINE_RUN = 4 // the headline and the closing question carry no quote and no run this long of the founder's words
 const wordsOf = (text) => norm(text).match(/[\p{L}\p{N}']+/gu) ?? []
 const runs = (words, n) => words.slice(0, Math.max(0, words.length - n + 1)).map((_, i) => words.slice(i, i + n).join(' '))
@@ -124,7 +130,7 @@ export function contrastProblem(text) {
 }
 
 // [{ number: '16', unit: 'hour' }] for each digit number followed by a word ("16 hours a week"); function words after a number are no unit.
-const UNIT_SKIP = new Set(['a', 'an', 'the', 'of', 'per', 'more', 'new', 'about', 'or', 'to', 'and', 'in', 'on', 'at', 'for', 'by', 'with', 'from', 'is', 'are', 'as', 'but', 'so', 'then', 'times', 'out', 'you', 'your', 'they', 'it', 'we', 'i', 'that', 'this', 'was', 'were', 'gave', 'said', 'who', 'which', 'whom', 'whose', 'each', 'still', 'have', 'has', 'had', 'will', 'would', 'can', 'could', 'do', 'did', 'now', 'already', 'left', 'all'])
+const UNIT_SKIP = new Set(['a', 'an', 'the', 'of', 'per', 'more', 'new', 'about', 'or', 'to', 'and', 'in', 'on', 'at', 'for', 'by', 'with', 'from', 'is', 'are', 'as', 'but', 'so', 'then', 'times', 'out', 'you', 'your', 'they', 'it', 'we', 'i', 'that', 'this', 'was', 'were', 'gave', 'said', 'who', 'which', 'whom', 'whose', 'each', 'still', 'have', 'has', 'had', 'will', 'would', 'can', 'could', 'do', 'did', 'now', 'already', 'all'])
 export const unitStem = (w) => w.replace(/^hrs?$/, 'hour').replace(/s$/, '')
 export const numberUnits = (text) => [...norm(text).matchAll(/(\d[\d,]*(?:\.\d+)?)(?:k|m)?\s+([a-z]+)/g)]
   .filter((m) => !UNIT_SKIP.has(m[2])).map((m) => ({ number: m[1].replace(/,/g, ''), unit: unitStem(m[2]) }))
