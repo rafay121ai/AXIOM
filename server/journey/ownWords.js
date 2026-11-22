@@ -2,6 +2,8 @@
 // what the founder actually wrote, may only use numbers and months that are in
 // their answers, and must keep to Axiom's voice rules. No model, no I/O.
 
+import { WORD_NUMBERS } from './learn/pictures.js'
+
 export const BANNED_PHRASES = Object.freeze([
   'great question', 'certainly', 'i understand', "that's interesting", 'absolutely',
   'of course', "i'd be happy to", 'great',
@@ -38,6 +40,18 @@ export function quotedPhrases(text) {
   return { phrases: [...t.matchAll(/"([^"]+)"/g)].map((m) => m[1]), unbalanced: count % 2 === 1 }
 }
 
+// A founder's spelled numbers count as digits ("two weeks" is "2 weeks"), so a Read may write either. Founder side only:
+// Axiom's own "one move" must not become a number it has to source. "one" and "zero" stay words ("no one", "the one
+// thing"), and "twenty-five" is 25, never 20 and 5.
+const SPELLED = Object.entries(WORD_NUMBERS).filter(([w, n]) => Number.isInteger(n) && n >= 2 && n <= 90 && !['twice', 'dozen'].includes(w))
+const TENS = SPELLED.filter(([, n]) => n >= 20 && n % 10 === 0).map(([w]) => w)
+const ONES = SPELLED.filter(([, n]) => n < 10).map(([w]) => w).concat('one')
+const compoundRx = new RegExp(`(?<![a-z])(${TENS.join('|')})[- ](${ONES.join('|')})(?![a-z])`, 'g')
+const spelledRx = new RegExp(`(?<![a-z])(${SPELLED.map(([w]) => w).join('|')})(?![a-z])`, 'g')
+export const withDigits = (text) => norm(text)
+  .replace(compoundRx, (_, tens, ones) => String(WORD_NUMBERS[tens] + WORD_NUMBERS[ones]))
+  .replace(spelledRx, (w) => String(WORD_NUMBERS[w]))
+
 const numbersIn = (text) =>
   [...norm(text).matchAll(/\d[\d,]*(?:\.\d+)?/g)].map((m) => m[0].replace(/,/g, '').replace(/\.$/, ''))
 
@@ -70,7 +84,7 @@ export function unquoteUnknown(text, answerTexts) {
 }
 
 const MAX_QUOTE_WORDS = 8
-const RESTATE_RUN = 6
+const RESTATE_RUN = MAX_QUOTE_WORDS // a run as long as the longest allowed quote restates them; shorter ones carry a fact ("train three or more times a week")
 const HEADLINE_RUN = 4 // the headline and the closing question carry no quote and no run this long of the founder's words
 const wordsOf = (text) => norm(text).match(/[\p{L}\p{N}']+/gu) ?? []
 const runs = (words, n) => words.slice(0, Math.max(0, words.length - n + 1)).map((_, i) => words.slice(i, i + n).join(' '))
@@ -116,13 +130,13 @@ export function contrastProblem(text) {
 }
 
 // [{ number: '16', unit: 'hour' }] for each digit number followed by a word ("16 hours a week"); function words after a number are no unit.
-const UNIT_SKIP = new Set(['a', 'an', 'the', 'of', 'per', 'more', 'new', 'about', 'or', 'to', 'and', 'in', 'on', 'at', 'for', 'by', 'with', 'from', 'is', 'are', 'as', 'but', 'so', 'then', 'times', 'out', 'you', 'your', 'they', 'it', 'we', 'i', 'that', 'this', 'was', 'were', 'gave', 'said'])
+const UNIT_SKIP = new Set(['a', 'an', 'the', 'of', 'per', 'more', 'new', 'about', 'or', 'to', 'and', 'in', 'on', 'at', 'for', 'by', 'with', 'from', 'is', 'are', 'as', 'but', 'so', 'then', 'times', 'out', 'you', 'your', 'they', 'it', 'we', 'i', 'that', 'this', 'was', 'were', 'gave', 'said', 'who', 'which', 'whom', 'whose', 'each', 'still', 'have', 'has', 'had', 'will', 'would', 'can', 'could', 'do', 'did', 'now', 'already', 'all'])
 export const unitStem = (w) => w.replace(/^hrs?$/, 'hour').replace(/s$/, '')
 export const numberUnits = (text) => [...norm(text).matchAll(/(\d[\d,]*(?:\.\d+)?)(?:k|m)?\s+([a-z]+)/g)]
   .filter((m) => !UNIT_SKIP.has(m[2])).map((m) => ({ number: m[1].replace(/,/g, ''), unit: unitStem(m[2]) }))
 
 // The "16 hour" pairs in the texts, and the first number in `text` followed by a word the founder never put after it.
-export const pairsOf = (texts) => new Set(texts.flatMap(numberUnits).map((p) => `${p.number} ${p.unit}`))
+export const pairsOf = (texts) => new Set(texts.map(withDigits).flatMap(numberUnits).map((p) => `${p.number} ${p.unit}`))
 export const looseUnit = (text, pairs) => numberUnits(text).find((p) => !pairs.has(`${p.number} ${p.unit}`)) ?? null
 
 // "You said / wrote / told me / mentioned <clause>" must be something they said: at least 80% of the clause's content words
@@ -180,7 +194,7 @@ export function checkFirstReading({ reading, answerTexts, earlierTexts = [] }) {
   }
 
   // Numbers and months
-  const known = new Set([...answerTexts, ...earlierTexts].flatMap(numbersIn))
+  const known = new Set([...answerTexts, ...earlierTexts].map(withDigits).flatMap(numbersIn))
   for (const n of new Set(numbersIn(text))) {
     if (!known.has(n)) problems.push(`number is not in the answers: ${n}`)
   }

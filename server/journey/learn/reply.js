@@ -101,7 +101,7 @@ export function checkFact(fact, founderTexts) {
   if (!t || t.length > FACT_MAX || sentencesOf(t).length !== 1 || !/[.]$/.test(t) || QUOTE_MARKS.test(t)) return null
   if (!checkHook({ text: t, sources: founderTexts, requireQuestion: false }).ok || /\?/.test(t)) return null
   const ownNumbers = new Set(founderTexts.flatMap(numbersWithWords))
-  const ownPairs = new Set(founderTexts.flatMap(numberUnits).map((p) => `${p.number} ${p.unit}`))
+  const ownPairs = pairsOf(founderTexts)
   return numbersWithWords(t).every((n) => ownNumbers.has(n)) && numberUnits(t).every((p) => ownPairs.has(`${p.number} ${p.unit}`)) ? t : null
 }
 
