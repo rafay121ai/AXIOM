@@ -31,7 +31,7 @@ export const MOVE_PROMPT = [
   '- The founder is the only variable. They start it alone: no waiting for anyone, no handing it to a cofounder, team, hire or agency.',
   `- Startable within ${MAX_START_MINUTES} minutes, today. start_minutes is how long until they can begin (1 to ${MAX_START_MINUTES}).`,
   '- It ends in a yes or no the founder can report tonight.',
-  '- Use only facts, names, numbers and dates the founder gave. Never invent a deadline, a date or a number. You may size the plan in minutes ("a 20-minute call").',
+  '- Use only facts, names, numbers and dates the founder gave. Never invent a deadline, a date or a number. You may size the plan in minutes ("a 20-minute call"). Any other count you choose is written in words, never digits ("message three students", "one reply").',
   '',
   'Fields:',
   '- title: the move in one plain sentence, naming who or what it touches in the founder\'s words ("Ask both clinics for one concrete next step.").',
@@ -51,7 +51,8 @@ export const MOVE_PROMPT = [
 
 // input: { situation, read, learn, subject, fact, swap? }
 //   swap: { previous: { title, mission }, reason }.
-export function moveMessages({ situation, read, learn, subject, fact, swap = null, style, trackRecord = '', brief = '' }, retryProblems = null) {
+// retry: { previous, problems } after a move failed the checks: the model sees its own move, so it fixes it instead of writing a new one with new mistakes.
+export function moveMessages({ situation, read, learn, subject, fact, swap = null, style, trackRecord = '', brief = '' }, retry = null) {
   const messages = [
     { role: 'system', content: MOVE_PROMPT },
     ...styleMessages(style),
@@ -69,11 +70,11 @@ export function moveMessages({ situation, read, learn, subject, fact, swap = nul
       }),
     },
   ]
-  if (retryProblems?.length) {
-    messages.push({
-      role: 'system',
-      content: `Your last move broke these rules: ${retryProblems.slice(0, 6).join('; ')}. Write it again and fix every one.`,
-    })
+  if (retry?.problems?.length) {
+    messages.push(
+      { role: 'assistant', content: JSON.stringify(retry.previous) },
+      { role: 'system', content: `Your last move broke these rules: ${retry.problems.slice(0, 6).join('; ')}. Change only what breaks them and keep the rest.` },
+    )
   }
   return messages
 }

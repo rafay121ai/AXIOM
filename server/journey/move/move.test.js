@@ -236,7 +236,10 @@ test('a retry that fixes the problem is shown', async () => {
   try {
     const res = await call('POST', `/api/learn/${LEARN}/move`)
     assert.equal(res.status, 200)
-    assert.match(chatCalls()[1].payload.messages.at(-1).content, /never gave: 7/)
+    const retry = chatCalls()[1].payload.messages
+    assert.match(retry.at(-1).content, /never gave: 7/)
+    // The retry shows the model its own move, so it fixes that move instead of inventing a new one (Nov 22: a fresh retry picked a new number and failed again).
+    assert.deepEqual([retry.at(-2).role, JSON.parse(retry.at(-2).content).mission], ['assistant', 'Email the 7 clinics by Friday.'])
   } finally { await close() }
 })
 
