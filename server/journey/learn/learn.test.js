@@ -111,7 +111,7 @@ async function setup(script = [], { rows = ROWS, answered = true, delayMs = 0, t
   const chatCalls = () => openai.calls.filter((c) => c.payload?.messages && !isSearch(c))
   const searchCalls = () => openai.calls.filter(isSearch)
   const close = () => new Promise((r) => server.close(r))
-  return { call: as('tok'), callOther: as('tok2'), callAnon: as(null), openai, chatCalls, searchCalls, knowledge, rows: (t) => base.rows(t), close }
+  return { call: as('tok'), callOther: as('tok2'), callAnon: as(null), openai, chatCalls, searchCalls, knowledge, rows: (t) => base.rows(t), db: base, close }
 }
 
 const learnReply = (over = {}) => JSON.stringify({
@@ -272,7 +272,7 @@ test('the saved first name wins over the sign-in name in Learn', async () => {
 })
 
 test('never more than two move cards; then the move waits on the home screen', async () => {
-  const { call, id, chatCalls, close } = await started([learnReply(), turnReply(), offerReply(), offerReply(), turnReply({ reply: 'The manager can say yes too, so the second clinic gets the same ask. Who at the second clinic can say yes?' })])
+  const { call, id, chatCalls, db, close } = await started([learnReply(), turnReply(), offerReply(), offerReply(), turnReply({ reply: 'The manager can say yes too, so the second clinic gets the same ask. Who at the second clinic can say yes?' })])
   try {
     await sendTurn(call, id, REAL1, 1)
     assert.equal((await sendTurn(call, id, REAL2, 2)).body.move_offer, 'first')
@@ -285,6 +285,7 @@ test('never more than two move cards; then the move waits on the home screen', a
       kind: 'second', kicker: 'Still waiting', text: 'It takes 10 minutes, Rafay. The two clinics have heard nothing from you for three weeks.',
     })
     assert.equal(second.body.offers_left, 0)
+    await db.from('moves').insert({ id: uuid(900), user_id: USER.id, learn_id: id, status: 'draft' })
     const after = await sendTurn(call, id, REAL4, 5)
     assert.equal(after.body.move_offer, 'none')
     assert.ok(after.body.turn.text.endsWith(AXIOM_LINES.after_cap))
@@ -293,6 +294,23 @@ test('never more than two move cards; then the move waits on the home screen', a
     assert.equal(asks.body.move_offer, 'none')
     assert.equal(asks.body.turn.text, AXIOM_LINES.after_cap)
     assert.equal(chatCalls().length, calls)
+  } finally { await close() }
+})
+
+// Nov 22: both cards were shown while every move failed to save, so no move existed, yet Learn said it waited on the home screen.
+test('after both cards with no move made, Learn never says it waits and shows the card again when asked', async () => {
+  const { call, id, close } = await started([learnReply(), turnReply(), offerReply(), offerReply(), turnReply({ reply: 'The manager can say yes too, so the second clinic gets the same ask. Who at the second clinic can say yes?' })])
+  try {
+    await sendTurn(call, id, REAL1, 1)
+    await sendTurn(call, id, REAL2, 2)
+    assert.equal((await sendTurn(call, id, REAL3, 4)).body.move_offer, 'second')
+    const after = await sendTurn(call, id, REAL4, 5)
+    assert.equal(after.body.move_offer, 'none')
+    assert.ok(!after.body.turn.text.includes(AXIOM_LINES.after_cap))
+    const asks = await sendTurn(call, id, 'what now', 6)
+    assert.equal(asks.body.move_offer, 'first')
+    assert.equal(asks.body.turn.text, AXIOM_LINES.intent)
+    assert.equal(asks.body.move_notice.kind, 'first')
   } finally { await close() }
 })
 

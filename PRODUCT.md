@@ -349,7 +349,9 @@ pillars. A personal struggle is never framed as a performance problem.
   The second is more urgent and uses only real facts (for example "It takes
   10 minutes, Rafay. The two clinics have heard nothing from you for three
   weeks."). No invented deadlines.
-- After that, the move waits on the home screen.
+- After that, the move waits on the home screen. If both cards were shown but
+  no move was ever made (opening it failed), Axiom never says it is waiting;
+  when the founder asks for the move, the card shows again (Rafay, Nov 22).
 
 ---
 
