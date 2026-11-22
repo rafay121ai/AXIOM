@@ -140,7 +140,7 @@ export function createMoves({ supabase, callStructured, clock, log = () => {}, l
     const founderTexts = swap ? [...ctx.founderTexts, swap.reason] : ctx.founderTexts
     const brief = await loadBrief(supabase, userId, ctx.founderTexts.join('\n'))
     const earlierTexts = earlierAllowed(findConflict({ transcript: transcriptOf(ctx.prompt), earlier: earlierLines(brief) }))
-    let problems = null
+    let retry = null
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       let data
       try {
@@ -151,7 +151,7 @@ export function createMoves({ supabase, callStructured, clock, log = () => {}, l
           maxCompletionTokens: 900,
           userId,
           usageContext: { step: 'move', kind, situation_id: conversation.situation_id },
-          messages: moveMessages({ ...ctx.prompt, ...(swap ? { swap } : {}), style, trackRecord, brief }, problems),
+          messages: moveMessages({ ...ctx.prompt, ...(swap ? { swap } : {}), style, trackRecord, brief }, retry),
         }))
       } catch (err) {
         log('model call failed', err)
@@ -159,9 +159,9 @@ export function createMoves({ supabase, callStructured, clock, log = () => {}, l
       }
       const verdict = checkMove({ data, founderTexts, earlierTexts, previous: swap?.previous ?? null })
       if (verdict.problems.length === 0) return verdict
-      problems = verdict.problems
+      retry = { previous: data, problems: verdict.problems }
     }
-    log('move failed the checks twice', { problems })
+    log('move failed the checks twice', { problems: retry.problems })
     throw failed()
   }
 
