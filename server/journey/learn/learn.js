@@ -282,7 +282,16 @@ export function createLearn({ supabase, knowledgeSupabase = null, embed = null, 
 
   // The offer for this reply: none while the founder already has 2 moves open (the offer is not used up).
   async function decide({ userId, conversation, offers, turns }) {
-    const decision = decideMoveOffer({ replies: repliesOf(turns), offers })
+    const replies = repliesOf(turns)
+    let decision = decideMoveOffer({ replies, offers })
+    if (decision.reason === 'cap') {
+      // The cap means the move waits on the home screen, so it holds only once a move exists. Both cards can be
+      // shown with no move made (Nov 22: every move failed to save), and then the card comes back when asked for.
+      const made = await one(supabase.from('moves').select('id').eq('learn_id', conversation.id).limit(1))
+      if (made.length === 0) {
+        decision = asksWhatNext(replies.at(-1) ?? '') ? { ...decision, offer: 'first', reason: 'intent' } : { ...decision, reason: null }
+      }
+    }
     if (decision.offer !== 'none' && !(await hasMoveRoom({ supabase, userId, nowMs: clock.now(), exceptLearnId: conversation.id }))) {
       return { ...decision, offer: 'none', reason: 'no_room' }
     }

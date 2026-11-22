@@ -776,3 +776,6 @@ Replaces the PARKED entry above for Gmail, Calendar and Notion. Plan: tasks/conn
 
 ## Nov 20 2026: nudge thread line keeps the title in quotes (Rafay)
 The full thread nudge reads `Rafay, where are you with "<thread title>"?`, the title verbatim in quotes, instead of the approved second-person form. Reason: thread titles are stored as imperatives ("Get Shifa Clinic to sign"), and rewording them breaks the grammar or the meaning. The short line stays as approved.
+
+## Nov 22 2026: the move card can show again when no move was made (Rafay)
+"At most two cards" holds once a move exists. If both cards were shown but no move was made (from Nov 19 to Nov 22 every move failed to save), Learn does not say "Your move is waiting for you on the home screen", and when the founder asks for the move it answers "Here is your move." with the card again. Reason: the limit stops nagging; a founder asking for their move is not being nagged, and without this the conversation had no way to a move. Enforced in learn.js `decide()`, test in learn.test.js.
