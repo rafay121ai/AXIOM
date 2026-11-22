@@ -20,6 +20,7 @@ import { MENTOR_STYLES } from '../journey/home/settingsService.js'
 import { USAGE_CALL_TYPES } from '../modelUsage.js'
 import { LOCK_SCREEN_MODES } from '../push/compose.js'
 import { PUSH_KINDS } from '../push/policy.js'
+import { MOVE_SCHEMA } from '../journey/move/prompts/move.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SERVER = join(HERE, '..')
@@ -429,6 +430,14 @@ const checkList = (sql, column) => {
   const m = new RegExp(`check\\s*\\(\\s*${column}\\s+in\\s*\\(([^)]*)\\)`, 'i').exec(sql)
   return m ? m[1].split(',').map((s) => s.trim().replace(/^'|'$/g, '')) : null
 }
+
+test('migrations: the latest moves checklist CHECK allows every size the move schema writes', () => {
+  // Nov 22 2026: the move went to one step (dde7d85) while the CHECK still said 2 to 4, so every insert failed live (fixed by 20261122000001, applied Nov 22).
+  const defs = all.map((f) => stripSqlComments(f.sql)).flatMap((sql) => [...sql.matchAll(/moves_checklist_check\s+check\s*\([^;]*?between\s+(\d+)\s+and\s+(\d+)/gi)])
+  const [, min, max] = defs.at(-1).map(Number)
+  const { minItems, maxItems } = MOVE_SCHEMA.properties.checklist
+  assert.ok(min <= minItems && maxItems <= max, `CHECK allows ${min} to ${max}, the move schema writes ${minItems} to ${maxItems}`)
+})
 
 test('migrations: CHECK lists match the values the server code uses', () => {
   // 20261120000001 re-adds the kind check with 'nudge'; the latest definition wins.

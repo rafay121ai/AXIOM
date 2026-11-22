@@ -336,3 +336,13 @@ Written after a read-only check of live main on Nov 20 (tasks/todo.md, "N1 resul
 Apply BEFORE the server code that sends nudges is deployed (Render deploys from main): without it the scheduler's log insert for a nudge fails the CHECK, the nudge is skipped and logged as "founder skipped", and the other pushes are unaffected. Needs Rafay's explicit approval.
 
 Status Nov 20 2026: Rafay approved applying. Re-checked live first (check unchanged, 0 rows, version not recorded), then ran the file's statements and recorded version 20261120000001 in supabase_migrations.schema_migrations in one transaction. Verified read-only afterwards: the kind check lists nudge and is NOT VALID; the slot, status and attempts checks are unchanged.
+
+## Move with one first step (Nov 22 2026): APPLIED to live on Nov 22 2026
+
+Written after a read-only check of live main on Nov 22: the live `moves_checklist_check` matched `20261101000005` (2 to 4 items).
+
+- `20261122000001_moves_checklist_one_step.sql`: moves.checklist accepts 1 to 4 items (NOT VALID, 5 second lock timeout). Every earlier value stays allowed; no column or data change. Rollback is in the file header (re-add the 2 to 4 check, only while no one-item row exists).
+
+Why: commit dde7d85 (Nov 19) made the move carry one first step, but the CHECK still required 2 to 4, so every new move failed on insert (500 on POST /api/learn/:id/move). Reproduced live in the simulator on Nov 22. The server code is already deployed; applying this is what unblocks moves. Needs Rafay's explicit approval.
+
+Status Nov 22 2026: Rafay approved applying. Re-checked live first (check unchanged, version not recorded), then ran the file's statements and recorded version 20261122000001 in supabase_migrations.schema_migrations in one transaction. Verified read-only afterwards: moves_checklist_check allows 1 to 4 and is NOT VALID; the other moves checks are unchanged. A move then saved and committed live from the simulator.

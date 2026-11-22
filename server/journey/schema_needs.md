@@ -149,7 +149,7 @@ values, and the old web app still reads it. To be confirmed by Rafay.
 - `status text not null check (status in ('draft','committed','report_due','reported','closed_no_report','swapped'))`
   (`reported` is set by the Report step; nothing here deletes a move)
 - Shown: `title text not null`, `mission text not null`, `success_condition text not null`,
-  `words text not null default ''`, `checklist jsonb not null` (2 to 4 strings),
+  `words text not null default ''`, `checklist jsonb not null` (1 to 4 strings; the app shows one first step),
   `prediction text not null`, `start_minutes int not null check (start_minutes between 1 and 10)`
 - Server only: `hypothesis text not null`, `validation jsonb not null` (the
   experiment validator's result), `swap_reason text null`
