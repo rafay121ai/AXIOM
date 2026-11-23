@@ -344,9 +344,11 @@ moves, 2 pushes a day.
 - Both are built by code from stored rows with a fixed template, never by a
   model (`server/journey/memory/`). They are background: the system message
   says the conversation always wins, and nothing in them is a source of
-  numbers, dates or names, except the lines under "Earlier they said:" (what
-  the founder typed before). Those lend numbers, dates and "You said" claims
-  to every check (Read, Read talk, Learn, Move), never a quote (decisions.md,
+  numbers, dates or names, except the lines under "Earlier they said:"
+  (stored facts about the founder, some extracted by a model). Those lend
+  numbers, dates and "You said" claims to every check (Read, Read talk,
+  Learn, Move), never a quote, and a line whose number the founder changed
+  anywhere in this conversation is dropped (`earlierSources`, decisions.md,
   Nov 23). Nothing is learned from care moments.
 - **Learning from every message** (`memory/learnMessage.js`): after each
   accepted founder message (Situation, Read answer, Read talk, Learn, Move

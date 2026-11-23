@@ -52,7 +52,8 @@ function pairTension(patterns) {
 // Content words of 4+ letters, so a stored fact on the same topic as the conversation can be found.
 const topicWords = (text) => new Set((norm(text).match(/\p{L}{4,}/gu) ?? []).filter((w) => !STOP.has(w)))
 
-// What the brief printed under "Earlier they said:" (the founder typed it, so its numbers and dates may be used).
+// What the brief printed under "Earlier they said:": stored facts about the founder (some extracted by a model), a source of numbers and dates
+// (minus any the conversation changed: earlierSources in conflicts.js), never of quotes.
 export function earlierLines(brief) {
   const lines = String(brief).split('\n')
   const from = lines.indexOf(EARLIER)

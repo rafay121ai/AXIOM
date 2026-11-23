@@ -141,4 +141,6 @@ test('a number from an "Earlier they said" line passes the Read; one from nowher
   assert.equal((await readFrom(invented)).source, 'fallback')
   const quoted = pricingRead('Payments go on in 2 weeks. The 18 "train with it three or more times" and none has been asked about price.')
   assert.match(checkRead({ read: quoted, answerTexts: PRICING, earlierTexts: earlierLines(PRICING_BRIEF) }).problems.join(), /quoted words are not in the answers/)
+  // Through createRead too: unquoteUnknown drops marks only from a rewording of this conversation's words, so this quote stays and is refused.
+  assert.equal((await readFrom(quoted)).source, 'fallback')
 })

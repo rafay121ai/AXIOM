@@ -8,11 +8,11 @@ import { stripFiller, isFillerReply } from './filler.js'
 import { SITUATION_SCHEMA, situationMessages } from './prompts/situation.js'
 import { READ_TALK_SCHEMA, readTalkMessages } from './prompts/readTalk.js'
 import { createRead } from './theRead.js'
-import { BANNED_PHRASES, contrastProblem, looseUnit, norm, pairsOf, saidProblem, wordRx } from './ownWords.js'
+import { BANNED_PHRASES, contrastProblem, looseUnit, norm, pairsOf, quoteProblems, saidProblem, wordRx } from './ownWords.js'
 import { styleOf } from './prompts/style.js'
 import { loadTrackRecord } from './memory/trackRecord.js'
 import { earlierLines, loadBrief } from './memory/brief.js'
-import { conflictProblem, findConflict, namesBothAndAsks } from './memory/conflicts.js'
+import { conflictProblem, earlierSources, findConflict, namesBothAndAsks } from './memory/conflicts.js'
 
 export const MAX_NEW_SITUATIONS_PER_DAY = 5
 export const TEXT_MAX = 2000
@@ -46,11 +46,12 @@ const titleOk = (title, founderTexts) => {
 }
 const busy = () => new HttpError(409, { error: 'This turn is still being processed. Try again in a moment.', code: 'turn_busy' })
 
-// The reply claims nothing they did not say: no invented "You said ...", no number with a word they never put after it.
-const ownWordsProblems = (text, sources, ownPairs) => {
+// The reply claims nothing they did not say: no quote of words they did not type here (founderTexts), no invented "You said ..." (sources may add
+// earlier lines), no number with a word they never put after it.
+const ownWordsProblems = (text, founderTexts, sources, ownPairs) => {
   const said = saidProblem(text, sources)
   const loose = looseUnit(text, ownPairs)
-  return [...(said ? [said] : []), ...(loose ? [`a number with a word they never put after it: ${loose.number} ${loose.unit}. Say the number the way they said it`] : [])]
+  return [...quoteProblems(text, founderTexts), ...(said ? [said] : []), ...(loose ? [`a number with a word they never put after it: ${loose.number} ${loose.unit}. Say the number the way they said it`] : [])]
 }
 
 // learn: remembers one founder message in the background (memory/learnMessage.js); openThread: stores the situation's one open thread once its Read exists; both no-ops until wired.
@@ -386,8 +387,10 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     const situationTalk = turns.filter((t) => !t.filler && !isReadTalk(t)).map((t) => ({ role: t.role, text: t.text }))
     const sources = [...founderTextsOf(turns), row.closing_answer]
     const brief = await loadBrief(supabase, userId, sources.join('\n'))
-    const earlier = earlierLines(brief)
-    const conflict = findConflict({ transcript: [...situationTalk, { role: 'axiom', text: row.closing_question }, ...talk], earlier })
+    const transcript = [...situationTalk, { role: 'axiom', text: row.closing_question }, ...talk]
+    const lines = earlierLines(brief)
+    const conflict = findConflict({ transcript, earlier: lines })
+    const earlier = earlierSources({ transcript, earlier: lines })
     const ownPairs = pairsOf([...sources, ...earlier, ...(conflict ? [conflict.nowText] : [])])
     let problems = null
     for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -410,7 +413,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
           : reply.includes('?') ? ['the reply holds a question: one question only, in question']
             : threadKinds(reply, sources).length === 0 ? ['the reply says nothing of theirs: use their own words']
               : conflict?.strong && !namesBothAndAsks(`${reply} ${question}`, conflict) ? [conflictProblem(conflict)]
-                : contrastProblem(`${reply} ${question}`) ? [contrastProblem(`${reply} ${question}`)] : ownWordsProblems(`${reply} ${question}`, [...sources, ...earlier, ...(conflict ? [conflict.nowText] : [])], ownPairs)
+                : contrastProblem(`${reply} ${question}`) ? [contrastProblem(`${reply} ${question}`)] : ownWordsProblems(`${reply} ${question}`, sources, [...sources, ...earlier, ...(conflict ? [conflict.nowText] : [])], ownPairs)
         if (verdict.ok && replyProblems.length === 0 && question.length <= 220) return `${reply} ${question}`
         problems = [...replyProblems, ...verdict.problems]
       } catch (err) {

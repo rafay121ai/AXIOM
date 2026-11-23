@@ -680,6 +680,37 @@ test('the talk after the Read may use a number and a "You said" from an "Earlier
   } finally { await close() }
 })
 
+// Review of Nov 23: the founder said 16 hours earlier in this conversation, so the old "under 15 hours" line is no source for the talk.
+test('the talk after the Read may not state an earlier number the founder changed earlier in this conversation', async () => {
+  const fact = { id: uuid(902), user_id: USER.id, belief: 'Works evenings and weekends, under 15 hours a week.', kind: 'fact', confidence: 0.6, source: 'signup', status: 'active', created_at: '2026-10-20T00:00:00Z', updated_at: '2026-10-20T00:00:00Z' }
+  const stale = talkLine({ reply: 'You said under 15 hours a week, and the ordering by hand takes them.' })
+  const { call, openai, close } = await setup([enough(), enough(), readReply(), readReply(), stale, talkLine(), talkLine()], { tables: { founder_beliefs: [fact] } })
+  try {
+    const id = (await create(call, 1, 'I order everything by hand for the clinic and it takes 16 hours a week.')).body.situation_id
+    await call('POST', `/api/situations/${id}/read`)
+    await call('POST', `/api/situations/${id}/read/answer`, { text: 'Nobody, the clinic staff are too busy with patients.' })
+    const talk = openai.calls.filter((c) => c.payload.response_format.json_schema.name === 'read_talk')
+    assert.match(talk[0].payload.messages.find((m) => m.content.startsWith('Past observations')).content, /under 15 hours/)
+    assert.ok(talk.length >= 2)
+    assert.match(talk[1].payload.messages.at(-1).content, /15 hour/)
+  } finally { await close() }
+})
+
+test('the talk after the Read never quotes words the founder did not type in this conversation', async () => {
+  const fact = { id: uuid(903), user_id: USER.id, belief: '18 of them train with it three or more times a week.', kind: 'fact', confidence: 0.6, source: 'signup', status: 'active', created_at: '2026-10-20T00:00:00Z', updated_at: '2026-10-20T00:00:00Z' }
+  const quoted = talkLine({ reply: 'You said "18 of them train with it three or more times a week", and monthly is your pick for the price.' })
+  const { call, openai, close } = await setup([enough(), enough(), readReply(), readReply(), quoted, talkLine(), talkLine()], { tables: { founder_beliefs: [fact] } })
+  try {
+    const id = (await create(call, 1, 'I built a boxing app people train with, and I need to pick the price: monthly or yearly.')).body.situation_id
+    await call('POST', `/api/situations/${id}/read`)
+    const res = await call('POST', `/api/situations/${id}/read/answer`, { text: ANSWER })
+    const talk = openai.calls.filter((c) => c.payload.response_format.json_schema.name === 'read_talk')
+    assert.ok(talk.length >= 2)
+    assert.match(talk[1].payload.messages.at(-1).content, /quoted words are not in the answers/)
+    assert.doesNotMatch(String(res.body.reply), /18 of them/)
+  } finally { await close() }
+})
+
 // Rafay, Nov 19 (real replay): sign-up said "under 15 hours", the Read answer was a bare "16". The server must name both.
 test('15 then a bare 16: the Read talk gets the notice and must name both, and memory keeps both numbers', async () => {
   const OLD = uuid(900)

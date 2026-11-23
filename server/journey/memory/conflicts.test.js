@@ -13,7 +13,7 @@ import { situationMessages } from '../prompts/situation.js'
 import { checkRead, createRead } from '../theRead.js'
 import { checkMove } from '../move/moveChecks.js'
 import { briefMessages, buildBriefText } from './brief.js'
-import { conflictProblem, findConflict, namesBoth, namesBothAndAsks, shiftText, transcriptOf } from './conflicts.js'
+import { conflictProblem, earlierSources, findConflict, namesBoth, namesBothAndAsks, shiftText, transcriptOf } from './conflicts.js'
 import { applyExtraction } from './extractBeliefs.js'
 import { createMessageLearner, learnFromMessage } from './learnMessage.js'
 import { createMemoryStore } from './memoryStore.js'
@@ -420,6 +420,35 @@ test('an earlier line lends numbers, never quotes; a number in neither still fai
   const move = (n) => ({ title: 'Email the clinics', mission: `Cut the ordering from ${n} hours.`, success: 'Both reply.', words: '', checklist: ['Open the email'], prediction: 'One may not reply.', hypothesis: 'h', start_minutes: 5 })
   assert.deepEqual(checkMove({ data: move(15), founderTexts: said, earlierTexts: lines }).problems.filter((p) => /never gave/.test(p)), [])
   assert.match(checkMove({ data: move(41), founderTexts: said, earlierTexts: lines }).problems.join(), /never gave: 41/)
+})
+
+// Review of Nov 23: a number the founder changed earlier in this conversation (not in the newest message) takes the old line out of the sources.
+test('a number changed anywhere in the conversation removes the old line from every check; a change in the newest message still needs both', async () => {
+  const LINE = 'Works evenings and weekends, under 15 hours a week.'
+  const b = turns(['founder', 'I order everything by hand for the clinic and it takes 16 hours a week.'], ['axiom', 'Who else could do the ordering?'], ['founder', 'Nobody, the clinic staff are too busy with patients.'])
+  const saidB = b.filter((t) => t.role === 'founder').map((t) => t.text)
+  assert.equal(findConflict({ transcript: b, earlier: [LINE] }), null)
+  assert.deepEqual(earlierSources({ transcript: b, earlier: [LINE, 'Has 40 customers waiting'] }), ['Has 40 customers waiting'])
+  const sources = earlierSources({ transcript: b, earlier: [LINE] })
+  const readOf = (n) => ({ headline: 'Ordering by hand is where your week goes.', body: `Ordering by hand takes the hours: ${n} hours a week, and none of it goes to finding the next clinic.`, closing_question: 'Who at the clinic could take the ordering by hand off you?' })
+  const created = async (n) => (await createRead({ conversation: b, deps: { callStructured: async () => ({ data: readOf(n) }), userId: 'u' }, situationId: 's', brief: `Earlier they said:\n- ${LINE}` })).source
+  assert.equal(await created(16), 'model')
+  assert.equal(await created('under 15'), 'fallback')
+  const replyOf = (n) => `Rob Fitzpatrick says ask about their life. Ordering by hand takes ${n} hours a week. Who at the clinic could take it?`
+  assert.deepEqual(checkReply({ data: lesson(replyOf(16)), mode: 'lesson', evidence, founderTexts: saidB, earlierTexts: sources }).problems, [])
+  assert.match(checkReply({ data: lesson(replyOf('under 15')), mode: 'lesson', evidence, founderTexts: saidB, earlierTexts: sources }).problems.join(), /never gave: 15/)
+  const move = (n) => ({ title: 'Write down the ordering by hand for the clinic', mission: `Write down each step of the ordering by hand so the ordering by hand drops below ${n} hours a week.`, success: 'The list is written tonight.', words: '', checklist: ['Open a blank note'], prediction: 'One step can go.', hypothesis: 'h', start_minutes: 5 })
+  assert.deepEqual(checkMove({ data: move(16), founderTexts: saidB, earlierTexts: sources }).problems.filter((p) => /never gave/.test(p)), [])
+  assert.match(checkMove({ data: move(15), founderTexts: saidB, earlierTexts: sources }).problems.join(), /never gave: 15/)
+  // Case A: the change is in the newest message, so the old clause is lent and the Read must name both and ask.
+  const a = turns(['founder', 'I order everything by hand for the clinic.'], ['axiom', 'How long does it take?'], ['founder', 'It takes 16 hours a week.'])
+  const conflict = findConflict({ transcript: a, earlier: [LINE] })
+  assert.equal(conflict.strong, true)
+  assert.deepEqual(earlierSources({ transcript: a, earlier: [LINE] }), [conflict.earlierClause])
+  const saidA = a.filter((t) => t.role === 'founder').map((t) => t.text)
+  assert.ok(checkRead({ read: readOf(16), answerTexts: saidA, earlierTexts: [conflict.earlierClause], conflict }).problems.includes(conflictProblem(conflict)))
+  const both = { ...readOf(16), closing_question: 'What changed between under 15 hours and 16 hours of ordering by hand?' }
+  assert.deepEqual(checkRead({ read: both, answerTexts: saidA, earlierTexts: [conflict.earlierClause], conflict }).problems.filter((p) => p === conflictProblem(conflict)), [])
 })
 
 test('a blocked topic anywhere in the message stops the whole pass: nothing stored, no model call', async () => {
