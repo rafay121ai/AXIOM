@@ -80,6 +80,8 @@ const unquoted = (read, answerTexts) => ({
 // support (Rafay, Nov 19: invented motives got through every code check). Fail-open: no check at the daily cap, and any error or
 // unusable output passes the Read, so this can never stop a founder from getting one.
 export const GROUNDING_TIMEOUT_MS = 8000
+// Each retry names the exact problems; a third try costs under half a cent and keeps a fixable slip from becoming the fallback (live, Nov 23).
+export const READ_ATTEMPTS = 3
 export async function unsupportedClaims({ read, conversation, brief, situationId, grounding, deps }) {
   try {
     if (await overCap(grounding.isCapped, deps.userId)) return []
@@ -112,7 +114,7 @@ export async function createRead({ conversation, deps, situationId, style, track
   let problems = null
   let grounded = false // the check runs once: a rewrite that only fixes its objection ships unchecked, and the last attempt is never turned down by it
   let claims = []
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
+  for (let attempt = 1; attempt <= READ_ATTEMPTS; attempt += 1) {
     try {
       const { data } = await deps.callStructured({
         step: 'read',
@@ -126,15 +128,18 @@ export async function createRead({ conversation, deps, situationId, style, track
       const read = unquoted(clean(data), founderTexts)
       const verdict = checkRead({ read, answerTexts: founderTexts, earlierTexts, conflict })
       if (verdict.ok) {
-        if (grounding && !grounded) claims = await unsupportedClaims({ read, conversation, brief, situationId, grounding, deps })
-        grounded = true
-        if (claims.length === 0) return { read, source: 'model' }
-        if (attempt === 2) {
-          deps.log?.('grounding objected, shipped', { claims })
-          return { read, source: 'model' }
+        if (grounding && !grounded) {
+          grounded = true
+          claims = await unsupportedClaims({ read, conversation, brief, situationId, grounding, deps })
+          if (claims.length > 0 && attempt < READ_ATTEMPTS) {
+            problems = claims.map((c) => `it claims something they did not say (${c}): say only what they said or what follows from their numbers`)
+            continue
+          }
         }
-        problems = claims.map((c) => `it claims something they did not say (${c}): say only what they said or what follows from their numbers`)
-      } else problems = verdict.problems
+        if (claims.length > 0) deps.log?.('grounding objected, shipped', { claims })
+        return { read, source: 'model' }
+      }
+      problems = verdict.problems
     } catch (err) {
       deps.log?.('model call failed', err)
       problems = null

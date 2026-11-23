@@ -8,7 +8,7 @@ import { readTalkMessages } from '../prompts/readTalk.js'
 import { readMessages } from '../prompts/read.js'
 import { learnMessages } from '../learn/prompts/learn.js'
 import { moveMessages } from '../move/prompts/move.js'
-import { checkRead, createRead } from '../theRead.js'
+import { checkRead, createRead, READ_ATTEMPTS } from '../theRead.js'
 import { checkHook } from '../hooks.js'
 import { checkMove } from '../move/moveChecks.js'
 import { checkReply } from '../learn/reply.js'
@@ -99,7 +99,7 @@ test('an old number echoed into a reply still fails every check', async () => {
   const conversation = [{ role: 'founder', text: mine[0] }]
   const out = await createRead({ conversation, deps: { callStructured, userId: A }, situationId: SIT, style: 'direct', brief: BRIEF })
   assert.equal(out.source, 'fallback')
-  assert.equal(sent.length, 2)
+  assert.equal(sent.length, READ_ATTEMPTS)
   assert.ok(sent.every((m) => framed(m).length === 1))
 })
 
