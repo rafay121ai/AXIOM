@@ -756,3 +756,18 @@ test('15 then a bare 16: the Read talk gets the notice and must name both, and m
     assert.ok(lines.some((l) => l.includes('under 15')) && lines.some((l) => l.includes('now says 16')), lines.join('|'))
   } finally { await close() }
 })
+
+// Rafay, Nov 23: "What is Axiom?" is answered with the approved wording, not started as a situation.
+test('a question about Axiom gets the fixed answer: no situation, no model call, no daily count', async () => {
+  const { call, openai, rows, close } = await setup([])
+  try {
+    const res = await call('POST', '/api/situations', { text: 'What is Axiom?', client_turn_id: uuid(990) })
+    assert.equal(res.status, 200)
+    assert.equal(res.body.situation_id, null)
+    assert.equal(res.body.status, 'say_more')
+    assert.match(res.body.reply, /^You're making calls nobody around you has made before/)
+    assert.match(res.body.reply, /What's the decision you keep putting off\?$/)
+    assert.equal(openai.calls.length, 0)
+    assert.equal(rows('situations').length, 0)
+  } finally { await close() }
+})
