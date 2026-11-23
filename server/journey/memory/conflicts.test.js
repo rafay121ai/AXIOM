@@ -13,7 +13,7 @@ import { situationMessages } from '../prompts/situation.js'
 import { checkRead, createRead } from '../theRead.js'
 import { checkMove } from '../move/moveChecks.js'
 import { briefMessages, buildBriefText } from './brief.js'
-import { conflictProblem, earlierAllowed, findConflict, namesBoth, namesBothAndAsks, shiftText, transcriptOf } from './conflicts.js'
+import { conflictProblem, findConflict, namesBoth, namesBothAndAsks, shiftText, transcriptOf } from './conflicts.js'
 import { applyExtraction } from './extractBeliefs.js'
 import { createMessageLearner, learnFromMessage } from './learnMessage.js'
 import { createMemoryStore } from './memoryStore.js'
@@ -371,9 +371,9 @@ test('only a strong conflict is enforced; a weak one is a notice with no retry a
   const WEAK = ['Works under 15 hours']
   const weak = findConflict({ transcript: turns(['founder', 'Ordering takes 16 hours a week for me.']), earlier: WEAK })
   assert.equal(weak.strong, false)
-  const miss = checkRead({ read, answerTexts: ['I order everything by hand and ordering takes my hours', 'Ordering takes 16 hours a week for me.'], earlierTexts: earlierAllowed(weak), conflict: weak })
+  const miss = checkRead({ read, answerTexts: ['I order everything by hand and ordering takes my hours', 'Ordering takes 16 hours a week for me.'], earlierTexts: WEAK, conflict: weak })
   assert.deepEqual(miss.problems.filter((p) => p === conflictProblem(weak)), [])
-  assert.deepEqual(checkReply({ data: lesson(MISS), mode: 'lesson', evidence, founderTexts: said, earlierTexts: earlierAllowed(weak), conflict: weak }).problems, [])
+  assert.deepEqual(checkReply({ data: lesson(MISS), mode: 'lesson', evidence, founderTexts: said, earlierTexts: WEAK, conflict: weak }).problems, [])
   const sent = []
   const callStructured = async ({ messages }) => { sent.push(messages); return { data: read } }
   const out = await createRead({ conversation: turns(['founder', 'I order everything by hand and ordering takes my hours'], ['axiom', 'Hours?'], ['founder', 'Ordering takes 16 hours a week for me.']), deps: { callStructured, userId: 'u' }, situationId: 's', brief: `Earlier they said:\n- ${WEAK[0]}` })
@@ -403,20 +403,23 @@ test('a new situation after a stored shift is not told again; memory stores no s
   assert.equal(supabase.rows('founder_beliefs').length, 2)
 })
 
-test('an earlier line lends numbers only through the active conflict', () => {
-  assert.deepEqual(earlierAllowed(null), [])
-  assert.deepEqual(earlierAllowed(hours), ['under 15 hours'])
+// Nov 23: every line under "Earlier they said:" lends its numbers to every check, with or without a conflict; never a quote.
+test('an earlier line lends numbers, never quotes; a number in neither still fails', () => {
   const lines = ['Evenings and weekends, under 15 hours', 'Has 40 customers waiting']
   const text = (n) => `Under 15 hours before and now 16. Every other job waits for the ordering by hand, and ${n} customers wait.`
   const readWith = (n) => ({ ...read, body: text(n), closing_question: 'What changed between the 15 and the 16 hours of ordering?' })
   const answers = ['I order everything by hand and ordering takes my hours', '16']
-  assert.match(checkRead({ read: readWith(40), answerTexts: answers, earlierTexts: earlierAllowed(hours), conflict: hours }).problems.join(), /number is not in the answers: 40/)
-  assert.ok(lines.length === 2)
-  const reply = (n) => `You said under 15 hours before, and now 16 hours a week. Rob Fitzpatrick says ask about their life. ${n} people wait. What changed?`
-  assert.match(checkReply({ data: lesson(reply(40)), mode: 'lesson', evidence, founderTexts: said, earlierTexts: earlierAllowed(hours), conflict: hours }).problems.join(), /never gave: 40/)
+  assert.deepEqual(checkRead({ read: readWith(40), answerTexts: answers, earlierTexts: lines, conflict: hours }), { ok: true, problems: [] })
+  assert.match(checkRead({ read: readWith(41), answerTexts: answers, earlierTexts: lines, conflict: hours }).problems.join(), /number is not in the answers: 41/)
+  const quoted = { ...readWith(40), body: 'Under 15 hours before and now 16. You have "40 customers waiting" on the ordering.' }
+  assert.match(checkRead({ read: quoted, answerTexts: answers, earlierTexts: lines, conflict: hours }).problems.join(), /quoted words are not in the answers/)
+  const reply = (n) => `You said under 15 hours before, and now 16 hours a week. Rob Fitzpatrick says ask about their life. ${n} customers wait. What changed?`
+  assert.deepEqual(checkReply({ data: lesson(reply(40)), mode: 'lesson', evidence, founderTexts: said, earlierTexts: lines, conflict: hours }).problems, [])
+  assert.match(checkReply({ data: lesson(reply(41)), mode: 'lesson', evidence, founderTexts: said, earlierTexts: lines, conflict: hours }).problems.join(), /never gave: 41/)
+  assert.match(checkReply({ data: lesson(`${reply(40).slice(0, -13)} You have "40 customers waiting". What changed?`), mode: 'lesson', evidence, founderTexts: said, earlierTexts: lines, conflict: hours }).problems.join(), /quotation marks/)
   const move = (n) => ({ title: 'Email the clinics', mission: `Cut the ordering from ${n} hours.`, success: 'Both reply.', words: '', checklist: ['Open the email'], prediction: 'One may not reply.', hypothesis: 'h', start_minutes: 5 })
-  assert.deepEqual(checkMove({ data: move(15), founderTexts: said, earlierTexts: earlierAllowed(hours) }).problems.filter((p) => /never gave/.test(p)), [])
-  assert.match(checkMove({ data: move(40), founderTexts: said, earlierTexts: earlierAllowed(hours) }).problems.join(), /never gave: 40/)
+  assert.deepEqual(checkMove({ data: move(15), founderTexts: said, earlierTexts: lines }).problems.filter((p) => /never gave/.test(p)), [])
+  assert.match(checkMove({ data: move(41), founderTexts: said, earlierTexts: lines }).problems.join(), /never gave: 41/)
 })
 
 test('a blocked topic anywhere in the message stops the whole pass: nothing stored, no model call', async () => {

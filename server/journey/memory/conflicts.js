@@ -99,9 +99,6 @@ export function findConflict({ transcript, earlier }) {
   return null
 }
 
-// What an earlier line may lend a check: only the clause of the active conflict, never every earlier line.
-export const earlierAllowed = (conflict) => (conflict ? [conflict.earlierClause] : [])
-
 // True when the text holds both numbers of the conflict (digits or words).
 export function namesBoth(text, conflict) {
   const found = numbersIn(text)

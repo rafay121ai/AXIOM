@@ -107,7 +107,7 @@ export function checkFact(fact, founderTexts) {
 
 // data: the model's output. Returns { reply, problems }. `reply` is the
 // cleaned version (every hard rule applied), used when the retry fails too.
-// earlierTexts: the clause of the active conflict (earlierAllowed); its number may be named (a change), never quoted.
+// earlierTexts: the lines under "Earlier they said:"; their numbers and units may be used, never quoted (the reply holds no quotes).
 export function checkReply({ data, mode, evidence, founderTexts, earlierTexts = [], asked = null, conflict = null }) {
   const problems = []
   const handles = new Map(evidence.map((e) => [e.handle, e]))

@@ -779,3 +779,9 @@ The full thread nudge reads `Rafay, where are you with "<thread title>"?`, the t
 
 ## Nov 22 2026: the move card can show again when no move was made (Rafay)
 "At most two cards" holds once a move exists. If both cards were shown but no move was made (from Nov 19 to Nov 22 every move failed to save), Learn does not say "Your move is waiting for you on the home screen", and when the founder asks for the move it answers "Here is your move." with the card again. Reason: the limit stops nagging; a founder asking for their move is not being nagged, and without this the conversation had no way to a move. Enforced in learn.js `decide()`, test in learn.test.js.
+
+## Nov 23 2026: earlier lines are a source of numbers, never of quotes (Rafay asked for the root fix)
+- Every live Read since Nov 21 fell back. The brief prints facts the founder typed before (sign-up, earlier situations) under "Earlier they said:", and the prompts told the model it could use their numbers and dates. The checks only accepted the clause of an active changed-number conflict, so a Read using "the 18 who train three or more times a week" (typed at sign-up, not in this conversation) was rejected twice and replaced by the fallback.
+- Now one rule everywhere: the lines under "Earlier they said:" are a valid source of numbers, dates, number-unit pairs and "You said ..." claims in the Read, Read talk, Learn and Move checks. They are never a source of quotes: quotes still come only from this conversation.
+- The changed-number rule is unchanged: a strong conflict must still name both numbers and ask what changed.
+- The Read and first reading prompts now say "never repeat a run of 8 or more of their words", matching the check.

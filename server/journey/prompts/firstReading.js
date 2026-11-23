@@ -17,7 +17,7 @@ export const FIRST_READING_PROMPT = [
   '',
   'Output: a headline and a body of about 3 short sentences. End the body on ONE specific question about something the founder wrote, one they have not answered yet. Never end on "Next we work on ..." or any line about what happens next. Nothing after the question.',
   'The body holds one pattern the founder did not say outright, found by putting two of their answers side by side, and the one question that follows from it. Do not list several answers.',
-  'Never open with "You wrote" or "You said". You may quote at most once, in double quotation marks, with 8 words or fewer copied exactly from the founder\'s own typed answers. Never repeat a run of 6 or more of their words. Never change or invent a quote.',
+  'Never open with "You wrote" or "You said". You may quote at most once, in double quotation marks, with 8 words or fewer copied exactly from the founder\'s own typed answers. Never repeat a run of 8 or more of their words. Never change or invent a quote.',
   'Use only numbers and dates that appear in the answers. Do not add, convert or estimate any number or date.',
   'underlines: at most 2 short phrases (a few words each) copied exactly from the founder\'s own answers and also present in your body. Use [] if nothing deserves it.',
   'Plain words only, no markup: never use _ * # [ ] { } or backticks. Never write the word "underline" in the headline or body, and never write a sign-up option label with hyphens (like "wait-and-collect-more"): say it in plain words.',

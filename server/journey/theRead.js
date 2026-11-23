@@ -5,7 +5,7 @@ import { checkFirstReading, looseUnit, pairsOf, saidProblem, unquoteUnknown } fr
 import { checkHook, threadKinds } from './hooks.js'
 import { stripFiller } from './filler.js'
 import { earlierLines } from './memory/brief.js'
-import { conflictProblem, earlierAllowed, findConflict, namesBothAndAsks } from './memory/conflicts.js'
+import { conflictProblem, findConflict, namesBothAndAsks } from './memory/conflicts.js'
 import { overCap } from './memory/extractBeliefs.js'
 import { READ_SCHEMA, readMessages } from './prompts/read.js'
 import { GROUNDING_SCHEMA, groundingMessages } from './prompts/readGrounding.js'
@@ -123,7 +123,7 @@ export async function createRead({ conversation, deps, situationId, style, track
         messages: readMessages({ conversation, style, trackRecord, brief, firstReading, conflict }, problems),
       })
       const read = unquoted(clean(data), founderTexts)
-      const verdict = checkRead({ read, answerTexts: founderTexts, earlierTexts: earlierAllowed(conflict), conflict })
+      const verdict = checkRead({ read, answerTexts: founderTexts, earlierTexts, conflict })
       if (verdict.ok) {
         if (grounding && !grounded) claims = await unsupportedClaims({ read, conversation, brief, situationId, grounding, deps })
         grounded = true

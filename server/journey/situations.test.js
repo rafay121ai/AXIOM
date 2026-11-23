@@ -664,6 +664,22 @@ test('memory: a filler reply and a switched-off learner make no memory call', as
   } finally { await off.close() }
 })
 
+// Nov 23: a number from a line under "Earlier they said:" is one the prompt allows, so the talk after the Read takes it on the first try.
+test('the talk after the Read may use a number and a "You said" from an "Earlier they said" line', async () => {
+  const fact = { id: uuid(901), user_id: USER.id, belief: 'Has 7 clinics on the waiting list.', kind: 'fact', confidence: 0.6, source: 'signup', status: 'active', created_at: '2026-10-20T00:00:00Z', updated_at: '2026-10-20T00:00:00Z' }
+  const line = talkLine({ reply: 'You said 7 clinics are on the waiting list.' })
+  const { call, openai, close } = await setup([enough(), enough(), readReply(), line], { tables: { founder_beliefs: [fact] } })
+  try {
+    const id = (await create(call, 1)).body.situation_id
+    await call('POST', `/api/situations/${id}/read`)
+    const res = await call('POST', `/api/situations/${id}/read/answer`, { text: ANSWER })
+    const talk = openai.calls.filter((c) => c.payload.response_format.json_schema.name === 'read_talk')
+    assert.match(talk[0].payload.messages.find((m) => m.content.startsWith('Past observations')).content, /Earlier they said:\n- Has 7 clinics/)
+    assert.equal(talk.length, 1)
+    assert.equal(res.body.reply, 'You said 7 clinics are on the waiting list. What do you want the clinics to do after the demo?')
+  } finally { await close() }
+})
+
 // Rafay, Nov 19 (real replay): sign-up said "under 15 hours", the Read answer was a bare "16". The server must name both.
 test('15 then a bare 16: the Read talk gets the notice and must name both, and memory keeps both numbers', async () => {
   const OLD = uuid(900)

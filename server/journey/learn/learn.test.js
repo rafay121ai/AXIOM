@@ -184,6 +184,19 @@ test('the lesson prompt carries this founder\'s brief once, before the user mess
   } finally { await close() }
 })
 
+// Nov 23: a number from a line under "Earlier they said:" is one the prompt allows, so the check takes it on the first try.
+test('a lesson using a number from an "Earlier they said" line ships without a retry', async () => {
+  const fact = { id: 'bwait', user_id: USER.id, belief: 'Has 7 clinics on the waiting list.', kind: 'fact', confidence: 0.6, status: 'active', created_at: '2026-11-01T00:00:00Z' }
+  const reply = learnReply({ reply: `The 7 clinics on the waiting list are behind these two. ${JSON.parse(learnReply()).reply}` })
+  const { start, chatCalls, close } = await started([reply], { tables: { founder_beliefs: [fact] } })
+  try {
+    assert.equal(start.status, 200)
+    assert.match(chatCalls()[0].payload.messages.find((m) => m.content.startsWith('Past observations')).content, /Earlier they said:\n- Has 7 clinics/)
+    assert.equal(chatCalls().length, 1)
+    assert.match(JSON.stringify(start.body), /The 7 clinics on the waiting list/)
+  } finally { await close() }
+})
+
 // ── Full flow ────────────────────────────────────────────────────────────────
 
 test('full flow: lesson, two real replies, then the first move card', async () => {

@@ -12,7 +12,7 @@ import { BANNED_PHRASES, contrastProblem, looseUnit, norm, pairsOf, saidProblem,
 import { styleOf } from './prompts/style.js'
 import { loadTrackRecord } from './memory/trackRecord.js'
 import { earlierLines, loadBrief } from './memory/brief.js'
-import { conflictProblem, earlierAllowed, findConflict, namesBothAndAsks } from './memory/conflicts.js'
+import { conflictProblem, findConflict, namesBothAndAsks } from './memory/conflicts.js'
 
 export const MAX_NEW_SITUATIONS_PER_DAY = 5
 export const TEXT_MAX = 2000
@@ -388,7 +388,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     const brief = await loadBrief(supabase, userId, sources.join('\n'))
     const earlier = earlierLines(brief)
     const conflict = findConflict({ transcript: [...situationTalk, { role: 'axiom', text: row.closing_question }, ...talk], earlier })
-    const ownPairs = pairsOf([...sources, ...earlierAllowed(conflict), ...(conflict ? [conflict.nowText] : [])])
+    const ownPairs = pairsOf([...sources, ...earlier, ...(conflict ? [conflict.nowText] : [])])
     let problems = null
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       try {
@@ -410,7 +410,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
           : reply.includes('?') ? ['the reply holds a question: one question only, in question']
             : threadKinds(reply, sources).length === 0 ? ['the reply says nothing of theirs: use their own words']
               : conflict?.strong && !namesBothAndAsks(`${reply} ${question}`, conflict) ? [conflictProblem(conflict)]
-                : contrastProblem(`${reply} ${question}`) ? [contrastProblem(`${reply} ${question}`)] : ownWordsProblems(`${reply} ${question}`, [...sources, ...earlierAllowed(conflict), ...(conflict ? [conflict.nowText] : [])], ownPairs)
+                : contrastProblem(`${reply} ${question}`) ? [contrastProblem(`${reply} ${question}`)] : ownWordsProblems(`${reply} ${question}`, [...sources, ...earlier, ...(conflict ? [conflict.nowText] : [])], ownPairs)
         if (verdict.ok && replyProblems.length === 0 && question.length <= 220) return `${reply} ${question}`
         problems = [...replyProblems, ...verdict.problems]
       } catch (err) {
