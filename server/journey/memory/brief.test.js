@@ -133,3 +133,34 @@ test('a sign-up strength and avoid pair is one line and is never crowded out of 
   // only a strength, or only an avoid: no combined line
   assert.equal(buildBriefText({ beliefs: beliefs.slice(0, 1) }), 'How they work:\n- Says they are better than most at selling.')
 })
+
+// Live, Nov 23: memory held near-copies of the founder's own sentences ("Built a boxing coaching app that watches you through
+// your phone camera..."), the brief showed them back, and every Read copied them and failed the no-restating rule.
+test('the brief leaves out stored lines that only repeat this conversation, and keeps what is new or changed', () => {
+  const at = '2026-11-22T17:07:14Z'
+  const fact = (belief) => ({ id: belief, kind: 'fact', source: 'conversation', status: 'active', confidence: 0.6, belief, created_at: at, updated_at: at })
+  const current = "I built a boxing coaching app that watches you through your phone camera and corrects your guard, stance and punch angles. 60 people used the free beta last month, and 18 of them train with it three or more times a week. I'm turning on payments in two weeks."
+  const text = buildBriefText({
+    beliefs: [
+      fact('Built a boxing coaching app that watches you through your phone camera and corrects your guard, stance and punch angles.'),
+      fact('18 of them train with it three or more times a week.'),
+      fact('Has not asked 18 active users what they would pay.'),
+      fact('Many users are training for a fight or a goal 8 to 12 weeks away.'),
+    ],
+    threads: [{ id: 't1', title: 'turning on payments in two weeks', status: 'open', updated_at: at }],
+    currentText: current,
+    nowMs: Date.parse('2026-11-23T10:00:00Z'),
+  })
+  assert.doesNotMatch(text, /phone camera/)
+  assert.doesNotMatch(text, /three or more times/)
+  assert.doesNotMatch(text, /turning on payments/)
+  assert.match(text, /Has not asked 18 active users what they would pay\./)
+  assert.match(text, /8 to 12 weeks away/)
+})
+
+test('a stored line with a changed number is not a repeat: it stays for the change question', () => {
+  const at = '2026-10-20T00:00:00Z'
+  const old = { id: 'o', kind: 'fact', source: 'signup', status: 'active', confidence: 0.5, belief: 'Works evenings and weekends, under 15 hours a week.', created_at: at, updated_at: at }
+  const text = buildBriefText({ beliefs: [old], currentText: 'Ordering takes 16 hours a week now, evenings and weekends.', nowMs: Date.parse('2026-11-23T10:00:00Z') })
+  assert.match(text, /under 15 hours a week/)
+})

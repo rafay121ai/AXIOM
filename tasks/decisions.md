@@ -789,3 +789,6 @@ The full thread nudge reads `Rafay, where are you with "<thread title>"?`, the t
 
 ## Nov 23 2026: the Read's headline and closing question may repeat up to 5 of the founder's words (was 3)
 Live log after PR 17: `read fell back [ 'the closing question repeats 4 or more words in a row of what they wrote' ]`. The closing question must carry a thread from the founder's words (hooks.js), and the founder's own options ("weekly, monthly or yearly") are 4 words, so a pricing question could not satisfy both rules. A run of 6 or more is still turned down there; the body keeps its 8-word limit and one quote. Prompt and check say the same number.
+
+## Nov 23 2026: the brief leaves out stored lines that only repeat this conversation (Rafay: "fix the brief")
+Root cause of the Read fallbacks since Nov 21: memory stores near-copies of the founder's sentences, and the brief showed them back while the Read may not restate the founder. A stored fact, earlier line or open thread whose content words are at least 80% in what the founder wrote in this conversation is now left out of the brief. A line with a changed number is not a repeat and stays, so the change question still works.
