@@ -207,15 +207,19 @@ test('the first reading and the Read reject the word underline, and a hyphenated
   assert.deepEqual(check(reading('Evenings and weekends do not leave room for the asks. Who will you ask first?')).problems, [])
 })
 
-test('a Read headline and closing question carry no quote and no run of 4 founder words; the body keeps one quote', () => {
+test('a Read headline and closing question carry no quote and no run of 6 founder words; the body keeps one quote', () => {
   const said = ['I order the products by myself to know the cost', 'home responsibilities and personal stuff']
   const read = { headline: 'Ordering by hand has no number on it yet.', body: 'You gave a reason but no count, and "to know the cost" is the only reason so far.', closing_question: 'How many hours does one ordering round take?', underlines: [] }
   const run = (over) => checkFirstReading({ reading: { ...read, ...over }, answerTexts: said }).problems.join()
   assert.equal(run({}), '')
   assert.match(run({ headline: 'The "home responsibilities and personal stuff" is the reason.' }), /headline quotes the founder/)
   assert.match(run({ closing_question: 'Is "home responsibilities" the reason?' }), /closing question quotes the founder/)
-  assert.match(run({ headline: 'You order the products by myself, still.' }), /headline repeats 4 or more words/)
-  assert.match(run({ closing_question: 'Do you order the products by yourself?' }), /closing question repeats 4/)
+  assert.match(run({ headline: 'You order the products by myself to know the cost, still.' }), /headline repeats 6 or more words/)
+  assert.match(run({ closing_question: 'Do you order the products by myself to know the cost?' }), /closing question repeats 6/)
+  // Live, Nov 23: a closing question naming the founder's own options is a thread, not a restatement.
+  const options = ["I can't decide: weekly, monthly or yearly, or weekly plus yearly."]
+  const pricing = { headline: 'The price plan is still a guess.', body: 'Nobody using it has been asked what they would pay, so each plan is a guess.', closing_question: 'Which of weekly, monthly or yearly would your most regular users pick?', underlines: [] }
+  assert.equal(checkFirstReading({ reading: pricing, answerTexts: options }).problems.join(), '')
 })
 
 test('numberUnits finds the word after a digit number and skips function words', () => {
