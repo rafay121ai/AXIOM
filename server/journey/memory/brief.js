@@ -52,11 +52,15 @@ function pairTension(patterns) {
 // A stored line that only repeats this conversation adds nothing, and the Read may not restate the founder, so it is left out
 // (live, Nov 23: memory held a 19-word copy of the opening message and every Read copied it and was turned down). Repeats means
 // at least 80% of its content words (numbers whole, words by their first 4 letters) are in what the founder wrote here.
-const contentStems = (text) => (norm(text).match(/[\p{L}\p{N}]+/gu) ?? []).filter((w) => w.length >= 3 && !STOP.has(w)).map((w) => (/\d/.test(w) ? w : w.slice(0, 4)))
+const contentStems = (text) => (norm(text).match(/[\p{L}\p{N}]+/gu) ?? []).filter((w) => /\d/.test(w) || (w.length >= 3 && !STOP.has(w))).map((w) => (/\d/.test(w) ? w : w.slice(0, 4)))
+// A line with a number the conversation does not hold is never a repeat (it may be a changed number, which the change question
+// needs), and a line of fewer than 3 content words is too short to tell.
+const MIN_STEMS = 3
 export function repeatsConversation(text, currentText) {
   const stems = contentStems(text)
-  if (stems.length === 0) return false
+  if (stems.length < MIN_STEMS) return false
   const now = new Set(contentStems(currentText))
+  if (stems.some((w) => /\d/.test(w) && !now.has(w))) return false
   return stems.filter((w) => now.has(w)).length / stems.length >= 0.8
 }
 

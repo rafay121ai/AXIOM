@@ -164,3 +164,25 @@ test('a stored line with a changed number is not a repeat: it stays for the chan
   const text = buildBriefText({ beliefs: [old], currentText: 'Ordering takes 16 hours a week now, evenings and weekends.', nowMs: Date.parse('2026-11-23T10:00:00Z') })
   assert.match(text, /under 15 hours a week/)
 })
+
+// Review, Nov 23: a line whose only difference is a changed number must stay, or the change question never fires.
+test('a stored line with a changed number stays in the brief and the conflict is found; a 1-word line never counts as a repeat', async () => {
+  const { earlierLines } = await import('./brief.js')
+  const { findConflict } = await import('./conflicts.js')
+  const at = '2026-10-20T00:00:00Z'
+  const nowMs = Date.parse('2026-11-23T10:00:00Z')
+  const line = (belief) => ({ id: belief, kind: 'fact', source: 'signup', status: 'active', confidence: 0.5, belief, created_at: at, updated_at: at })
+  const cases = [
+    ['Works evenings and weekends, 15 hours a week.', 'I work evenings and weekends on it, 16 hours a week now.'],
+    ['Spends 15 hours each week on sales calls.', 'I spend 16 hours each week on sales calls.'],
+    ['Has 40 paying customers on the monthly plan.', 'We have 55 paying customers on the monthly plan now.'],
+    ['Charges 20 dollars per month.', 'I charge 25 dollars per month.'],
+  ]
+  for (const [old, said] of cases) {
+    const text = buildBriefText({ beliefs: [line(old)], currentText: said, nowMs })
+    assert.match(text, new RegExp(old.split(' ')[0]), `${old} must stay`)
+    const conflict = findConflict({ transcript: [{ role: 'founder', text: said }], earlier: earlierLines(text) })
+    assert.ok(conflict, `a conflict for ${old}`)
+  }
+  assert.match(buildBriefText({ beliefs: [line('Has no cofounder.')], currentText: 'My cofounder and I split the work.', nowMs }), /Has no cofounder/)
+})
