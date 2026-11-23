@@ -49,6 +49,21 @@ function pairTension(patterns) {
   }
 }
 
+// A stored line that only repeats this conversation adds nothing, and the Read may not restate the founder, so it is left out
+// (live, Nov 23: memory held a 19-word copy of the opening message and every Read copied it and was turned down). Repeats means
+// at least 80% of its content words (numbers whole, words by their first 4 letters) are in what the founder wrote here.
+const contentStems = (text) => (norm(text).match(/[\p{L}\p{N}]+/gu) ?? []).filter((w) => /\d/.test(w) || (w.length >= 3 && !STOP.has(w))).map((w) => (/\d/.test(w) ? w : w.slice(0, 4)))
+// A line with a number the conversation does not hold is never a repeat (it may be a changed number, which the change question
+// needs), and a line of fewer than 3 content words is too short to tell.
+const MIN_STEMS = 3
+export function repeatsConversation(text, currentText) {
+  const stems = contentStems(text)
+  if (stems.length < MIN_STEMS) return false
+  const now = new Set(contentStems(currentText))
+  if (stems.some((w) => /\d/.test(w) && !now.has(w))) return false
+  return stems.filter((w) => now.has(w)).length / stems.length >= 0.8
+}
+
 // Content words of 4+ letters, so a stored fact on the same topic as the conversation can be found.
 const topicWords = (text) => new Set((norm(text).match(/\p{L}{4,}/gu) ?? []).filter((w) => !STOP.has(w)))
 
@@ -73,18 +88,19 @@ export function buildBriefText({ beliefs = [], traits = [], world = [], vocabula
     const e = evidenceCounts[t.id] ?? { rows: 0, sources: 0 }
     return t.origin === 'self_report' || (e.rows >= TRAIT_MIN_OBSERVATIONS && e.sources >= TRAIT_MIN_SITUATIONS)
   }
-  const fresh = (t) => !(nowMs - Date.parse(t.updated_at) > THREAD_MAX_AGE_DAYS * 86400000)
+  const recent = (t) => !(nowMs - Date.parse(t.updated_at) > THREAD_MAX_AGE_DAYS * 86400000)
   const { tension, rest } = pairTension(active(beliefs).filter((b) => b.kind !== 'fact' && usable(b)))
   const work = [
     ...rest.map((b) => ({ confidence: b.confidence, text: b.belief })),
     ...active(traits).filter((t) => usable(t) && trusted(t)).map((t) => ({ confidence: t.confidence, text: `${words(t.dimension)}: ${words(t.value)}` })),
   ].sort(byConfidence)
   const workLines = [...(tension ? [tension] : []), ...work].slice(0, 5).map((x) => x.text) // the tension line first, so the cap never drops it
-  const facts = active(beliefs).filter((b) => b.kind === 'fact' && usable(b) && !pastTheConversation(cleanStoredText(b.belief), currentText)).sort(newest).slice(0, 5).map((b) => b.belief)
+  const fresh = (text) => !repeatsConversation(cleanStoredText(text), currentText)
+  const facts = active(beliefs).filter((b) => b.kind === 'fact' && usable(b) && fresh(b.belief) && !pastTheConversation(cleanStoredText(b.belief), currentText)).sort(newest).slice(0, 5).map((b) => b.belief)
   // The same facts when they share a topic word with the conversation, even with numbers, dates or names it does not repeat:
   // the founder may have changed their mind, and Axiom may say so once.
   const now = topicWords(currentText)
-  const earlier = active(beliefs).filter((b) => b.kind === 'fact' && usable(b) && !facts.includes(b.belief) && [...topicWords(b.belief)].some((w) => now.has(w))).sort(newest).slice(0, 3).map((b) => b.belief)
+  const earlier = active(beliefs).filter((b) => b.kind === 'fact' && usable(b) && fresh(b.belief) && !facts.includes(b.belief) && [...topicWords(b.belief)].some((w) => now.has(w))).sort(newest).slice(0, 3).map((b) => b.belief)
   const said = (name) => name && wordRx(name).test(currentText)
   const entries = [
     ...earlier.map((text) => ['earlier', text]), // first, so the character cap never drops a possible change
@@ -92,7 +108,7 @@ export function buildBriefText({ beliefs = [], traits = [], world = [], vocabula
     ...facts.map((text) => ['facts', text]),
     ...active(world).filter((w) => said(w.name)).map((w) => ['world', `${w.name} (${w.kind}${w.role ? `, ${w.role}` : ''})`]),
     ...active(vocabulary).filter((v) => said(v.term)).map((v) => ['vocab', `${v.term}: ${v.meaning}`]),
-    ...threads.filter((t) => t.status === 'open' && fresh(t) && !pastTheConversation(cleanStoredText(t.title), currentText))
+    ...threads.filter((t) => t.status === 'open' && recent(t) && fresh(t.title) && !pastTheConversation(cleanStoredText(t.title), currentText))
       .sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at))).slice(0, 2).map((t) => ['threads', t.title]),
   ].map(([key, text]) => [key, cleanStoredText(text)]) // whatever was stored, a printed line is one plain line
   const render = (chosen) => SECTIONS
