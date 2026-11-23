@@ -786,3 +786,6 @@ The full thread nudge reads `Rafay, where are you with "<thread title>"?`, the t
 - The changed-number rule is unchanged: a strong conflict must still name both numbers and ask what changed.
 - A number changed anywhere in this conversation, not only in the newest message, removes the old line from the sources (review of Nov 23: "16 hours a week" said early in the conversation must stop "under 15 hours a week" being stated as current). The earlier lines are stored facts, some extracted by a model, so they are a source of numbers and dates, never of quotes; the Read talk now checks its quotes too.
 - The Read and first reading prompts now say "never repeat a run of 8 or more of their words", matching the check.
+
+## Nov 23 2026: the Read's headline and closing question may repeat up to 5 of the founder's words (was 3)
+Live log after PR 17: `read fell back [ 'the closing question repeats 4 or more words in a row of what they wrote' ]`. The closing question must carry a thread from the founder's words (hooks.js), and the founder's own options ("weekly, monthly or yearly") are 4 words, so a pricing question could not satisfy both rules. A run of 6 or more is still turned down there; the body keeps its 8-word limit and one quote. Prompt and check say the same number.

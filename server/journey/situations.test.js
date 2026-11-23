@@ -423,17 +423,17 @@ test('the Read check: banned phrase, teaser and a closing line that is not a que
   assert.equal(checkRead({ read: JSON.parse(readReply()), answerTexts }).ok, true)
 })
 
-test('the Read: two failures give the plain fallback, which quotes the founder and passes its own checker', async () => {
+test('the Read: three failures give the plain fallback, which quotes the founder and passes its own checker', async () => {
   const bad = readReply({ body: 'You wrote "the clinics love my demo" and want 40 customers. That is not what you wrote. Send the price today.' })
-  const { call, openai, rows, close } = await setup([enough(), enough(), bad, bad])
+  const { call, openai, rows, close } = await setup([enough(), enough(), bad, bad, bad])
   try {
     const id = (await create(call, 1)).body.situation_id
     const res = await call('POST', `/api/situations/${id}/read`)
     assert.equal(res.status, 200)
-    assert.equal(openai.calls.length, 4)
+    assert.equal(openai.calls.length, 5)
     assert.match(res.body.body, /Here is what I have, in your words: "I have a demo ready but I have"\./)
     assert.equal(rows('reads')[0].source, 'fallback')
-    assert.equal(rows('model_usage_logs').length, 4)
+    assert.equal(rows('model_usage_logs').length, 5)
     const answerTexts = [...buildEvidence(FULL_ANSWERS).answerTexts, FIRST]
     assert.equal(checkRead({ read: res.body, answerTexts, fallback: true }).ok, true)
   } finally { await close() }
@@ -684,7 +684,7 @@ test('the talk after the Read may use a number and a "You said" from an "Earlier
 test('the talk after the Read may not state an earlier number the founder changed earlier in this conversation', async () => {
   const fact = { id: uuid(902), user_id: USER.id, belief: 'Works evenings and weekends, under 15 hours a week.', kind: 'fact', confidence: 0.6, source: 'signup', status: 'active', created_at: '2026-10-20T00:00:00Z', updated_at: '2026-10-20T00:00:00Z' }
   const stale = talkLine({ reply: 'You said under 15 hours a week, and the ordering by hand takes them.' })
-  const { call, openai, close } = await setup([enough(), enough(), readReply(), readReply(), stale, talkLine(), talkLine()], { tables: { founder_beliefs: [fact] } })
+  const { call, openai, close } = await setup([enough(), enough(), readReply(), readReply(), readReply(), stale, talkLine(), talkLine()], { tables: { founder_beliefs: [fact] } })
   try {
     const id = (await create(call, 1, 'I order everything by hand for the clinic and it takes 16 hours a week.')).body.situation_id
     await call('POST', `/api/situations/${id}/read`)
@@ -699,7 +699,7 @@ test('the talk after the Read may not state an earlier number the founder change
 test('the talk after the Read never quotes words the founder did not type in this conversation', async () => {
   const fact = { id: uuid(903), user_id: USER.id, belief: '18 of them train with it three or more times a week.', kind: 'fact', confidence: 0.6, source: 'signup', status: 'active', created_at: '2026-10-20T00:00:00Z', updated_at: '2026-10-20T00:00:00Z' }
   const quoted = talkLine({ reply: 'You said "18 of them train with it three or more times a week", and monthly is your pick for the price.' })
-  const { call, openai, close } = await setup([enough(), enough(), readReply(), readReply(), quoted, talkLine(), talkLine()], { tables: { founder_beliefs: [fact] } })
+  const { call, openai, close } = await setup([enough(), enough(), readReply(), readReply(), readReply(), quoted, talkLine(), talkLine()], { tables: { founder_beliefs: [fact] } })
   try {
     const id = (await create(call, 1, 'I built a boxing app people train with, and I need to pick the price: monthly or yearly.')).body.situation_id
     await call('POST', `/api/situations/${id}/read`)

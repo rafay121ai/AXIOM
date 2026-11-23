@@ -85,7 +85,7 @@ export function unquoteUnknown(text, answerTexts) {
 
 const MAX_QUOTE_WORDS = 8
 const RESTATE_RUN = MAX_QUOTE_WORDS // a run as long as the longest allowed quote restates them; shorter ones carry a fact ("train three or more times a week")
-const HEADLINE_RUN = 4 // the headline and the closing question carry no quote and no run this long of the founder's words
+const HEADLINE_RUN = 6 // the headline and the closing question carry no quote and no run this long of the founder's words; shorter runs name their own options ("weekly, monthly or yearly"), which the closing question must do to keep a thread
 const wordsOf = (text) => norm(text).match(/[\p{L}\p{N}']+/gu) ?? []
 const runs = (words, n) => words.slice(0, Math.max(0, words.length - n + 1)).map((_, i) => words.slice(i, i + n).join(' '))
 
