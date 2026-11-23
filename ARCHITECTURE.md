@@ -421,13 +421,13 @@ loaded.
 - Swap limit of 1. Max 2 active moves.
 - At most 2 underlined phrases; at most one picture; reply length cap.
 - Push cap of 2 a day (one per slot, enforced by a unique index).
-- Daily cap of 5 new situations per founder (test accounts skip it).
+- Daily cap of 10 new situations per founder (test accounts skip it).
 
 ### Cost
 - Every call is logged to `model_usage_logs` with its step as the call type
   (migrations `20260930000001` and `20261101000009`). VERIFY the prices applied
   to each model ID before real users arrive.
-- Two daily limits protect a free product: 5 new situations per founder, and
+- Two daily limits protect a free product: 10 new situations per founder, and
   $1 of model cost per founder (`server/dailyCap.js`), summed from
   `model_usage_logs` since 00:00 UTC. Over the cap, routes that would call a
   model answer 429 `daily_cost_cap`. Never capped: the care check, which always

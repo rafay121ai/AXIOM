@@ -322,14 +322,13 @@ test('a follow-up chip that asks what changed is dropped when the reply already 
   assert.deepEqual(checkReply({ data, mode: 'lesson', evidence, founderTexts: said, earlierTexts: EARLIER }).reply.follow_ups, data.follow_ups)
 })
 
-test('a Learn reply that still has a contrast or no closing question after the retry never ships as is', async () => {
+// Rafay, Nov 23: a contrast is style. It is retried, then the lesson ships with it; only a missing closing question is still hard.
+test('a Learn reply with only a contrast ships after the retry; one with no closing question still gets the plain reply', async () => {
   const bad = lesson('Rob Fitzpatrick says ask about their life. Ordering is not the problem, it is the 16 hours a week of your life. What will you ask first?')
   const run = async (outputs, extra = {}) => composeReply({ mode: 'lesson', step: 'learn', evidence, founderTexts: said, earlierTexts: EARLIER, context: { brief, situation: [], read: null, learn: [] }, deps: { callStructured: async () => ({ data: outputs.shift() }) }, ...extra })
-  // repaired: the contrast sentence goes, the citation sentence and the question stay
-  const fixed = await run([bad, bad])
-  assert.equal(contrastProblem(fixed.text), null)
-  assert.match(fixed.text, /^Rob Fitzpatrick says ask about their life\. What will you ask first\?$/)
-  assert.equal(fixed.sources.length, 1)
+  const shipped = await run([bad, bad])
+  assert.match(shipped.text, /What will you ask first\?$/)
+  assert.equal(shipped.sources.length, 1)
   // no closing question: the plain reply, no source, no contrast, one question
   const noQ = lesson('Rob Fitzpatrick says ask about their life. Ordering takes 16 hours a week of your life.')
   const plain = await run([noQ, noQ])
@@ -338,7 +337,7 @@ test('a Learn reply that still has a contrast or no closing question after the r
   // a failed second call after a hard failure also gets the repair
   const calls = [bad]
   const afterError = await composeReply({ mode: 'lesson', step: 'learn', evidence, founderTexts: said, earlierTexts: EARLIER, context: { brief, situation: [], read: null, learn: [] }, deps: { callStructured: async () => { if (calls.length) return { data: calls.shift() }; throw new Error('down') } } })
-  assert.equal(contrastProblem(afterError.text), null)
+  assert.match(afterError.text, /What will you ask first\?$/)
 })
 
 // ── Slice 8: pre-merge review fixes ──────────────────────────────────────────
