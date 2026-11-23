@@ -82,6 +82,11 @@ const unquoted = (read, answerTexts) => ({
 export const GROUNDING_TIMEOUT_MS = 8000
 // Each retry names the exact problems; a third try costs under half a cent and keeps a fixable slip from becoming the fallback (live, Nov 23).
 export const READ_ATTEMPTS = 3
+
+// Hard problems mean something false or invented: they never ship. Every other problem is style: it is retried, and if only
+// style is left after the last attempt the draft with the fewest problems ships (Rafay, Nov 23: fail only on real evidence).
+const HARD = /quoted words are not in the answers|unbalanced quote|number is not in the answers|date is not in the answers|is not something they said|banned phrase|teaser|markup characters|wrong shape|the word "underline"|body is too short/
+export const hardProblems = (problems) => problems.filter((p) => HARD.test(p))
 export async function unsupportedClaims({ read, conversation, brief, situationId, grounding, deps }) {
   try {
     if (await overCap(grounding.isCapped, deps.userId)) return []
@@ -114,6 +119,7 @@ export async function createRead({ conversation, deps, situationId, style, track
   let problems = null
   let grounded = false // the check runs once: a rewrite that only fixes its objection ships unchecked, and the last attempt is never turned down by it
   let claims = []
+  let best = null // the style-only draft with the fewest problems
   for (let attempt = 1; attempt <= READ_ATTEMPTS; attempt += 1) {
     try {
       const { data } = await deps.callStructured({
@@ -140,10 +146,15 @@ export async function createRead({ conversation, deps, situationId, style, track
         return { read, source: 'model' }
       }
       problems = verdict.problems
+      if (hardProblems(problems).length === 0 && (!best || problems.length < best.problems.length)) best = { read, problems }
     } catch (err) {
       deps.log?.('model call failed', err)
       problems = null
     }
+  }
+  if (best) {
+    deps.log?.('read shipped with style problems', { problems: best.problems })
+    return { read: best.read, source: 'model' }
   }
   deps.log?.('read fell back', { problems })
   return { read: fallbackRead(founderTexts), source: 'fallback' }
