@@ -139,7 +139,9 @@ export function createMoves({ supabase, callStructured, clock, log = () => {}, l
     const trackRecord = await loadTrackRecord(supabase, userId, log)
     const founderTexts = swap ? [...ctx.founderTexts, swap.reason] : ctx.founderTexts
     const brief = await loadBrief(supabase, userId, ctx.founderTexts.join('\n'))
-    const earlierTexts = earlierSources({ transcript: transcriptOf(ctx.prompt), earlier: earlierLines(brief) })
+    // A swap reason is the founder's newest word too: a number changed there drops the old line.
+    const transcript = [...transcriptOf(ctx.prompt), ...(swap ? [{ role: 'founder', text: swap.reason }] : [])]
+    const earlierTexts = earlierSources({ transcript, earlier: earlierLines(brief) })
     let retry = null
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       let data

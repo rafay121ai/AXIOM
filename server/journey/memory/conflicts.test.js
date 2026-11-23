@@ -494,3 +494,11 @@ test('the shift is plain third person, keeps both numbers and fits 240 character
   assert.ok(/15/.test(text) && /16/.test(text), text)
   assert.ok(!/\b(I|my|me)\b/.test(text))
 })
+
+test('a number changed in a move swap reason drops the old line (moveService adds the reason to the transcript)', () => {
+  const LINE = 'Works evenings and weekends, under 15 hours a week.'
+  const transcript = [{ role: 'founder', text: 'I order everything by hand for the clinic.' }, { role: 'founder', text: 'it is 16 hours a week now' }]
+  // The reason is the newest message, so the change is the active conflict: only its clause stays, to name both numbers.
+  assert.deepEqual(earlierSources({ transcript, earlier: [LINE] }), ['under 15 hours a week'])
+  assert.deepEqual(earlierSources({ transcript: transcript.slice(0, 1), earlier: [LINE] }), [LINE])
+})
