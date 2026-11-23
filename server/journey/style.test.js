@@ -11,9 +11,9 @@ import { STYLE_INSTRUCTIONS, styleMessages, styleOf } from './prompts/style.js'
 const sha = (s) => createHash('sha256').update(s).digest('hex')
 // Snapshot of the prompts as they were before styles existed.
 const OLD = {
-  read: '50e663cae8fb8695c1fe5997961ae8688b782daeb90321e103118a71656b60da', // Nov 19: no quote or 4-word run in the headline and closing question; no "not X, it is Y"; no brackets
-  learn: 'd04a02aaaa40cca1e283f0a90e3c428ff391405817de43d82c974cdb9eea6cca', // Nov 19: a bare number keeps the words the founder gave it
-  move: '23dc1a56cc5fb97c11439277d150acec57afbc2125c1b0b03ebc4bb35a1f6863', // Nov 19: a swap is a different move, not a rewording
+  read: '5c442b5345d6b44d31012d1dac170f0cfe47a719d7e9f54a69fc47da64e36bb2', // Nov 23: numbers from this conversation or "Earlier they said:"; no run of 8 words
+  learn: '484c0bd825a0de8e95984be916a7bc5239d3710093d93bd1946ba61d8f89fb1e', // Nov 23: facts may come from "Earlier they said:"
+  move: 'ca36326fcde1e957f251897b1357c0db9f1b612023357ac2523072aae2674fc6', // Nov 23: facts may come from "Earlier they said:"
   report: '6ce24f154ae001da47b70fddb78b7365b1d79fd8f9ecb8dea1622566694127a7',
 }
 const base = { signUp: [], conversation: [], situation: [], read: null, learn: [], evidence: [], subject: 's', fact: 'f', move: {}, outcome: 'done', note: 'n' }

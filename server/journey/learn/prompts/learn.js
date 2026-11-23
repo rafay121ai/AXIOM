@@ -84,7 +84,7 @@ export const LEARN_PROMPT = [
   '- In reply, never write a handle and never use quotation marks of any kind. A short exact quote goes in quote, and the app shows it set apart with the author.',
   '- If evidence is empty or no passage fits, cite nothing and write only from the founder\'s own facts. Then say nothing about books, authors, research or sources, and never say that anything is missing. Never use anything you remember from outside the evidence.',
   '',
-  'Facts: use only numbers, dates and names the founder wrote in this situation. Never add, convert, estimate or invent one, and never invent a deadline. A number keeps exactly the words the founder gave it: a bare "16" stays "16" (never "16 hours", "16 minutes" or "it costs you 16 time" unless they said that).',
+  'Facts: use only numbers, dates and names the founder wrote in this situation or that appear in the lines under "Earlier they said:". Never add, convert, estimate or invent one, and never invent a deadline. A number keeps exactly the words the founder gave it: a bare "16" stays "16" (never "16 hours", "16 minutes" or "it costs you 16 time" unless they said that).',
   '',
   `picture_json: an empty string, or one picture as JSON when it makes things clearer. Types: ${PICTURE_TYPES.join(', ')}.`,
   '  split_bar {"type":"split_bar","data":{"title","unit","parts":[{"label","value"}]}} (2 to 6 parts)',

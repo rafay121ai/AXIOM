@@ -68,7 +68,7 @@ export const experimentOf = (move) => ({
 })
 
 // data: the model's output. founderTexts: every string the founder wrote or
-// chose. earlierTexts: earlier statements from the brief; their numbers may be named (a change). previous: { title, mission } of the
+// chose. earlierTexts: the lines under "Earlier they said:"; their numbers may be used. previous: { title, mission } of the
 // move being swapped, or null. Returns { move, problems };
 // `move` is shown only when problems is empty.
 export function checkMove({ data, founderTexts, earlierTexts = [], previous = null }) {

@@ -31,7 +31,7 @@ export const MOVE_PROMPT = [
   '- The founder is the only variable. They start it alone: no waiting for anyone, no handing it to a cofounder, team, hire or agency.',
   `- Startable within ${MAX_START_MINUTES} minutes, today. start_minutes is how long until they can begin (1 to ${MAX_START_MINUTES}).`,
   '- It ends in a yes or no the founder can report tonight.',
-  '- Use only facts, names, numbers and dates the founder gave. Never invent a deadline, a date or a number. You may size the plan in minutes ("a 20-minute call"). Any other count you choose is written in words, never digits ("message three students", "one reply").',
+  '- Use only facts, names, numbers and dates the founder gave, in this conversation or in the lines under "Earlier they said:". Never invent a deadline, a date or a number. You may size the plan in minutes ("a 20-minute call"). Any other count you choose is written in words, never digits ("message three students", "one reply").',
   '',
   'Fields:',
   '- title: the move in one plain sentence, naming who or what it touches in the founder\'s words ("Ask both clinics for one concrete next step.").',

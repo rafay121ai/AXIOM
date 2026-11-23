@@ -81,26 +81,37 @@ const SHIFT = /\bbefore, now says\b/
 export function findConflict({ transcript, earlier }) {
   const at = transcript.findLastIndex((t) => t.role === 'founder')
   if (at < 0 || earlier.length === 0) return null
-  const message = String(transcript[at].text)
-  const question = transcript.slice(0, at).findLast((t) => t.role === 'axiom')?.text ?? ''
-  const bareWord = message.trim().split(/\s+/).length <= 3 ? questionUnit(question) : null // "16" after "how many hours"
-  const now = numbers(message).map((n) => (n.unit ? n : { ...n, unit: unitOf(bareWord), bare: true })).filter((n) => n.unit)
   for (const line of earlier.filter((l) => !SHIFT.test(l))) {
-    const before = numbers(line).filter((n) => n.unit)
-    const same = (n) => before.some((b) => b.unit === n.unit && b.value === n.value)
-    for (const n of now) {
-      const b = !same(n) && before.find((x) => x.unit === n.unit && (n.bare || !x.period || !n.period || x.period === n.period))
-      if (!b) continue
-      const found = { earlier: line, earlierClause: b.clause, nowText: n.bare ? `${message.trim().replace(/[.!?]+$/, '')} ${bareWord}` : phraseOf(message), earlierNumber: b.value, nowNumber: n.value, strong: Boolean(n.bare || n.period === b.period) }
-      const told = [...transcript.slice(0, at).filter((t) => t.role === 'axiom').map((t) => t.text), ...earlier.filter((l) => SHIFT.test(l))]
-      return told.some((t) => namesBoth(t, found)) ? null : found
-    }
+    const found = changeAt(transcript, at, line)
+    if (!found) continue
+    const told = [...transcript.slice(0, at).filter((t) => t.role === 'axiom').map((t) => t.text), ...earlier.filter((l) => SHIFT.test(l))]
+    return told.some((t) => namesBoth(t, found)) ? null : found
   }
   return null
 }
 
-// What an earlier line may lend a check: only the clause of the active conflict, never every earlier line.
-export const earlierAllowed = (conflict) => (conflict ? [conflict.earlierClause] : [])
+// The change between the founder message at `at` and one earlier line, by the rules above (told or not), or null.
+function changeAt(transcript, at, line) {
+  const message = String(transcript[at].text)
+  const question = transcript.slice(0, at).findLast((t) => t.role === 'axiom')?.text ?? ''
+  const bareWord = message.trim().split(/\s+/).length <= 3 ? questionUnit(question) : null // "16" after "how many hours"
+  const now = numbers(message).map((n) => (n.unit ? n : { ...n, unit: unitOf(bareWord), bare: true })).filter((n) => n.unit)
+  const before = numbers(line).filter((n) => n.unit)
+  const same = (n) => before.some((b) => b.unit === n.unit && b.value === n.value)
+  for (const n of now) {
+    const b = !same(n) && before.find((x) => x.unit === n.unit && (n.bare || !x.period || !n.period || x.period === n.period))
+    if (b) return { earlier: line, earlierClause: b.clause, nowText: n.bare ? `${message.trim().replace(/[.!?]+$/, '')} ${bareWord}` : phraseOf(message), earlierNumber: b.value, nowNumber: n.value, strong: Boolean(n.bare || n.period === b.period) }
+  }
+  return null
+}
+
+// What the checks may take numbers, dates and "You said" claims from: the earlier lines no founder message in this conversation changed
+// (the conversation wins, Nov 23 review), plus the clause of the active conflict, which the answer must name. Never a source of quotes.
+export function earlierSources({ transcript, earlier }) {
+  const conflict = findConflict({ transcript, earlier })
+  const changed = (line) => transcript.some((t, i) => t.role === 'founder' && changeAt(transcript, i, line))
+  return [...earlier.filter((l) => !changed(l)), ...(conflict ? [conflict.earlierClause] : [])]
+}
 
 // True when the text holds both numbers of the conflict (digits or words).
 export function namesBoth(text, conflict) {

@@ -153,6 +153,13 @@ export function saidProblem(text, sources) {
   return null
 }
 
+// Quote problems in `text`: an unbalanced mark, or a quoted phrase that is not in what the founder typed or chose (answerTexts).
+export function quoteProblems(text, answerTexts) {
+  const inAnswers = inAnswersOf(answerTexts)
+  const { phrases, unbalanced } = quotedPhrases(text)
+  return [...(unbalanced ? ['unbalanced quote mark'] : []), ...phrases.filter((p) => !inAnswers(p)).map((p) => `quoted words are not in the answers: "${p}"`)]
+}
+
 // reading: { headline, body, underlines, closing_question? } (a Read has the closing question). answerTexts: every string the
 // founder typed or chose, one array item per answer. earlierTexts: what they said before (sign-up),
 // the source of a number or a month but never of a quote. Returns { ok, problems }.
@@ -168,12 +175,7 @@ export function checkFirstReading({ reading, answerTexts, earlierTexts = [] }) {
   const text = `${reading.headline}\n${reading.body}\n${closing ?? ''}`
   const lower = norm(text)
 
-  // Quotes
-  const { phrases, unbalanced } = quotedPhrases(text)
-  if (unbalanced) problems.push('unbalanced quote mark')
-  for (const phrase of phrases) {
-    if (!inAnswers(phrase)) problems.push(`quoted words are not in the answers: "${phrase}"`)
-  }
+  problems.push(...quoteProblems(text, answerTexts))
 
   if (/[_*#`[\]{}]/.test(text)) problems.push('markup characters (_ * # ` [ ] { }) in the reading: plain words only')
   if (/\bunderlines?\b/.test(lower)) problems.push('the word "underline" is in the text: it is not for the founder to read')

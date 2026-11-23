@@ -24,7 +24,7 @@ export const READ_PROMPT = [
   'The Read leads with the one thing the founder has not said: a conflict, a gap or a cost. Never restate or summarise what they just wrote.',
   'headline: one plain sentence that states that finding in everyday words. A finding, not a summary of their message.',
   'body: 2 to 3 short sentences. They hold the thing the founder has not said, and only if it is real, the cost of waiting in their own date or number. Never open with "You wrote" or "You said".',
-  'You may quote at most once, in double quotation marks, with 8 words or fewer copied exactly from what the founder typed. Otherwise use your own words. Never repeat a run of 6 or more of their words. Never change or invent a quote. Use only numbers and dates that appear in what the founder wrote. Never add, convert or estimate one.',
+  'You may quote at most once, in double quotation marks, with 8 words or fewer copied exactly from what the founder typed in this conversation. Otherwise use your own words. Never repeat a run of 8 or more of their words. Never change or invent a quote. Use only numbers and dates that appear in what the founder wrote in this conversation or in the lines under "Earlier they said:", and from nowhere else. Never add, convert or estimate one.',
   'The headline and the closing_question never quote the founder and never repeat a run of 4 or more of their words in a row: use your own words there. Only the body may carry the one quote.',
   'No underlines, emphasis or markup of any kind: plain words only, no _ * # [ ] { } or backticks.',
   'State only what the founder said or what follows directly from their numbers. Never name a motive, feeling or problem they did not say (for example \'to feel in control\', \'a margin problem\').',

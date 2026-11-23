@@ -218,6 +218,19 @@ test('the move prompt carries this founder\'s brief once, after the track record
   } finally { await close() }
 })
 
+// Nov 23: a number from a line under "Earlier they said:" is one the prompt allows, so the check takes it on the first try.
+test('a move using a number from an "Earlier they said" line ships without a retry', async () => {
+  const fact = { id: 'bwait', user_id: USER.id, belief: 'Has 7 clinics on the waiting list.', kind: 'fact', confidence: 0.6, status: 'active', created_at: '2026-11-01T00:00:00Z' }
+  const { call, chatCalls, close } = await setup([moveJson({ prediction: 'At least one of the clinics will not reply, and the 7 on the waiting list will hear it.' })], { tables: { founder_beliefs: [fact] } })
+  try {
+    const res = await call('POST', `/api/learn/${LEARN}/move`)
+    assert.equal(res.status, 200)
+    assert.match(chatCalls()[0].payload.messages.find((m) => m.content.startsWith('Past observations')).content, /Earlier they said:\n- Has 7 clinics/)
+    assert.equal(chatCalls().length, 1)
+    assert.match(JSON.stringify(res.body), /the 7 on the waiting list/)
+  } finally { await close() }
+})
+
 test('a move that fails the validator twice is never shown or stored', async () => {
   const vague = moveJson({ success: 'You feel clearer about the clinics.' })
   const { call, chatCalls, rows, close } = await setup([vague, vague])

@@ -112,3 +112,35 @@ test('spelled numbers: "twenty-five" is 25, "no one" and "zero" give no number, 
 test('a Learn fact accepts "2 weeks" when the founder typed "two weeks", like the Read', () => {
   assert.equal(checkFact('Payments go on in 2 weeks.', ["I'm turning on payments in two weeks."]), 'Payments go on in 2 weeks.')
 })
+
+// Live, Nov 23 (Render log): the founder gave 18 at sign-up and in an earlier situation, the brief printed it under
+// "Earlier they said:", the prompt allowed it, and the check turned it down twice, so every Read fell back.
+const PRICING = [
+  "I built a boxing coaching app that corrects your guard. I'm turning on payments in two weeks and I can't decide the price: weekly, monthly or yearly.",
+  'Most users are amateur boxers training at home. I keep changing my mind.',
+]
+const PRICING_BRIEF = 'Earlier they said:\n- 18 of them train with it three or more times a week.'
+const pricingRead = (body) => ({
+  headline: 'You are choosing a price before asking anyone who uses it.',
+  body,
+  closing_question: 'Which amateur boxers could you ask about the price this week?',
+})
+const readFrom = async (read) => {
+  const sent = []
+  const callStructured = async ({ messages }) => { sent.push(messages); return { data: read } }
+  const out = await createRead({ conversation: PRICING.map((text) => ({ role: 'founder', text })), deps: { callStructured, userId: 'u' }, situationId: 's', brief: PRICING_BRIEF })
+  return { ...out, calls: sent.length }
+}
+
+test('a number from an "Earlier they said" line passes the Read; one from nowhere, or a quote of that line, does not', async () => {
+  const good = pricingRead('Payments go on in 2 weeks. None of the 18 who train three or more times a week has been asked about price, so every option is a guess.')
+  assert.deepEqual(await readFrom(good), { read: good, source: 'model', calls: 1 })
+  assert.match(readMessages({ conversation: [], brief: PRICING_BRIEF })[0].content, /or in the lines under "Earlier they said:", and from nowhere else/)
+  const invented = pricingRead('Payments go on in 2 weeks. None of the 60 who train three or more times a week has been asked about price, so every option is a guess.')
+  assert.match(checkRead({ read: invented, answerTexts: PRICING, earlierTexts: earlierLines(PRICING_BRIEF) }).problems.join(), /number is not in the answers: 60/)
+  assert.equal((await readFrom(invented)).source, 'fallback')
+  const quoted = pricingRead('Payments go on in 2 weeks. The 18 "train with it three or more times" and none has been asked about price.')
+  assert.match(checkRead({ read: quoted, answerTexts: PRICING, earlierTexts: earlierLines(PRICING_BRIEF) }).problems.join(), /quoted words are not in the answers/)
+  // Through createRead too: unquoteUnknown drops marks only from a rewording of this conversation's words, so this quote stays and is refused.
+  assert.equal((await readFrom(quoted)).source, 'fallback')
+})
