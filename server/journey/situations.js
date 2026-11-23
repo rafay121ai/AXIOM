@@ -14,7 +14,7 @@ import { loadTrackRecord } from './memory/trackRecord.js'
 import { earlierLines, loadBrief } from './memory/brief.js'
 import { conflictProblem, earlierSources, findConflict, namesBothAndAsks } from './memory/conflicts.js'
 
-export const MAX_NEW_SITUATIONS_PER_DAY = 5
+export const MAX_NEW_SITUATIONS_PER_DAY = 10
 export const TEXT_MAX = 2000
 export const MIN_SITUATION_WORDS = 3
 const SAY_MORE = 'Say a bit more.'

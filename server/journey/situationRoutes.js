@@ -51,7 +51,7 @@ export function mountSituationRoutes(app, { supabase, care, cap, stored, callStr
 
   app.get('/api/situations/open', limiter(60), handle((req) => service.list(req.user.id)))
 
-  app.post('/api/situations', limiter(10), care.careHold, care.careGate(bodyFields('text')), cap(stored.situationStart),
+  app.post('/api/situations', limiter(12), care.careHold, care.careGate(bodyFields('text')), cap(stored.situationStart),
     handle((req) => service.create({ userId: req.user.id, text: textOf(req), clientTurnId: clientTurnId(req), unlimited: noDailyLimit(req.user) })))
 
   app.get('/api/situations/:id', limiter(60), handle((req) => service.get(req.user.id, idParam(req))))

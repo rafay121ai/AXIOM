@@ -244,7 +244,7 @@ test('full flow: lesson, two real replies, then the first move card', async () =
 })
 
 test('a failing offer ends in the plain fallback, and the Move is still offered', async () => {
-  const empty = offerReply({ reply: 'The price is not the problem, it is the silence of three weeks.' })
+  const empty = offerReply({ reply: 'Wait 47 weeks before you set the price.' }) // a number they never gave leaves nothing usable: a hard failure
   const { call, id, close } = await started([learnReply(), turnReply(), empty, empty])
   try {
     await sendTurn(call, id, REAL1, 1)

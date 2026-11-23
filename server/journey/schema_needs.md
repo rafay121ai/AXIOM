@@ -76,7 +76,7 @@ ARCHITECTURE.md; the code only needs the columns below. RLS on, server-only
   follow_up_count < 2 returning follow_up_count`. One statement, no retry loop.
   The code would call it with `supabase.rpc`.
 - The daily new-situation limit counts `situations.created_at` for today (UTC),
-  so it needs no `usage_daily` row. Limit: 5 (`MAX_NEW_SITUATIONS_PER_DAY`),
+  so it needs no `usage_daily` row. Limit: 10 (`MAX_NEW_SITUATIONS_PER_DAY`),
   number still to be set by Rafay.
 
 # Schema needs for Learn (B5b)
