@@ -144,3 +144,16 @@ test('a number from an "Earlier they said" line passes the Read; one from nowher
   // Through createRead too: unquoteUnknown drops marks only from a rewording of this conversation's words, so this quote stays and is refused.
   assert.equal((await readFrom(quoted)).source, 'fallback')
 })
+
+// Rafay, Nov 23: style alone never causes the fallback. Three drafts that only repeat the founder too closely ship the best one;
+// an invented number still falls back.
+test('a Read with only style problems ships after the retries; an invented number still falls back', async () => {
+  const said = BOXING
+  const styleOnly = { headline: 'You are choosing a price plan before asking anyone who uses it.', body: '60 people used the free beta last month, so the 18 matter most. Ask them before payments go on.', closing_question: 'Which of the 18 could you ask about price this week?' }
+  const conversation = said.map((text) => ({ role: 'founder', text }))
+  const call = (read) => async () => ({ data: read })
+  const shipped = await createRead({ conversation, deps: { callStructured: call(styleOnly), userId: 'u' }, situationId: 's', style: 'direct' })
+  assert.equal(shipped.source, 'model')
+  const invented = { ...styleOnly, body: 'Payments go on in 5 weeks. None of the 18 has been asked what they would pay, so each plan is a guess.' }
+  assert.equal((await createRead({ conversation, deps: { callStructured: call(invented), userId: 'u' }, situationId: 's', style: 'direct' })).source, 'fallback')
+})

@@ -221,10 +221,9 @@ test('Axiom\'s question is stripped of filler before it is shown and stored', as
   } finally { await close() }
 })
 
-test('a teaser or off-topic question is retried with the problem named, then dropped: ready, no follow-up used', async () => {
+test('a teaser question is retried with the problem named, then dropped: ready, no follow-up used', async () => {
   const teaser = verdict({ question: 'Want to see why the clinics went quiet?' })
-  const offTopic = verdict({ question: 'What is your biggest fear?' })
-  const { call, openai, rows, close } = await setup([teaser, offTopic])
+  const { call, openai, rows, close } = await setup([teaser, teaser])
   try {
     const res = await create(call, 1)
     assert.equal(res.body.status, 'ready')
@@ -232,6 +231,18 @@ test('a teaser or off-topic question is retried with the problem named, then dro
     assert.equal(openai.calls.length, 2)
     assert.match(openai.calls[1].payload.messages.at(-1).content, /teaser question/)
     assert.equal(rows('situation_turns').filter((t) => t.role === 'axiom').length, 0)
+  } finally { await close() }
+})
+
+// Rafay, Nov 23: style alone never drops a question. One with no thread from the founder is retried, then asked anyway.
+test('a question whose only problem is no thread is retried, then asked rather than skipped', async () => {
+  const offTopic = verdict({ question: 'What is your biggest fear?' })
+  const { call, openai, close } = await setup([offTopic, offTopic])
+  try {
+    const res = await create(call, 1)
+    assert.equal(openai.calls.length, 2)
+    assert.equal(res.body.follow_up_count, 1)
+    assert.match(JSON.stringify(res.body), /biggest fear/)
   } finally { await close() }
 })
 
