@@ -810,11 +810,12 @@ Replaces "read only" in the Nov 10 connectors entry. Reason (Rafay): a read-only
 
 ## Nov 25 2026: the connect screen, and "Let Axiom learn from how I work" (Rafay)
 - Connect screen copy (approved): "Connect Gmail, Calendar and Notion. I'll catch what matters before you miss it. Your reads get sharper from day one."
-- Below it, a separate switch, OFF by default, never pre-ticked, and connecting never depends on it: "Let Axiom learn from how I work, to make my experience better." A "What's kept" link opens: "Anonymous patterns, like your stage and how you decide. Never your name, your emails or your words. Kept to improve Axiom, even if you delete your account." The same switch is in Settings.
+- Below it, a separate switch, OFF by default, never pre-ticked, and connecting never depends on it: "Learn how I work. Make every read sharper." No link or extra text on the connect screen (Rafay, Nov 25).
+- The same switch is in Settings, with one line under it: "Anonymous. Never your name or your words. Kept to improve Axiom, even if you leave." The privacy page says the same. These two places are where the founder is told; neither may be removed while pattern rows are kept after deletion.
 - Reason: Rafay wants cross-founder patterns (stage, how founders decide, what they read, how they act) to stay after a founder leaves. "For founders like me" was dropped: founders do not want to share with other founders, and the patterns are never shown to anyone.
 - What is kept, and why it is allowed:
   1. From everyone: totals across founders only (no user id, no per-founder row). Disclosed in the privacy policy: "We use anonymous, combined statistics to improve Axiom."
   2. Only from founders with the switch on: one anonymous pattern row per founder, closed-list fields only (stage, industry category, decision traits from the existing closed list, situation kinds, lanes acted on, approval rate, move outcomes, newsletter categories). No user id, no link table, no free text, no names, no email content. Kept after account deletion.
 - Anything drawn from Gmail or Calendar enters the pattern row only as a category or a count (Google Limited Use).
-- While a founder uses Axiom, their own memory is unchanged and still deleted with the account. Turning the switch off stops new pattern rows; a row already written has no link back to them, so it cannot be found and removed (the "What's kept" text must not promise otherwise).
+- While a founder uses Axiom, their own memory is unchanged and still deleted with the account. Turning the switch off stops new pattern rows; a row already written has no link back to them, so it cannot be found and removed (the Settings line and privacy page must not promise otherwise).
 - Rejected (Nov 25): keeping a founder's profile after deletion without telling them, and wording written so founders would not understand what is kept.
