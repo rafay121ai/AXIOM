@@ -676,8 +676,10 @@ build or extend them.
 - The Welcome screen and the old chat product.
 
 ## Proactive Axiom (decided Nov 10 2026, NOT BUILT; plan: `tasks/connectors-plan.md`)
-Axiom reads the founder's Gmail, Google Calendar and Notion (read only, through
-Composio) and tells them what they should know, without being asked.
+Axiom reads the founder's Gmail, Google Calendar and Notion (through Composio),
+tells them what they should know without being asked, and prepares the work
+(replies, emails, calendar changes, Notion pages). It acts only after the founder
+approves (decided Nov 25 2026).
 - **Three lanes.** People (co-founder, investor, customer), Time (a meeting with
   no prep, a promise with a date), World (news in newsletters the founder chose
   to watch, when it changes their business). A signal does not have to connect
@@ -702,7 +704,13 @@ Composio) and tells them what they should know, without being asked.
   ones. An extreme event may skip the cap, at most 2 a day, still respecting
   quiet hours unless the event is dated within 3 hours. Lock screen defaults to
   Short. Pushes stop during care and delete requests, as before.
-- Raw email text is never stored. Read only: Axiom never sends or edits anything.
+- **Acts only after approval.** Axiom shows exactly what it will send or change;
+  the founder can edit it and taps to approve; only then does Axiom do it and say
+  what it did. Allowed: send an email or reply, create, move or cancel a calendar
+  event, create or update a Notion page. Never delete. Nothing is ever sent by a
+  push, a schedule or text inside an email. Approving a reply Axiom wrote can be
+  a Move. No actions during care.
+- Raw email text is never stored.
 - Delivery is not real-time: Gmail and Calendar are checked every few minutes.
 
 ## Later and parked (not now)
