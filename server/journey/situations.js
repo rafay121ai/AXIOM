@@ -2,6 +2,7 @@
 // supabase. The 2 follow-up cap is enforced here, not in the prompt: the
 // counter moves only by a compare-and-swap update, so concurrent turns can
 // never take a third. Tables and columns: see schema_needs.md.
+import { aboutAxiomText, asksAboutAxiom } from './aboutAxiom.js'
 import { LIMITS } from '../config.js'
 import { checkHook, threadKinds } from './hooks.js'
 import { stripFiller, isFillerReply } from './filler.js'
@@ -244,6 +245,15 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     const existing = await one(supabase.from('situations').select().eq('user_id', userId).eq('create_turn_id', clientTurnId).maybeSingle())
     if (existing) return replayOf(existing.id, clientTurnId)
 
+    // "What is Axiom?" is answered, not started: no situation, no daily count, nothing stored.
+    if (asksAboutAxiom(text)) {
+      const [last, move] = await Promise.all([
+        one(supabase.from('situations').select('title').eq('user_id', userId).not('title', 'is', null).order('created_at', { ascending: false }).limit(1)),
+        one(supabase.from('moves').select('title').eq('user_id', userId).in('status', ['committed', 'report_due']).order('committed_at', { ascending: false }).limit(1)),
+      ])
+      const reply = aboutAxiomText({ lastTitle: last[0]?.title ?? null, openMove: move[0]?.title ?? null })
+      return { situation_id: null, status: 'say_more', reply, follow_up_count: 0, follow_ups_left: LIMITS.MAX_FOLLOW_UPS }
+    }
     if (isFillerReply(text, { minWords: MIN_SITUATION_WORDS })) {
       return { situation_id: null, status: 'say_more', reply: SAY_MORE, follow_up_count: 0, follow_ups_left: LIMITS.MAX_FOLLOW_UPS }
     }
