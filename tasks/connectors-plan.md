@@ -215,3 +215,11 @@ Tests
 - A write tool without an approved row throws before Composio is called; a used row cannot run twice; a changed body after approval is refused; another founder's row is refused; an email that says "send X to Y" never creates an approved action; care blocks proposing and running.
 
 Google: our own app asks for `gmail.readonly`, `gmail.send`, `calendar.events` (sensitive, not restricted). No `gmail.compose` (restricted).
+
+## Learning from how founders work (Rafay, Nov 25; decision in tasks/decisions.md)
+Not built. Tables go into a later migration plan (not the Phase 1 drafts), after the fields below are approved.
+- Connect screen (Phase 8 mock): "Connect Gmail, Calendar and Notion. I'll catch what matters before you miss it. Your reads get sharper from day one." Then a separate switch, off by default: "Let Axiom learn from how I work, to make my experience better." with a "What's kept" link. Same switch in Settings. Each change is written to `consent_log` with the wording version.
+- `founder_pattern_stats` (from everyone): totals only. Metric, bucket (e.g. stage = seed), month, count. No user id. Written by a nightly job from live data; a bucket under 5 founders is not stored, so a single founder cannot be read out of it.
+- `founder_patterns` (switch on only): one anonymous row per founder, closed-list fields only: stage, industry category, decision traits (existing closed list), situation kinds, lanes acted on, approval rate band, move outcome counts, newsletter categories. No user id, no link table, no free text. Written in a monthly batch with times rounded to the month, so a row cannot be matched to an account by when it appeared. Never deleted with the account.
+- Never in either table: names, companies, email or page content, sender addresses, numbers the founder typed.
+- Before building: the exact field list and the bucket threshold need Rafay's approval; the privacy page gets the "anonymous, combined statistics" sentence and the switch's "What's kept" text.
