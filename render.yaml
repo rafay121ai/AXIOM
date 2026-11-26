@@ -32,6 +32,9 @@ services:
       # On (Rafay, Nov 9): a delete request waits a 7-day grace period, then the hourly check removes the founder.
       - key: ACCOUNT_DELETE
         value: "on"
+      # Connectors (Composio): off until the app screens exist. COMPOSIO_API_KEY is set in the dashboard only.
+      - key: CONNECTORS
+        value: "off"
       - key: FRONTEND_URL
         sync: false
       # Extra allowed origins, comma-separated. Set in the dashboard: https://axiom-founders.vercel.app (web app on Vercel, Nov 8).

@@ -45,6 +45,11 @@ const COLUMNS = Object.freeze({
   memory_evidence: ['id', 'item_table', 'item_id', 'source_kind', 'snippet', 'created_at'],
   memory_runs: ['id', 'source_kind', 'mode', 'status', 'created_at'],
   founder_corrections: ['id', 'item_table', 'item_text', 'reason', 'created_at'],
+  // Connectors: never composio_account_id or external_ref_hash. The content of a finished action is cleared after 30 days.
+  connector_accounts: ['id', 'toolkit', 'status', 'scopes', 'connected_at', 'last_sync_at', 'created_at'],
+  watch_sources: ['id', 'kind', 'identifier', 'display_name', 'status', 'rank_score', 'decided_at', 'created_at'],
+  signals: ['id', 'lane', 'toolkit', 'facts', 'impact', 'urgency', 'status', 'situation_id', 'expires_at', 'created_at'],
+  connector_actions: ['id', 'toolkit', 'tool_slug', 'args', 'preview', 'content_hash', 'status', 'signal_id', 'situation_id', 'proposed_at', 'approved_at', 'done_at', 'expires_at', 'composio_log_id', 'error_code', 'created_at'],
   users: ['email', 'first_name', 'created_at'],
   user_settings: ['share_auto', 'morning_on', 'evening_on', 'lock_screen', 'quiet_start', 'quiet_end', 'keep_items', 'mentor_style', 'created_at'],
 })
@@ -116,6 +121,10 @@ export function createAccountExport({ supabase, clock }) {
       memory_evidence: await mine('memory_evidence', userId),
       memory_runs: await mine('memory_runs', userId),
       founder_corrections: await mine('founder_corrections', userId),
+      connector_accounts: await mine('connector_accounts', userId),
+      watch_sources: await mine('watch_sources', userId),
+      signals: await mine('signals', userId),
+      connector_actions: await mine('connector_actions', userId),
       product_events: await noIdOf('product_events'),
       devices: (await mine('push_tokens', userId)).map((d) => ({ ...noId(d), token: 'redacted' })),
     }

@@ -482,6 +482,15 @@ loaded.
   approved calendar delete (`GOOGLECALENDAR_DELETE_EVENT`). The `args` of a finished
   action are cleared 30 days after it ends; the preview and hash stay. Every
   action is logged and exported. Client: `server/connectors/composio.js`.
+- Routes (built, Nov 27; only with `CONNECTORS=on`, else 404; JWT): `GET /api/connectors`
+  (per toolkit `{ toolkit, connected, status }`, reconciled with Composio),
+  `POST /api/connectors/:toolkit/connect` (`{ url }`; refused during care or a pending
+  delete request), `DELETE /api/connectors/:toolkit` (revokes at Composio first, then
+  deletes that toolkit's account row and signals, and watch sources for Gmail; beliefs,
+  world and evidence are kept). Account deletion revokes the Composio connections before
+  `delete_account`; a Composio failure is logged and never stops the deletion. The export
+  includes `connector_accounts`, `watch_sources`, `signals` and `connector_actions`
+  (not `connector_jobs`; no queue table is exported). `server/connectors/connectorService.js`.
 - Composio sends one signed webhook per event to `POST /connectors/webhook`
   (Standard Webhooks headers: id, timestamp, signature; 300 s replay window; the
   webhook id is the idempotency key). The route verifies, inserts a job, returns.
@@ -562,6 +571,7 @@ Names only; values live in Render (`render.yaml`) and a local `.env`.
 - `EXPO_PUSH`: `on` starts the push scheduler (off today).
 - `EXPO_ACCESS_TOKEN`: Expo push sender token.
 - `ACCOUNT_DELETE`: `on` makes account deletion real (off today).
+- `CONNECTORS`: `on` mounts the connector routes and starts the daily action-content clearing (off today). `COMPOSIO_API_KEY` is read by the Composio SDK.
 - `PRIVACY_URL`, `TERMS_URL`: links shown in Settings.
 
 ---

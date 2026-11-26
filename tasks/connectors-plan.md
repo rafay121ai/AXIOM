@@ -79,10 +79,10 @@ Raw email bodies are never stored. Only extracted facts and a verbatim snippet o
 - [x] Gate: Rafay approved (Nov 27). Applied to live main Nov 27, versions 20261125000001-3. Deploy order: migrations first, then server code. Rollback: server code first, then SQL.
 
 ### Phase 2. Connection layer (server only)
-- [ ] `server/connectors/composio.js`: thin client. One place that calls Composio. API key only in Render env (`COMPOSIO_API_KEY`), never in the app.
-- [ ] Composio user id = the Supabase user id (opaque uuid, no email or name sent as an identifier).
-- [ ] Routes (JWT checked, behind `CONNECTORS=on`): start connect (returns the Composio link), connect callback, status, disconnect.
-- [ ] Disconnect = revoke at Composio, delete the connector row, signals and watch sources. Facts already learned (beliefs, world, evidence) are KEPT (Rafay, Nov 10). The disconnect screen says so plainly and offers "delete what Axiom learned from this" as a separate button. Account deletion still removes everything.
+- [x] `server/connectors/composio.js`: thin client. One place that calls Composio. API key only in Render env (`COMPOSIO_API_KEY`), never in the app.
+- [x] Composio user id = the Supabase user id (opaque uuid, no email or name sent as an identifier).
+- [x] Routes (JWT checked, behind `CONNECTORS=on`): start connect (returns the Composio link), status, disconnect. (Nov 27. No separate callback route: `GET /api/connectors` reconciles with Composio after the founder returns.)
+- [ ] (server done Nov 27; screen and the separate "delete what Axiom learned" button not built) Disconnect = revoke at Composio, delete the connector row, signals and watch sources. Facts already learned (beliefs, world, evidence) are KEPT (Rafay, Nov 10). The disconnect screen says so plainly and offers "delete what Axiom learned from this" as a separate button. Account deletion still removes everything.
 - [ ] Scopes (changed Nov 25, see "Acting on approval"): Gmail read and send, Calendar events, Notion the pages the founder picks. Enforced in code: an allowlist of Composio action names; read tools run freely, write tools only with a founder approval; anything else throws.
 - [ ] Tests: fake Composio (same pattern as `createFakeSupabase`), connect, disconnect, revoked token becomes `needs_reconnect`, allowlist rejects a write action.
 

@@ -6,6 +6,8 @@ import { createClient } from '@supabase/supabase-js'
 import { createApp, systemClock } from './app.js'
 import { createExpoSender } from './push/expoSender.js'
 import { createAccount, startDeletionLoop } from './journey/home/accountService.js'
+import { createConnectors } from './connectors/composio.js'
+import { startActionClearing } from './connectors/connectorService.js'
 import { createNameLookup, startPushScheduler } from './push/scheduler.js'
 
 dotenv.config({ path: resolve(dirname(fileURLToPath(import.meta.url)), '../.env') })
@@ -36,7 +38,10 @@ if (!knowledgeUrl || !knowledgeKey) {
 }
 const knowledgeSupabase = knowledgeUrl && knowledgeKey ? createClient(knowledgeUrl, knowledgeKey) : null
 
-const app = createApp({ supabase, knowledgeSupabase, openai, env })
+// Connectors (Composio) only when CONNECTORS=on; the key comes from COMPOSIO_API_KEY.
+const connectors = env.CONNECTORS === 'on' ? createConnectors() : null
+
+const app = createApp({ supabase, knowledgeSupabase, openai, env, connectors })
 
 // Real pushes only when EXPO_PUSH=on and the database is configured.
 if (env.EXPO_PUSH === 'on' && supabase) {
@@ -52,11 +57,18 @@ if (env.EXPO_PUSH === 'on' && supabase) {
   console.log('[Axiom API] Push scheduler off (EXPO_PUSH is not on)')
 }
 
+if (connectors && supabase) {
+  startActionClearing({ supabase, clock: systemClock })
+  console.log('[Axiom API] Connectors on; action content is cleared daily after 30 days')
+} else {
+  console.log('[Axiom API] Connectors off (CONNECTORS is not on)')
+}
+
 // Real deletions only when ACCOUNT_DELETE=on and the database is configured.
 // Off: delete requests are recorded and nothing is removed.
 if (env.ACCOUNT_DELETE === 'on' && supabase) {
   // Checks once now, so a restart never delays a deletion that is already due.
-  startDeletionLoop({ account: createAccount({ supabase, clock: systemClock, deleteOn: true, log: (what, err) => console.error(`[Account] ${what}`, err?.message || '') }) }).run()
+  startDeletionLoop({ account: createAccount({ supabase, clock: systemClock, deleteOn: true, revokeConnections: connectors && ((id) => connectors.revokeAll(id)), log: (what, err) => console.error(`[Account] ${what}`, err?.message || '') }) }).run()
   console.log('[Axiom API] Account deletion on')
 } else {
   console.log('[Axiom API] Account deletion off (ACCOUNT_DELETE is not on)')
