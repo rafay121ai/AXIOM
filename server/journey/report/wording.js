@@ -3,6 +3,8 @@
 // words; the others are new and wait for Rafay's approval. Consent wordings
 // carry a version: the consent log stores which words the founder saw.
 
+import { lowerFirst } from '../lowerFirst.js'
+
 // The three outcomes, exactly. Nothing else can be reported.
 export const OUTCOMES = Object.freeze(['done', 'couldnt', 'didnt'])
 
@@ -18,13 +20,6 @@ export const NEED_MORE = 'Say a bit more.'
 
 // The Report opens with the move and Axiom's own prediction (PRODUCT.md:
 // "Your move was to … I said …. What happened?").
-// Lowercases a capitalised ordinary first word ("A few", "Both"); keeps "I", I'm/I'll/I've/I'd
-// and all-caps words (AI, MRR, B2B).
-export const lowerFirst = (s) => {
-  const word = /^[A-Za-z0-9'’]+/.exec(s)?.[0] ?? ''
-  const keep = /^I(['’](m|ll|ve|d))?$/.test(word) || /^[A-Z0-9]{2,}$/.test(word)
-  return /^[A-Z]/.test(s) && !keep ? s.charAt(0).toLowerCase() + s.slice(1) : s
-}
 const sentence = (s) => String(s ?? '').trim().replace(/[.!\s]+$/, '')
 export const moveLine = (title) => `Your move was to ${lowerFirst(sentence(title))}.`
 export const openingLine = ({ title, prediction }) =>

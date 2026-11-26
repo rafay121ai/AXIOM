@@ -9,6 +9,7 @@
 // - hidden: just "Axiom".
 // A full line that would break a voice rule (a banned phrase or a teaser in
 // stored text, or too long for a lock screen) falls back to the short line.
+import { lowerFirst } from '../journey/lowerFirst.js'
 import { BANNED_PHRASES, TEASER, norm, wordRx } from '../journey/ownWords.js'
 import { NUDGE_GOAL_DAYS } from './due.js'
 
@@ -21,7 +22,6 @@ const OPENS = Object.freeze({ morning: 'move', evening: 'report', reminder: 'rep
 
 const clean = (s) => String(s ?? '').replace(/\s+/g, ' ').trim()
 const sentence = (s) => clean(s).replace(/[.!?\s]+$/, '')
-const lowerFirst = (s) => (/^[A-Z][a-z]/.test(s) ? s.charAt(0).toLowerCase() + s.slice(1) : s)
 const upperFirst = (s) => s.charAt(0).toUpperCase() + s.slice(1)
 // "Rafay, how did it go?" or, with no name, "How did it go?"
 const lead = (name, rest) => (name ? `${name}, ${rest}` : upperFirst(rest))

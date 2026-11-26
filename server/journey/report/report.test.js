@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { lowerFirst } from '../lowerFirst.js'
 import { createApp } from '../../app.js'
 import { createFakeClock, createFakeOpenAI, createFakeSupabase } from '../../testing/fakes.js'
 import { FULL_ANSWERS } from '../fixtures.js'
@@ -8,7 +9,7 @@ import { STALE_MS, createReports } from './reportService.js'
 import { STORY_CAP } from './sharing.js'
 import {
   AFTER_STORY_VERSION, ALONE_VERSION, CONSENT_WORDINGS, KEPT_PRIVATE_LINE, NEED_MORE, OUTCOMES, SHARED_LINE,
-  SHARE_AUTO_TEXT, STORY_OFFER, WITHDRAWN_LINE, fallbackReply, openingLine, lowerFirst,
+  SHARE_AUTO_TEXT, STORY_OFFER, WITHDRAWN_LINE, fallbackReply, openingLine,
 } from './wording.js'
 
 const USER = { id: '11111111-1111-4111-8111-111111111111', email: 'founder@example.com' }

@@ -9,6 +9,7 @@ import { createMoves } from '../move/moveService.js'
 import { validTimeZone } from '../move/schedule.js'
 import { CARE_COPY } from '../../care/copy.js'
 import { saveOwnRow } from '../../push/settings.js'
+import { lowerFirst } from '../lowerFirst.js'
 import { pickGreeting } from './greeting.js'
 import { founderFirstName } from './name.js'
 import { ITEM_LABELS } from './wording.js'
@@ -24,7 +25,6 @@ const one = async (query) => {
   return data
 }
 
-const lowerFirst = (s) => (/^[A-Z][a-z]/.test(s) ? s.charAt(0).toLowerCase() + s.slice(1) : s)
 const plain = (s) => String(s ?? '').trim().replace(/[.!\s]+$/, '')
 const label = (template, title) => template.replace('{title}', lowerFirst(plain(title)))
 
