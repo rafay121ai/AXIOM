@@ -479,7 +479,8 @@ loaded.
   write tools (send, reply, calendar create/move/cancel, Notion create/add to) run
   only with a stored founder approval for that exact content, single use and not
   expired, checked in code before Composio is called. No delete tools except an
-  approved calendar cancel (`GOOGLECALENDAR_DELETE_EVENT`). Every
+  approved calendar delete (`GOOGLECALENDAR_DELETE_EVENT`). The `args` of a finished
+  action are cleared 30 days after it ends; the preview and hash stay. Every
   action is logged and exported. Client: `server/connectors/composio.js`.
 - Composio sends one signed webhook per event to `POST /connectors/webhook`
   (Standard Webhooks headers: id, timestamp, signature; 300 s replay window; the

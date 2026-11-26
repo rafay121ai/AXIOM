@@ -4,10 +4,12 @@ import { Composio } from '@composio/core'
 
 // notion is Composio's own toolkit (it has triggers), not the separate notion_mcp toolkit.
 export const TOOLKITS = ['googlecalendar', 'gmail', 'notion']
-// Slugs checked against Composio's live catalog (readOnlyHint), Nov 25.
+// Slugs checked against Composio's live catalog (readOnlyHint), Nov 25 and 27.
 export const READ_ONLY = new Set([
   'GOOGLECALENDAR_EVENTS_LIST',
   'GOOGLECALENDAR_LIST_CALENDARS',
+  'GOOGLECALENDAR_FIND_EVENT',
+  'GOOGLECALENDAR_FIND_FREE_SLOTS',
   'GMAIL_FETCH_EMAILS',
   'GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID',
   'GMAIL_FETCH_MESSAGE_BY_THREAD_ID',

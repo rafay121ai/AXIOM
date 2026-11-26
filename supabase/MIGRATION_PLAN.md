@@ -377,4 +377,4 @@ Server work these tables need (not SQL):
 Apply order: 1, 2, 3, then record the three versions, all BEFORE any server code that uses them is deployed (Render deploys from main). Each needs Rafay's explicit approval. Before applying, migration-checker must pass, the rollback must be tested on a Supabase branch (not live), and the live state must be re-checked against the facts above.
 
 Open, for Rafay:
-- **How long `connector_actions.args` is kept after an action is done.** It can hold the full email Axiom sent. Proposal: clear `args` 30 days after done and keep `preview`.
+- **How long `connector_actions.args` is kept after an action is done.** Decided Nov 27 (Rafay): `args` is cleared to `{}` 30 days after the action ends (done, failed, rejected or expired); `preview` and `content_hash` stay.

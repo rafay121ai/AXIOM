@@ -819,3 +819,9 @@ Replaces "read only" in the Nov 10 connectors entry. Reason (Rafay): a read-only
 - Anything drawn from Gmail or Calendar enters the pattern row only as a category or a count (Google Limited Use).
 - While a founder uses Axiom, their own memory is unchanged and still deleted with the account. Turning the switch off stops new pattern rows; a row already written has no link back to them, so it cannot be found and removed (the Settings line and privacy page must not promise otherwise).
 - Rejected (Nov 25): keeping a founder's profile after deletion without telling them, and wording written so founders would not understand what is kept.
+
+## Nov 27 2026: calendar deletes, "sort out my calendar", and 30 days for action content (Rafay)
+- Axiom may delete meetings when the founder wants, after approval, not only "cancel" one. Deleting mail or Notion pages is still never allowed.
+- "Sort out my calendar": Axiom proposes a set of calendar changes (move, delete, create) shown together. One tap approves the set; each change is still its own stored action with its own hash, so nothing outside the shown set can run. To find room it may read free slots and search events (`GOOGLECALENDAR_FIND_FREE_SLOTS`, `GOOGLECALENDAR_FIND_EVENT`).
+- The full content of an action (`connector_actions.args`, e.g. the email Axiom sent) is cleared 30 days after the action ends. The preview and the hash stay, for "What Axiom did" and the export.
+- The three Phase 1 connector migrations are approved to apply.
