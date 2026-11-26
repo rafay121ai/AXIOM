@@ -381,7 +381,7 @@ moves, 2 pushes a day.
 | Review draft | 1 call when a reviewer asks for a draft of a shared story |
 | Care        | A fast classifier plus rules, before everything |
 | Memory (every founder message) | 1 background gpt-4.1-mini call (about $0.001), never blocks the reply |
-| Read and first reading grounding | 1 small call per draft that passes the code checks, at most 3 per Read; a draft ships only if grounding ran on it (8 second timeout each, fails open, same `beliefs` step so its cost is not separate in `model_usage_logs`) |
+| Read and first reading grounding | 1 small call per Read or first reading (8 second timeout, fails open, same `beliefs` step so its cost is not separate in `model_usage_logs`) |
 | Memory (after a report) | 1 background extraction call (mode full), never blocks the report |
 | Memory (move closed, no report) | 1 background facts-only pass |
 | Memory (sign-up seed) | Tapped answers are seeded by code; 1 facts-only call over the written answers |
