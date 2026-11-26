@@ -66,8 +66,8 @@ Raw email bodies are never stored. Only extracted facts and a verbatim snippet o
 
 ### Phase 1. Schema (read-only live dump first, then a migration plan, then approval)
 - [x] Apply the memory-layer migrations (`20261109*`) first. Live as of Nov 25 (checked with list_migrations).
-- [ ] Fresh read-only dump of live main schema (extends `audit/schema_live_2026-11-09.md`).
-- [ ] One migration file plus rollback, idempotent, RLS on, no client policies (same rule as every founder table):
+- [x] Fresh read-only dump of live main schema (extends `audit/schema_live_2026-11-09.md`).
+- [x] Three migration files plus rollback, idempotent, RLS on, no client policies (same rule as every founder table):
   - `connector_accounts`: id, user_id, toolkit (gmail, calendar, notion), composio_account_id, status (active, needs_reconnect, revoked), scopes, connected_at, last_sync_at, last_error_code. One active row per founder and toolkit. We store NO OAuth tokens; Composio holds them.
   - `watch_sources`: id, user_id, kind (newsletter, sender), identifier (sender address or domain), display_name, status (suggested, watching, muted), rank_score, decided_at. Unique per founder and identifier.
   - `connector_jobs`: id, user_id, toolkit, external_id, kind, status (queued, running, done, failed, dropped), attempts, run_after, locked_at. Unique (user_id, toolkit, external_id) = idempotent; webhooks can repeat.
@@ -75,8 +75,8 @@ Raw email bodies are never stored. Only extracted facts and a verbatim snippet o
   - `notification_log`: allow `kind = 'signal'` with its own cap (see Q1). The current unique key (founder, day, slot) can't hold 4 signals, so signals need a different dedupe key. Change with care and test the morning and evening pushes still hold their one-a-day limit.
   - `founder_beliefs.source`: add `connector`. `model_usage_logs.call_type`: add `signal` and `connector` (same drop and re-add, NOT VALID, lock_timeout pattern as `20261101000009`).
   - `delete_account`: add the new tables, copied from the LIVE function definition, not from the repo files.
-- [ ] migration-checker agent passes. Rollback file tested on a Supabase branch, not on live.
-- [ ] Gate: Rafay approves applying. Deploy order: migrations first, then server code. Rollback: server code first, then SQL.
+- [x] migration-checker agent passes. Rollback tested Nov 27 on live inside one transaction that applied all three files, ran the rollback, checked the result and was then undone (no branch cost; nothing stayed).
+- [x] Gate: Rafay approved (Nov 27). Applied to live main Nov 27, versions 20261125000001-3. Deploy order: migrations first, then server code. Rollback: server code first, then SQL.
 
 ### Phase 2. Connection layer (server only)
 - [ ] `server/connectors/composio.js`: thin client. One place that calls Composio. API key only in Render env (`COMPOSIO_API_KEY`), never in the app.

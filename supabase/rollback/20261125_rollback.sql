@@ -1,4 +1,4 @@
--- Rollback for the connector migrations (supabase/pending/20261125*). Run by hand, never by a tool, and only
+-- Rollback for the connector migrations (supabase/migrations/20261125*). Run by hand, never by a tool, and only
 -- after the server code that uses them is rolled back. Order matters: the old delete_account goes back first,
 -- then the CHECKs, then the tables. Dropping the tables deletes every founder's connections,
 -- signals and action history; situations, moves, reports and memory are not touched.
