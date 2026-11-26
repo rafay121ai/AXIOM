@@ -234,15 +234,17 @@ test('a teaser question is retried with the problem named, then dropped: ready, 
   } finally { await close() }
 })
 
-// Rafay, Nov 23: style alone never drops a question. One with no thread from the founder is retried, then asked anyway.
-test('a question whose only problem is no thread is retried, then asked rather than skipped', async () => {
+// Follow-ups are optional (zero is allowed): one with no thread from the founder, still so after the retry, is not asked. The Read comes next; no text is shown in its place.
+test('a question with no thread from the founder is retried, then not asked: ready, no follow-up used', async () => {
   const offTopic = verdict({ question: 'What is your biggest fear?' })
-  const { call, openai, close } = await setup([offTopic, offTopic])
+  const { call, openai, rows, close } = await setup([offTopic, offTopic])
   try {
     const res = await create(call, 1)
     assert.equal(openai.calls.length, 2)
-    assert.equal(res.body.follow_up_count, 1)
-    assert.match(JSON.stringify(res.body), /biggest fear/)
+    assert.equal(res.body.status, 'ready')
+    assert.equal(res.body.follow_up_count, 0)
+    assert.doesNotMatch(JSON.stringify(res.body), /biggest fear/)
+    assert.equal(rows('situation_turns').filter((t) => t.role === 'axiom').length, 0)
   } finally { await close() }
 })
 
