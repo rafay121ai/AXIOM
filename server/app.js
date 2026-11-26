@@ -11,6 +11,8 @@ import { mountReviewRoutes } from './review/reviewRoutes.js'
 import { createSharing } from './journey/report/sharing.js'
 import { createEmbedder } from './journey/learn/retrieve.js'
 import { createCare } from './care/middleware.js'
+import { mountConnectorRoutes } from './connectors/routes.js'
+import { createAccount } from './journey/home/accountService.js'
 import { retireAfterCare } from './journey/memory/retireSituation.js'
 
 export const systemClock = Object.freeze({ now: () => Date.now() })
@@ -23,6 +25,7 @@ export function createApp({
   openai,
   clock = systemClock,
   env = {},
+  connectors = null, // the Composio client (server/connectors/composio.js); tests pass a fake
 } = {}) {
   const app = express()
   // Render sits behind exactly one proxy hop; trust only that hop for req.ip.
@@ -147,6 +150,8 @@ export function createApp({
   app.use('/api/account', requireAuth)
   app.use('/api/push', requireAuth)
   app.use('/api/loading-hint', requireAuth)
+  const connectorsOn = env.CONNECTORS === 'on' && connectors
+  if (connectorsOn) app.use('/api/connectors', requireAuth)
 
   // ─── Routes ───────────────────────────────────────────────────────────────────
 
@@ -181,6 +186,9 @@ export function createApp({
     noDailyLimit: isAdminUser,
     links: { privacy: env.PRIVACY_URL?.trim() || null, terms: env.TERMS_URL?.trim() || null },
   })
+  if (connectorsOn) {
+    mountConnectorRoutes(app, { supabase: supabaseAdmin, connectors, care, clock, pendingDeletion: createAccount({ supabase: supabaseAdmin, clock, deleteOn: env.ACCOUNT_DELETE === 'on' }).pending })
+  }
   mountPushRoutes(app, { supabase: supabaseAdmin, clock })
   mountReviewRoutes(app, { supabase: supabaseAdmin, callStructured: callStructuredForApp, clock, env, requireAuth })
 

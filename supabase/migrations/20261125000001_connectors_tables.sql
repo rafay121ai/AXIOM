@@ -1,5 +1,5 @@
 -- Connectors 1 of 3: the connector tables (tasks/connectors-plan.md, Phase 1 and "Acting on approval").
--- DRAFT IN supabase/pending/: NOT APPLIED. Needs Rafay's explicit approval; move into supabase/migrations/ only then.
+-- APPLIED to live main on Nov 27 2026 (Rafay's yes), in one transaction per file, version recorded.
 -- Written Nov 25 2026 after a read-only check of live main (zmzrrmqqxqzmmfovpqjt): none of these tables exist.
 --
 --   connector_accounts  which tools a founder connected (Composio holds the tokens; we store only its account id)

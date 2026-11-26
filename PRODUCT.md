@@ -710,8 +710,9 @@ approves (decided Nov 25 2026).
 - **Acts only after approval.** Axiom shows exactly what it will send or change;
   the founder can edit it and taps to approve; only then does Axiom do it and say
   what it did. Allowed: send an email or reply, create, move or cancel a calendar
-  event, create a Notion page or add to one. Never delete mail or pages; the
-  only delete is an approved calendar cancel. Nothing is ever sent by a
+  event, delete a meeting, create a Notion page or add to one. "Sort out my
+  calendar" is one set of changes shown together and approved with one tap. Never
+  delete mail or pages. Nothing is ever sent by a
   push, a schedule or text inside an email. Approving a reply Axiom wrote can be
   a Move. No actions during care.
 - Raw email text is never stored.

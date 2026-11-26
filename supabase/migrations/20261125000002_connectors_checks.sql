@@ -1,5 +1,5 @@
 -- Connectors 2 of 3: existing CHECKs accept the connector values and the signal push slots.
--- DRAFT IN supabase/pending/: NOT APPLIED. Needs Rafay's explicit approval; move into supabase/migrations/ only then.
+-- APPLIED to live main on Nov 27 2026 (Rafay's yes), in one transaction per file, version recorded.
 -- Written Nov 25 2026 against live main (read-only check the same day):
 --   notification_log_kind_check   morning, quiet_check, evening, reminder, nudge (NOT VALID); 0 rows in the table
 --   notification_log_slot_check   morning, evening

@@ -347,7 +347,8 @@ Why: commit dde7d85 (Nov 19) made the move carry one first step, but the CHECK s
 
 Status Nov 22 2026: Rafay approved applying. Re-checked live first (check unchanged, version not recorded), then ran the file's statements and recorded version 20261122000001 in supabase_migrations.schema_migrations in one transaction. Verified read-only afterwards: moves_checklist_check allows 1 to 4 and is NOT VALID; the other moves checks are unchanged. A move then saved and committed live from the simulator.
 
-## Connectors (Nov 25 2026): DRAFTS in supabase/pending/, NOT APPLIED
+## Connectors (Nov 25 2026): APPLIED to live main Nov 27 2026, now in supabase/migrations/
+Applied after a dry run on live inside a transaction that was then undone: all three files, then the rollback, restored delete_account byte for byte (md5 e845cf48...) and removed the tables and history rows. Verified after the apply: 5 tables, RLS on all, no anon or authenticated access, delete_account covers them and only service_role can run it, versions 20261125000001-3 recorded.
 
 Written after a read-only check of live main on Nov 25 2026: none of the five tables exist; `notification_log` holds 0 rows; the CHECKs below are as listed in file 2; `delete_account` md5 `e845cf4819f27f848cbc7ff7e8ff5237`, EXECUTE only for postgres and service_role. Plan: tasks/connectors-plan.md (Phase 1, "Acting on approval"); decision: tasks/decisions.md, Nov 25.
 
@@ -377,4 +378,4 @@ Server work these tables need (not SQL):
 Apply order: 1, 2, 3, then record the three versions, all BEFORE any server code that uses them is deployed (Render deploys from main). Each needs Rafay's explicit approval. Before applying, migration-checker must pass, the rollback must be tested on a Supabase branch (not live), and the live state must be re-checked against the facts above.
 
 Open, for Rafay:
-- **How long `connector_actions.args` is kept after an action is done.** It can hold the full email Axiom sent. Proposal: clear `args` 30 days after done and keep `preview`.
+- **How long `connector_actions.args` is kept after an action is done.** Decided Nov 27 (Rafay): `args` is cleared to `{}` 30 days after the action ends (done, failed, rejected or expired); `preview` and `content_hash` stay.

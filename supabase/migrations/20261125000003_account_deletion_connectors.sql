@@ -1,5 +1,5 @@
 -- Connectors 3 of 3: delete_account also removes the founder's connector rows.
--- DRAFT IN supabase/pending/: NOT APPLIED. It removes founder data: needs Rafay's explicit approval.
+-- APPLIED to live main on Nov 27 2026 (Rafay's yes), in one transaction per file, version recorded.
 -- Copied from the LIVE function on Nov 25 2026 (md5 of pg_get_functiondef: e845cf4819f27f848cbc7ff7e8ff5237;
 -- EXECUTE held by postgres and service_role only). Re-check that md5 right before applying; if it differs, stop.
 -- The only change: five deletes for the connector tables, children first (actions point at signals).

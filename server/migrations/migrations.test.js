@@ -30,6 +30,8 @@ const FIRST_JOURNEY_MIGRATION = '20261101000001'
 const DELETION_MIGRATION = '20261101000011_account_deletion.sql'
 // The memory layer (tasks/memory-plan.md) has its own checks at the end of this file.
 const MEMORY_PREFIX = '20261109'
+// The connectors migrations (Nov 25) have their own rollback and are not journey files.
+const CONNECTORS_PREFIX = '20261125'
 
 // ── SQL parsing ──────────────────────────────────────────────────────────────
 
@@ -82,7 +84,7 @@ const NOT_A_COLUMN = /^(constraint|primary|unique|check|foreign|exclude)\b/i
 function readMigrations() {
   return readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort().map((name) => ({
     name,
-    journey: name >= FIRST_JOURNEY_MIGRATION && !name.startsWith(MEMORY_PREFIX),
+    journey: name >= FIRST_JOURNEY_MIGRATION && !name.startsWith(MEMORY_PREFIX) && !name.startsWith(CONNECTORS_PREFIX),
     sql: readFileSync(join(MIGRATIONS, name), 'utf8'),
   }))
 }
@@ -158,7 +160,7 @@ test('migrations: the journey files exist, in order, after every older migration
   assert.ok(journey.length >= 11, `expected the journey migrations, found ${journey.length}`)
   const names = all.map((f) => f.name)
   assert.deepEqual(names, [...names].sort())
-  assert.deepEqual(journey.map((f) => f.name), names.filter((n) => !n.startsWith(MEMORY_PREFIX)).slice(-journey.length))
+  assert.deepEqual(journey.map((f) => f.name), names.filter((n) => !n.startsWith(MEMORY_PREFIX) && !n.startsWith(CONNECTORS_PREFIX)).slice(-journey.length))
 })
 
 test('migrations: every new table is created idempotently', () => {
