@@ -289,7 +289,7 @@ Axiom says plainly what is really happening in this situation.
   room.
 - A situation quiet for 14 days is paused silently. Nothing is deleted. No
   warning, no strike.
-- A daily limit on new situations (suggested 5) is enforced by the server for
+- A daily limit on new situations (10 a day) is enforced by the server for
   cost; Axiom says so plainly and offers the open ones.
 - A daily cost limit ($1 per founder). At the limit Axiom says "You've hit
   today's limit. Come back tomorrow to keep going." It never blocks the care
