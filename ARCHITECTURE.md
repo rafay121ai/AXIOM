@@ -474,8 +474,13 @@ loaded.
 ---
 
 ## Connectors and signals (planned, NOT BUILT; full plan: `tasks/connectors-plan.md`)
-- Composio holds the OAuth tokens. We store only its connected-account id. Read
-  only: an allowlist of Composio action names, anything else throws.
+- Composio holds the OAuth tokens. We store only its connected-account id. An
+  allowlist of Composio action names; anything else throws. Read tools run freely;
+  write tools (send, reply, calendar create/move/cancel, Notion create/add to) run
+  only with a stored founder approval for that exact content, single use and not
+  expired, checked in code before Composio is called. No delete tools except an
+  approved calendar cancel (`GOOGLECALENDAR_DELETE_EVENT`). Every
+  action is logged and exported. Client: `server/connectors/composio.js`.
 - Composio sends one signed webhook per event to `POST /connectors/webhook`
   (Standard Webhooks headers: id, timestamp, signature; 300 s replay window; the
   webhook id is the idempotency key). The route verifies, inserts a job, returns.
