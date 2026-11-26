@@ -59,16 +59,42 @@ test('a Read with an invented motive is rejected, retried with the claim named, 
   })
   assert.equal(out.source, 'model')
   assert.equal(out.read.body, GOOD.body)
-  assert.deepEqual(calls.map((c) => c.schemaName), ['read', 'read_grounding', 'read']) // the check runs once
+  assert.deepEqual(calls.map((c) => c.schemaName), ['read', 'read_grounding', 'read', 'read_grounding']) // every draft that could ship is checked
   assert.match(calls[2].messages.at(-1).content, /fear rejection/)
 })
 
-test('grounding alone never replaces a good Read on the last attempt: it ships and is logged', async () => {
+test('a draft the grounding check objects to never ships, on any attempt: the fallback is used', async () => {
   const logs = []
-  const { result, calls } = run({ reads: [INVENTED, INVENTED], grounding: { unsupported: ['fear rejection'] }, log: (...a) => logs.push(a) })
-  assert.equal((await result).source, 'model')
-  assert.equal(calls.filter((c) => c.schemaName === 'read_grounding').length, 1)
-  assert.deepEqual(logs.find((l) => l[0] === 'grounding objected, shipped')?.[1], { claims: ['fear rejection'] })
+  const { result, calls } = run({ reads: [INVENTED, INVENTED, INVENTED], grounding: { unsupported: ['fear rejection'] }, log: (...a) => logs.push(a) })
+  assert.equal((await result).source, 'fallback')
+  assert.equal(calls.filter((c) => c.schemaName === 'read_grounding').length, 3)
+  assert.deepEqual(logs.find((l) => l[0] === 'grounding objected')?.[1], { claims: ['fear rejection'] })
+})
+
+// Style-only drafts (a closing question with no thread of theirs) used to ship without grounding ever running on them.
+const STYLE_ONLY = { ...GOOD, closing_question: 'What is your biggest fear?' }
+function scriptedGrounding(verdicts) {
+  const calls = []
+  const reads = [INVENTED, STYLE_ONLY, STYLE_ONLY]
+  const result = createRead({
+    conversation: CONVERSATION, situationId: 's1', grounding: { isCapped: async () => false },
+    deps: { userId: 'u1', callStructured: async (c) => { calls.push(c.schemaName); return { data: c.schemaName === 'read_grounding' ? verdicts.shift() : reads.shift() } } },
+  })
+  return { calls, result }
+}
+
+test('a style-only draft ships only after grounding ran on it and found nothing', async () => {
+  const ok = scriptedGrounding([{ unsupported: ['fear rejection'] }, { unsupported: [] }])
+  const out = await ok.result
+  assert.equal(out.source, 'model')
+  assert.equal(out.read.closing_question, STYLE_ONLY.closing_question)
+  assert.deepEqual(ok.calls, ['read', 'read_grounding', 'read', 'read', 'read_grounding'])
+})
+
+test('a style-only draft the grounding check objects to is not eligible: the fallback is used', async () => {
+  const bad = scriptedGrounding([{ unsupported: ['fear rejection'] }, { unsupported: ['they want to quit'] }, { unsupported: ['they want to quit'] }])
+  assert.equal((await bad.result).source, 'fallback')
+  assert.equal(bad.calls.filter((c) => c === 'read_grounding').length, 3)
 })
 
 test('a code-rule failure on the last attempt still falls back, and the fallback is logged', async () => {
