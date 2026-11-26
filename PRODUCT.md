@@ -697,7 +697,10 @@ approves (decided Nov 25 2026).
   it without asking first. Each fact shows its source on the memory screen and can
   be marked wrong or outdated. Never health, politics, religion, family or money
   in personal accounts. Disconnecting keeps what Axiom learned, with a separate
-  "delete what Axiom learned" button; deleting the account removes everything.
+  "delete what Axiom learned" button; deleting the account removes everything,
+  except anonymous pattern rows from founders who turned on "Learn how I work.
+  Make every read sharper." (off by default; no name, no words, no link back to
+  the founder). Settings and the privacy page say they are kept after leaving.
 - **Newsletters:** after Gmail connects, Axiom ranks the founder's newsletters
   and asks which matter. Only those are watched.
 - **Pushes:** signals get their own 4 a day on top of the morning and evening
@@ -707,7 +710,8 @@ approves (decided Nov 25 2026).
 - **Acts only after approval.** Axiom shows exactly what it will send or change;
   the founder can edit it and taps to approve; only then does Axiom do it and say
   what it did. Allowed: send an email or reply, create, move or cancel a calendar
-  event, create or update a Notion page. Never delete. Nothing is ever sent by a
+  event, create a Notion page or add to one. Never delete mail or pages; the
+  only delete is an approved calendar cancel. Nothing is ever sent by a
   push, a schedule or text inside an email. Approving a reply Axiom wrote can be
   a Move. No actions during care.
 - Raw email text is never stored.
