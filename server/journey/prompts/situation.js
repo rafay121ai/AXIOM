@@ -44,7 +44,7 @@ export function situationMessages({ conversation, followUpsLeft, brief = '', con
   if (retryProblems?.length) {
     messages.push({
       role: 'system',
-      content: `Your last question was: ${previous}\nIt broke these rules: ${retryProblems.slice(0, 6).join('; ')}. Rewrite it and fix every one; for "no thread", put one word, number or date they wrote into the question.`,
+      content: `${previous ? `Your last question was: ${previous}\n` : 'Your last answer had no question.\n'}It broke these rules: ${retryProblems.slice(0, 6).join('; ')}. Rewrite it and fix every one; for "no thread", put one word, number or date they wrote into the question.`,
     })
   }
   return messages

@@ -182,7 +182,7 @@ test('a Read with no closing question or no thread ships with the founder-specif
   for (const closing of ['Think about which products you could hand over.', 'What is the plan for the next quarter?']) {
     const { out } = await SHIP([{ headline: 'Ordering by hand costs you the time for everything else.', body: GOOD_BODY, closing_question: closing }])
     assert.equal(out.source, 'model')
-    assert.equal(out.read.closing_question, 'On "I would like to manage": what is the next step, as you see it?')
+    assert.equal(out.read.closing_question, 'On "home responsibilities and personal stuff": what is the next step, as you see it?')
     assert.deepEqual(checkRead({ read: out.read, answerTexts: SAID, earlierTexts: [] }).problems.filter((p) => /question|thread/.test(p) && !/quotes the founder/.test(p)), [])
   }
 })

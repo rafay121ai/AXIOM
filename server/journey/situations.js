@@ -118,10 +118,11 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
 
   // ── The model's view of one turn ───────────────────────────────────────────
 
-  // Returns { topic, enough, question, title }. Axiom always asks MAX_FOLLOW_UPS
-  // questions before the Read (Rafay, Nov 9): while any are left, a missing or
-  // failing question is asked for again once. Never throws: a failed model call
-  // or a question that will not pass ends in "enough", never in a stall.
+  // Returns { topic, enough, question, title }. Axiom asks at most MAX_FOLLOW_UPS
+  // questions before the Read: while any are left, a missing or failing question
+  // is asked for again once, and one that still has no thread from the founder is
+  // not asked. Never throws: a failed model call or a question that will not pass
+  // ends in "enough", never in a stall; the model's topic and title are kept.
   async function assess({ userId, situation, turns, followUpsLeft }) {
     const conversation = turns.filter((t) => !t.filler).map((t) => ({ role: t.role, text: t.text }))
     const sources = founderTextsOf(turns)
@@ -129,6 +130,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     const conflict = findConflict({ transcript: conversation, earlier: earlierLines(brief) }) // notice only: a follow-up question is not forced to name it
     let problems = null
     let previous = ''
+    let last = { topic: 'same', title: null } // the model's topic and title survive a question that is not asked
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       try {
         const { data } = await callStructured({
@@ -141,6 +143,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
           messages: situationMessages({ conversation, followUpsLeft, brief, conflict }, problems, previous),
         })
         const base = { topic: data.topic, title: data.title.trim() }
+        last = base
         if (followUpsLeft <= 0) return { ...base, enough: true, question: null }
         const question = stripFiller(data.question).text
         const verdict = question ? checkHook({ text: question, sources }) : { ok: false, problems: ['a question is required: follow_ups_left is more than 0'] }
@@ -153,7 +156,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
       }
     }
     log('follow-up question failed the checks', { problems })
-    return { topic: 'same', title: null, enough: true, question: null }
+    return { ...last, enough: true, question: null }
   }
 
   // ── One founder turn ───────────────────────────────────────────────────────

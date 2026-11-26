@@ -93,9 +93,21 @@ export const hardProblems = (problems) => problems.filter((p) => HARD.test(p))
 const weight = (p) => (/not about this situation|no thread from the founder/.test(p) ? 10 : /^name both numbers/.test(p) ? 5 : 1)
 const score = (problems) => problems.reduce((sum, p) => sum + weight(p), 0)
 
+// A whole clause of the founder's words (3 to 8 words, cut at a comma or sentence end), never a truncated run; else their shortest whole
+// sentence of 15 words or fewer; else ''.
+function wholeClause(founderTexts) {
+  const clean = (t) => String(t).replace(/["“”„‟]/g, '')
+  const wc = (x) => x.split(/\s+/).length
+  const clauses = founderTexts.flatMap((t) => clean(t).split(/[,;.!?\n]+/).map((x) => x.trim()).filter((x) => wc(x) >= 3))
+  const fit = clauses.find((x) => wc(x) <= 8)
+  if (fit) return fit
+  const sentences = founderTexts.flatMap((t) => clean(t).split(/(?<=[.!?])\s+/).map((x) => x.trim().replace(/[.!?]+$/, '')).filter((x) => wc(x) >= 3 && wc(x) <= 15))
+  return sentences.sort((a, b) => a.length - b.length)[0] ?? ''
+}
+
 // Ship-time repair of the closing question on the draft that ships, from the founder's own words, never a new model call: one question only
 // (the first that carries a thread); a strong change they did not ask about gets the plain change question; no question, or none with a
-// thread, gets the approved "On "their words": ..." pattern (at most 5 words, under the 6 a closing may repeat). The headline and body stay.
+// thread, gets the approved "On "their words": ..." pattern (one whole clause of theirs, up to 8 words). The headline and body stay.
 export function repairClosing({ read, founderTexts, conflict }) {
   const sentences = read.closing_question.split(/(?<=[.!?])\s+/).map((x) => x.trim()).filter(Boolean)
   const questions = sentences.filter((x) => x.endsWith('?'))
@@ -103,7 +115,7 @@ export function repairClosing({ read, founderTexts, conflict }) {
   if (conflict?.strong && !namesBothAndAsks(all, conflict)) return { ...read, closing_question: `You gave ${conflict.earlierNumber} before and ${conflict.nowNumber} now. What changed?` }
   const pick = questions.find((q) => threadKinds(q, founderTexts).length > 0)
   if (pick) return { ...read, closing_question: pick }
-  const quote = snippetOf(founderTexts[0] ?? '', 40).split(/\s+/).slice(0, 5).join(' ').replace(/[\s,;:.!?\-–—]+$/, '')
+  const quote = wholeClause(founderTexts)
   if (!quote) return read
   return { ...read, closing_question: `On "${quote}": what is the next step, as you see it?` }
 }

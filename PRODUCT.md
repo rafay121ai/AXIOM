@@ -237,7 +237,7 @@ earlier answer sits above an **empty** chat box as one tap to send. The box is
 never pre-filled or locked.
 
 ### Follow up rule (enforced by the server)
-- **Exactly 2** follow-up questions per situation, always, one at a time,
+- **At most 2** follow-up questions per situation (Axiom skips one that would not be specific to the founder), one at a time,
   each about what the founder just wrote (Rafay, Nov 9). The first makes clear
   what this is (what the thing does, or what happened). The second goes to the
   real issue behind it (why they started it, what is stopping them, what

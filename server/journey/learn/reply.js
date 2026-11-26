@@ -207,11 +207,13 @@ function contrastSentence(text) {
 }
 
 // Ship-time repair: a remaining contrast sentence is dropped (a safe rewrite does not exist), never a question, and only when the reply keeps
-// other content. Otherwise the text ships as it is.
-function withoutContrast(text) {
+// other content and never the sentence that names a cited author or book. Otherwise the text ships as it is.
+function withoutContrast(text, sources) {
+  const cited = sources.map((c) => ({ author: c.author, source_title: c.book }))
+  const names = (s) => namesSource(s, cited) || sources.some((c) => guestIn(s, c.book)) // the sentence that names the cited author or book stays
   if (!contrastProblem(text)) return text
   const keep = []
-  for (const s of sentencesOf(text)) if (s.includes('?') || !contrastProblem([...keep, s].join(' '))) keep.push(s)
+  for (const s of sentencesOf(text)) if (s.includes('?') || names(s) || !contrastProblem([...keep, s].join(' '))) keep.push(s)
   const out = keep.join(' ')
   return keep.some((s) => !s.includes('?')) && !contrastProblem(out) ? out : text
 }
@@ -253,7 +255,7 @@ export async function composeReply({ mode, step, context, evidence, founderTexts
   // After the retry a reply that still breaks a hard rule is repaired, or replaced by the plain reply. Never shipped as is.
   const finish = () => {
     if (!last) return null
-    if (!last.hard) return { ...last.reply, text: withoutContrast(last.reply.text) }
+    if (!last.hard) return { ...last.reply, text: withoutContrast(last.reply.text, last.reply.sources) }
     const text = repairText(last.reply.text, mode, conflict)
     deps.log?.('learn reply repaired or replaced', { problems: last.problems, repaired: text !== null })
     return text ? { ...last.reply, text } : plainReply(mode)

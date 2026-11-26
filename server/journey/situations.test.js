@@ -813,3 +813,15 @@ test('a follow-up question that fails the checks is logged with its reasons, nev
     assert.ok(!line.includes('clinics') && !line.includes('demo'), 'no founder or model text in the log')
   } finally { console.error = original; await close() }
 })
+
+test('a topic change still starts a new situation when its follow-up question has no thread and is not asked', async () => {
+  const noThread = verdict({ topic: 'new', title: 'Hiring a developer', question: 'What is your biggest fear?' })
+  const { call, rows, close } = await setup([verdict(), noThread, noThread, ...Array(2).fill(verdict({ question: '', title: 'Hiring a developer' }))])
+  try {
+    const first = (await create(call, 1)).body
+    const res = await call('POST', `/api/situations/${first.situation_id}/turn`, { text: 'Separate thing: I need to hire a developer by December.', client_turn_id: uuid(2) })
+    assert.equal(res.body.started_new, true)
+    assert.equal(rows('situations').length, 2)
+    assert.equal(rows('situations').find((s) => s.id === res.body.situation_id).title, 'Hiring a developer')
+  } finally { await close() }
+})

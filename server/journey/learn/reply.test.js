@@ -102,3 +102,14 @@ test('a contrast sentence still there after the retry is dropped; the reply keep
   assert.match(retry, /The sentence: /)
   assert.equal(reply.text, 'You have a prototype and no customers yet. Who will you call today?')
 })
+
+test('a contrast sentence that names the cited author and book is kept, not dropped', async () => {
+  const ev = [{ handle: 'E1', chunk_id: 'c1', author: 'Reid Hoffman', source_title: 'Blitzscaling', text: 'Distribution is a core link in the chain.', similarity: 0.4 }]
+  const draft = { reply: 'You have a prototype and no customers yet. Hoffman in Blitzscaling says distribution is not the problem, it is the first call. Who will you call today?', citations: [{ handle: 'E1' }] }
+  const reply = await composeReply({
+    mode: 'lesson', step: 'learn', evidence: ev, founderTexts: founder, usageContext: {}, context: { situation: [], read: {}, learn: [] },
+    deps: { userId: 'u', callStructured: async () => ({ data: { ...draft, picture_json: '', follow_ups: [], move_subject: '', move_fact: '' } }) },
+  })
+  assert.match(reply.text, /Blitzscaling/)
+  assert.equal(reply.sources.length, 1)
+})
