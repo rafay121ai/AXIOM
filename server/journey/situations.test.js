@@ -771,3 +771,19 @@ test('a question about Axiom gets the fixed answer: no situation, no model call,
     assert.equal(rows('situations').length, 0)
   } finally { await close() }
 })
+
+test('a follow-up question that fails the checks is logged with its reasons, never the founder text', async () => {
+  const bad = verdict({ question: 'Tell me how many clinics asked for pricing.' }) // not a question
+  const { call, close } = await setup([bad, bad])
+  const original = console.error
+  const logged = []
+  console.error = (...a) => logged.push(a.join(' '))
+  try {
+    const res = await create(call, 1)
+    assert.equal(res.status, 200)
+    const line = logged.find((l) => l.includes('follow-up question failed the checks'))
+    assert.ok(line, `no log line in ${JSON.stringify(logged)}`)
+    assert.match(line, /it is not a question/)
+    assert.ok(!line.includes('clinics') && !line.includes('demo'), 'no founder or model text in the log')
+  } finally { console.error = original; await close() }
+})
