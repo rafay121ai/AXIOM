@@ -117,12 +117,9 @@ export async function createRead({ conversation, deps, situationId, style, track
   const conflict = findConflict({ transcript: conversation, earlier })
   const earlierTexts = earlierSources({ transcript: conversation, earlier })
   let problems = null
-  const styleOnly = [] // drafts with style problems only; one ships only after grounding has run on it and found nothing
-  const grounded = async (read) => {
-    const claims = grounding ? await unsupportedClaims({ read, conversation, brief, situationId, grounding, deps }) : []
-    if (claims.length > 0) deps.log?.('grounding objected', { claims })
-    return claims
-  }
+  let grounded = false // the check runs once: a rewrite that only fixes its objection ships unchecked, and the last attempt is never turned down by it
+  let claims = []
+  let best = null // the style-only draft with the fewest problems
   for (let attempt = 1; attempt <= READ_ATTEMPTS; attempt += 1) {
     try {
       const { data } = await deps.callStructured({
@@ -137,20 +134,25 @@ export async function createRead({ conversation, deps, situationId, style, track
       const read = unquoted(clean(data), founderTexts)
       const verdict = checkRead({ read, answerTexts: founderTexts, earlierTexts, conflict })
       if (verdict.ok) {
-        const claims = await grounded(read)
-        if (claims.length === 0) return { read, source: 'model' }
-        problems = claims.map((c) => `it claims something they did not say (${c}): say only what they said or what follows from their numbers`)
-        continue
+        if (grounding && !grounded) {
+          grounded = true
+          claims = await unsupportedClaims({ read, conversation, brief, situationId, grounding, deps })
+          if (claims.length > 0 && attempt < READ_ATTEMPTS) {
+            problems = claims.map((c) => `it claims something they did not say (${c}): say only what they said or what follows from their numbers`)
+            continue
+          }
+        }
+        if (claims.length > 0) deps.log?.('grounding objected, shipped', { claims })
+        return { read, source: 'model' }
       }
       problems = verdict.problems
-      if (hardProblems(problems).length === 0) styleOnly.push({ read, problems })
+      if (hardProblems(problems).length === 0 && (!best || problems.length < best.problems.length)) best = { read, problems }
     } catch (err) {
       deps.log?.('model call failed', err)
       problems = null
     }
   }
-  for (const best of styleOnly.sort((a, b) => a.problems.length - b.problems.length)) {
-    if ((await grounded(best.read)).length > 0) continue
+  if (best) {
     deps.log?.('read shipped with style problems', { problems: best.problems })
     return { read: best.read, source: 'model' }
   }
