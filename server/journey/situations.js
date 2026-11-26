@@ -269,7 +269,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
       situation = await startSituation(userId, clientTurnId)
     } catch (err) {
       if (err?.code !== '23505') throw err
-      return create({ userId, text, clientTurnId })
+      return create({ userId, text, clientTurnId, unlimited })
     }
     try {
       return await runTurn({ userId, situation, text, clientTurnId, first: true })

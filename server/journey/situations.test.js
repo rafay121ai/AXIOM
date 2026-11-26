@@ -606,6 +606,30 @@ test('a test account in ADMIN_USER_IDS is not held to the daily limit', async ()
   } finally { await close() }
 })
 
+test('a test account keeps its unlimited pass when a duplicate-key race makes create retry', async () => {
+  const today = Array.from({ length: MAX_NEW_SITUATIONS_PER_DAY }, (_, i) => ({ id: uuid(900 + i), user_id: USER.id, status: 'open', follow_up_count: 0, created_at: new Date(NOW).toISOString(), last_activity_at: new Date(NOW).toISOString() }))
+  const { call, close, db } = await setup([enough(), enough()], { env: { ...ENV, ADMIN_USER_IDS: USER.id }, tables: { situations: today } })
+  const from = db.from.bind(db)
+  let failed = false
+  db.from = (table) => {
+    const builder = from(table)
+    if (table !== 'situations' || failed) return builder
+    const insert = builder.insert.bind(builder)
+    builder.insert = (row) => {
+      if (failed) return insert(row)
+      failed = true
+      const lost = { data: null, error: { code: '23505', message: 'duplicate key' } }
+      const chain = { select: () => chain, single: () => chain, maybeSingle: () => chain, then: (res, rej) => Promise.resolve(lost).then(res, rej) }
+      return chain
+    }
+    return builder
+  }
+  try {
+    assert.equal((await create(call, 1)).status, 200)
+    assert.ok(failed, 'the duplicate-key path ran')
+  } finally { await close() }
+})
+
 // Live, Nov 9: a new situation about a different app got a Read built only on the
 // sign-up answers (the founder's main business), so it read as the old chat. Later steps
 // now also see the brief and track record, but the conversation wins and only the first
