@@ -20,7 +20,7 @@ export function mountConnectorRoutes(app, { supabase, connectors, care, pendingD
       return res.json(await fn(req))
     } catch (err) {
       if (err instanceof HttpError) return res.status(err.status).json(err.body)
-      console.error('[Connectors] failed', err?.message || err)
+      console.error('[Connectors] failed', err?.name ?? 'Error', err?.code ?? err?.status ?? '')
       return res.status(500).json({ error: 'Something went wrong. Try again.' })
     }
   }

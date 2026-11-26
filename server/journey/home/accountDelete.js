@@ -22,7 +22,7 @@ export class DeletionError extends Error {}
 const missing = (error) => error.status === 404 || /not found/i.test(error.message ?? '')
 const fail = (step, error) => new DeletionError(`${step} failed, code ${error.code ?? error.status ?? 'none'}`)
 
-// revokeConnections(userId) -> names of connectors Composio could not revoke (Phase 2 connectors); null when connectors are off.
+// revokeConnections(userId) -> 'toolkit ca_id' of each connected account Composio could not revoke (Phase 2 connectors); null when connectors are off.
 export function createFounderDeletion({ supabase, revokeConnections = null }) {
   async function dataFunction(userId) {
     if (typeof supabase.rpc !== 'function') throw new DeletionError('data function missing')
@@ -53,7 +53,7 @@ export function createFounderDeletion({ supabase, revokeConnections = null }) {
     if (!revokeConnections) return
     try {
       const failed = await revokeConnections(userId)
-      if (failed.length) console.error(`[Account] Composio did not revoke: ${failed.join(', ')}; deletion continues, clear it in the Composio dashboard`)
+      if (failed.length) console.error(`[Account] Composio did not revoke (connected account ids): ${failed.join(', ')}; deletion continues, clear them in the Composio dashboard`)
     } catch (err) {
       console.error(`[Account] Composio revoke failed (${err?.code ?? err?.status ?? 'none'}); deletion continues, clear it in the Composio dashboard`)
     }

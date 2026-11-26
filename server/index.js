@@ -38,10 +38,12 @@ if (!knowledgeUrl || !knowledgeKey) {
 }
 const knowledgeSupabase = knowledgeUrl && knowledgeKey ? createClient(knowledgeUrl, knowledgeKey) : null
 
-// Connectors (Composio) only when CONNECTORS=on; the key comes from COMPOSIO_API_KEY.
-const connectors = env.CONNECTORS === 'on' ? createConnectors() : null
+// The Composio client exists whenever the key is set, so account deletion always revokes a founder's connections,
+// even with CONNECTORS off. The routes and the clearing timer stay behind CONNECTORS=on.
+const connectors = env.COMPOSIO_API_KEY ? createConnectors() : null
+const connectorsOn = env.CONNECTORS === 'on'
 
-const app = createApp({ supabase, knowledgeSupabase, openai, env, connectors })
+const app = createApp({ supabase, knowledgeSupabase, openai, env, connectors: connectorsOn ? connectors : null })
 
 // Real pushes only when EXPO_PUSH=on and the database is configured.
 if (env.EXPO_PUSH === 'on' && supabase) {
@@ -57,7 +59,7 @@ if (env.EXPO_PUSH === 'on' && supabase) {
   console.log('[Axiom API] Push scheduler off (EXPO_PUSH is not on)')
 }
 
-if (connectors && supabase) {
+if (connectorsOn && connectors && supabase) {
   startActionClearing({ supabase, clock: systemClock })
   console.log('[Axiom API] Connectors on; action content is cleared daily after 30 days')
 } else {

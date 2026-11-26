@@ -49,7 +49,7 @@ const COLUMNS = Object.freeze({
   connector_accounts: ['id', 'toolkit', 'status', 'scopes', 'connected_at', 'last_sync_at', 'created_at'],
   watch_sources: ['id', 'kind', 'identifier', 'display_name', 'status', 'rank_score', 'decided_at', 'created_at'],
   signals: ['id', 'lane', 'toolkit', 'facts', 'impact', 'urgency', 'status', 'situation_id', 'expires_at', 'created_at'],
-  connector_actions: ['id', 'toolkit', 'tool_slug', 'args', 'preview', 'content_hash', 'status', 'signal_id', 'situation_id', 'proposed_at', 'approved_at', 'done_at', 'expires_at', 'composio_log_id', 'error_code', 'created_at'],
+  connector_actions: ['id', 'toolkit', 'tool_slug', 'args', 'preview', 'content_hash', 'status', 'signal_id', 'situation_id', 'proposed_at', 'approved_at', 'done_at', 'expires_at', 'error_code', 'created_at'],
   users: ['email', 'first_name', 'created_at'],
   user_settings: ['share_auto', 'morning_on', 'evening_on', 'lock_screen', 'quiet_start', 'quiet_end', 'keep_items', 'mentor_style', 'created_at'],
 })

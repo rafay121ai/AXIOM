@@ -159,3 +159,12 @@ Shown when the model's Read fails validation twice or the call fails. Stored row
 | Part | Text |
 |---|---|
 | body | "You have been on it {time}, {week}." "So far you have {tried}." (only if they ticked something) "You are aiming for {aim} {when}." "I could not read more into your answers than that just now, so I will not guess. Next: what you wrote you are most stuck on." |
+
+## G. Connectors: refusal and error lines (Nov 27, AWAITING RAFAY)
+Founder-facing, new, not in any mock or the voice guide. Source: server/connectors/connectorService.js `COPY`.
+| Where | Text |
+|---|---|
+| Connect refused during a care event | "Connecting can wait. Come back to it when things feel steadier." |
+| Connect refused during a pending account delete | "Your account is set to be deleted, so I will not connect anything new." |
+| Unknown connector | "That is not something I can connect." |
+| Disconnect failed at Composio | "I could not disconnect that just now. Nothing was removed. Try again." |

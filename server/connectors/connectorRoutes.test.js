@@ -20,10 +20,20 @@ function fakeComposio(state = {}) {
   const deleted = []
   const composio = {
     create: async (userId) => ({
-      toolkits: async () => ({ items: Object.entries(state[userId] ?? {}).map(([slug, c]) => ({ slug, connection: { isActive: c.active, connectedAccount: { id: c.id, status: c.active ? 'ACTIVE' : 'EXPIRED' } } })) }),
+      toolkits: async () => ({ items: Object.entries(state[userId] ?? {}).filter(([k]) => k !== 'old').map(([slug, c]) => ({ slug, connection: { isActive: c.active, connectedAccount: { id: c.id, status: c.active ? 'ACTIVE' : 'EXPIRED' } } })) }),
       authorize: async (toolkit) => ({ redirectUrl: `https://connect.example/${toolkit}/${userId}` }),
     }),
-    connectedAccounts: { delete: async (id) => { if (composio.failDelete) throw new Error('boom'); deleted.push(id) } },
+    connectedAccounts: {
+      // state[user].old = [{ toolkit, id }]: accounts a reconnect left behind. Two per page, to exercise the cursor.
+      list: async ({ userIds, toolkitSlugs, cursor }) => {
+        assert.equal(userIds.length, 1)
+        const mine = state[userIds[0]] ?? {}
+        const all = [...Object.entries(mine).filter(([k]) => k !== 'old').map(([toolkit, c]) => ({ toolkit, id: c.id })), ...(mine.old ?? [])].filter((a) => toolkitSlugs.includes(a.toolkit))
+        const from = Number(cursor ?? 0)
+        return { items: all.slice(from, from + 2).map((a) => ({ id: a.id, toolkit: { slug: a.toolkit } })), nextCursor: from + 2 < all.length ? String(from + 2) : null }
+      },
+      delete: async (id) => { if (composio.failDelete) throw new Error('boom'); deleted.push(id) },
+    },
   }
   return { composio, deleted }
 }
@@ -51,6 +61,14 @@ test('routes do not exist (404) when CONNECTORS is off, even without a token', a
   try {
     for (const [m, p] of [['GET', '/api/connectors'], ['POST', '/api/connectors/gmail/connect'], ['DELETE', '/api/connectors/gmail']]) assert.equal((await t.call(m, p)).status, 404, p)
   } finally { await t.close() }
+})
+
+test('routes stay 404 with a Composio client present when CONNECTORS is off (client exists for account deletion)', async () => {
+  const fake = fakeComposio({})
+  const app = createApp({ env: { FRONTEND_URL: ENV.FRONTEND_URL }, supabase: createFakeSupabase({}), openai: createFakeOpenAI([]), clock: createFakeClock(NOW), connectors: createConnectors({ composio: fake.composio }) })
+  const server = app.listen(0)
+  await new Promise((r) => server.once('listening', r))
+  try { assert.equal((await fetch(`http://127.0.0.1:${server.address().port}/api/connectors`)).status, 404) } finally { await new Promise((r) => server.close(r)) }
 })
 
 test('routes need a signed-in founder', async () => {
@@ -116,7 +134,7 @@ const seedConnected = () => ({
     connector_accounts: [A, B].flatMap((u) => ['gmail', 'notion'].map((toolkit) => ({ id: `${u.id}-${toolkit}`, user_id: u.id, toolkit, composio_account_id: `ca_${toolkit}`, status: 'active' }))),
     watch_sources: [A, B].map((u) => ({ id: `w-${u.id}`, user_id: u.id, kind: 'sender', identifier: 'x@y.com' })),
     signals: [A, B].flatMap((u) => ['gmail', 'notion'].map((toolkit) => ({ id: `s-${u.id}-${toolkit}`, user_id: u.id, toolkit, lane: 'people' }))),
-    connector_actions: [{ id: 'act1', user_id: A.id, toolkit: 'gmail', status: 'done', args: { body: 'hi' } }],
+    connector_actions: [{ id: 'act1', user_id: A.id, toolkit: 'gmail', status: 'done', args: { body: 'hi' }, composio_log_id: 'log_x' }],
     founder_beliefs: [{ id: 'b1', user_id: A.id, belief: 'learned from gmail', status: 'active' }],
   },
 })
@@ -160,20 +178,54 @@ test('account deletion revokes the Composio connections before the data function
     await createFounderDeletion({ supabase: base, revokeConnections: async (id) => { order.push(`revoke ${id}`); return [] } }).deleteFounder(A.id)
     assert.deepEqual(order, [`revoke ${A.id}`, 'delete_account'])
     order.length = 0
-    await createFounderDeletion({ supabase: base, revokeConnections: async () => ['gmail'] }).deleteFounder(A.id)
+    await createFounderDeletion({ supabase: base, revokeConnections: async () => ['gmail ca_old1'] }).deleteFounder(A.id)
     await createFounderDeletion({ supabase: base, revokeConnections: async () => { throw new Error(`down ${A.id}`) } }).deleteFounder(A.id)
     assert.deepEqual(order, ['delete_account', 'delete_account'])
     assert.equal(logged.length, 2)
-    assert.ok(logged[0].includes('gmail') && !logged.join().includes(A.id))
+    assert.ok(logged[0].includes('gmail ca_old1') && !logged.join().includes(A.id))
   } finally { console.error = quiet }
 })
 
-test('revokeAll continues past a failing toolkit and names it', async () => {
-  const { composio } = fakeComposio({ [A.id]: { gmail: { id: 'g', active: true }, notion: { id: 'n', active: true } } })
+test('revokeAll deletes every account of the founder (older ones too, across pages), continues past a failure and names it', async () => {
+  const { composio } = fakeComposio({ [A.id]: { gmail: { id: 'g', active: true }, notion: { id: 'n', active: true }, old: [{ toolkit: 'gmail', id: 'g_old' }, { toolkit: 'notion', id: 'n_old' }, { toolkit: 'gmail', id: 'g_old2' }] }, [B.id]: { gmail: { id: 'b', active: true } } })
   const seen = []
-  composio.connectedAccounts.delete = async (id) => { seen.push(id); if (id === 'g') throw new Error('x') }
-  assert.deepEqual(await createConnectors({ composio }).revokeAll(A.id), ['gmail'])
-  assert.deepEqual(seen, ['g', 'n'])
+  composio.connectedAccounts.delete = async (id) => { seen.push(id); if (id === 'g_old') throw new Error('x') }
+  assert.deepEqual(await createConnectors({ composio }).revokeAll(A.id), ['gmail g_old'])
+  assert.deepEqual(seen.sort(), ['g', 'g_old', 'g_old2', 'n', 'n_old'])
+})
+
+test('disconnect deletes the older connected accounts a reconnect left, for that toolkit only', async () => {
+  const state = seedConnected()
+  state.composioState[A.id].old = [{ toolkit: 'gmail', id: 'ca_a_gmail_old' }, { toolkit: 'notion', id: 'ca_a_notion_old' }]
+  const t = await setup(state)
+  try {
+    await t.call('DELETE', '/api/connectors/gmail')
+    assert.deepEqual(t.deleted.sort(), ['ca_a_gmail', 'ca_a_gmail_old'])
+  } finally { await t.close() }
+})
+
+test('disconnect deletes that toolkit\'s queued jobs and expires open actions, so an old approval cannot run after a reconnect', async () => {
+  const s = seedConnected()
+  const act = (id, user, toolkit, status) => ({ id, user_id: user, toolkit, status, args: {} })
+  s.tables.connector_jobs = [{ id: 'j1', user_id: A.id, toolkit: 'gmail' }, { id: 'j2', user_id: A.id, toolkit: 'notion' }, { id: 'j3', user_id: B.id, toolkit: 'gmail' }]
+  s.tables.connector_actions = [act('p', A.id, 'gmail', 'proposed'), act('ap', A.id, 'gmail', 'approved'), act('d', A.id, 'gmail', 'done'), act('n', A.id, 'notion', 'proposed'), act('b', B.id, 'gmail', 'approved')]
+  const t = await setup(s)
+  try {
+    await t.call('DELETE', '/api/connectors/gmail')
+    assert.deepEqual(t.base.rows('connector_jobs').map((r) => r.id).sort(), ['j2', 'j3'])
+    assert.deepEqual(Object.fromEntries(t.base.rows('connector_actions').map((r) => [r.id, r.status])), { p: 'expired', ap: 'expired', d: 'done', n: 'proposed', b: 'approved' })
+  } finally { await t.close() }
+})
+
+test('list writes only when something changed, and never duplicates a row', async () => {
+  const t = await setup({ composioState: { [A.id]: { gmail: { id: 'ca_g', active: true } } } })
+  try {
+    await Promise.all([t.call('GET', '/api/connectors'), t.call('GET', '/api/connectors')])
+    assert.equal(t.base.rows('connector_accounts').length, 1)
+    const stamp = JSON.stringify(t.base.rows('connector_accounts'))
+    await t.call('GET', '/api/connectors')
+    assert.equal(JSON.stringify(t.base.rows('connector_accounts')), stamp, 'an unchanged connection is not rewritten')
+  } finally { await t.close() }
 })
 
 test('export includes the connector tables for this founder only, without Composio ids or hashes of signals', async () => {
@@ -188,6 +240,7 @@ test('export includes the connector tables for this founder only, without Compos
   const text = JSON.stringify(doc)
   assert.ok(!text.includes('SECRETHASH') && !text.includes('composio_account_id') && !text.includes(B.id))
   assert.equal('connector_jobs' in doc, false)
+  assert.ok(!text.includes('composio_log_id'))
 })
 
 test('30-day clearing: only ended actions older than 30 days lose args; preview and hash stay', async () => {
@@ -203,8 +256,10 @@ test('30-day clearing: only ended actions older than 30 days lose args; preview 
     row('expired-fresh', 'expired', { updated_at: fresh }),
     row('proposed-old', 'proposed', { updated_at: old }),
     row('approved-old', 'approved', { updated_at: old }),
+    row('cleared-old', 'done', { done_at: old, args: {} }),
   ] } })
   assert.equal(await clearActionContent({ supabase: base, clock: createFakeClock(NOW) }), 4)
+  assert.equal(await clearActionContent({ supabase: base, clock: createFakeClock(NOW) }), 0, 'rows already cleared are skipped')
   const by = Object.fromEntries(base.rows('connector_actions').map((r) => [r.id, r]))
   for (const id of ['done-old', 'failed-old', 'rejected-old', 'expired-old']) assert.deepEqual(by[id].args, {}, id)
   for (const id of ['done-fresh', 'expired-fresh', 'proposed-old', 'approved-old']) assert.deepEqual(by[id].args, { body: id }, id)

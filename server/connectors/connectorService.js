@@ -22,7 +22,7 @@ export function createConnectorService({ supabase, connectors, care, pendingDele
   // Composio is the truth about whether the connection works. Our row follows it.
   async function list(userId) {
     const live = await connectors.status(userId)
-    const rows = ok(await supabase.from('connector_accounts').select('id, toolkit, status').eq('user_id', userId))
+    const rows = ok(await supabase.from('connector_accounts').select('id, toolkit, status, composio_account_id').eq('user_id', userId))
     const out = []
     for (const toolkit of TOOLKITS) {
       const { active, accountId } = live[toolkit]
@@ -30,9 +30,9 @@ export function createConnectorService({ supabase, connectors, care, pendingDele
       let status = 'not_connected'
       if (active && accountId) {
         status = 'active'
-        // Update first, insert when there is no row (the unique key covers a race).
-        const hit = ok(await supabase.from('connector_accounts').update({ composio_account_id: accountId, status, last_error_code: null, updated_at: iso() }).eq('user_id', userId).eq('toolkit', toolkit).select('id'))
-        if (!hit.length) ok(await supabase.from('connector_accounts').insert({ user_id: userId, toolkit, composio_account_id: accountId, status }).select('id'))
+        if (row?.status !== 'active' || row.composio_account_id !== accountId) {
+          ok(await supabase.from('connector_accounts').upsert({ user_id: userId, toolkit, composio_account_id: accountId, status, last_error_code: null, updated_at: iso() }, { onConflict: 'user_id,toolkit' }).select('id'))
+        }
       } else if (row) {
         status = 'needs_reconnect'
         if (row.status !== status) ok(await supabase.from('connector_accounts').update({ status, updated_at: iso() }).eq('id', row.id).select('id'))
@@ -61,6 +61,9 @@ export function createConnectorService({ supabase, connectors, care, pendingDele
     const gone = (table) => supabase.from(table).delete().eq('user_id', userId)
     ok(await gone('connector_accounts').eq('toolkit', toolkit).select('id'))
     ok(await gone('signals').eq('toolkit', toolkit).select('id'))
+    ok(await gone('connector_jobs').eq('toolkit', toolkit).select('id'))
+    // An approval given before a disconnect can never run after a reconnect.
+    ok(await supabase.from('connector_actions').update({ status: 'expired', updated_at: iso() }).eq('user_id', userId).eq('toolkit', toolkit).in('status', ['proposed', 'approved']).select('id'))
     if (toolkit === 'gmail') ok(await gone('watch_sources').select('id'))
     return { toolkit, connected: false, status: 'not_connected' }
   }
@@ -72,7 +75,7 @@ export function createConnectorService({ supabase, connectors, care, pendingDele
 // Ended = done, failed, rejected or expired; the end is done_at, else updated_at.
 export async function clearActionContent({ supabase, clock }) {
   const cutoff = new Date(clock.now() - ACTION_KEEP_MS).toISOString()
-  const base = () => supabase.from('connector_actions').update({ args: {} }).in('status', ENDED)
+  const base = () => supabase.from('connector_actions').update({ args: {} }).in('status', ENDED).neq('args', '{}')
   const withDone = ok(await base().lt('done_at', cutoff).select('id'))
   const without = ok(await base().is('done_at', null).lt('updated_at', cutoff).select('id'))
   return withDone.length + without.length

@@ -111,6 +111,7 @@ export function createFakeSupabase({ tables = {}, users = {}, idFactory = random
     let orderBy = []
     let max = Infinity
     let single = null
+    let onConflict = null
 
     // .not(col, operator, value): the operators the server uses with it.
     const negated = (v, { operator, value }) => {
@@ -124,7 +125,7 @@ export function createFakeSupabase({ tables = {}, users = {}, idFactory = random
       const v = row[col]
       switch (op) {
         case 'eq': return v === val
-        case 'neq': return v !== val
+        case 'neq': return (v && typeof v === 'object' ? JSON.stringify(v) : v) !== val
         case 'gt': return v > val
         case 'gte': return v >= val
         case 'lt': return v < val
@@ -140,9 +141,15 @@ export function createFakeSupabase({ tables = {}, users = {}, idFactory = random
     function run() {
       const rows = rowsOf(table)
       if (action === 'insert' || action === 'upsert') {
-        const inserted = [].concat(payload).map((r) => ({ id: idFactory(), ...r }))
-        if (action === 'insert' && breaksUnique(table, [...rows, ...inserted])) return { error: duplicate }
-        rows.push(...inserted)
+        // upsert with onConflict: a row with the same key columns is updated, not duplicated.
+        const fresh = []
+        const inserted = []
+        for (const r of [].concat(payload)) {
+          const twin = action === 'upsert' && onConflict && rows.find((x) => onConflict.every((c) => x[c] === r[c]))
+          if (twin) { Object.assign(twin, r); inserted.push(twin) } else { const n = { id: idFactory(), ...r }; fresh.push(n); inserted.push(n) }
+        }
+        if (action === 'insert' && breaksUnique(table, [...rows, ...fresh])) return { error: duplicate }
+        rows.push(...fresh)
         return inserted
       }
       const hit = rows.filter(matches)
@@ -161,7 +168,7 @@ export function createFakeSupabase({ tables = {}, users = {}, idFactory = random
     const api = {
       select() { return api },
       insert(p) { action = 'insert'; payload = p; return api },
-      upsert(p) { action = 'upsert'; payload = p; return api },
+      upsert(p, opts) { action = 'upsert'; payload = p; onConflict = opts?.onConflict?.split(',') ?? null; return api },
       update(p) { action = 'update'; payload = p; return api },
       delete() { action = 'delete'; return api },
       or(expr) { filters.push(['or', null, expr]); return api },
