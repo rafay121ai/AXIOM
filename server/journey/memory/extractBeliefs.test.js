@@ -49,7 +49,8 @@ function setup(over = {}) {
   return { supabase, store, clock, calls, run }
 }
 const beliefs = (supabase) => supabase.rows('founder_beliefs')
-const stored = (userId, b, extra = {}) => ({ id: uuid(500 + Math.floor(Math.random() * 400)), user_id: userId, kind: 'fact', confidence: 0.6, source: 'conversation', status: 'active', created_at: at(NOW - DAY), updated_at: at(NOW - DAY), ...extra, belief: b })
+let storedCount = 0 // a counter, not Math.random: two random ids could collide and fail a test about 1 run in 60
+const stored = (userId, b, extra = {}) => ({ id: uuid(500 + storedCount++), user_id: userId, kind: 'fact', confidence: 0.6, source: 'conversation', status: 'active', created_at: at(NOW - DAY), updated_at: at(NOW - DAY), ...extra, belief: b })
 const newFact = (belief, snippet) => ({ new_beliefs: [{ belief, kind: 'fact', snippet }] })
 
 test('no past beliefs and nothing to learn: nothing written, the run is recorded, no brief lines', async () => {
