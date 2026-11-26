@@ -138,7 +138,7 @@ export function checkReply({ data, mode, evidence, founderTexts, earlierTexts = 
   const uncited = evidence.filter((e) => !sources.some((s) => s.handle === e.handle || sameText(s.author) === sameText(e.author) || sameText(s.book) === sameText(e.source_title)))
   const passageNumbers = new Set(evidence.filter((e) => sources.some((s) => s.handle === e.handle)).flatMap((e) => digitsIn(e.text)))
   const ownNumbers = new Set([...founderTexts, ...earlierTexts].map(withDigits).flatMap(digitsIn)) // "three" counts as 3 (live, Nov 23)
-  // A number keeps the unit the founder gave it: a bare "16" never becomes "16 hours" or "16 time" (live, Nov 19). A sentence that adds a unit they never gave is an invented fact: dropped and named in the retry, like an unknown number.
+  // A number keeps the unit the founder gave it: a bare "16" never becomes "16 hours" or "16 time" (live, Nov 19).
   const ownPairs = pairsOf([...founderTexts, ...earlierTexts, ...(conflict ? [conflict.nowText] : []), ...evidence.filter((e) => sources.some((s) => s.handle === e.handle)).map((e) => e.text)])
   const kept = []
   for (const sentence of sentencesOf(text)) {
@@ -149,7 +149,7 @@ export function checkReply({ data, mode, evidence, founderTexts, earlierTexts = 
     const unknown = digitsIn(sentence).find((n) => !ownNumbers.has(n) && !passageNumbers.has(n))
     if (unknown) { problems.push(`a number the founder never gave: ${unknown}`); continue }
     const loose = looseUnit(sentence, ownPairs)
-    if (loose) { problems.push(`a number with a word the founder never put after it: ${loose.number} ${loose.unit}. Say the number the way they said it`); continue }
+    if (loose) problems.push(`a number with a word the founder never put after it: ${loose.number} ${loose.unit}. Say the number the way they said it`) // style: retried, never dropped (Rafay, Nov 23)
     const said = saidProblem(sentence, [...founderTexts, ...earlierTexts, ...(conflict ? [conflict.nowText] : [])])
     if (said) { problems.push(said); continue }
     kept.push(sentence)
@@ -199,14 +199,19 @@ export function checkReply({ data, mode, evidence, founderTexts, earlierTexts = 
   return { reply, problems: [...new Set(problems)], hard }
 }
 
-// The reply with its questions dropped and the closing question kept, last; null when that leaves no sentence.
+// The reply with the sentences that carry a contrast dropped and the closing question kept, last; null when that leaves no valid reply.
 // With a strong conflict the one question kept is the one that asks what changed (the generic closing goes), moved to the end.
 function repairText(text, mode, conflict) {
   const sentences = sentencesOf(text)
   const closing = QUESTION_MODES.has(mode) ? (conflict?.strong && changeQuestion(text, conflict)) || sentences.findLast((s) => s.endsWith('?')) : null
   if (QUESTION_MODES.has(mode) && !closing) return null
-  const keep = sentences.filter((s) => !s.includes('?'))
-  return keep.length >= 1 ? [...keep, ...(closing ? [closing] : [])].join(' ') : null
+  const keep = []
+  for (const s of sentences) {
+    if (s.includes('?') || contrastProblem([...keep, s, ...(closing ? [closing] : [])].join(' '))) continue
+    keep.push(s)
+  }
+  const out = [...keep, ...(closing ? [closing] : [])].join(' ')
+  return keep.length >= 1 && !contrastProblem(out) ? out : null
 }
 
 // Last resort (voice: direct, no filler): no source, no teaching, nothing pasted from the founder, nothing invented. Wording for Rafay's approval.

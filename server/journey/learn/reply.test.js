@@ -87,10 +87,3 @@ test('a number from an earlier statement is allowed in a reply, an invented one 
   assert.deepEqual(check(15, ['Works evenings and weekends, under 15 hours a week.']), [])
   assert.ok(check(14, ['Works evenings and weekends, under 15 hours a week.']).some((p) => p.includes('never gave: 14')))
 })
-
-test('a sentence that gives a number a unit the founder never gave is dropped and named', () => {
-  const data = { reply: 'Ordering takes 16 hours every week for you. What is the first order you could hand off?', citations: [] }
-  const { reply, problems } = checkReply({ data, mode: 'lesson', evidence: [], founderTexts: ['Ordering takes 16 every week and I plan to delegate it'] })
-  assert.ok(problems.some((p) => /never put after it: 16 hour/.test(p)), problems.join('; '))
-  assert.doesNotMatch(reply.text, /16 hours/)
-})
