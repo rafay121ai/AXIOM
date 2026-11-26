@@ -157,3 +157,47 @@ test('a Read with only style problems ships after the retries; an invented numbe
   const invented = { ...styleOnly, body: 'Payments go on in 5 weeks. None of the 18 has been asked what they would pay, so each plan is a guess.' }
   assert.equal((await createRead({ conversation, deps: { callStructured: call(invented), userId: 'u' }, situationId: 's', style: 'direct' })).source, 'fallback')
 })
+
+// Rafay, Nov 27: a style-only Read may no longer ship with two closing questions, no closing question or a closing with no thread; the
+// closing is repaired from the founder's words at ship time, the answer still ships, and the retry shows the model its draft.
+const SHIP = async (reads) => {
+  const sent = []
+  let i = 0
+  const callStructured = async ({ messages }) => { sent.push(messages); return { data: reads[Math.min(i++, reads.length - 1)] } }
+  const out = await createRead({ conversation: SAID.map((text) => ({ role: 'founder', text })), deps: { callStructured, userId: 'u' }, situationId: 's', style: 'direct' })
+  return { out, sent }
+}
+const GOOD_BODY = 'Ordering every product yourself takes 16 hours, so the rest of the business waits on it. Home responsibilities already fill the time you have left.'
+
+test('a Read whose closing has two questions ships with one, and the retry showed the draft', async () => {
+  const two = { headline: 'Ordering by hand costs you the time for everything else.', body: GOOD_BODY, closing_question: 'Which products could someone else order? What would it cost to hand them over?' }
+  const { out, sent } = await SHIP([two])
+  assert.equal(out.source, 'model')
+  assert.equal(out.read.closing_question, 'Which products could someone else order?')
+  assert.equal((out.read.closing_question.match(/\?/g) ?? []).length, 1)
+  assert.match(sent[1].at(-1).content, /Which products could someone else order\?[\s\S]*more than one question/) // draft shown, problem named
+})
+
+test('a Read with no closing question or no thread ships with the founder-specific question built from their words', async () => {
+  for (const closing of ['Think about which products you could hand over.', 'What is the plan for the next quarter?']) {
+    const { out } = await SHIP([{ headline: 'Ordering by hand costs you the time for everything else.', body: GOOD_BODY, closing_question: closing }])
+    assert.equal(out.source, 'model')
+    assert.equal(out.read.closing_question, 'On "I would like to manage": what is the next step, as you see it?')
+    assert.deepEqual(checkRead({ read: out.read, answerTexts: SAID, earlierTexts: [] }).problems.filter((p) => /question|thread/.test(p) && !/quotes the founder/.test(p)), [])
+  }
+})
+
+test('the best style-only draft is the one that is about the situation, not the one with fewer problems', async () => {
+  const offTopic = { headline: 'Cash flow is the real risk in a young company.', body: 'Founders often run short of cash before revenue arrives. Track it every week and plan for the worst.', closing_question: 'What is your runway?' }
+  const about = { headline: 'Ordering by hand costs you the time for everything else.', body: GOOD_BODY, closing_question: 'Which products could someone else order? What would it cost?' }
+  const { out } = await SHIP([about, offTopic, offTopic])
+  assert.match(out.read.body, /16 hours/)
+})
+
+test('a Read that leaves a strong change unnamed ships with the plain change question', async () => {
+  const asked = [{ role: 'axiom', text: 'How many hours a week does the ordering take?' }, ...SAID.map((text) => ({ role: 'founder', text }))]
+  const read = { headline: 'Ordering by hand costs you the time for everything else.', body: GOOD_BODY, closing_question: 'Which products could someone else order?' }
+  const out = await createRead({ conversation: asked, deps: { callStructured: async () => ({ data: read }), userId: 'u' }, situationId: 's', style: 'direct', brief: brief(SAID.join('\n')) })
+  assert.equal(out.source, 'model')
+  assert.equal(out.read.closing_question, 'You gave 15 before and 16 now. What changed?')
+})

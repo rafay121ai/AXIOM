@@ -11,7 +11,7 @@ import { STYLE_INSTRUCTIONS, styleMessages, styleOf } from './prompts/style.js'
 const sha = (s) => createHash('sha256').update(s).digest('hex')
 // Snapshot of the prompts as they were before styles existed.
 const OLD = {
-  read: 'ba9fb54b109e4ce3b5fa70608be1720854e7f7e9c04de604d000420f0aa253f4', // Nov 23: headline and closing question may repeat up to 5 founder words (was 3)
+  read: '2039c9636c42baabb7a136b3a20f613c3fba613ee5cf33753a222b9c6767cee3', // Nov 27: closing is one question with a thread; body is about this situation
   learn: '40a1dec1792812cc8eda5e8057feca3c62a6a5389a454c7757cea83bc1de56a6', // Nov 27: contrast rule says how to comply (state the point directly)
   move: 'ca36326fcde1e957f251897b1357c0db9f1b612023357ac2523072aae2674fc6', // Nov 23: facts may come from "Earlier they said:"
   report: '6ce24f154ae001da47b70fddb78b7365b1d79fd8f9ecb8dea1622566694127a7',
