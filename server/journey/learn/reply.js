@@ -175,7 +175,7 @@ export function checkReply({ data, mode, evidence, founderTexts, earlierTexts = 
   }
   if (conflict?.strong && !namesBothAndAsks(text, conflict)) problems.push(conflictProblem(conflict))
   const contrast = contrastProblem(text)
-  if (contrast) problems.push(contrast) // style: retried, never a reason to replace the lesson (Rafay, Nov 23)
+  if (contrast) problems.push(`${contrast}. The sentence: ${contrastSentence(text)}`) // style: retried, then the sentence is dropped at ship time, never a reason to replace the lesson (Rafay, Nov 23)
   if (text && threadKinds(text, founderTexts).length === 0) problems.push('nothing from this founder: use their own words, a number or a date they gave')
 
   let picture = null
@@ -197,6 +197,23 @@ export function checkReply({ data, mode, evidence, founderTexts, earlierTexts = 
   }
   if (!text) { problems.push('nothing usable is left in the reply'); hard = true }
   return { reply, problems: [...new Set(problems)], hard }
+}
+
+// The sentence at which the contrast shows up (the one that completes it, with the sentence before it when the contrast spans two).
+function contrastSentence(text) {
+  const sentences = sentencesOf(text)
+  const i = sentences.findIndex((_, n) => contrastProblem(sentences.slice(0, n + 1).join(' ')))
+  return sentences.slice(Math.max(0, i - 1), i + 1).join(' ')
+}
+
+// Ship-time repair: a remaining contrast sentence is dropped (a safe rewrite does not exist), never a question, and only when the reply keeps
+// other content. Otherwise the text ships as it is.
+function withoutContrast(text) {
+  if (!contrastProblem(text)) return text
+  const keep = []
+  for (const s of sentencesOf(text)) if (s.includes('?') || !contrastProblem([...keep, s].join(' '))) keep.push(s)
+  const out = keep.join(' ')
+  return keep.some((s) => !s.includes('?')) && !contrastProblem(out) ? out : text
 }
 
 // The reply with the sentences that carry a contrast dropped and the closing question kept, last; null when that leaves no valid reply.
@@ -231,11 +248,12 @@ export async function composeReply({ mode, step, context, evidence, founderTexts
   const shown = evidence.map((e) => ({ handle: e.handle, author: e.author, title: e.source_title, text: e.text, ...(e.lesson ? { lesson: { idea: e.lesson.principle, when: e.lesson.applies_when, text: e.lesson.paragraphs.join(' ') } } : {}) }))
   const asked = mode === 'lesson' ? null : (context.learn ?? []).filter((t) => t.role === 'founder').at(-1)?.text ?? null
   let problems = null
+  let previous = ''
   let last = null
   // After the retry a reply that still breaks a hard rule is repaired, or replaced by the plain reply. Never shipped as is.
   const finish = () => {
     if (!last) return null
-    if (!last.hard) return last.reply
+    if (!last.hard) return { ...last.reply, text: withoutContrast(last.reply.text) }
     const text = repairText(last.reply.text, mode, conflict)
     deps.log?.('learn reply repaired or replaced', { problems: last.problems, repaired: text !== null })
     return text ? { ...last.reply, text } : plainReply(mode)
@@ -250,7 +268,7 @@ export async function composeReply({ mode, step, context, evidence, founderTexts
         maxCompletionTokens: 1200,
         userId: deps.userId,
         usageContext,
-        messages: learnMessages({ mode, ...context, conflict, evidence: shown }, problems),
+        messages: learnMessages({ mode, ...context, conflict, evidence: shown }, problems, previous),
       }))
     } catch (err) {
       deps.log?.('model call failed', err)
@@ -262,6 +280,7 @@ export async function composeReply({ mode, step, context, evidence, founderTexts
     if (verdict.problems.length === 0) return verdict.reply
     last = verdict
     problems = verdict.problems
+    previous = data.reply ?? ''
   }
   deps.log?.('learn reply cleaned after retry', { problems })
   return finish()

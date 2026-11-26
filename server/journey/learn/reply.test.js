@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { checkReply } from './reply.js'
+import { checkReply, composeReply } from './reply.js'
 
 const evidence = [{ handle: 'E1', chunk_id: 'c1', author: 'Reid Hoffman', source_title: 'Blitzscaling', text: 'Distribution is a core link in the chain.', similarity: 0.4 }]
 
@@ -86,4 +86,19 @@ test('a number from an earlier statement is allowed in a reply, an invented one 
   assert.ok(check(15, []).some((p) => p.includes('number the founder never gave: 15')))
   assert.deepEqual(check(15, ['Works evenings and weekends, under 15 hours a week.']), [])
   assert.ok(check(14, ['Works evenings and weekends, under 15 hours a week.']).some((p) => p.includes('never gave: 14')))
+})
+
+// Rafay, Nov 27: a contrast line ("X is not the problem, it is Y") broke voice.md and shipped. The retry names the sentence and shows the draft;
+// if it is still there at ship time the sentence is dropped, the lesson and its question stay, and nothing falls back.
+test('a contrast sentence still there after the retry is dropped; the reply keeps its content and question', async () => {
+  const contrast = { reply: 'You have a prototype and no customers yet. The prototype is not the problem, it is the missing first call. Who will you call today?', citations: [] }
+  const sent = []
+  const reply = await composeReply({
+    mode: 'reply', step: 'learn', evidence: [], founderTexts: founder, usageContext: {}, context: { situation: [], read: {}, learn: [] },
+    deps: { userId: 'u', callStructured: async ({ messages }) => { sent.push(messages); return { data: { ...contrast, picture_json: '', follow_ups: [], move_subject: '', move_fact: '' } } } },
+  })
+  const retry = sent[1].at(-1).content
+  assert.match(retry, /The prototype is not the problem/) // the draft is shown and the sentence named
+  assert.match(retry, /The sentence: /)
+  assert.equal(reply.text, 'You have a prototype and no customers yet. Who will you call today?')
 })

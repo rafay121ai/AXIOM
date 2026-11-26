@@ -12,7 +12,7 @@ const sha = (s) => createHash('sha256').update(s).digest('hex')
 // Snapshot of the prompts as they were before styles existed.
 const OLD = {
   read: 'ba9fb54b109e4ce3b5fa70608be1720854e7f7e9c04de604d000420f0aa253f4', // Nov 23: headline and closing question may repeat up to 5 founder words (was 3)
-  learn: '484c0bd825a0de8e95984be916a7bc5239d3710093d93bd1946ba61d8f89fb1e', // Nov 23: facts may come from "Earlier they said:"
+  learn: '40a1dec1792812cc8eda5e8057feca3c62a6a5389a454c7757cea83bc1de56a6', // Nov 27: contrast rule says how to comply (state the point directly)
   move: 'ca36326fcde1e957f251897b1357c0db9f1b612023357ac2523072aae2674fc6', // Nov 23: facts may come from "Earlier they said:"
   report: '6ce24f154ae001da47b70fddb78b7365b1d79fd8f9ecb8dea1622566694127a7',
 }
