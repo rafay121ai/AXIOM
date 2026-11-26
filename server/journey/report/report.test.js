@@ -8,7 +8,7 @@ import { STALE_MS, createReports } from './reportService.js'
 import { STORY_CAP } from './sharing.js'
 import {
   AFTER_STORY_VERSION, ALONE_VERSION, CONSENT_WORDINGS, KEPT_PRIVATE_LINE, NEED_MORE, OUTCOMES, SHARED_LINE,
-  SHARE_AUTO_TEXT, STORY_OFFER, WITHDRAWN_LINE, fallbackReply, openingLine,
+  SHARE_AUTO_TEXT, STORY_OFFER, WITHDRAWN_LINE, fallbackReply, openingLine, lowerFirst,
 } from './wording.js'
 
 const USER = { id: '11111111-1111-4111-8111-111111111111', email: 'founder@example.com' }
@@ -719,4 +719,16 @@ test('a care stop whose event and care_flag both fail to write still closes shar
     assert.equal(later.body.consent.state, 'not_offered')
     assert.equal(rows('peer_outcomes').length, 0)
   } finally { await close() }
+})
+
+test('lowerFirst lowercases ordinary capitalised first words but keeps I and all-caps words', () => {
+  assert.equal(lowerFirst('A few will reply'), 'a few will reply')
+  assert.equal(lowerFirst('Both will reply'), 'both will reply')
+  assert.equal(lowerFirst('I think so'), 'I think so')
+  assert.equal(lowerFirst("I'll try"), "I'll try")
+  assert.equal(lowerFirst('AI agents will'), 'AI agents will')
+  assert.equal(lowerFirst('MRR will grow'), 'MRR will grow')
+  assert.equal(lowerFirst('B2B buyers will'), 'B2B buyers will')
+  assert.equal(openingLine({ title: 'Email ten people', prediction: 'A few will reply.' }),
+    'Your move was to email ten people. I said a few will reply. What happened?')
 })
