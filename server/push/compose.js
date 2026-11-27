@@ -59,6 +59,21 @@ export const PUSH_WORDING = Object.freeze({
   },
 })
 
+// Signal pushes (S4). Email content on a lock screen is a leak, so the body never carries the
+// signal text: it says what kind of thing it is, and a meeting says when. The point is one tap away.
+// Only 'hidden' changes it. Awaiting Rafay (tasks/wording_to_approve.md, section I).
+export function composeSignalPush({ item, name = null, lockScreen = DEFAULT_LOCK_SCREEN, now }) {
+  let body = HIDDEN_BODY
+  if (lockScreen !== 'hidden') {
+    const mins = Math.round((item.meetingStart - now) / 60000)
+    const when = mins >= 90 ? `in ${Math.round(mins / 60)} hours` : mins > 1 ? `in ${mins} minutes` : 'now'
+    const rest = item.toolkit === 'googlecalendar' ? `a meeting starts ${when}.`
+      : item.toolkit === 'gmail' ? 'an email that needs you today has come in.' : 'something in your tools needs you today.'
+    body = lead(name ? clean(name) : null, rest)
+  }
+  return { body, data: { kind: 'signal', open: 'signal', signal_id: item.signalId }, sound: 'default' }
+}
+
 // Problems that keep a line off a lock screen.
 export function voiceProblems(text) {
   const t = norm(text)

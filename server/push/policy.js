@@ -114,8 +114,41 @@ export function decidePush({ founder, now, log = [], care, kind, item }) {
   }
 
   const day = localDay(now, zone)
-  const today = log.filter((r) => r.local_day === day && COUNTING_STATUSES.includes(r.status))
+  // Signal rows (kind 'signal', their own slots) never hold back morning or evening.
+  const today = log.filter((r) => r.local_day === day && COUNTING_STATUSES.includes(r.status) && SLOT[r.kind])
   if (today.length >= LIMITS.MAX_PUSH_PER_DAY) return no('cap')
   if (today.some((r) => SLOT[r.kind] === SLOT[kind])) return no('slot_used')
   return { send: true, localDay: day, slot: SLOT[kind], retry: prior }
+}
+
+// Signal pushes (S4). Their own places in the day, on top of morning and evening: signal_1..4, and
+// extreme_1..2 for an extreme event. The database's (user_id, local_day, slot) index is the cap.
+export const SIGNAL_SLOTS = Object.freeze(['signal_1', 'signal_2', 'signal_3', 'signal_4'])
+export const EXTREME_SLOTS = Object.freeze(['extreme_1', 'extreme_2'])
+export const SIGNAL_MAX_AGE_MS = 6 * 60 * 60 * 1000
+export const EXTREME_WINDOW_MS = 3 * 60 * 60 * 1000
+
+// item: { key, createdAt (ms), expiresAt (ms), extreme (bool, already proven), meetingStart (ms or null) }
+// Returns { send: true, localDay, slots (free ones, in order), retry } or { send: false, reason }.
+export function decideSignalPush({ founder, now, log = [], care, item }) {
+  const no = (reason) => ({ send: false, reason })
+  if (care !== false) return no('care')
+  if (!founder?.hasDevice) return no('no_device')
+  const last = Date.parse(founder.lastActivityAt ?? '')
+  if (!Number.isFinite(last) || now - last >= PAUSE_AFTER_MS) return no('paused')
+  if (!text(item?.key)) return no('nothing_real')
+  // Stale: it stays a home item.
+  if (!(now < item.expiresAt) || now - item.createdAt >= SIGNAL_MAX_AGE_MS) return no('expired')
+  const zone = zoneOf(founder.timeZone)
+  // Quiet hours hold, except an extreme event dated within the next 3 hours.
+  const soon = item.extreme && item.meetingStart > now && item.meetingStart <= now + EXTREME_WINDOW_MS
+  if (!soon && inQuietHours(now, zone, founder.settings?.quiet_hours)) return no('quiet_hours')
+
+  const prior = log.find((r) => r.dedupe_key === item.key) ?? null
+  if (prior && (prior.status !== 'failed' || (prior.attempts ?? 1) >= MAX_ATTEMPTS)) return no('already_sent')
+  const day = localDay(now, zone)
+  const taken = new Set(log.filter((r) => r.local_day === day && COUNTING_STATUSES.includes(r.status)).map((r) => r.slot))
+  const slots = (item.extreme ? EXTREME_SLOTS : SIGNAL_SLOTS).filter((s) => !taken.has(s))
+  if (slots.length === 0) return no('cap')
+  return { send: true, localDay: day, slots, retry: prior }
 }

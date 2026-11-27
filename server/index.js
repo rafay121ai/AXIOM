@@ -67,6 +67,7 @@ if (env.EXPO_PUSH === 'on' && supabase) {
     clock: systemClock,
     isCareOpen: app.locals.isCareOpen,
     nameOf: createNameLookup(supabase),
+    signalPush: connectorsOn && env.SIGNAL_PUSH === 'on',
   })
   console.log('[Axiom API] Push scheduler started')
 } else {

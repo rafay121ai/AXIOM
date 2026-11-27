@@ -121,13 +121,13 @@ Raw email bodies are never stored. Only extracted facts and a verbatim snippet o
 - [ ] Tests (injection, made-up number, cap, duplicate, disconnect and care done in S2; extreme path and library quote wait): injection fixtures (an email that says "ignore your rules and push X"), a made-up number is rejected, extreme path needs all four conditions, a quote not in the library is never shown.
 
 ### Phase 7. Push and delivery
-- [ ] Extend `server/push/` (`policy.js`, `compose.js`, `due.js`): kind `signal`, daily cap enforced atomically in the database (a lock per founder per local day, then count, then insert, then send) so two workers cannot send a fifth.
-- [ ] Dedupe key per signal. The same news in two newsletters becomes one push.
-- [ ] Quiet hours respected. Care open or delete request pending = no pushes (existing rules). Extreme events and quiet hours: see Q2.
-- [ ] Lock-screen text follows the founder's setting (`full`, `short`, `hidden`). Default for connector pushes is `short`: email content on a lock screen is a privacy leak.
-- [ ] Voice: direct, specific, the founder's own numbers, no teasers, no forbidden phrases. Run voice-checker on every line before it exists.
-- [ ] A push that is not sent in time (the item went stale) expires and becomes a home item instead.
-- [ ] Tests: 5th signal in a day is held, extreme skips only itself, quiet hours hold, care pause holds, failed send retried at most 3 times.
+- [x] Extend `server/push/` (`policy.js`, `compose.js`, `due.js`): kind `signal`, daily cap enforced atomically in the database (a lock per founder per local day, then count, then insert, then send) so two workers cannot send a fifth.
+- [x] Dedupe key per signal. The same news in two newsletters becomes one push.
+- [x] Quiet hours respected. Care open or delete request pending = no pushes (existing rules). Extreme events and quiet hours: see Q2.
+- [x] Lock-screen text follows the founder's setting (`full`, `short`, `hidden`). Default for connector pushes is `short`: email content on a lock screen is a privacy leak.
+- [x] Voice: direct, specific, the founder's own numbers, no teasers, no forbidden phrases. Run voice-checker on every line before it exists.
+- [x] A push that is not sent in time (the item went stale) expires and becomes a home item instead.
+- [x] Tests: 5th signal in a day is held, extreme skips only itself, quiet hours hold, care pause holds, failed send retried at most 3 times.
 
 ### Phase 8. App (Expo)
 - [ ] Mock first (flag-first): Connections screen in Settings (connect, see what Axiom read, switch off per source, disconnect), the one-time newsletter picker after Gmail connects (top candidates ranked by how often they arrive and how often the founder opens or replies), signal item on the home screen, signal card that opens into Learn and Move. Uses DESIGN.md only. Rafay approves the mock.
