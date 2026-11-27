@@ -249,13 +249,16 @@ export type StoryReply = { story: Story | null; founder_lessons?: FounderLessons
 export type ConsentResult = { consent: ConsentState; reply: string };
 
 /** Where the screens a home item or a history action leads: the stage, the situation, and the move when there is one. */
-export type Target = { stage: 'situation' | 'read' | 'learn' | 'move' | 'report'; situation_id: string; move_id?: string };
+export type Target =
+  | { stage: 'situation' | 'read' | 'learn' | 'move' | 'report'; situation_id: string; move_id?: string }
+  /** A finding from a connected tool. Tapping it opens a situation that already starts with Axiom's line. */
+  | { stage: 'signal'; signal_id: string };
 
 /** One thing still to do. `stays` is true when it must not fade (the founder asked, or no phone can ring). */
-export type HomeItem = { kind: 'report' | 'move' | 'situation'; label: string; title: string | null; stays: boolean; target: Target };
+export type HomeItem = { kind: 'report' | 'move' | 'situation' | 'signal'; label: string; title: string | null; stays: boolean; target: Target };
 
 /** A situation listed in the menu. `stage` is where it stands, null once it has no live screen. */
-export type DrawerSituation = { id: string; title: string | null; stage: Target['stage'] | null; last_activity_at: string };
+export type DrawerSituation = { id: string; title: string | null; stage: Exclude<Target, { stage: 'signal' }>['stage'] | null; last_activity_at: string };
 
 /**
  * The home screen. Axiom's greeting comes from the server, as does every label. While a care event is open
@@ -362,6 +365,8 @@ export interface AxiomApi {
   sendTurn(situationId: string, text: string, turnId: string): Promise<Screened<SituationReply>>;
   /** A situation with what was said in it so far: how the app picks a situation up again. */
   getSituation(situationId: string): Promise<SituationView>;
+  /** A tap on a signal item: the server makes the situation (Axiom's line already in it) and names it. Writes no founder message. */
+  openSignal(signalId: string): Promise<{ situation_id: string }>;
   /** The Read for a situation. The same Read comes back every time it is asked for. */
   getRead(situationId: string): Promise<Read>;
   /** The founder's reply to the Read's closing question, or a skip. Typed replies are screened. */
