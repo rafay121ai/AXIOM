@@ -1,5 +1,5 @@
--- NOT APPLIED. Draft only ("Learn how I work" switch, decisions.md Nov 25 and Nov 27). Do not run; move to supabase/migrations/
--- with a new timestamp after Rafay's yes.
+-- APPLIED to live main on Nov 27 2026 (Rafay's yes), after a dry run in an undone transaction; version recorded.
+-- "Learn how I work" switch (decisions.md Nov 25 and Nov 27).
 -- 1. The switch: off by default, never pre-ticked. 2. consent_log gets two actions for it. The CHECK is added NOT VALID
 -- (like the earlier widenings): existing rows are not re-checked, new rows are.
 -- Rollback (by hand): alter table public.user_settings drop column if exists learn_how_i_work;
