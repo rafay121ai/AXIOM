@@ -379,3 +379,8 @@ Apply order: 1, 2, 3, then record the three versions, all BEFORE any server code
 
 Open, for Rafay:
 - **How long `connector_actions.args` is kept after an action is done.** Decided Nov 27 (Rafay): `args` is cleared to `{}` 30 days after the action ends (done, failed, rejected or expired); `preview` and `content_hash` stay.
+
+## Learn how I work switch (Nov 27 2026): APPLIED to live main Nov 27 2026
+- `20261127000002_learn_how_i_work.sql`: `user_settings.learn_how_i_work boolean not null default false` (off for everyone; 6 rows at the time, none on) and `consent_log_action_check` widened NOT VALID with `learn_on`, `learn_off`.
+- Applied with Rafay's yes after a dry run in an undone transaction; version recorded. Must be live before CONNECTORS=on (GET /api/connectors reads the column).
+- Rollback: `supabase/rollback/20261127_learn_how_i_work_rollback.sql`.

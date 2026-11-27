@@ -1,7 +1,7 @@
 import type { Auth } from './auth';
 import { createOutbox, type KeyValueStore, memoryStore } from './outbox';
 import { createSaveQueue, HttpError } from './queue';
-import type { AccountExport, AccountRequest, AxiomApi, Commitment, ConsentResult, ConsentState, DueReport, FirstReading, HistoryPage, HistoryRow, Home, LearnReply, LoadingQuote, MemoryItem, MoveView, Read, ReadAnswerResult, ReportResult, Screened, Settings, Signup, SituationReply, SituationView, StoryReply, SwapResult } from './types';
+import type { AccountExport, AccountRequest, AxiomApi, Commitment, Connectors, ConsentResult, ConsentState, DueReport, FirstReading, HistoryPage, HistoryRow, Home, LearnReply, LoadingQuote, MemoryItem, MoveView, Read, ReadAnswerResult, ReportResult, Screened, Settings, Signup, SituationReply, SituationView, StoryReply, SwapResult } from './types';
 
 const CODE_NAME = /^[a-z]+(_[a-z]+)*$/;
 
@@ -116,6 +116,20 @@ export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch
     },
     getSettings: () => request<Settings>('GET', '/api/settings'),
     updateSettings: (patch) => request<Settings>('PUT', '/api/settings', patch),
+    async getConnectors() {
+      try {
+        return await request<Connectors>('GET', '/api/connectors');
+      } catch (e) {
+        if (e instanceof HttpError && e.status === 404) return null;
+        throw e;
+      }
+    },
+    connectConnector: (toolkit) => request<{ url: string }>('POST', `/api/connectors/${toolkit}/connect`),
+    async disconnectConnector(toolkit) {
+      await request('DELETE', `/api/connectors/${toolkit}`);
+    },
+    forgetConnector: (toolkit) => request<{ forgotten: number }>('POST', `/api/connectors/${toolkit}/forget`),
+    setLearnHowIWork: (on) => request<{ learn_how_i_work: boolean }>('PUT', '/api/connectors/learn', { on }),
     requestExport: () => request<AccountExport>('POST', '/api/account/export'),
     requestDelete: () => request<AccountRequest>('DELETE', '/api/account', { confirm: 'DELETE' }),
     cancelDelete: () => request<AccountRequest>('DELETE', '/api/account', { cancel: true }),

@@ -46,7 +46,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 export async function openSignal({ supabase, userId, signalId, beginSituation, clock, env = process.env }) {
   const gone = () => new HttpError(404, { error: 'Not found' })
   if (!signalHomeOn(env) || await careOpen(supabase, userId)) throw gone()
-  const find = async () => ok(await supabase.from('signals').select('id, lane, facts, status, situation_id').eq('user_id', userId).eq('id', signalId).limit(1))[0]
+  const find = async () => ok(await supabase.from('signals').select('id, toolkit, lane, facts, status, situation_id').eq('user_id', userId).eq('id', signalId).limit(1))[0]
   const signal = await find()
   if (!signal || !signal.facts?.what_happened) throw gone()
   const result = (id) => ({ situation_id: id, stage: 'situation' })
@@ -65,7 +65,7 @@ export async function openSignal({ supabase, userId, signalId, beginSituation, c
     const situation = await beginSituation({ userId, line: `${named({ ...signal.facts })} ${SIGNAL_ASK}` })
     ok(await supabase.from('signals').update({ situation_id: situation.id, updated_at: new Date(clock.now()).toISOString() }).eq('user_id', userId).eq('id', signalId).select('id'))
     // The founder acted on it: now it may become a world fact (memory is written by this action, never by loading home).
-    await learnFromSignals({ supabase, userId, facts: [{ id: signal.id, lane: signal.lane, what_happened: signal.facts.what_happened, source_name: signal.facts.source_name ?? '' }], clock })
+    await learnFromSignals({ supabase, userId, facts: [{ id: signal.id, toolkit: signal.toolkit, lane: signal.lane, what_happened: signal.facts.what_happened, source_name: signal.facts.source_name ?? '' }], clock })
     return result(situation.id)
   } catch (err) {
     // The situation cleans up after itself; the signal goes back to what it was, so the founder can try again.
@@ -90,8 +90,9 @@ export async function learnFromSignals({ supabase, userId, facts, clock, log = (
       if (!sentence) continue
       const done = await applyExtraction({
         store, userId, mode: 'facts_only', founderTexts: [f.what_happened], corrections, nowMs: clock.now(), log,
+        // sourceKey is the toolkit, so "forget" can find the receipt after the signal is gone
         data: { world: [{ name, kind: COMPANY.test(name) ? 'company' : 'person', role: null, snippet: sentence }] },
-        receipt: () => ({ sourceKind: 'connector', sourceId: f.id }), beliefSource: 'connector',
+        receipt: () => ({ sourceKind: 'connector', sourceId: f.id, sourceKey: f.toolkit ?? null }), beliefSource: 'connector',
       })
       learned += done?.world ?? 0
     }

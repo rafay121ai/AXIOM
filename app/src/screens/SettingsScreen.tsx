@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { sendUntilDelivered } from '../api/delivery';
 import type { AccountExport, AccountRequest, LockScreen, MentorStyle, Settings, SettingsPatch } from '../api/types';
+import { ConnectionRows } from '../components/ConnectionRows';
 import { Fade } from '../components/Fade';
 import { LoadingHint } from '../components/LoadingHint';
 import { PageHeader } from '../components/PageHeader';
@@ -11,6 +12,8 @@ import { TimeField } from '../components/TimeField';
 import { Wash } from '../components/Wash';
 import { WordChoice } from '../components/WordChoice';
 import { copy, failureLine } from '../copy';
+import type { ConnectorsApi } from '../connect/flow';
+import { useConnectors } from '../connect/useConnectors';
 import { clockTime } from '../move/format';
 import { colors, fonts, ink } from '../theme';
 
@@ -22,6 +25,9 @@ type Props = {
   cancelDelete: () => Promise<AccountRequest>;
   /** The Country row opens the `where` question; the other row opens the whole list. */
   onEditAnswers: (startAt?: string) => void;
+  connectors: ConnectorsApi;
+  /** Opens How this works; the full privacy page link comes from here. */
+  onHow: (privacyUrl: string | null) => void;
   onSignOut: () => Promise<void>;
   onBack: () => void;
 };
@@ -57,7 +63,8 @@ function Row({ title, sub, value, chevron, danger, onPress, right, first }: RowP
 }
 
 // Settings: groups divided by thin lines with plain labels. Every change is saved at once; if it does not save, it goes back.
-export function SettingsScreen({ load, save, requestExport, requestDelete, cancelDelete, onEditAnswers, onSignOut, onBack }: Props) {
+export function SettingsScreen({ load, save, requestExport, requestDelete, cancelDelete, onEditAnswers, connectors, onHow, onSignOut, onBack }: Props) {
+  const cx = useConnectors(connectors);
   const [s, setS] = useState<Settings | null>(null);
   const [failure, setFailure] = useState<{ text: string; canRetry: boolean } | null>(null);
   const [timeOpen, setTimeOpen] = useState(false);
@@ -209,6 +216,12 @@ export function SettingsScreen({ load, save, requestExport, requestDelete, cance
             <Section label={copy.settings.onScreen}>
               <Row first title={copy.settings.keep} sub={copy.settings.keepSub} right={<Switch on={s.keep_items} label={copy.settings.keep} onChange={(v) => void change({ keep_items: v })} />} />
             </Section>
+
+            {cx.data && (
+              <Section label={copy.connect.section}>
+                <ConnectionRows api={connectors} cx={cx} onHow={() => onHow(s.links.privacy)} />
+              </Section>
+            )}
 
             <Section label={copy.settings.privacy}>
               <Row first title={copy.settings.share} sub={s.privacy.text} right={<Switch on={s.privacy.share_automatically} label={copy.settings.share} onChange={(v) => void change({ share_automatically: v })} />} />

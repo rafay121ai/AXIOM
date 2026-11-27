@@ -281,6 +281,7 @@ test('every call in the app\'s http client has a contract here', () => {
   const local = new Set(['signInWithGoogle', 'signOut', 'isSignedIn', 'resumeUnsent', 'getSignInName']) // sign-in and the phone's own outbox, not the API
   const covered = new Set(Object.keys(CONTRACT).map((k) => k.replace(/\(.*\)$/, '')))
   covered.add('registerPushToken').add('removePushToken') // http.ts ignores the answer
+  for (const m of ['getConnectors', 'connectConnector', 'disconnectConnector', 'forgetConnector', 'setLearnHowIWork']) covered.add(m) // behind CONNECTORS, off in this walk; checked in connectors/connectorRoutes.test.js
   covered.add('openSignal') // behind CONNECTORS and SIGNAL_HOME, off in this walk; its answer is checked in connectors/world.test.js
   const missing = methods.filter((m) => !local.has(m) && !covered.has(m))
   assert.ok(methods.length >= 30, `read ${methods.length} methods from http.ts`)

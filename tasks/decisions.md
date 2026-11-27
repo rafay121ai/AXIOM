@@ -836,3 +836,8 @@ Replaces "read only" in the Nov 10 connectors entry. Reason (Rafay): a read-only
 - Settings, Connections: "What I learned from it stays until you delete it." is removed.
 - Settings: the line "Anonymous. Never your name or your words. Kept to improve Axiom, even if you leave." is removed from under the switch at Rafay's request. It is replaced by a quiet "How this works" link to the privacy page, which must keep the full sentence (that anonymous pattern rows are kept after the founder leaves). This supersedes "may not be removed" in the Nov 25 entry for the Settings line only; the privacy page disclosure stays required while pattern rows are kept after deletion.
 
+
+## Nov 27 2026: connect screen mock and connector wording approved (Rafay)
+- tasks/design/mock-connect-v1.html is approved: connect screen once after the first reading, Settings, Connections, reconnect state, "How this works".
+- Wording sections G, H and I in tasks/wording_to_approve.md are approved as written, with one change: the pending-delete refusal is now "Your account is being deleted, so nothing new can be connected." (the old line sounded cold).
+- Signal pushes keep the generic lock-screen lines; the point is one tap away in the app.

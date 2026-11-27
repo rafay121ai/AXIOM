@@ -126,6 +126,37 @@ export const copy = {
     removed: 'Removed. Axiom will not use it again.',
     empty: "Axiom hasn't learned anything about you yet.",
   },
+  // mock-connect-v1.html, word for word (approved Nov 27).
+  connect: {
+    lead: "I'll catch what matters before you miss it.",
+    lead2: 'Your reads get sharper from day one.',
+    learn: 'Learn how I work. Make every read sharper.',
+    connect: 'Connect',
+    connected: 'Connected',
+    reconnect: 'Reconnect',
+    notNow: 'Not now',
+    continue: 'Continue',
+    disconnect: 'Disconnect',
+    forget: 'Delete what Axiom learned from {tool}',
+    disconnected: '{tool} disconnected',
+    forgotten: 'Deleted what I learned from {tool}',
+    needsYou: '{tool} needs you to sign in again.',
+    choosePages: 'Choose pages',
+    section: 'Connections',
+    howLink: 'How this works',
+    howTitle: 'How this works',
+    how: [
+      'Off by default. If you turn it on, Axiom also saves anonymous patterns about how founders work, like a stage and how fast decisions get made.',
+      "They carry no name, no email, no account and none of your words, so they can't be traced back to you.",
+      "Because of that they are kept to improve Axiom even after you leave, and can't be removed one by one. Turning the switch off stops new ones.",
+    ],
+    privacyPage: 'Read the full privacy page',
+    tools: {
+      gmail: { name: 'Gmail', hint: 'Mail from people' },
+      googlecalendar: { name: 'Calendar', hint: 'Your meetings' },
+      notion: { name: 'Notion', hint: 'Pages you choose' },
+    },
+  },
   // mock-onboarding-v2.html, screen 11 (Settings) and mock-states-v1.html section 4, word for word.
   settings: {
     title: 'Settings',

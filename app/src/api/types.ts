@@ -339,6 +339,10 @@ export type Signup = { questions: Question[]; answers: Record<string, Answer>; n
 /** The kind of phone a reminder token belongs to. */
 export type PushPlatform = 'ios' | 'android';
 
+export type Toolkit = 'gmail' | 'googlecalendar' | 'notion';
+export type ConnectorStatus = 'active' | 'needs_reconnect' | 'not_connected';
+export type Connectors = { connectors: { toolkit: Toolkit; connected: boolean; status: ConnectorStatus }[]; learn_how_i_work: boolean };
+
 export interface AxiomApi {
   /** Starts Google sign-in. Resolves when the founder is signed in. */
   signInWithGoogle(): Promise<void>;
@@ -418,6 +422,14 @@ export interface AxiomApi {
   getSettings(): Promise<Settings>;
   /** Saves some settings and returns the page as it now stands. */
   updateSettings(patch: SettingsPatch): Promise<Settings>;
+  /** The connected tools and the "learn how I work" switch. Null when connectors are switched off on the server (404): then nothing about them shows. */
+  getConnectors(): Promise<Connectors | null>;
+  /** The sign-in link for one tool; the app opens it in the browser. */
+  connectConnector(toolkit: Toolkit): Promise<{ url: string }>;
+  disconnectConnector(toolkit: Toolkit): Promise<void>;
+  /** Deletes what Axiom learned from one tool. */
+  forgetConnector(toolkit: Toolkit): Promise<{ forgotten: number }>;
+  setLearnHowIWork(on: boolean): Promise<{ learn_how_i_work: boolean }>;
   /** Everything Axiom holds, as the server's data file. */
   requestExport(): Promise<AccountExport>;
   /** Asks to delete everything; sends the confirmation word. The server starts a grace period (or only records it while deletion is off). */

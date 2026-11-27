@@ -483,7 +483,12 @@ loaded.
   action are cleared 30 days after it ends; the preview and hash stay. Every
   action is logged and exported. Client: `server/connectors/composio.js`.
 - Routes (built, Nov 27; only with `CONNECTORS=on`, else 404; JWT): `GET /api/connectors`
-  (per toolkit `{ toolkit, connected, status }`, reconciled with Composio),
+  (`{ connectors: [{ toolkit, connected, status }], learn_how_i_work }`, reconciled with Composio),
+  `PUT /api/connectors/learn` (`{ on }` -> `{ learn_how_i_work }`; saves `user_settings.learn_how_i_work` and logs
+  `consent_log` `learn_on`/`learn_off` with a wording version; no other effect yet, the pattern tables are not built;
+  refused during care or a pending delete), `POST /api/connectors/:toolkit/forget` (`{ forgotten: n }`; deletes the
+  connector evidence of that toolkit, found by `source_key` or a live signal of it, and the world rows left with no
+  evidence; rows the founder also mentioned stay; same refusals),
   `POST /api/connectors/:toolkit/connect` (`{ url }`; refused during care or a pending
   delete request), `DELETE /api/connectors/:toolkit` (revokes at Composio first, then
   deletes that toolkit's account row and signals, and watch sources for Gmail; beliefs,

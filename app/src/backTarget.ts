@@ -11,6 +11,7 @@ export function backTarget<S extends Back>(stage: S, home: S, settings: S, histo
     case 'memory':
     case 'settings': return home;
     case 'past': return history;
+    case 'how':
     case 'answers': return settings;
     case 'move': return stage.back as S;
     default: return 'stay';

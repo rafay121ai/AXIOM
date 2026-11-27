@@ -8,7 +8,7 @@ import { useReduceMotion } from '../components/useReduceMotion';
 import { readingSentences } from '../onboarding/reading';
 import { gold, space, type } from '../theme';
 
-type Props = { reading: FirstReading; onContinue: () => void };
+type Props = { reading: FirstReading; onContinue: () => void | Promise<void> };
 
 const FIRST = 500;
 const STEP = 1500;
@@ -24,6 +24,8 @@ export function ReadingScreen({ reading, onContinue }: Props) {
   const fades = useMemo(() => Array.from({ length: count }, () => new Animated.Value(0)), [count]);
   const bar = useRef(new Animated.Value(0)).current;
   const [ready, setReady] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const go = () => { if (busy) return; setBusy(true); void Promise.resolve(onContinue()).finally(() => setBusy(false)); };
 
   useEffect(() => {
     const show = (v: Animated.Value, delay: number, duration: number) =>
@@ -51,7 +53,7 @@ export function ReadingScreen({ reading, onContinue }: Props) {
         pointerEvents={ready ? 'auto' : 'none'}
         style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 12) + 20, opacity: bar, transform: [{ translateY: bar.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }] }]}
       >
-        <GoldButton label="Continue" onPress={onContinue} />
+        <GoldButton label="Continue" onPress={go} disabled={busy} />
       </Animated.View>
     </View>
   );
