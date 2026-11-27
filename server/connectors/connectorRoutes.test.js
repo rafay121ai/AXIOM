@@ -90,13 +90,13 @@ test('connect is refused during an open care event and during a pending delete r
   const care = await setup({ tables: { care_events: [{ id: 'c1', user_id: A.id, level: 'clear', resolved_at: null }] } })
   try {
     const res = await care.call('POST', '/api/connectors/gmail/connect')
-    assert.deepEqual([res.status, res.body.error], [409, COPY.care])
+    assert.deepEqual([res.status, res.body.line], [409, COPY.care])
     assert.equal((await care.call('POST', '/api/connectors/gmail/connect', 'tokB')).status, 200, 'another founder is not blocked')
   } finally { await care.close() }
   const del = await setup({ env: { ...ENV, ACCOUNT_DELETE: 'on' }, tables: { account_requests: [{ id: 'r1', user_id: A.id, kind: 'delete', status: 'pending', created_at: at(NOW), delete_after: at(NOW + 7 * DAY) }] } })
   try {
     const res = await del.call('POST', '/api/connectors/gmail/connect')
-    assert.deepEqual([res.status, res.body.error], [409, COPY.deleting])
+    assert.deepEqual([res.status, res.body.line], [409, COPY.deleting])
   } finally { await del.close() }
 })
 
@@ -162,7 +162,7 @@ test('disconnect: if Composio fails, nothing is deleted and the founder is told'
   try {
     const before = JSON.stringify([t.base.rows('connector_accounts'), t.base.rows('signals'), t.base.rows('watch_sources')])
     const res = await t.call('DELETE', '/api/connectors/gmail')
-    assert.deepEqual([res.status, res.body.error], [502, COPY.revokeFailed])
+    assert.deepEqual([res.status, res.body.line], [502, COPY.revokeFailed])
     assert.equal(JSON.stringify([t.base.rows('connector_accounts'), t.base.rows('signals'), t.base.rows('watch_sources')]), before)
   } finally { await t.close() }
 })
@@ -288,12 +288,12 @@ test('learn and forget are refused during care and pending delete', async () => 
   try {
     for (const [m, p, b] of [['PUT', '/api/connectors/learn', { on: true }], ['POST', '/api/connectors/gmail/forget']]) {
       const res = await care.call(m, p, 'tokA', b)
-      assert.deepEqual([res.status, res.body.error], [409, COPY.care], p)
+      assert.deepEqual([res.status, res.body.line], [409, COPY.care], p)
     }
     assert.equal(care.base.rows('consent_log').length, 0)
   } finally { await care.close() }
   const del = await setup({ env: { ...ENV, ACCOUNT_DELETE: 'on' }, tables: { account_requests: [{ id: 'r1', user_id: A.id, kind: 'delete', status: 'pending', created_at: at(NOW), delete_after: at(NOW + 7 * DAY) }] } })
-  try { assert.equal((await del.call('POST', '/api/connectors/gmail/forget')).body.error, COPY.deleting) } finally { await del.close() }
+  try { assert.equal((await del.call('POST', '/api/connectors/gmail/forget')).body.line, COPY.deleting) } finally { await del.close() }
 })
 
 test('forget deletes only that toolkit\'s connector evidence and the world rows left bare; founder-mentioned and other-tool rows stay', async () => {
@@ -311,9 +311,45 @@ test('forget deletes only that toolkit\'s connector evidence and the world rows 
   } })
   try {
     const res = await t.call('POST', '/api/connectors/gmail/forget')
-    assert.deepEqual([res.status, res.body], [200, { forgotten: 2 }])
+    assert.deepEqual([res.status, res.body], [200, { forgotten: 2, signals_deleted: 1 }])
     assert.deepEqual(t.base.rows('founder_world').map((w) => w.id).sort(), ['w2', 'w3', 'w5'])
     assert.deepEqual(t.base.rows('memory_evidence').map((e) => e.id).sort(), ['e3', 'e5', 'e7'])
     assert.equal((await t.call('POST', '/api/connectors/slack/forget')).status, 404)
+  } finally { await t.close() }
+})
+
+test('refusals carry a snake_case code and the founder line', async () => {
+  const t = await setup({ tables: { care_events: [{ id: 'c1', user_id: A.id, level: 'clear', resolved_at: null }] } })
+  try {
+    const res = await t.call('POST', '/api/connectors/gmail/connect')
+    assert.deepEqual([res.body.error, res.body.line], ['care_open', COPY.care])
+    const un = await t.call('POST', '/api/connectors/slack/connect')
+    assert.deepEqual([un.body.error, un.body.line], ['unknown_connector', COPY.unknown])
+  } finally { await t.close() }
+})
+
+test('forget also deletes that toolkit\'s signals and no other', async () => {
+  const t = await setup({ tables: { signals: [{ id: 's1', user_id: A.id, toolkit: 'gmail' }, { id: 's2', user_id: A.id, toolkit: 'notion' }, { id: 's3', user_id: B.id, toolkit: 'gmail' }] } })
+  try {
+    const res = await t.call('POST', '/api/connectors/gmail/forget')
+    assert.deepEqual([res.body.forgotten, res.body.signals_deleted], [0, 1])
+    assert.deepEqual(t.base.rows('signals').map((s) => s.id), ['s2', 's3'])
+  } finally { await t.close() }
+})
+
+test('before the migration: GET says learn_how_i_work false, PUT /learn is 503 with a code', async () => {
+  const t = await setup()
+  const real = t.base.from.bind(t.base)
+  t.base.from = (table) => {
+    if (table !== 'user_settings') return real(table)
+    const err = { code: '42703', message: 'column does not exist' }
+    const q = { select: () => q, eq: () => q, limit: () => q, then: (res) => res({ data: null, error: err }) }
+    return q
+  }
+  try {
+    const got = await t.call('GET', '/api/connectors')
+    assert.deepEqual([got.status, got.body.learn_how_i_work], [200, false])
+    const put = await t.call('PUT', '/api/connectors/learn', 'tokA', { on: true })
+    assert.deepEqual([put.status, put.body.error], [503, 'learn_unavailable'])
   } finally { await t.close() }
 })

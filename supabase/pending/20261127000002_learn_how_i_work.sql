@@ -4,6 +4,7 @@
 -- (like the earlier widenings): existing rows are not re-checked, new rows are.
 -- Rollback (by hand): alter table public.user_settings drop column if exists learn_how_i_work;
 --   and put the old consent_log_action_check back (the seven actions of 20261101000006), NOT VALID; delete learn_on/learn_off rows first to validate.
+-- Apply BEFORE CONNECTORS=on: GET /api/connectors reads the column (it answers false while it is missing, PUT /learn answers 503).
 set lock_timeout = '5s';
 
 alter table public.user_settings add column if not exists learn_how_i_work boolean not null default false;

@@ -11,18 +11,18 @@ export function mountConnectorRoutes(app, { supabase, connectors, care, pendingD
     windowMs: 60 * 1000,
     max,
     keyGenerator: (req) => req.user.id,
-    message: { error: 'That is too many at once. Wait a minute.' },
+    message: { error: 'rate_limited', line: 'That is too many at once. Wait a minute.' },
     standardHeaders: true,
     legacyHeaders: false,
   })
   const handle = (fn) => async (req, res) => {
-    if (!supabase) return res.status(503).json({ error: 'Service not configured' })
+    if (!supabase) return res.status(503).json({ error: 'not_configured', line: 'Service not configured' })
     try {
       return res.json(await fn(req))
     } catch (err) {
       if (err instanceof HttpError) return res.status(err.status).json(err.body)
       console.error('[Connectors] failed', err?.name ?? 'Error', err?.code ?? err?.status ?? '')
-      return res.status(500).json({ error: 'Something went wrong. Try again.' })
+      return res.status(500).json({ error: 'server_error', line: 'Something went wrong. Try again.' })
     }
   }
 
