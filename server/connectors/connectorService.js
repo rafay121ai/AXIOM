@@ -10,6 +10,9 @@ export const COPY = {
   unknown: 'That is not something I can connect.',
   revokeFailed: 'I could not disconnect that just now. Nothing was removed. Try again.',
 }
+// Consent wording version for the switch: its line, plus the privacy page section 8 as written on Nov 27 2026.
+export const LEARN_LINE = 'Learn how I work. Make every read sharper.'
+export const LEARN_VERSION = 'settings-learn-how-i-work-v1+privacy-s8-2026-11-27'
 const DAY = 24 * 60 * 60 * 1000
 export const ACTION_KEEP_MS = 30 * DAY
 export const JOB_KEEP_MS = 7 * DAY
@@ -44,13 +47,54 @@ export function createConnectorService({ supabase, connectors, care, pendingDele
       }
       out.push({ toolkit, connected: status === 'active', status })
     }
-    return { connectors: out }
+    const settings = ok(await supabase.from('user_settings').select('learn_how_i_work').eq('user_id', userId).limit(1))
+    return { connectors: out, learn_how_i_work: settings[0]?.learn_how_i_work === true }
+  }
+
+  const refuseIfBlocked = async (userId) => {
+    if (await care.isCareOpen(userId)) throw new HttpError(409, { error: COPY.care })
+    if (await pendingDeletion(userId)) throw new HttpError(409, { error: COPY.deleting })
+  }
+
+  // Decision Nov 25/27 ("Learn how I work"): this only stores the choice and its consent record. The anonymous pattern tables
+  // are not built yet, so the switch has no other effect. The consent row is written first: if it fails, the setting does not change.
+  async function setLearn(userId, on) {
+    if (typeof on !== 'boolean') throw new HttpError(400, { error: 'on must be true or false' })
+    await refuseIfBlocked(userId)
+    const current = ok(await supabase.from('user_settings').select('learn_how_i_work').eq('user_id', userId).limit(1))[0]?.learn_how_i_work === true
+    if (current === on) return { learn_how_i_work: on }
+    ok(await supabase.from('consent_log').insert({ user_id: userId, report_id: null, action: on ? 'learn_on' : 'learn_off', wording_version: LEARN_VERSION, decided_at: iso() }).select('id'))
+    const fields = { learn_how_i_work: on, updated_at: iso() }
+    if (ok(await supabase.from('user_settings').update(fields).eq('user_id', userId).select('user_id')).length === 0) {
+      const ins = await supabase.from('user_settings').insert({ user_id: userId, ...fields }).select('user_id')
+      if (ins.error?.code === '23505') ok(await supabase.from('user_settings').update(fields).eq('user_id', userId).select('user_id'))
+      else if (ins.error) throw ins.error
+    }
+    return { learn_how_i_work: on }
+  }
+
+  // Deletes what Axiom learned from this tool: its connector evidence, then each world row left with no evidence at all.
+  // A row the founder also mentioned has other evidence, so it stays. Evidence is found by the toolkit in source_key,
+  // or by a signal of that toolkit that still exists (rows written before the toolkit was recorded).
+  async function forget(userId, toolkit) {
+    check(toolkit)
+    await refuseIfBlocked(userId)
+    const mine = (table) => supabase.from(table).delete().eq('user_id', userId).eq('source_kind', 'connector')
+    const ids = ok(await supabase.from('signals').select('id').eq('user_id', userId).eq('toolkit', toolkit)).map((s) => s.id)
+    const gone = ok(await mine('memory_evidence').eq('source_key', toolkit).select('item_table, item_id'))
+    if (ids.length) gone.push(...ok(await mine('memory_evidence').in('source_id', ids).select('item_table, item_id')))
+    const worldIds = [...new Set(gone.filter((e) => e.item_table === 'founder_world').map((e) => e.item_id))]
+    let forgotten = 0
+    for (const id of worldIds) {
+      const left = ok(await supabase.from('memory_evidence').select('id').eq('user_id', userId).eq('item_table', 'founder_world').eq('item_id', id).limit(1))
+      if (left.length === 0) forgotten += ok(await supabase.from('founder_world').delete().eq('user_id', userId).eq('id', id).select('id')).length
+    }
+    return { forgotten }
   }
 
   async function connect(userId, toolkit) {
     check(toolkit)
-    if (await care.isCareOpen(userId)) throw new HttpError(409, { error: COPY.care })
-    if (await pendingDeletion(userId)) throw new HttpError(409, { error: COPY.deleting })
+    await refuseIfBlocked(userId)
     const { redirectUrl } = await connectors.connect(userId, toolkit)
     return { url: redirectUrl }
   }
@@ -73,7 +117,7 @@ export function createConnectorService({ supabase, connectors, care, pendingDele
     return { toolkit, connected: false, status: 'not_connected' }
   }
 
-  return { list, connect, disconnect }
+  return { list, connect, disconnect, setLearn, forget }
 }
 
 // Decision Nov 27: the content of an action is cleared 30 days after it ends; preview and hash stay.

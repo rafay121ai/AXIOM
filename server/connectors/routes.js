@@ -28,5 +28,7 @@ export function mountConnectorRoutes(app, { supabase, connectors, care, pendingD
 
   app.get('/api/connectors', limiter(60), handle((req) => service.list(req.user.id)))
   app.post('/api/connectors/:toolkit/connect', limiter(20), handle((req) => service.connect(req.user.id, req.params.toolkit)))
+  app.put('/api/connectors/learn', limiter(20), handle((req) => service.setLearn(req.user.id, req.body?.on)))
+  app.post('/api/connectors/:toolkit/forget', limiter(20), handle((req) => service.forget(req.user.id, req.params.toolkit)))
   app.delete('/api/connectors/:toolkit', limiter(20), handle((req) => service.disconnect(req.user.id, req.params.toolkit)))
 }

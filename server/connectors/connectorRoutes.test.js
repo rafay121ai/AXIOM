@@ -6,7 +6,7 @@ import { createFakeClock, createFakeOpenAI, createFakeSupabase } from '../testin
 import { createFounderDeletion } from '../journey/home/accountDelete.js'
 import { createAccountExport } from '../journey/home/accountExport.js'
 import { createConnectors } from './composio.js'
-import { ACTION_KEEP_MS, clearActionContent, COPY } from './connectorService.js'
+import { ACTION_KEEP_MS, clearActionContent, COPY, LEARN_VERSION } from './connectorService.js'
 
 const A = { id: '11111111-1111-4111-8111-111111111111', email: 'a@example.com' }
 const B = { id: '22222222-2222-4222-8222-222222222222', email: 'b@example.com' }
@@ -48,8 +48,8 @@ async function setup({ composioState = {}, tables = {}, env = ENV, failDelete = 
   const server = app.listen(0)
   await new Promise((r) => server.once('listening', r))
   const url = `http://127.0.0.1:${server.address().port}`
-  const call = async (method, path, token = 'tokA') => {
-    const res = await fetch(`${url}${path}`, { method, headers: { authorization: `Bearer ${token}` } })
+  const call = async (method, path, token = 'tokA', body) => {
+    const res = await fetch(`${url}${path}`, { method, headers: { authorization: `Bearer ${token}`, ...(body ? { 'content-type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) })
     const text = await res.text()
     return { status: res.status, body: text.startsWith('{') ? JSON.parse(text) : text }
   }
@@ -59,7 +59,7 @@ async function setup({ composioState = {}, tables = {}, env = ENV, failDelete = 
 test('routes do not exist (404) when CONNECTORS is off, even without a token', async () => {
   const t = await setup({ env: { FRONTEND_URL: ENV.FRONTEND_URL } })
   try {
-    for (const [m, p] of [['GET', '/api/connectors'], ['POST', '/api/connectors/gmail/connect'], ['DELETE', '/api/connectors/gmail']]) assert.equal((await t.call(m, p)).status, 404, p)
+    for (const [m, p] of [['GET', '/api/connectors'], ['POST', '/api/connectors/gmail/connect'], ['DELETE', '/api/connectors/gmail'], ['PUT', '/api/connectors/learn'], ['POST', '/api/connectors/gmail/forget']]) assert.equal((await t.call(m, p)).status, 404, p)
   } finally { await t.close() }
 })
 
@@ -264,4 +264,56 @@ test('30-day clearing: only ended actions older than 30 days lose args; preview 
   for (const id of ['done-old', 'failed-old', 'rejected-old', 'expired-old']) assert.deepEqual(by[id].args, {}, id)
   for (const id of ['done-fresh', 'expired-fresh', 'proposed-old', 'approved-old']) assert.deepEqual(by[id].args, { body: id }, id)
   assert.ok(Object.values(by).every((r) => r.preview === `p-${r.id}` && r.content_hash === 'h'))
+})
+
+test('list includes learn_how_i_work (false by default); PUT saves it and logs consent with a wording version', async () => {
+  const t = await setup()
+  try {
+    assert.equal((await t.call('GET', '/api/connectors')).body.learn_how_i_work, false)
+    const on = await t.call('PUT', '/api/connectors/learn', 'tokA', { on: true })
+    assert.deepEqual([on.status, on.body], [200, { learn_how_i_work: true }])
+    assert.equal((await t.call('GET', '/api/connectors')).body.learn_how_i_work, true)
+    assert.equal((await t.call('GET', '/api/connectors', 'tokB')).body.learn_how_i_work, false)
+    await t.call('PUT', '/api/connectors/learn', 'tokA', { on: true }) // no change, no second row
+    await t.call('PUT', '/api/connectors/learn', 'tokA', { on: false })
+    const log = t.base.rows('consent_log')
+    assert.deepEqual(log.map((r) => [r.user_id, r.action, r.report_id]), [[A.id, 'learn_on', null], [A.id, 'learn_off', null]])
+    assert.ok(log.every((r) => r.wording_version === LEARN_VERSION))
+    assert.equal((await t.call('PUT', '/api/connectors/learn', 'tokA', { on: 'yes' })).status, 400)
+  } finally { await t.close() }
+})
+
+test('learn and forget are refused during care and pending delete', async () => {
+  const care = await setup({ tables: { care_events: [{ id: 'c1', user_id: A.id, level: 'clear', resolved_at: null }] } })
+  try {
+    for (const [m, p, b] of [['PUT', '/api/connectors/learn', { on: true }], ['POST', '/api/connectors/gmail/forget']]) {
+      const res = await care.call(m, p, 'tokA', b)
+      assert.deepEqual([res.status, res.body.error], [409, COPY.care], p)
+    }
+    assert.equal(care.base.rows('consent_log').length, 0)
+  } finally { await care.close() }
+  const del = await setup({ env: { ...ENV, ACCOUNT_DELETE: 'on' }, tables: { account_requests: [{ id: 'r1', user_id: A.id, kind: 'delete', status: 'pending', created_at: at(NOW), delete_after: at(NOW + 7 * DAY) }] } })
+  try { assert.equal((await del.call('POST', '/api/connectors/gmail/forget')).body.error, COPY.deleting) } finally { await del.close() }
+})
+
+test('forget deletes only that toolkit\'s connector evidence and the world rows left bare; founder-mentioned and other-tool rows stay', async () => {
+  const ev = (id, item, extra) => ({ id, user_id: A.id, item_table: 'founder_world', item_id: item, snippet: 's', ...extra })
+  const t = await setup({ tables: {
+    founder_world: [{ id: 'w1', user_id: A.id, name: 'Dr Hamid' }, { id: 'w2', user_id: A.id, name: 'Sam' }, { id: 'w3', user_id: A.id, name: 'Ana' }, { id: 'w4', user_id: A.id, name: 'Lee' }, { id: 'w5', user_id: B.id, name: 'Zed' }],
+    signals: [{ id: 's4', user_id: A.id, toolkit: 'gmail' }],
+    memory_evidence: [
+      ev('e1', 'w1', { source_kind: 'connector', source_id: 's1', source_key: 'gmail' }),
+      ev('e2', 'w2', { source_kind: 'connector', source_id: 's2', source_key: 'gmail' }), ev('e3', 'w2', { source_kind: 'situation', source_id: 'x1' }),
+      ev('e4', 'w3', { source_kind: 'connector', source_id: 's3', source_key: 'gmail' }), ev('e5', 'w3', { source_kind: 'connector', source_id: 's5', source_key: 'notion' }),
+      ev('e6', 'w4', { source_kind: 'connector', source_id: 's4', source_key: null }),
+      ev('e7', 'w5', { user_id: B.id, source_kind: 'connector', source_id: 's6', source_key: 'gmail' }),
+    ],
+  } })
+  try {
+    const res = await t.call('POST', '/api/connectors/gmail/forget')
+    assert.deepEqual([res.status, res.body], [200, { forgotten: 2 }])
+    assert.deepEqual(t.base.rows('founder_world').map((w) => w.id).sort(), ['w2', 'w3', 'w5'])
+    assert.deepEqual(t.base.rows('memory_evidence').map((e) => e.id).sort(), ['e3', 'e5', 'e7'])
+    assert.equal((await t.call('POST', '/api/connectors/slack/forget')).status, 404)
+  } finally { await t.close() }
 })
