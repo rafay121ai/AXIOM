@@ -675,7 +675,7 @@ build or extend them.
   read-feedback endpoint.
 - The Welcome screen and the old chat product.
 
-## Proactive Axiom (decided Nov 10 2026, NOT BUILT; plan: `tasks/connectors-plan.md`)
+## Proactive Axiom (decided Nov 10 2026, built Nov 27 behind flags, off by default; plan: `tasks/connectors-plan.md`)
 Axiom reads the founder's Gmail, Google Calendar and Notion (through Composio),
 tells them what they should know without being asked, and prepares the work
 (replies, emails, calendar changes, Notion pages). It acts only after the founder
@@ -706,7 +706,7 @@ approves (decided Nov 25 2026).
 - **Pushes:** signals get their own 4 a day on top of the morning and evening
   ones. An extreme event may skip the cap, at most 2 a day, still respecting
   quiet hours unless the event is dated within 3 hours. Lock screen defaults to
-  Short. Pushes stop during care and delete requests, as before.
+  Short (lock-screen wording awaiting Rafay: `tasks/wording_to_approve.md` section I). Pushes stop during care and delete requests, as before.
 - **Acts only after approval.** Axiom shows exactly what it will send or change;
   the founder can edit it and taps to approve; only then does Axiom do it and say
   what it did. Allowed: send an email or reply, create, move or cancel a calendar

@@ -1,3 +1,12 @@
+# Plan: Axiom uses the connector tables (Nov 27 2026, Rafay: "make axiom use those 5 tables")
+Branch feat/connectors-app. Server only; flags off by default (CONNECTORS, SIGNAL_PUSH). Tests with fakes, no real model or Composio calls. Each step: builder -> test-runner -> reviewer -> fix from root.
+- [x] S1 (built Nov 27, server/connectors/ingest.js, worker.js, filter.js, read.js; webhook, watched-source exceptions and confirmed co-founder rule not built) Fetch, queue, filter (Phases 3-4): poll each connected founder every few minutes (push scheduler pattern) with read-only tools only; bounded backfill on first connect; connector_jobs as the queue (conditional claim, retries, dead letter); code-only filter with the sensitive deny list and fixtures; circuit breaker. Webhook later (polling covers it).
+- [x] S2 (built Nov 27, server/connectors/signal.js; no action field, newsletters and extreme-event rule not built) Signals (Phase 6): SIGNAL model step through callStructured (call_type signal, daily cap), schema-checked; verifier: every name, number and date in what_happened is in the source; email text is untrusted data; writes signals (lane, facts, impact, urgency, expires_at). Raw email text never stored.
+- [x] S3 (built Nov 27, server/connectors/worldContext.js, signalHome.js; no model for memory, the greeting has no model so signals are home items) Personalisation (Phase 5 + use): the server reads a founder's recent signals and upcoming meetings into the Read, Learn, Situation and home greeting context as data, never instructions; signals become home items; connector facts reach founder memory through the existing memory layer (source connector), never health, politics, religion, family or personal money.
+- [x] S4 Signal pushes (Phase 7): policy.js counts only morning and evening against the 2-a-day cap; signals take slots signal_1..4 (extreme_1..2), quiet hours, care pause, lock screen short by default, behind SIGNAL_PUSH.
+- [ ] Review the whole change (backend-auditor, axiom-reviewer, voice-checker), full tests, graphify update.
+Not in this plan: the app screens (mock v1 waits for Rafay's OK), newsletter picker and World lane, Notion signals beyond page changes, acting on approval (act()).
+
 # Plan: update the four documents to match every decision (from tasks/decisions.md)
 
 Source of truth for what was decided: tasks/decisions.md, tasks/voice.md, tasks/walkthrough.md, tasks/design/*.html.

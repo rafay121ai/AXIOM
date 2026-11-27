@@ -450,7 +450,9 @@ test('migrations: CHECK lists match the values the server code uses', () => {
   assert.deepEqual(checkList(journeySql, 'mentor_style')?.sort(), [...MENTOR_STYLES].sort())
   // 'beliefs' is allowed by 20261109000002 (memory layer, applied to live Nov 10 2026); every other step by 20261101000009.
   const memoryCallTypes = all.find((f) => f.name.startsWith('20261109000002'))?.sql ?? ''
-  const callTypes = [...(checkList(journeySql, 'call_type') ?? []), ...(checkList(stripSqlComments(memoryCallTypes), 'call_type') ?? [])]
+  // 'signal' (and 'connector') are allowed by 20261125000002 (connectors; in live), which re-adds the check with every value.
+  const connectorCallTypes = all.find((f) => f.name.startsWith('20261125000002'))?.sql ?? ''
+  const callTypes = [...(checkList(journeySql, 'call_type') ?? []), ...(checkList(stripSqlComments(memoryCallTypes), 'call_type') ?? []), ...(checkList(stripSqlComments(connectorCallTypes), 'call_type') ?? [])]
   for (const t of [...USAGE_CALL_TYPES, ...STEPS]) assert.ok(callTypes.includes(t), `call_type check lacks ${t}`)
   assert.match(sqlCompact, /check \(call_type in \([^)]*\)\) not valid;/, 'call_type check must stay NOT VALID')
 })

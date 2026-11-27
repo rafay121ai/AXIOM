@@ -172,10 +172,11 @@ const KEPT_PRIVATE_LINE = 'Kept private. You can change this any time in setting
 // The home screen, from the mock (sample founder). The words are the server's own (server/journey/home/wording.js):
 // the mock's "Tonight: tell me how it went" is "Tell me how it went" there. Which items show follows the mock's states.
 export type FounderSim = 'closed';
-export type HomeSim = 'morning' | 'report' | 'evening' | 'nothing' | 'care';
+export type HomeSim = 'morning' | 'report' | 'evening' | 'nothing' | 'signal' | 'care';
 
 const FAKE_SITUATION = 'fake-situation-1';
 const TODAY_ITEM: HomeItem = { kind: 'move', label: 'Today: ask the clinics for a call', title: FAKE_DUE.title, stays: false, target: { stage: 'move', situation_id: FAKE_SITUATION, move_id: FAKE_MOVE.id } };
+const SIGNAL_ITEM: HomeItem = { kind: 'signal', label: 'Dana replied to your pricing email', title: null, stays: false, target: { stage: 'signal', signal_id: 'fake-signal-1' } };
 const STILL_ITEM: HomeItem = { ...TODAY_ITEM, label: 'Still to do: ask the clinics for a call' };
 const REPORT_ITEM: HomeItem = { kind: 'report', label: 'Tell me how it went', title: FAKE_DUE.title, stays: false, target: { stage: 'report', situation_id: FAKE_SITUATION, move_id: FAKE_DUE.move_id } };
 const DUE_REPORT = { move_id: FAKE_DUE.move_id, situation_id: FAKE_SITUATION, title: FAKE_DUE.title, report_due_at: '2026-10-26T20:00:00.000Z' };
@@ -276,14 +277,14 @@ function fakeGreeting(now: Date): { kind: string; text: string } {
 function fakeHome(state: HomeSim, now: Date): Home {
   const drawer = (to_do: HomeItem[]): Home['drawer'] => ({
     to_do,
-    open: to_do.length > 0 ? [{ id: FAKE_SITUATION, title: 'Asking the two clinics for a call', stage: to_do[0].target.stage, last_activity_at: '2026-10-26T09:00:00.000Z' }] : [],
+    open: to_do.length > 0 && to_do[0].target.stage !== 'signal' ? [{ id: FAKE_SITUATION, title: 'Asking the two clinics for a call', stage: to_do[0].target.stage, last_activity_at: '2026-10-26T09:00:00.000Z' }] : [],
     paused: [FAKE_PAUSED],
     recent: FAKE_RECENT,
   });
   if (state === 'care') {
     return { greeting: { kind: 'care_check_in', text: 'How are you doing today?' }, care_check_in: true, items: [], fade_after_ms: 8000, drawer: { to_do: [], open: [], paused: [], recent: [] }, due_reports: [] };
   }
-  const to_do = { morning: [TODAY_ITEM], report: [REPORT_ITEM], evening: [STILL_ITEM, REPORT_ITEM], nothing: [] }[state];
+  const to_do = { morning: [TODAY_ITEM], report: [REPORT_ITEM], evening: [STILL_ITEM, REPORT_ITEM], nothing: [], signal: [SIGNAL_ITEM] }[state];
   return {
     greeting: fakeGreeting(now),
     care_check_in: false,
@@ -395,6 +396,11 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
       const state = situations.get(id);
       if (!state) throw new HttpError(404);
       return { situation: { id, title: null, status: 'open', follow_up_count: state.asked, created_at: state.turns[0].created_at }, turns: state.turns, read: null };
+    },
+    async openSignal() {
+      const id = `fake-situation-${nextId++}`;
+      situations.set(id, { asked: 0, said: [], turns: [{ role: 'axiom', text: 'Dana replied to your pricing email. Her answer changes what you can ask for. What do you want from her?', created_at: new Date().toISOString() }] });
+      return { situation_id: id };
     },
     async getRead() {
       return FAKE_READ;

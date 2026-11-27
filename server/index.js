@@ -8,6 +8,9 @@ import { createExpoSender } from './push/expoSender.js'
 import { createAccount, startDeletionLoop } from './journey/home/accountService.js'
 import { createConnectors } from './connectors/composio.js'
 import { startActionClearing } from './connectors/connectorService.js'
+import { createIngestion, startConnectorIngestion } from './connectors/ingest.js'
+import { createSignalHandler } from './connectors/signal.js'
+import { createBudget } from './connectors/budget.js'
 import { createNameLookup, startPushScheduler } from './push/scheduler.js'
 
 dotenv.config({ path: resolve(dirname(fileURLToPath(import.meta.url)), '../.env') })
@@ -43,7 +46,19 @@ const knowledgeSupabase = knowledgeUrl && knowledgeKey ? createClient(knowledgeU
 const connectors = env.COMPOSIO_API_KEY ? createConnectors() : null
 const connectorsOn = env.CONNECTORS === 'on'
 
-const app = createApp({ supabase, knowledgeSupabase, openai, env, connectors: connectorsOn ? connectors : null })
+// One ingestion (one circuit breaker) for the timers and for the backfill the routes start. It skips founders with a
+// deletion request or an open care event; `app` is read at call time, after it exists.
+const pendingDeletion = supabase && createAccount({ supabase, clock: systemClock, deleteOn: env.ACCOUNT_DELETE === 'on' }).pending
+const blocked = async (id) => (await app.locals.isCareOpen(id)) || (await pendingDeletion(id))
+// The signal step needs the app's capped model call, so it is built on first use.
+let signalHandler = (...args) => {
+  signalHandler = createSignalHandler({ supabase, callStructured: app.locals.callStructured, clock: systemClock, blocked, isCapped: app.locals.isOverCap, overBudget: createBudget({ supabase, clock: systemClock, limitUsd: Number(env.CONNECTOR_DAILY_USD) > 0 ? Number(env.CONNECTOR_DAILY_USD) : undefined }) })
+  return signalHandler(...args)
+}
+const ingestion = connectorsOn && connectors && supabase
+  ? createIngestion({ supabase, connectors, clock: systemClock, blocked, handleItem: (...args) => signalHandler(...args) })
+  : undefined
+const app = createApp({ supabase, knowledgeSupabase, openai, env, connectors: connectorsOn ? connectors : null, ingestion })
 
 // Real pushes only when EXPO_PUSH=on and the database is configured.
 if (env.EXPO_PUSH === 'on' && supabase) {
@@ -53,6 +68,7 @@ if (env.EXPO_PUSH === 'on' && supabase) {
     clock: systemClock,
     isCareOpen: app.locals.isCareOpen,
     nameOf: createNameLookup(supabase),
+    signalPush: connectorsOn && env.SIGNAL_PUSH === 'on',
   })
   console.log('[Axiom API] Push scheduler started')
 } else {
@@ -61,7 +77,8 @@ if (env.EXPO_PUSH === 'on' && supabase) {
 
 if (connectorsOn && connectors && supabase) {
   startActionClearing({ supabase, clock: systemClock })
-  console.log('[Axiom API] Connectors on; action content is cleared daily after 30 days')
+  startConnectorIngestion({ ingestion })
+  console.log('[Axiom API] Connectors on; connectors are polled and queued; action content is cleared daily after 30 days')
 } else {
   console.log('[Axiom API] Connectors off (CONNECTORS is not on)')
 }

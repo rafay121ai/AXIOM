@@ -2,6 +2,7 @@
 // clearing of action content. Tables are server only; all access is the service-role client.
 import { TOOLKITS } from './composio.js'
 import { HttpError } from '../journey/situations.js'
+import { expireSignals } from './signal.js'
 
 export const COPY = {
   care: 'Connecting can wait. Come back to it when things feel steadier.',
@@ -11,11 +12,13 @@ export const COPY = {
 }
 const DAY = 24 * 60 * 60 * 1000
 export const ACTION_KEEP_MS = 30 * DAY
+export const JOB_KEEP_MS = 7 * DAY
+const CALENDAR_JOB_KEEP_MS = 21 * 24 * 60 * 60 * 1000
 const ENDED = ['done', 'failed', 'rejected', 'expired']
 
 const ok = (r) => { if (r.error) throw r.error; return r.data }
 
-export function createConnectorService({ supabase, connectors, care, pendingDeletion, clock }) {
+export function createConnectorService({ supabase, connectors, care, pendingDeletion, clock, onFirstActive = () => {} }) {
   const iso = () => new Date(clock.now()).toISOString()
   const check = (toolkit) => { if (!TOOLKITS.includes(toolkit)) throw new HttpError(404, { error: COPY.unknown }) }
 
@@ -32,6 +35,8 @@ export function createConnectorService({ supabase, connectors, care, pendingDele
         status = 'active'
         if (row?.status !== 'active' || row.composio_account_id !== accountId) {
           ok(await supabase.from('connector_accounts').upsert({ user_id: userId, toolkit, composio_account_id: accountId, status, last_error_code: null, updated_at: iso() }, { onConflict: 'user_id,toolkit' }).select('id'))
+          // The first time a tool is active: a bounded backfill, in the background. The poller covers a failure.
+          if (!row) Promise.resolve(onFirstActive(userId, toolkit)).catch((err) => console.error('[Connectors] backfill failed', err?.code ?? ''))
         }
       } else if (row) {
         status = 'needs_reconnect'
@@ -72,12 +77,20 @@ export function createConnectorService({ supabase, connectors, care, pendingDele
 }
 
 // Decision Nov 27: the content of an action is cleared 30 days after it ends; preview and hash stay.
+// Also deletes done and dropped connector_jobs after 7 days.
 // Ended = done, failed, rejected or expired; the end is done_at, else updated_at.
 export async function clearActionContent({ supabase, clock }) {
   const cutoff = new Date(clock.now() - ACTION_KEEP_MS).toISOString()
   const base = () => supabase.from('connector_actions').update({ args: {} }).in('status', ENDED).neq('args', '{}')
   const withDone = ok(await base().lt('done_at', cutoff).select('id'))
   const without = ok(await base().is('done_at', null).lt('updated_at', cutoff).select('id'))
+  await expireSignals({ supabase, clock })
+  // Finished queue rows hold no content and are only history: a week is enough.
+  // Calendar polls list every event in the next 14 days each time, and the finished job is what stops an unchanged event being fetched
+  // again, so calendar jobs are kept past that window (21 days) instead of a week.
+  const old = (ms) => new Date(clock.now() - ms).toISOString()
+  ok(await supabase.from('connector_jobs').delete().in('status', ['done', 'dropped']).neq('toolkit', 'googlecalendar').lt('updated_at', old(JOB_KEEP_MS)).select('id'))
+  ok(await supabase.from('connector_jobs').delete().in('status', ['done', 'dropped']).eq('toolkit', 'googlecalendar').lt('updated_at', old(CALENDAR_JOB_KEEP_MS)).select('id'))
   return withDone.length + without.length
 }
 

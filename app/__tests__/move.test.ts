@@ -43,12 +43,11 @@ describe('move calls', () => {
 });
 
 describe('the fake move', () => {
-  it('has the mock\'s move: mission, success, words and a checklist of 2 to 4', async () => {
+  it('has the mock\'s move: mission, success, words and a one-step checklist', async () => {
     const m = await createFakeApi().openMove('fake-learn-1');
     expect(m.title).toBe('Ask both clinics for one concrete next step.');
     expect(m.words).toContain('20 minutes');
-    expect(m.checklist.length).toBeGreaterThanOrEqual(2);
-    expect(m.checklist.length).toBeLessThanOrEqual(4);
+    expect(m.checklist.length).toBe(1); // one first step (server moveChecks.js, Nov 22)
     expect(m.can_swap).toBe(true);
   });
 

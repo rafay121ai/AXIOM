@@ -65,6 +65,7 @@ export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch
     sendTurn: (situationId, text, turnId) =>
       sendWritten<Screened<SituationReply>>(`turn:${turnId}`, 'POST', `/api/situations/${situationId}/turn`, { text, client_turn_id: turnId }),
     getSituation: (situationId) => request<SituationView>('GET', `/api/situations/${situationId}`),
+    openSignal: (signalId) => request<{ situation_id: string }>('POST', `/api/home/signals/${signalId}/open`),
     getRead: (situationId) => request<Read>('POST', `/api/situations/${situationId}/read`),
     answerRead: (situationId, answer) =>
       request<Screened<ReadAnswerResult>>('POST', `/api/situations/${situationId}/read/answer`, answer),

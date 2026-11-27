@@ -13,6 +13,7 @@ import { BANNED_PHRASES, contrastProblem, looseUnit, norm, pairsOf, quoteProblem
 import { styleOf } from './prompts/style.js'
 import { loadTrackRecord } from './memory/trackRecord.js'
 import { earlierLines, loadBrief } from './memory/brief.js'
+import { loadWorld, worldTexts } from '../connectors/worldContext.js'
 import { conflictProblem, earlierSources, findConflict, namesBothAndAsks } from './memory/conflicts.js'
 
 export const MAX_NEW_SITUATIONS_PER_DAY = 10
@@ -57,7 +58,7 @@ const ownWordsProblems = (text, founderTexts, sources, ownPairs) => {
 
 // learn: remembers one founder message in the background (memory/learnMessage.js); openThread: stores the situation's one open thread once its Read exists; both no-ops until wired.
 // readGrounding: { isCapped } checks each Read for claims the founder never made (theRead.js); null is off.
-export function createSituations({ supabase, callStructured, clock, log = () => {}, learn = () => {}, openThread = () => {}, readGrounding = null }) {
+export function createSituations({ supabase, callStructured, clock, log = () => {}, learn = () => {}, openThread = () => {}, readGrounding = null, env = process.env }) {
   const iso = () => new Date(clock.now()).toISOString()
   const one = async (query) => {
     const { data, error } = await query
@@ -126,6 +127,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     const conversation = turns.filter((t) => !t.filler).map((t) => ({ role: t.role, text: t.text }))
     const sources = founderTextsOf(turns)
     const brief = await loadBrief(supabase, userId, sources.join('\n'))
+    const world = await loadWorld(supabase, userId, { now: clock.now(), env })
     const conflict = findConflict({ transcript: conversation, earlier: earlierLines(brief) }) // notice only: a follow-up question is not forced to name it
     let problems = null
     let styleOnly = null // a question whose only problem is style (no thread): asked rather than skipped (Rafay, Nov 23)
@@ -138,7 +140,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
           maxCompletionTokens: 400,
           userId,
           usageContext: { step: 'followup', kind: 'situation_turn', situation_id: situation.id },
-          messages: situationMessages({ conversation, followUpsLeft, brief, conflict }, problems),
+          messages: situationMessages({ conversation, followUpsLeft, brief, world, conflict }, problems),
         })
         const base = { topic: data.topic, title: data.title.trim() }
         if (followUpsLeft <= 0) return { ...base, enough: true, question: null }
@@ -279,6 +281,27 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     }
   }
 
+  // A situation that opens with Axiom's own line (a tapped signal): the same daily cap as create(), and the line, which asks
+  // one question, counts as a follow-up so the founder still gets at most MAX_FOLLOW_UPS questions before the Read.
+  async function beginWithAxiomLine({ userId, line }) {
+    if ((await newToday(userId)) >= MAX_NEW_SITUATIONS_PER_DAY) {
+      throw new HttpError(429, {
+        error: 'daily_limit',
+        message: `You have started ${MAX_NEW_SITUATIONS_PER_DAY} situations today. That is the limit for one day. Pick one of the open ones.`,
+        open: await openList(userId),
+      })
+    }
+    const situation = await startSituation(userId, null)
+    try {
+      await one(supabase.from('situations').update({ follow_up_count: 1 }).eq('id', situation.id).select('id'))
+      await one(supabase.from('situation_turns').insert({ situation_id: situation.id, role: 'axiom', text: line, filler: false, result: null, created_at: iso() }).select('id'))
+      return situation
+    } catch (err) {
+      await supabase.from('situations').delete().eq('id', situation.id)
+      throw err
+    }
+  }
+
   async function turn({ userId, situationId, text, clientTurnId }) {
     const situation = await ownSituation(userId, situationId)
     const prior = await one(supabase.from('situation_turns').select('id').eq('situation_id', situation.id).eq('client_turn_id', clientTurnId).maybeSingle())
@@ -334,6 +357,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
       style: await styleOf(supabase, userId),
       trackRecord: await loadTrackRecord(supabase, userId, log),
       brief: await loadBrief(supabase, userId, founderTextsOf(turns).join('\n')),
+      world: await loadWorld(supabase, userId, { now: clock.now(), env }),
       firstReading: await firstReadingOf(userId),
       deps: { callStructured, userId, log },
       grounding: readGrounding,
@@ -406,8 +430,9 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     const transcript = [...situationTalk, { role: 'axiom', text: row.closing_question }, ...talk]
     const lines = earlierLines(brief)
     const conflict = findConflict({ transcript, earlier: lines })
+    const world = await loadWorld(supabase, userId, { now: clock.now(), env })
     const earlier = earlierSources({ transcript, earlier: lines })
-    const ownPairs = pairsOf([...sources, ...earlier, ...(conflict ? [conflict.nowText] : [])])
+    const ownPairs = pairsOf([...sources, ...earlier, ...worldTexts(world), ...(conflict ? [conflict.nowText] : [])])
     let problems = null
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       try {
@@ -418,7 +443,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
           maxCompletionTokens: 400,
           userId,
           usageContext: { step: 'followup', kind: 'read_talk', situation_id: situation.id },
-          messages: readTalkMessages({ situation: situationTalk, read: { headline: row.headline, body: row.body, closing_question: row.closing_question }, talk, questionsLeft: MAX_READ_QUESTIONS - asked, brief, conflict, firstReading: await firstReadingOf(userId) }, problems),
+          messages: readTalkMessages({ situation: situationTalk, read: { headline: row.headline, body: row.body, closing_question: row.closing_question }, talk, questionsLeft: MAX_READ_QUESTIONS - asked, brief, world, conflict, firstReading: await firstReadingOf(userId) }, problems),
         })
         if (data.asked_to_learn) return null
         if (asked >= MIN_READ_QUESTIONS && data.knows_goal && data.knows_blocker && data.knows_detail) return null
@@ -441,5 +466,5 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     return null
   }
 
-  return { create, turn, list, get, read, answerRead }
+  return { create, beginWithAxiomLine, turn, list, get, read, answerRead }
 }

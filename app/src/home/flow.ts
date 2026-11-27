@@ -13,7 +13,7 @@ export type MenuRows = { open: MenuRow[]; history: MenuRow[]; paused: MenuRow[] 
  * History is the most recent few. Paused situations bring up their page, where they can be brought back.
  */
 export function menuRows({ to_do, open, paused, recent }: Home['drawer']): MenuRows {
-  const covered = new Set(to_do.map((i: HomeItem) => i.target.situation_id));
+  const covered = new Set(to_do.map((i: HomeItem) => ('situation_id' in i.target ? i.target.situation_id : '')));
   const title = (t: string | null) => t ?? copy.home.untitled;
   const situation = (s: DrawerSituation): MenuRow => ({
     key: s.id,
@@ -46,8 +46,12 @@ export type Destination =
  * lesson, which the server returns unchanged when asked again. A check-in shown without its id is the one
  * waiting, if only one is.
  */
-export async function destinationOf(api: Pick<AxiomApi, 'getDueReports' | 'getSituation' | 'startLearn'>, t: Target): Promise<Destination> {
+export async function destinationOf(api: Pick<AxiomApi, 'getDueReports' | 'getSituation' | 'startLearn' | 'openSignal'>, t: Target): Promise<Destination> {
   switch (t.stage) {
+    case 'signal': {
+      const { situation_id } = await api.openSignal(t.signal_id);
+      return { kind: 'situation', situationId: situation_id, turns: (await api.getSituation(situation_id)).turns };
+    }
     case 'situation':
       return { kind: 'situation', situationId: t.situation_id, turns: (await api.getSituation(t.situation_id)).turns };
     case 'read':

@@ -99,6 +99,7 @@ export function createMemoryScreen({ supabase, clock }) {
       if (!e) return null
       let text = `"${e.snippet}"`
       if (e.source_kind === 'signup' && !TYPED_SIGNUP.has(e.source_key)) text = `You picked: ${e.snippet}`
+      else if (e.source_kind === 'connector') text = `From your connected tools: "${e.snippet}"`
       else if (titles[e.source_id]) text = `Your move: ${titles[e.source_id]}`
       return { text, at: e.created_at }
     }

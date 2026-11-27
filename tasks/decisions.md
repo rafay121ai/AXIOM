@@ -825,3 +825,9 @@ Replaces "read only" in the Nov 10 connectors entry. Reason (Rafay): a read-only
 - "Sort out my calendar": Axiom proposes a set of calendar changes (move, delete, create) shown together. One tap approves the set; each change is still its own stored action with its own hash, so nothing outside the shown set can run. To find room it may read free slots and search events (`GOOGLECALENDAR_FIND_FREE_SLOTS`, `GOOGLECALENDAR_FIND_EVENT`).
 - The full content of an action (`connector_actions.args`, e.g. the email Axiom sent) is cleared 30 days after the action ends. The preview and the hash stay, for "What Axiom did" and the export.
 - The three Phase 1 connector migrations are approved to apply.
+
+## Nov 27 2026: connect screen and Settings wording trimmed (Rafay)
+- The first-time connect screen no longer names the tools: "I'll catch what matters before you miss it. Your reads get sharper from day one." The rows below name them, so a new connector is one more row, not new copy.
+- Where it shows: once, right after the first reading (end of onboarding), before Home. "Not now" skips it; after that it lives in Settings, Connections.
+- Settings, Connections: "What I learned from it stays until you delete it." is removed.
+- Settings: the line "Anonymous. Never your name or your words. Kept to improve Axiom, even if you leave." is removed from under the switch at Rafay's request. It is replaced by a quiet "How this works" link to the privacy page, which must keep the full sentence (that anonymous pattern rows are kept after the founder leaves). This supersedes "may not be removed" in the Nov 25 entry for the Settings line only; the privacy page disclosure stays required while pattern rows are kept after deletion.

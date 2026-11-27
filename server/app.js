@@ -26,6 +26,7 @@ export function createApp({
   clock = systemClock,
   env = {},
   connectors = null, // the Composio client (server/connectors/composio.js); tests pass a fake
+  ingestion = undefined, // connector polling and backfill, shared with the timers (index.js); default: its own
 } = {}) {
   const app = express()
   // Render sits behind exactly one proxy hop; trust only that hop for req.ip.
@@ -52,6 +53,9 @@ export function createApp({
   })
   // Read by the push scheduler: no pushes while a care event is open.
   app.locals.isCareOpen = care.isCareOpen
+  // Read by the connector signal step (index.js): a model call that obeys the daily cap and logs its cost.
+  app.locals.callStructured = callStructuredForApp
+  app.locals.isOverCap = isOverCap
 
 
   const allowedOrigins = new Set([
@@ -83,6 +87,7 @@ export function createApp({
         .from('model_usage_logs')
         .select('id, created_at, estimated_cost_usd')
         .eq('user_id', id)
+        .neq('call_type', 'signal') // connector spend has its own budget (connectors/budget.js)
         .gte('created_at', since)
       if (cursor) query = query.or(keysetOrFilter(cursor))
       const { data, error } = await query
@@ -182,12 +187,13 @@ export function createApp({
     learnMessages: env.LEARN_EVERY_MESSAGE !== 'off', // on unless switched off
     readGrounding: env.READ_GROUNDING !== 'off', // on unless switched off
     deleteOn: env.ACCOUNT_DELETE === 'on',
+    env,
     // Test accounts (ADMIN_USER_IDS / ADMIN_EMAILS) skip the daily limit on new situations (Rafay, Nov 2).
     noDailyLimit: isAdminUser,
     links: { privacy: env.PRIVACY_URL?.trim() || null, terms: env.TERMS_URL?.trim() || null },
   })
   if (connectorsOn) {
-    mountConnectorRoutes(app, { supabase: supabaseAdmin, connectors, care, clock, pendingDeletion: createAccount({ supabase: supabaseAdmin, clock, deleteOn: env.ACCOUNT_DELETE === 'on' }).pending })
+    mountConnectorRoutes(app, { supabase: supabaseAdmin, connectors, care, clock, pendingDeletion: createAccount({ supabase: supabaseAdmin, clock, deleteOn: env.ACCOUNT_DELETE === 'on' }).pending, ingestion })
   }
   mountPushRoutes(app, { supabase: supabaseAdmin, clock })
   mountReviewRoutes(app, { supabase: supabaseAdmin, callStructured: callStructuredForApp, clock, env, requireAuth })

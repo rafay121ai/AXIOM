@@ -12,6 +12,7 @@ const STEP_DEFAULTS = Object.freeze({
   care: CHAT_MODEL,
   report: CHAT_MODEL,
   beliefs: UTILITY_MODEL,
+  signal: UTILITY_MODEL, // connector items (connectors/signal.js)
 })
 
 export const MODELS = Object.freeze({ embedding: 'text-embedding-3-small' })

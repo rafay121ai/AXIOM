@@ -40,7 +40,7 @@ A lawyer should check:
 - OpenAI API data terms: retention, training, and where it processes data.
   [CHECK OpenAI API data terms]. Also whether a Data Processing Addendum is
   signed with OpenAI, Supabase, Render.
-- International transfer wording (section 10): Standard Contractual Clauses
+- International transfer wording (section 11): Standard Contractual Clauses
   with each processor.
 - Care data (section 6) may be health-related "special category" data under
   GDPR. Even storing only "a care check happened" may count. Needs a view.
@@ -190,7 +190,39 @@ tell it was yours, so it can no longer be taken down. If you want a published
 story removed, withdraw it before you delete your account. [DECIDE: see For
 Rafay, item 4]
 
-## 8. Who we share data with
+## 8. Connected tools (Gmail, Google Calendar, Notion)
+
+Connecting is optional and off until you turn it on, one tool at a time.
+
+- **What Axiom reads:** mail from people (not promotions, receipts or
+  newsletters you did not pick), your meetings, and only the Notion pages you
+  choose in Notion's own picker. Mail about health, money, legal matters,
+  passwords and one-time codes is dropped before anything reads it.
+- **What Axiom keeps:** short notes about what matters to you (for example
+  "the investor you are waiting on replied") and facts about your work, each
+  with where it came from. Raw email text is not stored.
+- **What Axiom does:** it can prepare an email, a calendar change or a Notion
+  page. Nothing is sent, changed or deleted until you approve exactly what you
+  see. The full text of an action is cleared 30 days after it is done.
+- **Who handles it:** Composio connects to your accounts for us and holds the
+  access tokens; we never store your password or tokens. What Axiom reads is
+  sent to OpenAI to write its notes.
+- **Disconnecting:** Settings, Connections. Access is removed at once. What
+  Axiom already learned stays until you delete it there, or delete your account.
+- **Google data:** Axiom's use of information received from Google APIs follows
+  the Google API Services User Data Policy, including the Limited Use
+  requirements. It is not used for ads and not used to train general AI models.
+
+### "Learn how I work"
+
+Off by default. If you turn it on, Axiom also saves anonymous patterns about
+how founders work (for example a stage and how fast decisions get made). They
+carry no name, no email, no account id and none of your words, so they cannot
+be traced back to you. Because of that they **are kept to improve Axiom even
+after you leave**, and cannot be removed one by one. Turning the switch off
+stops new ones.
+
+## 9. Who we share data with
 
 We do not sell your data. We share it only with the services that run Axiom:
 
@@ -199,6 +231,7 @@ We do not sell your data. We share it only with the services that run Axiom:
 | Supabase | Database and sign-in | Singapore (AWS ap-southeast-1) |
 | Render | Runs our server | Singapore [CHECK in Render dashboard] |
 | Google | Sign-in with Google | [CHECK] |
+| Composio | Connects Gmail, Calendar and Notion when you choose to (section 8) | United States [CHECK] |
 | OpenAI | Writes Axiom's replies, second check for distress | United States [CHECK OpenAI API data terms] |
 | Expo, Apple (APNs), Google (FCM) | Deliver reminders to your phone | [CHECK] |
 
@@ -209,24 +242,25 @@ screen shows the full text, a short version, or nothing.
 We may also disclose data if the law requires it, or to protect someone's
 life. [CHECK with lawyer]
 
-## 9. How long we keep it
+## 10. How long we keep it
 
 - Your account data: until you delete your account.
 - After you ask to delete: 7 days, in case you change your mind. Then it is
-  deleted (see section 11).
+  deleted (see section 12).
 - Database backups: deleted data can remain in backups for up to [BACKUP
   DAYS] days, then it is gone. [CHECK Supabase plan backup retention]
 - OpenAI: under OpenAI's own retention. [CHECK OpenAI API data terms]
 - Published anonymised stories: see section 7.
+- Anonymous "Learn how I work" patterns: kept after you leave (section 8).
 
-## 10. International transfers
+## 11. International transfers
 
 Our database is in Singapore. OpenAI and other services may process data in
 other countries, including the United States. Where the law requires it, we
 rely on safeguards such as Standard Contractual Clauses. [CHECK with lawyer
 and with each provider's terms]
 
-## 11. Your choices and rights
+## 12. Your choices and rights
 
 In the app, at any time:
 - **Download your data.** Settings gives you one file (JSON) with your account,
@@ -252,7 +286,7 @@ or a copy of your data, to object to how we use it, or to ask us to limit it.
 We answer within [30] days. [CHECK] You can complain to the data protection
 authority where you live.
 
-## 12. Security
+## 13. Security
 
 - Only our server can write to the database. The app uses Supabase only to
   sign you in.
@@ -264,18 +298,18 @@ authority where you live.
 No system is perfectly safe. If a breach affects you, we will tell you as the
 law requires.
 
-## 13. Children
+## 14. Children
 
 Axiom is for people aged [18] and over. [DECIDE] We do not knowingly collect
 data from anyone younger. If you think a child has an account, write to
 [CONTACT EMAIL] and we will delete it.
 
-## 14. Changes
+## 15. Changes
 
 If we change this policy, we will update the date at the top. If the change
 matters, we will tell you in the app before it takes effect.
 
-## 15. Contact
+## 16. Contact
 
 [OPERATOR LEGAL NAME], [ADDRESS], [COUNTRY]. [CONTACT EMAIL].
 
