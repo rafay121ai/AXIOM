@@ -6,7 +6,7 @@ import { expireSignals } from './signal.js'
 
 export const COPY = {
   care: 'Connecting can wait. Come back to it when things feel steadier.',
-  deleting: 'Your account is set to be deleted, so I will not connect anything new.',
+  deleting: 'Your account is being deleted, so nothing new can be connected.',
   unknown: 'That is not something I can connect.',
   revokeFailed: 'I could not disconnect that just now. Nothing was removed. Try again.',
 }
