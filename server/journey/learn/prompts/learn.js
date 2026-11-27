@@ -6,6 +6,7 @@
 import { PICTURE_TYPES } from '../pictures.js'
 import { styleMessages } from '../../prompts/style.js'
 import { briefMessages } from '../../memory/brief.js'
+import { worldMessages } from '../../../connectors/worldContext.js'
 export const MAX_CITATIONS = 2
 export const MAX_FOLLOW_UPS = 2
 export const FOLLOW_UP_MAX = 60
@@ -106,12 +107,13 @@ export const LEARN_PROMPT = [
 //   situation and learn: [{ role, text }];
 //   read: { headline, body, closing_question, founder_answer, skipped, talk_after: [{ role, text }] };
 //   evidence: [{ handle, text }] (never ids, authors or titles).
-export function learnMessages({ mode, situation, read, learn, evidence, tapped = null, style, brief = '', conflict = null }, retryProblems = null) {
+export function learnMessages({ mode, situation, read, learn, evidence, tapped = null, style, brief = '', world = [], conflict = null }, retryProblems = null) {
   const messages = [
     { role: 'system', content: LEARN_PROMPT },
     ...(evidence.some((e) => e.lesson) ? [{ role: 'system', content: LESSON_NOTE }] : []),
     ...styleMessages(style),
     ...briefMessages(brief, conflict),
+    ...worldMessages(world),
     { role: 'system', content: `This turn: ${MODES[mode].join(' ')}` },
     // A changed number is the one case where an offer or tapped answer holds a question: the one that asks what changed (checked in reply.js).
     ...(conflict && (mode === 'offer' || mode === 'followup') ? [{ role: 'system', content: 'The exception to "no question": because a number changed, end this reply with one short question asking what changed, after both numbers.' }] : []),

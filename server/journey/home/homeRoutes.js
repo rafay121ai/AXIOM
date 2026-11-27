@@ -7,6 +7,7 @@ import { bodyFields } from '../../care/middleware.js'
 import { isUuid } from '../../writeValidation.js'
 import { validTimeZone } from '../move/schedule.js'
 import { HttpError, TEXT_MAX } from '../situations.js'
+import { openSignal } from '../../connectors/signalHome.js'
 import { createHome } from './homeService.js'
 import { SEARCH_MAX, createHistory } from './historyService.js'
 import { createAccount } from './accountService.js'
@@ -49,6 +50,13 @@ export function mountHomeRoutes(app, { supabase, care, callStructured, clock, li
       const zone = req.query.time_zone
       if (zone !== undefined && (typeof zone !== 'string' || !validTimeZone(zone))) bad('time_zone must be a time zone name')
       return home.home({ user: req.user, timeZone: zone ?? null })
+    }))
+
+  // A tap on a signal item: opens a situation that starts with Axiom's line. No founder text is written.
+  app.post('/api/home/signals/:id/open', limiter(20), care.careHold,
+    handle((req) => {
+      if (!isUuid(req.params.id)) throw new HttpError(404, { error: 'Not found' })
+      return openSignal({ supabase, userId: req.user.id, signalId: req.params.id, clock })
     }))
 
   // The answer to "How are you doing today?". It has been read by the care gate

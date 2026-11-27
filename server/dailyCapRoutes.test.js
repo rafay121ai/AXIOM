@@ -145,6 +145,7 @@ test('a failed cost lookup fails open', async () => {
 // Every /api/ route the server exposes is called by the app or listed here, so an old route cannot return unseen.
 const NOT_CALLED_BY_APP = new Set([
   'GET /api/review/outcomes', 'POST /api/review/outcomes/:x/draft', 'POST /api/review/outcomes/:x', // reviewer tool, not a founder action
+  'POST /api/home/signals/:x/open', // the signal item is not in the app yet (mock waits for Rafay)
   'GET /api/situations/open', 'GET /api/learn/:x', 'GET /api/moves/active', 'GET /api/reports/:x', // journey reads the app does not call yet
   'GET /api/settings/sharing', 'PUT /api/settings/sharing', 'GET /api/settings/reminders', 'PUT /api/settings/reminders', // reached through /api/settings
 ])
@@ -169,7 +170,7 @@ const NOT_CAPPED = {
   'POST /api/moves/:x/commit': 'no model call', 'POST /api/moves/:x/report': 'the evening report is the loop; never blocked',
   'POST /api/reports/:x/consent': 'no model call', 'POST /api/reports/:x/withdraw': 'no model call',
   'PUT /api/settings/sharing': 'no model call', 'PUT /api/settings': 'no model call', 'PUT /api/settings/reminders': 'no model call',
-  'POST /api/memory/:x/:x/wrong': 'no model call',
+  'POST /api/memory/:x/:x/wrong': 'no model call', 'POST /api/home/signals/:x/open': 'no model call',
   'POST /api/home/checkin': 'the way out of care', 'POST /api/account/export': 'no model call', 'DELETE /api/account': 'no model call',
   'PUT /api/signup/answers/:x': 'stores sign-up answers; never blocked',
   'PUT /api/signup/name': 'no model call', 'PUT /api/signup/birthday': 'no model call',

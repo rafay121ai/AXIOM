@@ -9,6 +9,8 @@ import { createMoves } from '../move/moveService.js'
 import { validTimeZone } from '../move/schedule.js'
 import { CARE_COPY } from '../../care/copy.js'
 import { saveOwnRow } from '../../push/settings.js'
+import { loadWorld } from '../../connectors/worldContext.js'
+import { learnFromSignals, markShown, signalItem } from '../../connectors/signalHome.js'
 import { pickGreeting } from './greeting.js'
 import { founderFirstName } from './name.js'
 import { ITEM_LABELS } from './wording.js'
@@ -77,6 +79,9 @@ export function createHome({ supabase, care, callStructured, clock, log = () => 
       ...dueMoves.map((m) => ({ kind: 'report', label: ITEM_LABELS.report, title: m.title, stays: keepAll || pushOff, target: { stage: 'report', situation_id: m.situation_id, move_id: m.id } })),
       ...waiting.map((m) => ({ kind: 'move', label: label(todayOf(m), m.title), title: m.title, stays: keepAll, target: { stage: 'move', situation_id: m.situation_id, move_id: m.id } })),
     ]
+    // What the connected tools found: after moves, before the unfinished situation (the same 2-item cap applies).
+    const world = await loadWorld(supabase, userId, { now: nowMs })
+    toDo.push(...world.map(signalItem))
     const covered = new Set(open.map((m) => m.situation_id))
     const unfinished = rows.find((r) => r.status === 'open' && r.stage && !covered.has(r.id))
     if (unfinished) {
@@ -87,6 +92,16 @@ export function createHome({ supabase, care, callStructured, clock, log = () => 
         stays: keepAll,
         target: { stage: unfinished.stage, situation_id: unfinished.id },
       })
+    }
+
+    const shown = toDo.slice(0, MAX_ITEMS).filter((i) => i.kind === 'signal').map((i) => i.target.signal_id)
+    if (shown.length > 0) {
+      try {
+        await markShown(supabase, userId, shown, nowMs)
+        await learnFromSignals({ supabase, userId, facts: world.filter((f) => shown.includes(f.id)), clock, log })
+      } catch (err) {
+        log('signals not marked shown', err)
+      }
     }
 
     const greeting = pickGreeting({

@@ -5,6 +5,7 @@ import { checkFirstReading, looseUnit, pairsOf, saidProblem, unquoteUnknown } fr
 import { checkHook, threadKinds } from './hooks.js'
 import { stripFiller } from './filler.js'
 import { earlierLines } from './memory/brief.js'
+import { worldBlock, worldTexts } from '../connectors/worldContext.js'
 import { conflictProblem, earlierSources, findConflict, namesBothAndAsks } from './memory/conflicts.js'
 import { overCap } from './memory/extractBeliefs.js'
 import { READ_SCHEMA, readMessages } from './prompts/read.js'
@@ -111,11 +112,11 @@ export async function unsupportedClaims({ read, conversation, brief, situationId
 // in the fallback. Returns { read, source }.
 // Built from this situation; the brief and track record feed it as background, the conversation wins, and only the first
 // reading uses the sign-up answers directly (Rafay, Nov 9). trackRecord: how their recent moves went.
-export async function createRead({ conversation, deps, situationId, style, trackRecord = '', brief = '', firstReading = null, grounding = null }) {
+export async function createRead({ conversation, deps, situationId, style, trackRecord = '', brief = '', world = [], firstReading = null, grounding = null }) {
   const founderTexts = conversation.filter((t) => t.role === 'founder').map((t) => t.text)
   const earlier = earlierLines(brief)
   const conflict = findConflict({ transcript: conversation, earlier })
-  const earlierTexts = earlierSources({ transcript: conversation, earlier })
+  const earlierTexts = [...earlierSources({ transcript: conversation, earlier }), ...worldTexts(world)] // a fact from a signal is not invented
   let problems = null
   let grounded = false // the check runs once: a rewrite that only fixes its objection ships unchecked, and the last attempt is never turned down by it
   let claims = []
@@ -129,14 +130,14 @@ export async function createRead({ conversation, deps, situationId, style, track
         maxCompletionTokens: 1200,
         userId: deps.userId,
         usageContext: { step: 'read', kind: 'read', situation_id: situationId },
-        messages: readMessages({ conversation, style, trackRecord, brief, firstReading, conflict }, problems),
+        messages: readMessages({ conversation, style, trackRecord, brief, world, firstReading, conflict }, problems),
       })
       const read = unquoted(clean(data), founderTexts)
       const verdict = checkRead({ read, answerTexts: founderTexts, earlierTexts, conflict })
       if (verdict.ok) {
         if (grounding && !grounded) {
           grounded = true
-          claims = await unsupportedClaims({ read, conversation, brief, situationId, grounding, deps })
+          claims = await unsupportedClaims({ read, conversation, brief: [brief, worldBlock(world)].filter(Boolean).join('\n'), situationId, grounding, deps })
           if (claims.length > 0 && attempt < READ_ATTEMPTS) {
             problems = claims.map((c) => `it claims something they did not say (${c}): say only what they said or what follows from their numbers`)
             continue

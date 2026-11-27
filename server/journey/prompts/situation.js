@@ -2,6 +2,7 @@
 // questions Axiom always asks before the Read (Rafay, Nov 9). The server counts
 // them and checks each one; the prompt is not the rule.
 import { briefMessages } from '../memory/brief.js'
+import { worldMessages } from '../../connectors/worldContext.js'
 
 export const SITUATION_SCHEMA = Object.freeze({
   type: 'object',
@@ -34,10 +35,11 @@ export const SITUATION_PROMPT = [
 // conversation: [{ role: 'founder'|'axiom', text }]
 export const NEVER_ASK_KNOWN = { role: 'system', content: 'Never ask for something the past observations already answer.' }
 
-export function situationMessages({ conversation, followUpsLeft, brief = '', conflict = null }, retryProblems = null) {
+export function situationMessages({ conversation, followUpsLeft, brief = '', world = [], conflict = null }, retryProblems = null) {
   const messages = [
     { role: 'system', content: SITUATION_PROMPT },
     ...briefMessages(brief, conflict),
+    ...worldMessages(world),
     ...(brief ? [NEVER_ASK_KNOWN] : []),
     { role: 'user', content: JSON.stringify({ conversation, follow_ups_left: followUpsLeft }) },
   ]

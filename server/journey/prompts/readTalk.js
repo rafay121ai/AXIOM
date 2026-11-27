@@ -3,6 +3,7 @@
 // model says what it knows and whether they asked to learn; the server decides
 // when Learn starts and counts questions. The prompt is not the rule.
 import { briefMessages } from '../memory/brief.js'
+import { worldMessages } from '../../connectors/worldContext.js'
 import { NEVER_ASK_KNOWN } from './situation.js'
 import { alreadySaidMessages } from './read.js'
 
@@ -39,10 +40,11 @@ export const READ_TALK_PROMPT = [
 ].join('\n')
 
 // read: { headline, body, closing_question }; talk: [{ role: 'founder'|'axiom', text }], starting with their answer.
-export function readTalkMessages({ situation, read, talk, questionsLeft, brief = '', firstReading = null, conflict = null }, retryProblems = null) {
+export function readTalkMessages({ situation, read, talk, questionsLeft, brief = '', world = [], firstReading = null, conflict = null }, retryProblems = null) {
   const messages = [
     { role: 'system', content: READ_TALK_PROMPT },
     ...briefMessages(brief, conflict),
+    ...worldMessages(world),
     ...(brief ? [NEVER_ASK_KNOWN] : []),
     ...alreadySaidMessages(firstReading),
     { role: 'user', content: JSON.stringify({ situation, read, talk, questions_left: questionsLeft }) },

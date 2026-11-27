@@ -101,12 +101,12 @@ Raw email bodies are never stored. Only extracted facts and a verbatim snippet o
 - [x] Tests: a fixtures folder of real-shaped emails (promo, receipt, newsletter, co-founder, medical, injection attempt) with the expected keep or drop.
 
 ### Phase 5. Passive profile (learns without asking)
-- [ ] Reuse the memory layer (`extractBeliefs.js`, `beliefRules.js`, `memoryStore.js`, `memory_evidence`): add `connector` as a source and a connector extraction prompt in `server/journey/memory/prompts/`.
-- [ ] Rules kept from the memory plan: every number in a belief must appear in the source text; evidence snippet is verbatim and at most 200 characters; no belief from care-touched content.
-- [ ] Learns: business and industry, customers, co-founder and key people (`founder_world`), recurring meetings, working rhythm, goals and bets (Notion).
-- [ ] Never learns: health, politics, religion, family, money in personal accounts, anything the sensitive filter dropped.
-- [ ] Shows on the existing memory screen (`memoryScreen.js`) with the source name, and the founder can mark a fact wrong or outdated (`founder_corrections`). A corrected fact is never re-learned.
-- [ ] Tests: sensitive mail produces no belief; a wrong number is rejected; a correction sticks.
+- [x] Reuse the memory layer (`extractBeliefs.js`, `beliefRules.js`, `memoryStore.js`, `memory_evidence`): `connector` is a source (signalHome.js `learnFromSignals`). No extraction prompt: the signal step already wrote the fact, so no second model call.
+- [x] Rules kept from the memory plan: every number in a belief must appear in the source text; evidence snippet is verbatim and at most 200 characters; no belief from care-touched content.
+- [ ] Learns: business and industry, customers, co-founder and key people (`founder_world`), recurring meetings, working rhythm, goals and bets (Notion). (S3: people and companies only, into `founder_world`.)
+- [x] Never learns: health, politics, religion, family, money in personal accounts, anything the sensitive filter dropped.
+- [x] Shows on the existing memory screen (`memoryScreen.js`) with a connector receipt, and the founder can mark a fact wrong or outdated (`founder_corrections`). A corrected fact is never re-learned.
+- [x] Tests (server/connectors/world.test.js): sensitive mail produces no fact; a correction sticks. A wrong number cannot reach memory (the name must be in the sentence; no belief is written).
 
 ### Phase 6. Significance engine
 - [x] One model step `SIGNAL` (env `MODEL_SIGNAL`, cost logged as call_type `signal`, counted by the daily cap in `server/dailyCap.js`). Input: filtered item, the founder's stored beliefs, world, open situations, upcoming events. Output is JSON and is schema-checked.

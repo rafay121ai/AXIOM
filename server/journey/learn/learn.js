@@ -16,6 +16,7 @@ import { createSharing } from '../report/sharing.js'
 import { createFounderLessons } from '../report/founderLessons.js'
 import { styleOf } from '../prompts/style.js'
 import { earlierLines, loadBrief } from '../memory/brief.js'
+import { loadWorld, worldTexts } from '../../connectors/worldContext.js'
 import { earlierSources, findConflict, transcriptOf } from '../memory/conflicts.js'
 
 const SAY_MORE = 'Say a bit more.'
@@ -143,10 +144,11 @@ export function createLearn({ supabase, knowledgeSupabase = null, embed = null, 
     const transcript = transcriptOf(ctx.prompt)
     const earlier = earlierLines(brief)
     const conflict = findConflict({ transcript, earlier })
-    const earlierTexts = earlierSources({ transcript, earlier })
+    const world = await loadWorld(supabase, userId, { now: clock.now() })
+    const earlierTexts = [...earlierSources({ transcript, earlier }), ...worldTexts(world)]
     const reply = await composeReply({
       mode, step, evidence, founderTexts: ctx.founderTexts, earlierTexts, usageContext, conflict,
-      context: { ...ctx.prompt, ...(tapped ? { tapped } : {}), style: await styleOf(supabase, userId), brief },
+      context: { ...ctx.prompt, ...(tapped ? { tapped } : {}), style: await styleOf(supabase, userId), brief, world },
       deps: { callStructured, userId, log },
     })
     const row = await one(supabase.from('learn_turns').insert({

@@ -13,6 +13,7 @@ import { BANNED_PHRASES, contrastProblem, looseUnit, norm, pairsOf, quoteProblem
 import { styleOf } from './prompts/style.js'
 import { loadTrackRecord } from './memory/trackRecord.js'
 import { earlierLines, loadBrief } from './memory/brief.js'
+import { loadWorld, worldTexts } from '../connectors/worldContext.js'
 import { conflictProblem, earlierSources, findConflict, namesBothAndAsks } from './memory/conflicts.js'
 
 export const MAX_NEW_SITUATIONS_PER_DAY = 10
@@ -126,6 +127,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     const conversation = turns.filter((t) => !t.filler).map((t) => ({ role: t.role, text: t.text }))
     const sources = founderTextsOf(turns)
     const brief = await loadBrief(supabase, userId, sources.join('\n'))
+    const world = await loadWorld(supabase, userId, { now: clock.now() })
     const conflict = findConflict({ transcript: conversation, earlier: earlierLines(brief) }) // notice only: a follow-up question is not forced to name it
     let problems = null
     let styleOnly = null // a question whose only problem is style (no thread): asked rather than skipped (Rafay, Nov 23)
@@ -138,7 +140,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
           maxCompletionTokens: 400,
           userId,
           usageContext: { step: 'followup', kind: 'situation_turn', situation_id: situation.id },
-          messages: situationMessages({ conversation, followUpsLeft, brief, conflict }, problems),
+          messages: situationMessages({ conversation, followUpsLeft, brief, world, conflict }, problems),
         })
         const base = { topic: data.topic, title: data.title.trim() }
         if (followUpsLeft <= 0) return { ...base, enough: true, question: null }
@@ -334,6 +336,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
       style: await styleOf(supabase, userId),
       trackRecord: await loadTrackRecord(supabase, userId, log),
       brief: await loadBrief(supabase, userId, founderTextsOf(turns).join('\n')),
+      world: await loadWorld(supabase, userId, { now: clock.now() }),
       firstReading: await firstReadingOf(userId),
       deps: { callStructured, userId, log },
       grounding: readGrounding,
@@ -406,7 +409,8 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     const transcript = [...situationTalk, { role: 'axiom', text: row.closing_question }, ...talk]
     const lines = earlierLines(brief)
     const conflict = findConflict({ transcript, earlier: lines })
-    const earlier = earlierSources({ transcript, earlier: lines })
+    const world = await loadWorld(supabase, userId, { now: clock.now() })
+    const earlier = [...earlierSources({ transcript, earlier: lines }), ...worldTexts(world)]
     const ownPairs = pairsOf([...sources, ...earlier, ...(conflict ? [conflict.nowText] : [])])
     let problems = null
     for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -418,7 +422,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
           maxCompletionTokens: 400,
           userId,
           usageContext: { step: 'followup', kind: 'read_talk', situation_id: situation.id },
-          messages: readTalkMessages({ situation: situationTalk, read: { headline: row.headline, body: row.body, closing_question: row.closing_question }, talk, questionsLeft: MAX_READ_QUESTIONS - asked, brief, conflict, firstReading: await firstReadingOf(userId) }, problems),
+          messages: readTalkMessages({ situation: situationTalk, read: { headline: row.headline, body: row.body, closing_question: row.closing_question }, talk, questionsLeft: MAX_READ_QUESTIONS - asked, brief, world, conflict, firstReading: await firstReadingOf(userId) }, problems),
         })
         if (data.asked_to_learn) return null
         if (asked >= MIN_READ_QUESTIONS && data.knows_goal && data.knows_blocker && data.knows_detail) return null
