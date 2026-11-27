@@ -89,6 +89,38 @@ export const READ_ATTEMPTS = 3
 // style is left after the last attempt the draft with the fewest problems ships (Rafay, Nov 23: fail only on real evidence).
 const HARD = /quoted words are not in the answers|unbalanced quote|number is not in the answers|date is not in the answers|is not something they said|banned phrase|teaser|markup characters|wrong shape|the word "underline"|body is too short/
 export const hardProblems = (problems) => problems.filter((p) => HARD.test(p))
+
+// Which style-only draft is best: not being about this situation or having no thread weighs most (specific or nothing), then an unnamed
+// change, then everything else.
+const weight = (p) => (/not about this situation|no thread from the founder/.test(p) ? 10 : /^name both numbers/.test(p) ? 5 : 1)
+const score = (problems) => problems.reduce((sum, p) => sum + weight(p), 0)
+
+// A whole clause of the founder's words (3 to 8 words, cut at a comma or sentence end), never a truncated run; else their shortest whole
+// sentence of 15 words or fewer; else ''.
+function wholeClause(founderTexts) {
+  const clean = (t) => String(t).replace(/["“”„‟]/g, '')
+  const wc = (x) => x.split(/\s+/).length
+  const clauses = founderTexts.flatMap((t) => clean(t).split(/[,;.!?\n]+/).map((x) => x.trim()).filter((x) => wc(x) >= 3))
+  const fit = clauses.find((x) => wc(x) <= 8)
+  if (fit) return fit
+  const sentences = founderTexts.flatMap((t) => clean(t).split(/(?<=[.!?])\s+/).map((x) => x.trim().replace(/[.!?]+$/, '')).filter((x) => wc(x) >= 3 && wc(x) <= 15))
+  return sentences.sort((a, b) => a.length - b.length)[0] ?? ''
+}
+
+// Ship-time repair of the closing question on the draft that ships, from the founder's own words, never a new model call: one question only
+// (the first that carries a thread); a strong change they did not ask about gets the plain change question; no question, or none with a
+// thread, gets the approved "On "their words": ..." pattern (one whole clause of theirs, up to 8 words). The headline and body stay.
+export function repairClosing({ read, founderTexts, conflict }) {
+  const sentences = read.closing_question.split(/(?<=[.!?])\s+/).map((x) => x.trim()).filter(Boolean)
+  const questions = sentences.filter((x) => x.endsWith('?'))
+  const all = `${read.headline} ${read.body} ${read.closing_question}`
+  if (conflict?.strong && !namesBothAndAsks(all, conflict)) return { ...read, closing_question: `You gave ${conflict.earlierNumber} before and ${conflict.nowNumber} now. What changed?` }
+  const pick = questions.find((q) => threadKinds(q, founderTexts).length > 0)
+  if (pick) return { ...read, closing_question: pick }
+  const quote = wholeClause(founderTexts)
+  if (!quote) return read
+  return { ...read, closing_question: `On "${quote}": what is the next step, as you see it?` }
+}
 export async function unsupportedClaims({ read, conversation, brief, situationId, grounding, deps }) {
   try {
     if (await overCap(grounding.isCapped, deps.userId)) return []
@@ -122,7 +154,8 @@ export async function createRead({ conversation, deps, situationId, style, track
   let problems = null
   let grounded = false // the check runs once: a rewrite that only fixes its objection ships unchecked, and the last attempt is never turned down by it
   let claims = []
-  let best = null // the style-only draft with the fewest problems
+  let best = null // the style-only draft with the lowest score
+  let previous = null // the last draft, shown to the model on the retry
   for (let attempt = 1; attempt <= READ_ATTEMPTS; attempt += 1) {
     try {
       const { data } = await deps.callStructured({
@@ -132,7 +165,7 @@ export async function createRead({ conversation, deps, situationId, style, track
         maxCompletionTokens: 1200,
         userId: deps.userId,
         usageContext: { step: 'read', kind: 'read', situation_id: situationId },
-        messages: readMessages({ conversation, style, trackRecord, brief, world, firstReading, conflict }, problems),
+        messages: readMessages({ conversation, style, trackRecord, brief, world, firstReading, conflict }, problems, previous),
       })
       const read = unquoted(clean(data), founderTexts)
       const verdict = checkRead({ read, answerTexts: founderTexts, earlierTexts, worldTexts: factTexts, conflict })
@@ -149,15 +182,20 @@ export async function createRead({ conversation, deps, situationId, style, track
         return { read, source: 'model' }
       }
       problems = verdict.problems
-      if (hardProblems(problems).length === 0 && (!best || problems.length < best.problems.length)) best = { read, problems }
+      previous = { headline: read.headline, body: read.body, closing_question: read.closing_question }
+      if (hardProblems(problems).length === 0 && (!best || score(problems) < score(best.problems))) best = { read, problems }
     } catch (err) {
       deps.log?.('model call failed', err)
       problems = null
     }
   }
   if (best) {
-    deps.log?.('read shipped with style problems', { problems: best.problems })
-    return { read: best.read, source: 'model' }
+    // Repaired closing ships when the repaired draft has no more weighted problems and no hard one.
+    const fixed = repairClosing({ read: best.read, founderTexts, conflict })
+    const after = checkRead({ read: fixed, answerTexts: founderTexts, earlierTexts, conflict }).problems
+    const repaired = hardProblems(after).length === 0 && score(after) <= score(best.problems)
+    deps.log?.('read shipped with style problems', { problems: best.problems, repaired, left: repaired ? after : best.problems })
+    return { read: repaired ? fixed : best.read, source: 'model' }
   }
   deps.log?.('read fell back', { problems })
   return { read: fallbackRead(founderTexts), source: 'fallback' }

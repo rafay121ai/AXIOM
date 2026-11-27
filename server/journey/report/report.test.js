@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { lowerFirst } from '../lowerFirst.js'
 import { createApp } from '../../app.js'
 import { createFakeClock, createFakeOpenAI, createFakeSupabase } from '../../testing/fakes.js'
 import { FULL_ANSWERS } from '../fixtures.js'
@@ -719,4 +720,16 @@ test('a care stop whose event and care_flag both fail to write still closes shar
     assert.equal(later.body.consent.state, 'not_offered')
     assert.equal(rows('peer_outcomes').length, 0)
   } finally { await close() }
+})
+
+test('lowerFirst lowercases ordinary capitalised first words but keeps I and all-caps words', () => {
+  assert.equal(lowerFirst('A few will reply'), 'a few will reply')
+  assert.equal(lowerFirst('Both will reply'), 'both will reply')
+  assert.equal(lowerFirst('I think so'), 'I think so')
+  assert.equal(lowerFirst("I'll try"), "I'll try")
+  assert.equal(lowerFirst('AI agents will'), 'AI agents will')
+  assert.equal(lowerFirst('MRR will grow'), 'MRR will grow')
+  assert.equal(lowerFirst('B2B buyers will'), 'B2B buyers will')
+  assert.equal(openingLine({ title: 'Email ten people', prediction: 'A few will reply.' }),
+    'Your move was to email ten people. I said a few will reply. What happened?')
 })

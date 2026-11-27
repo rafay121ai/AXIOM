@@ -234,15 +234,17 @@ test('a teaser question is retried with the problem named, then dropped: ready, 
   } finally { await close() }
 })
 
-// Rafay, Nov 23: style alone never drops a question. One with no thread from the founder is retried, then asked anyway.
-test('a question whose only problem is no thread is retried, then asked rather than skipped', async () => {
+// Follow-ups are optional (zero is allowed): one with no thread from the founder, still so after the retry, is not asked. The Read comes next; no text is shown in its place.
+test('a question with no thread from the founder is retried, then not asked: ready, no follow-up used', async () => {
   const offTopic = verdict({ question: 'What is your biggest fear?' })
-  const { call, openai, close } = await setup([offTopic, offTopic])
+  const { call, openai, rows, close } = await setup([offTopic, offTopic])
   try {
     const res = await create(call, 1)
     assert.equal(openai.calls.length, 2)
-    assert.equal(res.body.follow_up_count, 1)
-    assert.match(JSON.stringify(res.body), /biggest fear/)
+    assert.equal(res.body.status, 'ready')
+    assert.equal(res.body.follow_up_count, 0)
+    assert.doesNotMatch(JSON.stringify(res.body), /biggest fear/)
+    assert.equal(rows('situation_turns').filter((t) => t.role === 'axiom').length, 0)
   } finally { await close() }
 })
 
@@ -606,6 +608,30 @@ test('a test account in ADMIN_USER_IDS is not held to the daily limit', async ()
   } finally { await close() }
 })
 
+test('a test account keeps its unlimited pass when a duplicate-key race makes create retry', async () => {
+  const today = Array.from({ length: MAX_NEW_SITUATIONS_PER_DAY }, (_, i) => ({ id: uuid(900 + i), user_id: USER.id, status: 'open', follow_up_count: 0, created_at: new Date(NOW).toISOString(), last_activity_at: new Date(NOW).toISOString() }))
+  const { call, close, db } = await setup([enough(), enough()], { env: { ...ENV, ADMIN_USER_IDS: USER.id }, tables: { situations: today } })
+  const from = db.from.bind(db)
+  let failed = false
+  db.from = (table) => {
+    const builder = from(table)
+    if (table !== 'situations' || failed) return builder
+    const insert = builder.insert.bind(builder)
+    builder.insert = (row) => {
+      if (failed) return insert(row)
+      failed = true
+      const lost = { data: null, error: { code: '23505', message: 'duplicate key' } }
+      const chain = { select: () => chain, single: () => chain, maybeSingle: () => chain, then: (res, rej) => Promise.resolve(lost).then(res, rej) }
+      return chain
+    }
+    return builder
+  }
+  try {
+    assert.equal((await create(call, 1)).status, 200)
+    assert.ok(failed, 'the duplicate-key path ran')
+  } finally { await close() }
+})
+
 // Live, Nov 9: a new situation about a different app got a Read built only on the
 // sign-up answers (the founder's main business), so it read as the old chat. Later steps
 // now also see the brief and track record, but the conversation wins and only the first
@@ -769,5 +795,33 @@ test('a question about Axiom gets the fixed answer: no situation, no model call,
     assert.match(res.body.reply, /What's the decision you keep putting off\?$/)
     assert.equal(openai.calls.length, 0)
     assert.equal(rows('situations').length, 0)
+  } finally { await close() }
+})
+
+test('a follow-up question that fails the checks is logged with its reasons, never the founder text', async () => {
+  const bad = verdict({ question: 'Tell me how many clinics asked for pricing.' }) // not a question
+  const { call, close } = await setup([bad, bad])
+  const original = console.error
+  const logged = []
+  console.error = (...a) => logged.push(a.join(' '))
+  try {
+    const res = await create(call, 1)
+    assert.equal(res.status, 200)
+    const line = logged.find((l) => l.includes('follow-up question failed the checks'))
+    assert.ok(line, `no log line in ${JSON.stringify(logged)}`)
+    assert.match(line, /it is not a question/)
+    assert.ok(!line.includes('clinics') && !line.includes('demo'), 'no founder or model text in the log')
+  } finally { console.error = original; await close() }
+})
+
+test('a topic change still starts a new situation when its follow-up question has no thread and is not asked', async () => {
+  const noThread = verdict({ topic: 'new', title: 'Hiring a developer', question: 'What is your biggest fear?' })
+  const { call, rows, close } = await setup([verdict(), noThread, noThread, ...Array(2).fill(verdict({ question: '', title: 'Hiring a developer' }))])
+  try {
+    const first = (await create(call, 1)).body
+    const res = await call('POST', `/api/situations/${first.situation_id}/turn`, { text: 'Separate thing: I need to hire a developer by December.', client_turn_id: uuid(2) })
+    assert.equal(res.body.started_new, true)
+    assert.equal(rows('situations').length, 2)
+    assert.equal(rows('situations').find((s) => s.id === res.body.situation_id).title, 'Hiring a developer')
   } finally { await close() }
 })

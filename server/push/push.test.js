@@ -812,6 +812,13 @@ test('scheduler: a thread quiet for 21 days or more is not offered again', async
   assert.equal(s.sender.sent.length, 0)
 })
 
+test('compose: a title that starts with the word "A" is lowercased mid-sentence, "AI" and "I" are kept', () => {
+  const morning = (title) => composePush({ kind: 'morning', item: { ...ITEMS.morning, title }, name: 'Rafay', lockScreen: 'full' }).body
+  assert.equal(morning('A few clinics need a call.'), 'Morning, Rafay. Today: a few clinics need a call.')
+  assert.equal(morning('AI pricing page goes live.'), 'Morning, Rafay. Today: AI pricing page goes live.')
+  assert.equal(morning('I send the invoice.'), 'Morning, Rafay. Today: I send the invoice.')
+})
+
 // ── Signal pushes (S4) ───────────────────────────────────────────────────────
 
 const SIG_NOW = T('2026-10-26T06:00:00Z') // 11 am in Karachi

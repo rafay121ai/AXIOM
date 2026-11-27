@@ -119,10 +119,11 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
 
   // ── The model's view of one turn ───────────────────────────────────────────
 
-  // Returns { topic, enough, question, title }. Axiom always asks MAX_FOLLOW_UPS
-  // questions before the Read (Rafay, Nov 9): while any are left, a missing or
-  // failing question is asked for again once. Never throws: a failed model call
-  // or a question that will not pass ends in "enough", never in a stall.
+  // Returns { topic, enough, question, title }. Axiom asks at most MAX_FOLLOW_UPS
+  // questions before the Read: while any are left, a missing or failing question
+  // is asked for again once, and one that still has no thread from the founder is
+  // not asked. Never throws: a failed model call or a question that will not pass
+  // ends in "enough", never in a stall; the model's topic and title are kept.
   async function assess({ userId, situation, turns, followUpsLeft }) {
     const conversation = turns.filter((t) => !t.filler).map((t) => ({ role: t.role, text: t.text }))
     const sources = founderTextsOf(turns)
@@ -130,7 +131,8 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     const world = await loadWorld(supabase, userId, { now: clock.now(), env })
     const conflict = findConflict({ transcript: conversation, earlier: earlierLines(brief) }) // notice only: a follow-up question is not forced to name it
     let problems = null
-    let styleOnly = null // a question whose only problem is style (no thread): asked rather than skipped (Rafay, Nov 23)
+    let previous = ''
+    let last = { topic: 'same', title: null } // the model's topic and title survive a question that is not asked
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       try {
         const { data } = await callStructured({
@@ -140,26 +142,23 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
           maxCompletionTokens: 400,
           userId,
           usageContext: { step: 'followup', kind: 'situation_turn', situation_id: situation.id },
-          messages: situationMessages({ conversation, followUpsLeft, brief, world, conflict }, problems),
+          messages: situationMessages({ conversation, followUpsLeft, brief, world, conflict }, problems, previous),
         })
         const base = { topic: data.topic, title: data.title.trim() }
+        last = base
         if (followUpsLeft <= 0) return { ...base, enough: true, question: null }
         const question = stripFiller(data.question).text
         const verdict = question ? checkHook({ text: question, sources }) : { ok: false, problems: ['a question is required: follow_ups_left is more than 0'] }
         if (verdict.ok && question.length <= 220) return { ...base, enough: false, question }
         problems = verdict.problems
-        if (question && question.length <= 220 && problems.every((p) => /^no thread from the founder/.test(p))) styleOnly = { ...base, enough: false, question }
+        previous = question
       } catch (err) {
         log('model call failed', err)
         return { topic: 'same', title: null, enough: true, question: null }
       }
     }
-    if (styleOnly) {
-      log('follow-up question asked with a style problem', { problems })
-      return styleOnly
-    }
     log('follow-up question failed the checks', { problems })
-    return { topic: 'same', title: null, enough: true, question: null }
+    return { ...last, enough: true, question: null }
   }
 
   // ── One founder turn ───────────────────────────────────────────────────────
@@ -271,7 +270,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
       situation = await startSituation(userId, clientTurnId)
     } catch (err) {
       if (err?.code !== '23505') throw err
-      return create({ userId, text, clientTurnId })
+      return create({ userId, text, clientTurnId, unlimited })
     }
     try {
       return await runTurn({ userId, situation, text, clientTurnId, first: true })

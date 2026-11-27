@@ -35,7 +35,7 @@ export const SITUATION_PROMPT = [
 // conversation: [{ role: 'founder'|'axiom', text }]
 export const NEVER_ASK_KNOWN = { role: 'system', content: 'Never ask for something the past observations already answer.' }
 
-export function situationMessages({ conversation, followUpsLeft, brief = '', world = [], conflict = null }, retryProblems = null) {
+export function situationMessages({ conversation, followUpsLeft, brief = '', world = [], conflict = null }, retryProblems = null, previous = '') {
   const messages = [
     { role: 'system', content: SITUATION_PROMPT },
     ...briefMessages(brief, conflict),
@@ -46,7 +46,7 @@ export function situationMessages({ conversation, followUpsLeft, brief = '', wor
   if (retryProblems?.length) {
     messages.push({
       role: 'system',
-      content: `Your last question broke these rules: ${retryProblems.slice(0, 6).join('; ')}. Answer again and fix every one.`,
+      content: `${previous ? `Your last question was: ${previous}\n` : 'Your last answer had no question.\n'}It broke these rules: ${retryProblems.slice(0, 6).join('; ')}. Rewrite it and fix every one; for "no thread", put one word, number or date they wrote into the question.`,
     })
   }
   return messages

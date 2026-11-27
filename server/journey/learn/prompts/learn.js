@@ -99,7 +99,7 @@ export const LEARN_PROMPT = [
   'move_subject: what their move will be about, a short phrase in the founder\'s own words (for example "the two clinics"), or an empty string.',
   'move_fact: one true sentence about the cost of waiting, using a number or time the founder gave (for example "The two clinics have heard nothing from you for three weeks."), or an empty string.',
   '',
-  'Voice: plain everyday words and short sentences. Direct and urgent, never harsh: hard on the situation, never on the person. Advice keeps the founder in control, never begging or pleading. No metaphors, no clever contrasts ("not X, but Y"), no hypotheticals, no flattery, no chatbot language, no swearing, no humour. Specific to this founder only.',
+  'Voice: plain everyday words and short sentences. Direct and urgent, never harsh: hard on the situation, never on the person. Advice keeps the founder in control, never begging or pleading. No metaphors, no clever contrasts: never "X is not the problem, it is Y" or "not X, but Y" in any form (state the point directly, once: "Y is the problem"), no hypotheticals, no flattery, no chatbot language, no swearing, no humour. Specific to this founder only.',
   'Never use: "great question", "certainly", "I understand", "that\'s interesting", "absolutely", "of course", "I\'d be happy to", "great". Never assume gender: use "you" or "they".',
 ].join('\n')
 
@@ -107,7 +107,7 @@ export const LEARN_PROMPT = [
 //   situation and learn: [{ role, text }];
 //   read: { headline, body, closing_question, founder_answer, skipped, talk_after: [{ role, text }] };
 //   evidence: [{ handle, text }] (never ids, authors or titles).
-export function learnMessages({ mode, situation, read, learn, evidence, tapped = null, style, brief = '', world = [], conflict = null }, retryProblems = null) {
+export function learnMessages({ mode, situation, read, learn, evidence, tapped = null, style, brief = '', world = [], conflict = null }, retryProblems = null, previous = '') {
   const messages = [
     { role: 'system', content: LEARN_PROMPT },
     ...(evidence.some((e) => e.lesson) ? [{ role: 'system', content: LESSON_NOTE }] : []),
@@ -133,7 +133,7 @@ export function learnMessages({ mode, situation, read, learn, evidence, tapped =
   if (retryProblems?.length) {
     messages.push({
       role: 'system',
-      content: `Your last reply broke these rules: ${retryProblems.slice(0, 6).join('; ')}. Write it again and fix every one.`,
+      content: `Your last reply was: ${previous}\nIt broke these rules: ${retryProblems.slice(0, 6).join('; ')}. Write it again, keep what was fine, and fix every one.`,
     })
   }
   return messages

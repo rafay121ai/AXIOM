@@ -1,6 +1,7 @@
 // "What is Axiom?" typed where a situation starts: answered with fixed, approved wording (Rafay, Nov 23, version A),
 // never a model, never a situation. Specific to the founder: their last situation and their open move, when they have them.
 import { norm } from './ownWords.js'
+import { lowerFirst } from './lowerFirst.js'
 
 const MAX_WORDS = 14 // a question about Axiom is short; a longer message is a real situation that mentions it
 
@@ -28,7 +29,6 @@ export const ABOUT_AXIOM = [
 export const ABOUT_CLOSING = "What's the decision you keep putting off?"
 
 const plain = (s) => String(s ?? '').replace(/\s+/g, ' ').trim().replace(/[.!?]+$/, '')
-const lowerFirst = (s) => (/^[A-Z][a-z]/.test(s) ? s[0].toLowerCase() + s.slice(1) : s)
 
 // lastTitle: their newest situation's title; openMove: the title of a committed move not yet reported. Either may be null.
 export function aboutAxiomText({ lastTitle = null, openMove = null } = {}) {

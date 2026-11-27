@@ -24,12 +24,12 @@ export const READ_PROMPT = [
   '',
   'The Read leads with the one thing the founder has not said: a conflict, a gap or a cost. Never restate or summarise what they just wrote.',
   'headline: one plain sentence that states that finding in everyday words. A finding, not a summary of their message.',
-  'body: 2 to 3 short sentences. They hold the thing the founder has not said, and only if it is real, the cost of waiting in their own date or number. Never open with "You wrote" or "You said".',
+  'body: 2 to 3 short sentences. They are about this situation: they use at least one distinctive word, number or date the founder wrote here. They hold the thing the founder has not said, and only if it is real, the cost of waiting in their own date or number. Never open with "You wrote" or "You said".',
   'You may quote at most once, in double quotation marks, with 8 words or fewer copied exactly from what the founder typed in this conversation. Otherwise use your own words. Never repeat a run of 8 or more of their words. Never change or invent a quote. Use only numbers and dates that appear in what the founder wrote in this conversation or in the lines under "Earlier they said:", and from nowhere else. Never add, convert or estimate one.',
   'The headline and the closing_question never quote the founder and never repeat a run of 6 or more of their words in a row: use your own words there. Only the body may carry the one quote.',
   'No underlines, emphasis or markup of any kind: plain words only, no _ * # [ ] { } or backticks.',
   'State only what the founder said or what follows directly from their numbers. Never name a motive, feeling or problem they did not say (for example \'to feel in control\', \'a margin problem\').',
-  'closing_question: one real question the founder can answer in a reply box. It asks for a missing piece, is about something they said (use their words, a number or a date), and the answer will be used in the lesson. No yes/no teaser, no "want to see why?", no asking them to rate or confirm the Read.',
+  'closing_question: one real question the founder can answer in a reply box. It asks for a missing piece, is about something they said (use their words, a number or a date), and the answer will be used in the lesson. Exactly one question mark, and it is the last character: no second question, no statement after it. It must carry one specific word, number or date from what they wrote (a single word or number of theirs, not a long run). No yes/no teaser, no "want to see why?", no asking them to rate or confirm the Read.',
   '',
   'Voice: plain everyday words and short sentences. Direct and urgent, never harsh: hard on the situation, never on the person. No metaphors, no idioms, no hypotheticals. Never write "not X, it is Y" or "you are not saying X, you are saying Y" in any form: say what is true once. Specific to this founder only.',
   'Never use: "great question", "certainly", "I understand", "that\'s interesting", "absolutely", "of course", "I\'d be happy to", "great". No flattery, no chatbot language, no swearing. Never assume gender: use "you" or "they". Do not teach or give the move yet.',
@@ -42,7 +42,7 @@ export const alreadySaidMessages = (firstReading) => (firstReading?.headline ? [
 }] : [])
 
 // conversation: [{ role, text }]
-export function readMessages({ conversation, style, trackRecord = '', brief = '', world = [], firstReading = null, conflict = null }, retryProblems = null) {
+export function readMessages({ conversation, style, trackRecord = '', brief = '', world = [], firstReading = null, conflict = null }, retryProblems = null, previous = null) {
   const messages = [
     { role: 'system', content: READ_PROMPT },
     ...styleMessages(style),
@@ -55,7 +55,7 @@ export function readMessages({ conversation, style, trackRecord = '', brief = ''
   if (retryProblems?.length) {
     messages.push({
       role: 'system',
-      content: `Your last Read broke these rules: ${retryProblems.slice(0, 6).join('; ')}. Write it again and fix every one.`,
+      content: `Your last Read was:\n${previous ? JSON.stringify(previous) : '(not available)'}\nIt broke these rules: ${retryProblems.slice(0, 6).join('; ')}. Rewrite it, keep what was fine and change only what breaks a rule. If the problem is the closing question: one question only, ending the Read, using one word, number or date of theirs.`,
     })
   }
   return messages

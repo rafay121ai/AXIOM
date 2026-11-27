@@ -364,10 +364,10 @@ Order set by Rafay: give-to-get, founder voices, Calm/Direct/Hard prompt, accoun
 - Needs Rafay's decision before applying migrations: `founder_profiles` has a table-level SELECT grant to `authenticated` (from 20261013000003), so the new `signup_answers` and `first_reading` columns would be readable by their owner directly through Supabase. Postgres cannot narrow it by revoking two columns; the real fix is to replace the table-level grant with a column list (or remove it, since the app uses the API only). Recommendation: remove it. This changes an existing grant, so it needs your yes.
 - `shareDb.js` fallback (used only until the SQL functions exist) has no care check under a lock; the SQL function does.
 
-- [ ] 1. Give to get + founder voices (one change; they share the Learn path). Rule from Rafay: the first 2 founder lessons are free, each followed by the share ask. After the 2nd, if the founder has not shared, no more founder lessons; Axiom says so once and says sharing from Settings brings them back. Turning on sharing in Settings unlocks them at once.
-- [ ] 2. Calm / Direct / Hard: the saved setting is read by the prompts.
-- [ ] 3. Account export and delete (real, tested on fakes; never run live).
-- [ ] 4. Google sign-in on phones (native flow).
+- [x] 1. Give to get + founder voices (one change; they share the Learn path; 8136462 server, 70b7858 app cards; founderLessons.test.js). Rule from Rafay: the first 2 founder lessons are free, each followed by the share ask. After the 2nd, if the founder has not shared, no more founder lessons; Axiom says so once and says sharing from Settings brings them back. Turning on sharing in Settings unlocks them at once.
+- [x] 2. Calm / Direct / Hard: the saved setting is read by the prompts. (8136462; style.test.js)
+- [x] 3. Account export and delete (real, tested on fakes; never run live). (8136462 server, 70b7858 app; account.test.js. Delete stays off unless ACCOUNT_DELETE=on; migrations 10 and 11 were written then, apply status is tracked under migrations.)
+- [x] 4. Google sign-in on phones (native flow). (70b7858: app/src/auth/oauth.ts, oauth.test.ts. Real login not run; keys and dashboard settings are in app/AUTH_SETUP.md; the Android line below stays open.)
 - [x] 0. Simulator walkthrough: logo box gone, chat bar slim and capped at 3 lines, care screen no longer dropped mid-transition, wait-screen quote marks a cut with an ellipsis.
 ## App leftovers after Home/History/Settings (B11 integration)
 - Server must add a code for `move_not_ready` (and `quiet_hours` clash on settings PUT) so the app can show specific lines; `move_id` in history action targets; a call to fetch earlier turns when resuming a situation.

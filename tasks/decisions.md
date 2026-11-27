@@ -703,7 +703,7 @@ Idea from Rafay: founder credits, and growth by referral. Not building until giv
 - App ID (Rafay, Nov 2): iOS bundle id and Android package are com.getaxiom.app.
 - Situation (Rafay, Nov 2): when Axiom has enough, it says "Got it. Here's what I see." and holds 1.5 s before the Read, instead of moving on silently.
 - Learn (Rafay, Nov 2): a tapped suggestion chip counts as a real reply toward the move card (still two in total, or at once on asking). PRODUCT.md updated.
-- Testing (Rafay, Nov 2): accounts in ADMIN_USER_IDS skip the 5-a-day limit on new situations; real founders keep it.
+- Testing (Rafay, Nov 2): accounts in ADMIN_USER_IDS skip the 10-a-day limit on new situations; real founders keep it.
 - Move (Rafay, Nov 2): success may not be a "see if / check whether" line (never a yes or no); the effect goes in the prediction. Words are written for the reader, never about the founder's effort. Checklist label is "Before you start". experimentQuality.js unchanged.
 - Background (Rafay, Nov 3): the journey screens use the construction grid (faint gold lines), not the spider web. The spider web stays on the sign-in intro only. DESIGN.md updated.
 - Deletion (Rafay, Nov 3): approved stories stay after an account is deleted, with no link to the founder. The delete screen shows the server's DELETION_PLAN note before the founder types DELETE.
@@ -796,6 +796,10 @@ Root cause of the Read fallbacks since Nov 21: memory stores near-copies of the 
 ## Nov 23 2026: "What is Axiom?" gets a fixed answer, not a situation (Rafay, version A)
 A short question about Axiom itself ("What is Axiom?", "What can you do?", "How does this work?") typed where a situation starts is answered with approved wording, never a model: no situation, no daily count, nothing stored. Care still screens it first. The founder's own last situation title and open move are added when they exist. Approved wording (version A): "You're making calls nobody around you has made before, usually alone, usually by Friday. / That's what I'm for. Tell me what's going on, in your own words. I'll tell you what you're not seeing, show you what founders and authors who've been there learned, and hand you one thing you can do today. Not a plan. One move. / Tonight I'll ask how it went. Whatever happens, I keep it, so the next time you're stuck, I already know you. / What's the decision you keep putting off?" Code: server/journey/aboutAxiom.js.
 
+## Nov 23 2026: style problems never cause the Read fallback (PR 20), and 10 new situations a day (PR 21) (recorded after the fact)
+- PR 20: a Read whose only problems are style (not a false or invented fact) is retried, and if style is all that is left the draft with the fewest problems ships, instead of the plain fallback. Hard problems (an invented number, date or quote, a banned phrase, markup) still never ship. Nov 27 (Rafay): kept lenient on purpose. A stricter rule (grounding must pass on the exact draft that ships; a unit the founder never gave drops the sentence) was tried and reverted, because it turns good answers into fallbacks.
+- PR 21: the daily limit on new situations is 10, not the 5 suggested earlier (decision above, "suggested 5 a day"). Test accounts in ADMIN_USER_IDS still skip it. The limit is checked, then the situation is inserted, so two parallel requests can both pass; there is no database guard yet (it would need a unique index, a schema change, so it waits for a migration plan).
+
 ## Nov 25 2026: Axiom acts on the founder's accounts, only after the founder approves (Rafay)
 Replaces "read only" in the Nov 10 connectors entry. Reason (Rafay): a read-only Axiom only observes; it is not proactive and does no work for the founder. Axiom does the work, the founder makes the call.
 - Flow: Axiom prepares an action (an email or reply written for the founder, a calendar change, a Notion page). The founder sees exactly what will be sent or changed, can edit it, and taps to approve. Only then does Axiom carry it out, and it says what it did and where.
@@ -831,3 +835,4 @@ Replaces "read only" in the Nov 10 connectors entry. Reason (Rafay): a read-only
 - Where it shows: once, right after the first reading (end of onboarding), before Home. "Not now" skips it; after that it lives in Settings, Connections.
 - Settings, Connections: "What I learned from it stays until you delete it." is removed.
 - Settings: the line "Anonymous. Never your name or your words. Kept to improve Axiom, even if you leave." is removed from under the switch at Rafay's request. It is replaced by a quiet "How this works" link to the privacy page, which must keep the full sentence (that anonymous pattern rows are kept after the founder leaves). This supersedes "may not be removed" in the Nov 25 entry for the Settings line only; the privacy page disclosure stays required while pattern rows are kept after deletion.
+
