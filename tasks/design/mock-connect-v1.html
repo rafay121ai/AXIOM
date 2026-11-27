@@ -131,6 +131,8 @@
   .toast { position: absolute; left: 50%; bottom: 34px; z-index: 40; transform: translate(-50%, 10px); opacity: 0; pointer-events: none; padding: 12px 18px; border-radius: 16px; font-size: 14px; color: rgba(var(--ink-rgb), .92); white-space: nowrap; transition: opacity .3s, transform .3s var(--ease); }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
+  .howbody p { font-size: 15px; line-height: 1.55; color: rgba(var(--ink-rgb), .78); margin: 0 0 14px; }
+  .howbody p.hl { font-family: var(--serif); font-size: 19px; line-height: 1.45; color: #f4f4f2; margin-top: 10px; }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } .ok svg path { stroke-dashoffset: 0; } }
 </style>
 </head>
@@ -254,6 +256,18 @@
       </div>
       <div class="toast glass" id="toast2"></div>
     </section>
+
+    <!-- 4. How this works: the "Learn how I work" part of the privacy page -->
+    <section class="view" id="v-how" aria-label="How this works">
+      <div class="wash" style="opacity:.5"></div>
+      <div class="sthead"><button class="stback" id="howback" aria-label="Back">‹</button><span class="t">How this works</span><span style="width:44px"></span></div>
+      <div class="sbody howbody">
+        <p class="hl">Off by default. If you turn it on, Axiom also saves anonymous patterns about how founders work, like a stage and how fast decisions get made.</p>
+        <p>They carry no name, no email, no account and none of your words, so they can't be traced back to you.</p>
+        <p>Because of that they are kept to improve Axiom even after you leave, and can't be removed one by one. Turning the switch off stops new ones.</p>
+        <button class="ta" style="margin-left:-8px"><span>Read the full privacy page</span></button>
+      </div>
+    </section>
   </div>
 </div>
 <script>
@@ -280,6 +294,11 @@
   // settings rows open/close; text actions show a quiet confirmation
   $$('.srow > button.srm').forEach(b => b.onclick = () => b.parentElement.classList.toggle('open'));
   $$('[data-toast]').forEach(b => b.onclick = (e) => { e.stopPropagation(); const t = b.closest('.view').querySelector('.toast'); t.textContent = b.dataset.toast; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 1800); });
+  // "How this works" opens the privacy part; back returns to where you were
+  let from = null;
+  const show = (v) => $$('.view').forEach(x => x.classList.toggle('on', x === v));
+  $$('.how').forEach(b => b.onclick = () => { from = b.closest('.view'); show($('#v-how')); });
+  $('#howback').onclick = () => show(from || $('#v-settings'));
 </script>
 </body>
 </html>
