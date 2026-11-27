@@ -1,5 +1,5 @@
 import { HttpError } from './queue';
-import type { AccountExport, AccountRequest, AxiomApi, Commitment, ConsentResult, DueReport, FirstReading, HistoryPage, HistoryRow, Home, HomeItem, FounderLessons, LearnReply, LearnTurn, MemoryItem, MoveView, Outcome, Question, Read, ReadAnswerResult, ReportResult, Screened, Settings, SituationReply, SituationView, Story, StoryReply, SwapResult } from './types';
+import type { AccountExport, AccountRequest, AxiomApi, Commitment, Connectors, ConsentResult, DueReport, FirstReading, HistoryPage, HistoryRow, Home, HomeItem, FounderLessons, LearnReply, LearnTurn, MemoryItem, MoveView, Outcome, Question, Read, ReadAnswerResult, ReportResult, Screened, Settings, SituationReply, SituationView, Story, StoryReply, SwapResult } from './types';
 
 // Fixture questions: the same 14, in the same order and words, as server/journey/questions.js.
 const QUESTIONS: Question[] = [
@@ -313,6 +313,9 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
   let checkedIn = false;
   let memory = [...MEMORY];
   let settings = FAKE_SETTINGS;
+  // Fixture connectors: connecting is instant, and the link is a placeholder.
+  let tools: Connectors = { connectors: (['gmail', 'googlecalendar', 'notion'] as const).map((toolkit) => ({ toolkit, connected: false, status: 'not_connected' as const })), learn_how_i_work: false };
+  const setTool = (toolkit: string, connected: boolean) => { tools = { ...tools, connectors: tools.connectors.map((c) => (c.toolkit === toolkit ? { ...c, connected, status: connected ? 'active' : 'not_connected' } : c)) }; };
   const wait = () => (latencyMs > 0 ? new Promise<void>((r) => setTimeout(r, latencyMs)) : undefined);
   const screen = async (): Promise<Screened> => (sim === 'clear' ? CLEAR : sim === 'unclear' ? UNCLEAR : {});
 
@@ -540,6 +543,23 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
       if (share_automatically !== undefined) next.privacy = { share_automatically, text: share_automatically ? SHARE_TEXT.on : SHARE_TEXT.off };
       settings = next;
       return withPending(settings);
+    },
+    async getConnectors() {
+      return tools;
+    },
+    async connectConnector(toolkit) {
+      setTool(toolkit, true);
+      return { url: `https://example.com/connect/${toolkit}` };
+    },
+    async disconnectConnector(toolkit) {
+      setTool(toolkit, false);
+    },
+    async forgetConnector() {
+      return { forgotten: true };
+    },
+    async setLearnHowIWork(on) {
+      tools = { ...tools, learn_how_i_work: on };
+      return { learn_how_i_work: on };
     },
     async requestExport(): Promise<AccountExport> {
       return { message: ACCOUNT.exportReady, exported_at: new Date().toISOString(), account: { email: FAKE_SETTINGS.you.email, first_name: FAKE_SETTINGS.you.name }, situations: [] };

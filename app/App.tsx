@@ -1,11 +1,13 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFonts } from 'expo-font';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, BackHandler, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { api } from './src/api';
-import type { Answer, DueReport, FirstReading, CareHelp, Home, Question, Screened } from './src/api/types';
+import type { Answer, Connectors, DueReport, FirstReading, CareHelp, Home, Question, Screened } from './src/api/types';
 import { SignInCancelled } from './src/auth/oauth';
+import { clearShown, connectGate } from './src/connect/flow';
 import { routeScreened } from './src/care/route';
 import { backTarget } from './src/backTarget';
 import { copy } from './src/copy';
@@ -18,6 +20,8 @@ import { AxiomMessage } from './src/components/AxiomMessage';
 import { Construction } from './src/components/Construction';
 import { loadReading } from './src/onboarding/reading';
 import { LINE_EVERY, waitLines, waitMinMs } from './src/onboarding/waitLines';
+import { ConnectScreen } from './src/screens/ConnectScreen';
+import { HowScreen } from './src/screens/HowScreen';
 import { CareScreen } from './src/screens/CareScreen';
 import { HistoryScreen } from './src/screens/HistoryScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
@@ -41,6 +45,7 @@ type Stage =
   | { name: 'questions'; questions: Question[]; answers: Record<string, Answer>; startAt: string | null; signInName?: string }
   | { name: 'wait'; lines: string[] }
   | { name: 'reading'; reading: FirstReading }
+  | { name: 'connect'; first: Connectors }
   | { name: 'situation'; chat: Chat; opening: string; suggestion?: string }
   | { name: 'read'; situationId: string }
   | { name: 'learn'; situationId: string; chat: LearnChat }
@@ -50,12 +55,13 @@ type Stage =
   | { name: 'memory' }
   | { name: 'past'; id: string }
   | { name: 'settings' }
+  | { name: 'how'; privacyUrl: string | null }
   | { name: 'answers'; startAt?: string }
   | { name: 'report'; report: DueReport; next: DueReport[] }
   | { name: 'care'; message: string; help: CareHelp };
 
 // Screens with the faint gold wash instead of the construction grid.
-const QUIET: Stage['name'][] = ['home', 'history', 'memory', 'past', 'settings', 'answers'];
+const QUIET: Stage['name'][] = ['home', 'history', 'memory', 'past', 'settings', 'answers', 'how', 'connect'];
 
 const run = (anim: Animated.CompositeAnimation) => new Promise<void>((resolve) => anim.start(() => resolve()));
 
@@ -185,6 +191,7 @@ export default function App() {
   const signOut = useCallback(async () => {
     await push.release().catch(() => {});
     await api.signOut();
+    await clearShown(AsyncStorage);
     goTo({ name: 'signin' });
   }, [goTo]);
 
@@ -338,10 +345,13 @@ export default function App() {
                 requestDelete={() => api.requestDelete()}
                 cancelDelete={() => api.cancelDelete()}
                 onEditAnswers={(startAt) => goTo({ name: 'answers', startAt })}
+                connectors={api}
+                onHow={(privacyUrl) => goTo({ name: 'how', privacyUrl })}
                 onSignOut={signOut}
                 onBack={() => goTo({ name: 'home' })}
               />
             )}
+            {stage.name === 'how' && <HowScreen privacyUrl={stage.privacyUrl} onBack={() => goTo({ name: 'settings' })} />}
             {stage.name === 'answers' && (
               <AnswersScreen
                 key={stage.startAt ?? 'all'}
@@ -352,7 +362,12 @@ export default function App() {
                 onCare={showCare}
               />
             )}
-            {stage.name === 'reading' && <ReadingScreen reading={stage.reading} onContinue={() => beginSituation(false)} />}
+            {stage.name === 'reading' && <ReadingScreen reading={stage.reading} onContinue={async () => {
+              const first = await connectGate(api, AsyncStorage);
+              if (first) goTo({ name: 'connect', first });
+              else beginSituation(false);
+            }} />}
+            {stage.name === 'connect' && <ConnectScreen api={api} first={stage.first} onDone={() => beginSituation(false)} />}
           </Animated.View>
         </View>
       </View>
