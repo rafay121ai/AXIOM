@@ -428,7 +428,7 @@ export interface AxiomApi {
   connectConnector(toolkit: Toolkit): Promise<{ url: string }>;
   disconnectConnector(toolkit: Toolkit): Promise<void>;
   /** Deletes what Axiom learned from one tool. */
-  forgetConnector(toolkit: Toolkit): Promise<{ forgotten: boolean }>;
+  forgetConnector(toolkit: Toolkit): Promise<{ forgotten: number }>;
   setLearnHowIWork(on: boolean): Promise<{ learn_how_i_work: boolean }>;
   /** Everything Axiom holds, as the server's data file. */
   requestExport(): Promise<AccountExport>;

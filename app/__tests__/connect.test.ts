@@ -15,7 +15,7 @@ const calls = (f: jest.Mock) => f.mock.calls.map(([url, init]) => [init.method, 
 
 describe('connector routes', () => {
   it('go to the right routes', async () => {
-    const f = jest.fn().mockResolvedValue(res(200, { url: 'u', forgotten: true, learn_how_i_work: true }));
+    const f = jest.fn().mockResolvedValue(res(200, { url: 'u', forgotten: 3, learn_how_i_work: true }));
     const api = createHttpApi({ baseUrl: 'http://x', auth, fetch: f });
     await api.getConnectors();
     await api.connectConnector('gmail');
@@ -58,6 +58,13 @@ describe('the connect screen is shown once', () => {
     expect(await connectGate(api, store)).not.toBeNull();
   });
 
+  it('skips without marking it shown when the server is too slow', async () => {
+    const store = memoryStore();
+    const slow = { getConnectors: () => new Promise<null>(() => {}) };
+    expect(await connectGate(slow, store, 20)).toBeNull();
+    expect(await store.getItem('connect_shown')).toBeNull();
+  });
+
   it('skips when the server cannot be reached', async () => {
     const api = { getConnectors: async () => { throw new HttpError(); } };
     expect(await connectGate(api, memoryStore())).toBeNull();
@@ -97,8 +104,15 @@ describe('connecting', () => {
 });
 
 describe('words and errors', () => {
-  it('shows the server line when it sent one, else the plain line', () => {
-    expect(connectLine(new HttpError(409, 'pending_delete', 'Not while your account is waiting to be deleted.'))).toBe('Not while your account is waiting to be deleted.');
+  it('shows the server line from a real refusal body on every connector call, else the plain line', async () => {
+    const body = { error: 'account_deleting', line: 'Not while your account is waiting to be deleted.' };
+    const api = createHttpApi({ baseUrl: 'http://x', auth, fetch: jest.fn().mockResolvedValue(res(409, body)) });
+    const calls = [() => api.connectConnector('gmail'), () => api.setLearnHowIWork(true), () => api.disconnectConnector('gmail'), () => api.forgetConnector('gmail')];
+    for (const call of calls) {
+      const e = await call().catch((x) => x);
+      expect(e).toMatchObject({ status: 409, code: 'account_deleting' });
+      expect(connectLine(e)).toBe(body.line);
+    }
     expect(connectLine(new HttpError(500))).toBe(copy.settings.notSaved);
     expect(connectLine(new Error('boom'))).toBe(copy.settings.notSaved);
   });

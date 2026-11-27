@@ -17,10 +17,13 @@ export const anyConnected = (c: Connectors | null) => !!c?.connectors.some((x) =
 const SHOWN = 'connect_shown';
 export const clearShown = (store: KeyValueStore) => store.removeItem(SHOWN);
 
-/** The connectors to show on the connect screen, or null when it must be skipped: switched off (404), already shown, or the server could not be reached. Marks it shown. */
-export async function connectGate(api: Pick<AxiomApi, 'getConnectors'>, store: KeyValueStore): Promise<Connectors | null> {
+/** The connectors to show on the connect screen, or null when it must be skipped: switched off (404), already shown, or the server could not be reached in a few seconds. Marks it shown. */
+export async function connectGate(api: Pick<AxiomApi, 'getConnectors'>, store: KeyValueStore, timeoutMs = 4000): Promise<Connectors | null> {
   if (await store.getItem(SHOWN)) return null;
-  const c = await api.getConnectors().catch(() => null);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const slow = new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), timeoutMs); });
+  const c = await Promise.race([api.getConnectors().catch(() => null), slow]);
+  clearTimeout(timer);
   if (c) await store.setItem(SHOWN, '1');
   return c;
 }

@@ -128,7 +128,7 @@ export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch
     async disconnectConnector(toolkit) {
       await request('DELETE', `/api/connectors/${toolkit}`);
     },
-    forgetConnector: (toolkit) => request<{ forgotten: boolean }>('POST', `/api/connectors/${toolkit}/forget`),
+    forgetConnector: (toolkit) => request<{ forgotten: number }>('POST', `/api/connectors/${toolkit}/forget`),
     setLearnHowIWork: (on) => request<{ learn_how_i_work: boolean }>('PUT', '/api/connectors/learn', { on }),
     requestExport: () => request<AccountExport>('POST', '/api/account/export'),
     requestDelete: () => request<AccountRequest>('DELETE', '/api/account', { confirm: 'DELETE' }),

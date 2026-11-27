@@ -555,7 +555,7 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
       setTool(toolkit, false);
     },
     async forgetConnector() {
-      return { forgotten: true };
+      return { forgotten: 0 };
     },
     async setLearnHowIWork(on) {
       tools = { ...tools, learn_how_i_work: on };
