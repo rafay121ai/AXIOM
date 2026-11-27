@@ -66,8 +66,8 @@ export function composeSignalPush({ item, name = null, lockScreen = DEFAULT_LOCK
   let body = HIDDEN_BODY
   if (lockScreen !== 'hidden') {
     const mins = Math.round((item.meetingStart - now) / 60000)
-    const when = mins >= 90 ? `in ${Math.round(mins / 60)} hours` : mins > 1 ? `in ${mins} minutes` : 'now'
-    const rest = item.toolkit === 'googlecalendar' ? `a meeting starts ${when}.`
+    const when = mins >= 120 ? `in ${Math.floor(mins / 60)} hours` : `in ${mins} minutes`
+    const rest = item.toolkit === 'googlecalendar' && mins >= 1 ? `a meeting starts ${when}.`
       : item.toolkit === 'gmail' ? 'an email that needs you today has come in.' : 'something in your tools needs you today.'
     body = lead(name ? clean(name) : null, rest)
   }

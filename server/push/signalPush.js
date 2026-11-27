@@ -5,29 +5,25 @@
 import { createMemoryStore } from '../journey/memory/memoryStore.js'
 import { norm, wordRx } from '../journey/ownWords.js'
 import { composeSignalPush } from './compose.js'
-import { decideSignalPush, EXTREME_WINDOW_MS, PAUSE_AFTER_MS, SIGNAL_MAX_AGE_MS } from './policy.js'
+import { ACTIVE_STATUSES } from '../journey/move/room.js'
+import { decideSignalPush, EXTREME_WINDOW_MS, EXTREME_SLOTS, inQuietHours, localDay, PAUSE_AFTER_MS, SIGNAL_MAX_AGE_MS, SIGNAL_SLOTS, COUNTING_STATUSES } from './policy.js'
 import { reminderSettingsOf } from './settings.js'
 
 const URGENCY_ORDER = (a, b) => b.urgency - a.urgency || Date.parse(a.created_at) - Date.parse(b.created_at)
 
-// The four extreme conditions beyond "verified" (a signal row exists only after the verifier passed), all in code.
-async function isExtreme({ supabase, memory, signal, now }) {
+// Extreme, from stored facts only (never the model's words): urgency 3 (the verifier already passed, a row exists only then),
+// and the founder's own part in it: an accepted or organized meeting within 3 hours, or an email in a thread they replied in,
+// and it names something in their world (a founder_world name, or for a meeting an open linked situation).
+export function isExtreme(signal, { names, openSituations }, now) {
   if (signal.urgency !== 3) return false
   const f = signal.facts ?? {}
   const said = norm(`${f.what_happened ?? ''} ${f.source_name ?? ''}`)
-  const names = (await memory.activeWorld(signal.user_id)).map((w) => w.name).filter(Boolean)
   const named = names.some((n) => wordRx(norm(n)).test(said))
   if (signal.toolkit === 'googlecalendar') {
     const start = Date.parse(f.meeting_start)
-    if (!(start > now && start <= now + EXTREME_WINDOW_MS)) return false
-    if (named) return true
-    if (!signal.situation_id) return false
-    const { data, error } = await supabase.from('situations').select('id').eq('user_id', signal.user_id).eq('id', signal.situation_id).eq('status', 'open')
-    if (error) throw error
-    return data.length > 0
+    return f.accepted === true && start > now && start <= now + EXTREME_WINDOW_MS && (named || (!!signal.situation_id && openSituations.has(signal.situation_id)))
   }
-  // A reply from a known person: a known name in the line.
-  return signal.toolkit === 'gmail' && named
+  return signal.toolkit === 'gmail' && f.replied_thread === true && named
 }
 
 export async function runSignalPushes({ supabase, tokens, now, iso, everyRow, one, deleting, careOpen, loadLog, claim, deliver, nameOf, clock, log, summary }) {
@@ -42,21 +38,36 @@ export async function runSignalPushes({ supabase, tokens, now, iso, everyRow, on
       const devices = await tokens.forUser(userId)
       if (devices.length === 0) continue
       if (await careOpen(userId)) { summary.paused_for_care += 1; continue }
-      const [profile, latest, settingsRow, logRows] = await Promise.all([
+      const [profile, latest, activeMoves, settingsRow, logRows] = await Promise.all([
         one(supabase.from('founder_profiles').select('timezone').eq('user_id', userId).maybeSingle()),
         one(supabase.from('situations').select('last_activity_at').eq('user_id', userId).order('last_activity_at', { ascending: false }).limit(1)),
+        one(supabase.from('moves').select('committed_at, time_zone').eq('user_id', userId).in('status', ACTIVE_STATUSES).gt('closes_at', iso(now))),
         one(supabase.from('user_settings').select('lock_screen, quiet_start, quiet_end').eq('user_id', userId).maybeSingle()),
         loadLog(userId, now),
       ])
       const settings = reminderSettingsOf({ settingsRow })
-      const lastMs = Date.parse(latest[0]?.last_activity_at ?? '')
-      const founder = { timeZone: profile?.timezone || devices.find((d) => d.timezone)?.timezone || 'UTC', hasDevice: true, settings, lastActivityAt: Number.isFinite(lastMs) && now - lastMs < PAUSE_AFTER_MS ? iso(lastMs) : null }
+      // Same activity and time zone rule as the scheduled pushes (scheduler.js forFounder).
+      const timeZone = profile?.timezone || devices.find((d) => d.timezone)?.timezone || activeMoves.find((m) => m.time_zone)?.time_zone || 'UTC'
+      const activity = [latest[0]?.last_activity_at, ...activeMoves.map((m) => m.committed_at)].map((v) => Date.parse(v ?? '')).filter(Number.isFinite)
+      const founder = { timeZone, hasDevice: true, settings, lastActivityAt: activity.length ? iso(Math.max(...activity)) : null }
       let logList = [...logRows]
       let name
 
-      for (const signal of signals.sort(URGENCY_ORDER)) {
+      // Skip early when nothing can go: all places taken, or quiet hours with no urgency 3 candidate.
+      const free = (slots) => { const day = localDay(now, timeZone); return slots.some((x) => !logList.some((r) => r.local_day === day && COUNTING_STATUSES.includes(r.status) && r.slot === x)) }
+      const quiet = inQuietHours(now, timeZone, settings.quiet_hours)
+      const live = signals.filter((x) => (free(SIGNAL_SLOTS) && !quiet) || (x.urgency === 3 && free(EXTREME_SLOTS)))
+      if (live.length === 0) continue
+      // The founder's world and open situations, read once, and only if an urgency 3 signal needs them.
+      let context = null
+      const contextOf = async () => context ??= {
+        names: (await memory.activeWorld(userId)).map((w) => w.name).filter(Boolean),
+        openSituations: new Set((await one(supabase.from('situations').select('id').eq('user_id', userId).eq('status', 'open'))).map((x) => x.id)),
+      }
+
+      for (const signal of live.sort(URGENCY_ORDER)) {
         if (devices.length === 0) break
-        const extreme = await isExtreme({ supabase, memory, signal, now })
+        const extreme = signal.urgency === 3 && isExtreme(signal, await contextOf(), now)
         const item = {
           key: `signal:${signal.id}`, signalId: signal.id, toolkit: signal.toolkit, situationId: signal.situation_id,
           createdAt: Date.parse(signal.created_at), expiresAt: Date.parse(signal.expires_at), extreme,

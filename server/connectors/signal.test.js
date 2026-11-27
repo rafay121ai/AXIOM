@@ -198,8 +198,12 @@ test('a stranger who is not replying cannot go above urgency 1; a reply can', as
   await stranger.handle(U, 'gmail', mail)
   assert.equal(stranger.signals()[0].urgency, 1)
   const reply = setup({ replies: [good({ urgency: 3 })] })
-  await reply.handle(U, 'gmail', { ...mail, subject: 'Re: Pilot call moved to Thursday' })
+  await reply.handle(U, 'gmail', mail, { repliedTo: true })
   assert.equal(reply.signals()[0].urgency, 3)
+  assert.equal(reply.signals()[0].facts.replied_thread, true)
+  const fake = setup({ replies: [good({ urgency: 3 })] })
+  await fake.handle(U, 'gmail', { ...mail, subject: 'Re: Pilot call moved to Thursday' })
+  assert.equal(fake.signals()[0].urgency, 1) // a Re: subject alone proves nothing
 })
 
 test('a world name that only sits inside a longer word does not make a person known', async () => {
@@ -213,4 +217,15 @@ test('the model call has a timeout', async () => {
   const s = setup()
   await s.handle(U, 'gmail', mail)
   assert.ok(s.openai.calls[0].options?.signal)
+})
+
+test('a calendar invite the founder did not accept is capped at urgency 1; accepted or organized keeps it and stores one bit', async () => {
+  const tables = { connector_accounts: [{ id: 'a2', user_id: U, toolkit: 'googlecalendar', status: 'active' }] }
+  const run = async (o) => { const s = setup({ replies: [prep({ urgency: 3 })], tables }); await s.handle(U, 'googlecalendar', meeting(o)); return s.signals()[0] }
+  const self = (responseStatus) => [{ email: 'me@x.example', self: true, responseStatus }, { email: 'sam@harbor.example', displayName: 'Sam Ortega' }]
+  assert.equal((await run({ attendees: self('needsAction') })).urgency, 1)
+  assert.equal((await run({ attendees: self('needsAction') })).facts.accepted, undefined)
+  const yes = await run({ attendees: self('accepted') })
+  assert.equal(yes.urgency, 3); assert.equal(yes.facts.accepted, true)
+  assert.equal((await run({ attendees: self('needsAction'), organizer: { self: true } })).facts.accepted, true)
 })

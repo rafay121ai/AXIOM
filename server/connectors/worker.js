@@ -72,6 +72,7 @@ export function createWorker({ supabase, read, breaker, clock, blocked = async (
         ctx.repliedTo = (t.messages ?? []).some((m) => (m.labelIds ?? []).includes('SENT'))
       }
       result = filterItem(toolkit, item, ctx)
+      return { ...result, repliedTo: ctx.repliedTo === true }
     }
     return result
   }
@@ -115,7 +116,7 @@ export function createWorker({ supabase, read, breaker, clock, blocked = async (
       if (!result.keep) return finish(job, { status: 'dropped', last_error_code: result.reason })
       // The founder may have disconnected while we read: check again right before anything is written.
       if ((await accountOf(job))?.status !== 'active') return finish(job, { status: 'dropped', last_error_code: 'no_active_account' })
-      await handleItem(job.user_id, job.toolkit, result.injection ? { ...item, injection: true } : item)
+      await handleItem(job.user_id, job.toolkit, result.injection ? { ...item, injection: true } : item, { repliedTo: result.repliedTo === true })
       if (account.last_error_code) ok(await supabase.from('connector_accounts').update({ last_error_code: null, updated_at: iso() }).eq('id', account.id).select('id'))
       return finish(job, { status: 'done', last_error_code: null })
     } catch (err) {

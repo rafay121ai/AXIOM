@@ -125,7 +125,7 @@ const ok = (r) => { if (r.error) throw r.error; return r.data }
 // handler(userId, toolkit, item) for the worker (handleItem.js is the default no-op).
 // blocked(userId): care open or deletion pending. isCapped(userId): over the daily cost cap (the item is skipped; it would only wait).
 export function createSignalHandler({ supabase, callStructured, clock, blocked = async () => false, isCapped = async () => false, loadBrief = defaultLoadBrief, log = (what, info) => console.error(`[Signal] ${what}`, info ?? '') }) {
-  async function handleItem(userId, toolkit, item) {
+  async function handleItem(userId, toolkit, item, { repliedTo = false } = {}) {
     const skip = (reason) => { log('no signal', `${toolkit} ${reason}`); return null }
     if (await blocked(userId).catch(() => true)) return skip('founder_paused')
     const accounts = ok(await supabase.from('connector_accounts').select('status').eq('user_id', userId).eq('toolkit', toolkit))
@@ -178,8 +178,13 @@ export function createSignalHandler({ supabase, callStructured, clock, blocked =
     let urgency = linked ? out.urgency : 0 // impact tied to nothing about the founder: a home item only
     if (item.injection) urgency = Math.min(urgency, 1)
     // A stranger who is not replying to the founder cannot interrupt them: a calendar meeting inside 48h is the one exception.
-    if (toolkit === 'gmail' && !/^\s*(re|aw):/i.test(item.subject ?? '') && !world.some((n) => n && wordRx(n).test(norm(nameOf(item.from))))) urgency = Math.min(urgency, 1)
+    if (toolkit === 'gmail' && !repliedTo && !world.some((n) => n && wordRx(n).test(norm(nameOf(item.from))))) urgency = Math.min(urgency, 1)
     const facts = { what_happened: out.what_happened, source_name: out.source_name }
+    // Google adds invites by itself: only a meeting the founder accepted or organized can interrupt them.
+    const accepted = toolkit === 'googlecalendar' && (item.organizer?.self === true || (item.attendees ?? []).some((a) => a.self && a.responseStatus === 'accepted'))
+    if (toolkit === 'googlecalendar' && !accepted) urgency = Math.min(urgency, 1)
+    if (accepted) facts.accepted = true
+    if (toolkit === 'gmail' && repliedTo) facts.replied_thread = true
     if (toolkit === 'googlecalendar') {
       facts.meeting_start = startOf(item)
       facts.attendees = people(item).map((a) => a.displayName).filter((n) => n && wordRx(norm(n)).test(norm(source)))

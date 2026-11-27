@@ -182,7 +182,7 @@ Founder-facing, new. Source: server/connectors/signalHome.js, server/journey/mem
 Founder-facing, new. Source: server/push/compose.js (composeSignalPush). Behind SIGNAL_PUSH=on. The body never carries email or signal text (a lock screen leak), whatever the lock-screen setting says except "hidden" (just "Axiom"). The point is one tap away in the app.
 | Signal | Lock-screen line |
 |---|---|
-| Calendar meeting | "{name}, a meeting starts in 2 hours." (or "in 45 minutes", "now") |
+| Calendar meeting | "{name}, a meeting starts in 90 minutes." (minutes under 2 hours, whole hours after; a missing or past start uses the "something in your tools" line) |
 | Email | "{name}, an email that needs you today has come in." |
 | Anything else (Notion) | "{name}, something in your tools needs you today." |
 Open question: the brief also said "the push carries the point". These lines are deliberately generic for the lock screen. If you want the point itself on the lock screen for people who choose "full", say so and I will add it for that mode only.
