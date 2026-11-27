@@ -20,9 +20,9 @@ const one = async (query) => {
 
 const day = (iso) => new Date(iso).toLocaleDateString('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' })
 
-export function createAccount({ supabase, clock, deleteOn = false, log = () => {} }) {
+export function createAccount({ supabase, clock, deleteOn = false, revokeConnections = null, log = () => {} }) {
   const iso = (ms = clock.now()) => new Date(ms).toISOString()
-  const deletion = createFounderDeletion({ supabase })
+  const deletion = createFounderDeletion({ supabase, revokeConnections })
   const waiting = (userId, status) => one(supabase.from('account_requests').select('id, created_at, delete_after')
     .eq('user_id', userId).eq('kind', 'delete').eq('status', status).limit(1))
 

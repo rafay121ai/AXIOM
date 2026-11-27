@@ -4,7 +4,7 @@ import { createApp } from '../app.js'
 import { createFakeClock, createFakeOpenAI, createFakePushSender, createFakeSupabase } from '../testing/fakes.js'
 import { BANNED_PHRASES, TEASER, norm, wordRx } from '../journey/ownWords.js'
 import { decidePush, inQuietHours, localDay, PAUSE_AFTER_MS, DAY_MS, NUDGE_SPACING_MS } from './policy.js'
-import { composePush, HIDDEN_BODY, LOCK_SCREEN_MODES, PUSH_WORDING } from './compose.js'
+import { composePush, composeSignalPush, HIDDEN_BODY, LOCK_SCREEN_MODES, PUSH_WORDING, voiceProblems } from './compose.js'
 import { duePushes, NUDGE_THREAD_QUIET_MS } from './due.js'
 import { createPushScheduler } from './scheduler.js'
 import { cleanTokenPayload, EXPO_TOKEN_RX } from './tokens.js'
@@ -817,4 +817,162 @@ test('compose: a title that starts with the word "A" is lowercased mid-sentence,
   assert.equal(morning('A few clinics need a call.'), 'Morning, Rafay. Today: a few clinics need a call.')
   assert.equal(morning('AI pricing page goes live.'), 'Morning, Rafay. Today: AI pricing page goes live.')
   assert.equal(morning('I send the invoice.'), 'Morning, Rafay. Today: I send the invoice.')
+})
+
+// ── Signal pushes (S4) ───────────────────────────────────────────────────────
+
+const SIG_NOW = T('2026-10-26T06:00:00Z') // 11 am in Karachi
+const signal = (n, over = {}) => ({
+  id: uuid(900 + n), user_id: USER.id, lane: 'people', toolkit: 'gmail', external_ref_hash: `hash-${n}`.padEnd(20, 'x'),
+  facts: { what_happened: `Dana Lee replied about the pilot ${n}`, source_name: 'Dana Lee', replied_thread: true }, impact: 'x', urgency: 2, status: 'new',
+  situation_id: null, created_at: at(SIG_NOW - 10 * MIN), expires_at: at(SIG_NOW + 5 * HOUR), ...over,
+})
+const meeting = (n, minutes, over = {}) => signal(n, { toolkit: 'googlecalendar', lane: 'time', urgency: 3, situation_id: SIT,
+  facts: { what_happened: 'Pilot call with Dana Lee', source_name: 'Google Calendar', accepted: true, meeting_start: at(SIG_NOW + minutes * MIN) }, ...over })
+const signalSetup = ({ signals, world = [], settings = [], care, start = SIG_NOW, tables = {}, ...opts } = {}) => {
+  const s = schedulerSetup({ moves: [], start, care, settings, tables: { signals, founder_world: world, ...tables }, ...opts })
+  const scheduler = createPushScheduler({ supabase: s.supabase, sender: s.sender, clock: s.clock, isCareOpen: care ?? (async () => false), nameOf: async () => 'Rafay', log: () => {}, signalPush: true })
+  return { ...s, scheduler, sigs: () => s.base.rows('signals') }
+}
+const worldDana = [{ id: uuid(800), user_id: USER.id, name: 'Dana Lee', kind: 'person', status: 'active', mention_count: 2, last_mentioned_at: at(SIG_NOW - DAY_MS) }]
+
+test('policy: signal rows never count against the 2 a day of morning and evening', () => {
+  const log = ['signal_1', 'signal_2', 'extreme_1'].map((slot, i) => ({ kind: 'signal', slot, local_day: '2026-10-26', status: 'sent', dedupe_key: `s${i}`, created_at: at(DUE) }))
+  assert.equal(decide({ log }).send, true)
+  assert.equal(decide({ log: [...log, { kind: 'morning', slot: 'morning', local_day: '2026-10-26', status: 'sent', dedupe_key: 'm', created_at: at(DUE) }, { kind: 'evening', slot: 'evening', local_day: '2026-10-26', status: 'sent', dedupe_key: 'e', created_at: at(DUE) }] }).reason, 'cap')
+})
+
+test('signal push: the 5th signal of a day is held; its slot is the database cap', async () => {
+  const s = signalSetup({ signals: [1, 2, 3, 4, 5].map((n) => signal(n)) })
+  await s.scheduler.tick()
+  assert.equal(s.sender.sent.length, 4)
+  assert.deepEqual(s.log().map((r) => r.slot).sort(), ['signal_1', 'signal_2', 'signal_3', 'signal_4'])
+  assert.equal(s.sigs().filter((r) => r.status === 'pushed').length, 4)
+  await s.scheduler.tick()
+  assert.equal(s.sender.sent.length, 4)
+  assert.equal(s.sigs().filter((r) => r.status === 'new').length, 1)
+})
+
+test('signal push: two schedulers with a stale log cannot get a 5th through (23505 path)', async () => {
+  const day = localDay(SIG_NOW, 'Asia/Karachi')
+  const taken = ['signal_1', 'signal_2', 'signal_3'].map((slot) => ({ id: `x-${slot}`, user_id: USER.id, kind: 'signal', slot, local_day: day, status: 'sent', dedupe_key: `old:${slot}`, attempts: 1, created_at: at(SIG_NOW - 4 * HOUR) }))
+  const s = signalSetup({ signals: [signal(1), signal(2)], tables: { notification_log: taken } })
+  const db = withLogBarrier(s.base)
+  const make = () => createPushScheduler({ supabase: db, sender: s.sender, clock: s.clock, isCareOpen: async () => false, nameOf: async () => 'Rafay', log: () => {}, signalPush: true })
+  await Promise.all([make().tick(), make().tick()])
+  assert.equal(s.sender.sent.length, 1)
+  assert.equal(s.log().filter((r) => r.local_day === day && COUNTING(r)).length, 4)
+})
+
+test('signal push: morning and evening still send after 4 signals went out', async () => {
+  const s = signalSetup({ signals: [1, 2, 3, 4].map((n) => signal(n)), moves: [move()], start: T('2026-10-26T03:00:00Z') })
+  s.base.rows('signals').forEach((r) => { r.created_at = at(T('2026-10-26T03:00:00Z') - MIN); r.expires_at = at(T('2026-10-26T09:00:00Z')) })
+  const sch = createPushScheduler({ supabase: s.supabase, sender: s.sender, clock: s.clock, isCareOpen: async () => false, nameOf: async () => 'Rafay', log: () => {}, signalPush: true })
+  await sch.tick()
+  s.clock.set(DUE)
+  await sch.tick()
+  const kinds = s.sender.sent.map((m) => m.data.kind)
+  assert.equal(kinds.filter((k) => k === 'signal').length, 4)
+  assert.ok(kinds.includes('morning') && kinds.includes('evening'))
+})
+
+test('signal push: only new, urgency 2 or more, not expired, not stale', async () => {
+  const s = signalSetup({ signals: [signal(1, { urgency: 1 }), signal(2, { status: 'shown' }), signal(3, { expires_at: at(SIG_NOW - MIN) }), signal(4, { created_at: at(SIG_NOW - 7 * HOUR) })] })
+  await s.scheduler.tick()
+  assert.equal(s.sender.sent.length, 0)
+})
+
+test('signal push: extreme needs urgency 3, a meeting within 3 hours or a known person, and the founder\'s world; it takes only its own slot', async () => {
+  const ok = signalSetup({ signals: [meeting(1, 90)] })
+  await ok.scheduler.tick()
+  assert.deepEqual(ok.log().map((r) => r.slot), ['extreme_1'])
+  const bad = [
+    meeting(2, 200), // beyond 3 hours
+    meeting(3, 60, { urgency: 2 }), // not urgency 3
+    meeting(4, 60, { situation_id: null, facts: { what_happened: 'Standup with the team', source_name: 'Google Calendar', accepted: true, meeting_start: at(SIG_NOW + 60 * MIN) } }), // names nothing of theirs
+    signal(5, { urgency: 3, facts: { what_happened: 'Someone new asks for a call', source_name: 'Sam Roe' } }), // gmail, not a known person
+  ]
+  const s = signalSetup({ signals: bad })
+  await s.scheduler.tick()
+  assert.ok(s.log().every((r) => !r.slot.startsWith('extreme')))
+  const gm = signalSetup({ signals: [signal(6, { urgency: 3 })], world: worldDana })
+  await gm.scheduler.tick()
+  assert.deepEqual(gm.log().map((r) => r.slot), ['extreme_1'])
+})
+
+test('signal push: extreme has 2 places; the third waits, and never takes a signal slot', async () => {
+  const s = signalSetup({ signals: [meeting(1, 60), meeting(2, 70), meeting(3, 80)] })
+  await s.scheduler.tick()
+  assert.deepEqual(s.log().map((r) => r.slot).sort(), ['extreme_1', 'extreme_2'])
+})
+
+test('signal push: quiet hours hold; an extreme event within 3 hours is the one exception', async () => {
+  const night = T('2026-10-26T18:00:00Z') // 11 pm in Karachi
+  const mk = (sigs) => signalSetup({ signals: sigs, start: night })
+  const held = mk([signal(1, { created_at: at(night - MIN), expires_at: at(night + HOUR) }), meeting(2, 200, { created_at: at(night - MIN), expires_at: at(night + 4 * HOUR), facts: { what_happened: 'Pilot call with Dana Lee', source_name: 'Google Calendar', accepted: true, meeting_start: at(night + 200 * MIN) } })])
+  await held.scheduler.tick()
+  assert.equal(held.sender.sent.length, 0)
+  const soon = mk([meeting(3, 0, { created_at: at(night - MIN), expires_at: at(night + 4 * HOUR), facts: { what_happened: 'Pilot call with Dana Lee', source_name: 'Google Calendar', accepted: true, meeting_start: at(night + 120 * MIN) } })])
+  await soon.scheduler.tick()
+  assert.equal(soon.sender.sent.length, 1)
+  assert.equal(soon.log()[0].slot, 'extreme_1')
+})
+
+test('signal push: nothing while care is open, or for a founder being deleted', async () => {
+  const c = signalSetup({ signals: [signal(1)], care: async () => true })
+  await c.scheduler.tick()
+  assert.equal(c.sender.sent.length, 0)
+  const d = signalSetup({ signals: [signal(1)], tables: { account_requests: [{ id: uuid(5), user_id: USER.id, kind: 'delete', status: 'queued' }] } })
+  await d.scheduler.tick()
+  assert.equal(d.sender.sent.length, 0)
+})
+
+test('signal push: off unless asked for', async () => {
+  const s = signalSetup({ signals: [signal(1)] })
+  const off = createPushScheduler({ supabase: s.supabase, sender: s.sender, clock: s.clock, isCareOpen: async () => false, log: () => {} })
+  await off.tick()
+  assert.equal(s.sender.sent.length, 0)
+})
+
+test('signal push: the lock screen is short by default and even when the setting is full; hidden is just Axiom; no content in the body or the log', async () => {
+  for (const [lock, expected] of [[undefined, 'Rafay, an email that needs you today has come in.'], ['full', 'Rafay, an email that needs you today has come in.'], ['hidden', HIDDEN_BODY]]) {
+    const s = signalSetup({ signals: [signal(1)], settings: lock ? [{ user_id: USER.id, lock_screen: lock }] : [] })
+    await s.scheduler.tick()
+    assert.equal(s.sender.sent[0].body, expected)
+    assert.deepEqual(voiceProblems(s.sender.sent[0].body), [])
+    assert.ok(!JSON.stringify(s.log()).includes('Dana'))
+  }
+  const m = signalSetup({ signals: [meeting(1, 90)] })
+  await m.scheduler.tick()
+  assert.equal(m.sender.sent[0].body, 'Rafay, a meeting starts in 90 minutes.')
+})
+
+test('signal push: unknown is never resent; a refused send is retried at most 3 times; a signal pushed once is not pushed again', async () => {
+  const unk = signalSetup({ signals: [signal(1)], respond: () => ({ ok: false, unknown: true, error: 'timeout' }) })
+  for (let i = 0; i < 4; i += 1) await unk.scheduler.tick()
+  assert.equal(unk.sender.sent.length, 1)
+  const bad = signalSetup({ signals: [signal(1)], respond: () => ({ ok: false, unknown: false, error: 'refused' }) })
+  for (let i = 0; i < 6; i += 1) await bad.scheduler.tick()
+  assert.equal(bad.sender.sent.length, 3)
+  assert.equal(bad.sigs()[0].status, 'new')
+  const once = signalSetup({ signals: [signal(1)] })
+  for (let i = 0; i < 3; i += 1) await once.scheduler.tick()
+  assert.equal(once.sender.sent.length, 1)
+})
+
+test('signal push: a meeting the founder did not accept, or an email with no reply of theirs, is never extreme', async () => {
+  const invite = meeting(1, 60); delete invite.facts.accepted
+  const stranger = signal(2, { urgency: 3, facts: { what_happened: 'Dana Lee replied about the pilot', source_name: 'Dana Lee' } })
+  const s = signalSetup({ signals: [invite, stranger], world: worldDana, start: T('2026-10-26T18:00:00Z') })
+  s.base.rows('signals').forEach((r) => { r.created_at = at(T('2026-10-26T18:00:00Z') - MIN); r.expires_at = at(T('2026-10-26T22:00:00Z')); if (r.facts.meeting_start) r.facts.meeting_start = at(T('2026-10-26T18:00:00Z') + 60 * MIN) })
+  await s.scheduler.tick()
+  assert.equal(s.sender.sent.length, 0) // quiet hours hold both
+})
+
+test('compose signal: 90 minutes is not rounded to 2 hours; a past or missing start is the generic line', () => {
+  const body = (start, toolkit = 'googlecalendar') => composeSignalPush({ item: { toolkit, meetingStart: start, signalId: 'x' }, name: 'Rafay', now: SIG_NOW }).body
+  assert.equal(body(SIG_NOW + 90 * MIN), 'Rafay, a meeting starts in 90 minutes.')
+  assert.equal(body(SIG_NOW + 150 * MIN), 'Rafay, a meeting starts in 2 hours.')
+  assert.equal(body(SIG_NOW - 5 * MIN), 'Rafay, something in your tools needs you today.')
+  assert.equal(body(NaN), 'Rafay, something in your tools needs you today.')
 })

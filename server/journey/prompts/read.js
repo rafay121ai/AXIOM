@@ -4,6 +4,7 @@
 import { styleMessages } from './style.js'
 import { trackRecordMessages } from '../memory/trackRecord.js'
 import { briefMessages } from '../memory/brief.js'
+import { worldMessages } from '../../connectors/worldContext.js'
 
 export const READ_SCHEMA = Object.freeze({
   type: 'object',
@@ -41,12 +42,13 @@ export const alreadySaidMessages = (firstReading) => (firstReading?.headline ? [
 }] : [])
 
 // conversation: [{ role, text }]
-export function readMessages({ conversation, style, trackRecord = '', brief = '', firstReading = null, conflict = null }, retryProblems = null, previous = null) {
+export function readMessages({ conversation, style, trackRecord = '', brief = '', world = [], firstReading = null, conflict = null }, retryProblems = null, previous = null) {
   const messages = [
     { role: 'system', content: READ_PROMPT },
     ...styleMessages(style),
     ...trackRecordMessages('read', trackRecord),
     ...briefMessages(brief, conflict),
+    ...worldMessages(world),
     ...alreadySaidMessages(firstReading),
     { role: 'user', content: JSON.stringify({ conversation }) },
   ]

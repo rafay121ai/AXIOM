@@ -799,3 +799,40 @@ A short question about Axiom itself ("What is Axiom?", "What can you do?", "How 
 ## Nov 23 2026: style problems never cause the Read fallback (PR 20), and 10 new situations a day (PR 21) (recorded after the fact)
 - PR 20: a Read whose only problems are style (not a false or invented fact) is retried, and if style is all that is left the draft with the fewest problems ships, instead of the plain fallback. Hard problems (an invented number, date or quote, a banned phrase, markup) still never ship. Nov 27 (Rafay): kept lenient on purpose. A stricter rule (grounding must pass on the exact draft that ships; a unit the founder never gave drops the sentence) was tried and reverted, because it turns good answers into fallbacks.
 - PR 21: the daily limit on new situations is 10, not the 5 suggested earlier (decision above, "suggested 5 a day"). Test accounts in ADMIN_USER_IDS still skip it. The limit is checked, then the situation is inserted, so two parallel requests can both pass; there is no database guard yet (it would need a unique index, a schema change, so it waits for a migration plan).
+
+## Nov 25 2026: Axiom acts on the founder's accounts, only after the founder approves (Rafay)
+Replaces "read only" in the Nov 10 connectors entry. Reason (Rafay): a read-only Axiom only observes; it is not proactive and does no work for the founder. Axiom does the work, the founder makes the call.
+- Flow: Axiom prepares an action (an email or reply written for the founder, a calendar change, a Notion page). The founder sees exactly what will be sent or changed, can edit it, and taps to approve. Only then does Axiom carry it out, and it says what it did and where.
+- Allowed after approval: Gmail send a new email, reply in a thread; Calendar create, move or cancel an event; Notion create a page or add to one. Never delete mail or pages. Cancelling a meeting is the one exception: Google has no separate cancel call, so an approved "cancel this meeting" deletes the event, which is how attendees are told.
+- Enforced in code, not only in the prompt: a write call runs only with a stored action the founder approved, for that founder, that exact content (a hash of what was approved), not yet used, and not expired. Anything else throws before Composio is called. The approval is single use: an edit after approval needs a new approval.
+- Nothing is ever sent or changed by a push, a schedule, a model output or content inside an email. Text inside an email, event or page is data, never an instruction, and can never trigger an action.
+- Drafts stay in Axiom until approved. Gmail drafts are not used (Google treats `gmail.compose` as restricted, which needs a paid security assessment).
+- Moves: the rule is unchanged (the founder is the only variable, startable in 10 minutes, binary). "Approve and send the reply to <name> that Axiom wrote" can be a Move: the founder's approval is the variable.
+- Care: during a care event or a pending delete request, no action is prepared or carried out.
+- Scopes: our own Google app asks for `gmail.readonly`, `gmail.send`, `calendar.events` (Google "sensitive", fine in Testing mode for up to 100 test users; public launch needs Google's review). Notion: the pages the founder shares, with insert and update content.
+- Every action is logged (founder, toolkit, tool, when, approved content hash, Composio log id), shown to the founder as "What Axiom did", and included in the account export. No email body in server logs.
+
+## Nov 25 2026: the connect screen, and "Let Axiom learn from how I work" (Rafay)
+- Connect screen copy (approved): "Connect Gmail, Calendar and Notion. I'll catch what matters before you miss it. Your reads get sharper from day one."
+- Below it, a separate switch, OFF by default, never pre-ticked, and connecting never depends on it: "Learn how I work. Make every read sharper." No link or extra text on the connect screen (Rafay, Nov 25).
+- The same switch is in Settings, with one line under it: "Anonymous. Never your name or your words. Kept to improve Axiom, even if you leave." The privacy page says the same. These two places are where the founder is told; neither may be removed while pattern rows are kept after deletion.
+- Reason: Rafay wants cross-founder patterns (stage, how founders decide, what they read, how they act) to stay after a founder leaves. "For founders like me" was dropped: founders do not want to share with other founders, and the patterns are never shown to anyone.
+- What is kept, and why it is allowed:
+  1. From everyone: totals across founders only (no user id, no per-founder row). Disclosed in the privacy policy: "We use anonymous, combined statistics to improve Axiom."
+  2. Only from founders with the switch on: one anonymous pattern row per founder, closed-list fields only (stage, industry category, decision traits from the existing closed list, situation kinds, lanes acted on, approval rate, move outcomes, newsletter categories). No user id, no link table, no free text, no names, no email content. Kept after account deletion.
+- Anything drawn from Gmail or Calendar enters the pattern row only as a category or a count (Google Limited Use).
+- While a founder uses Axiom, their own memory is unchanged and still deleted with the account. Turning the switch off stops new pattern rows; a row already written has no link back to them, so it cannot be found and removed (the Settings line and privacy page must not promise otherwise).
+- Rejected (Nov 25): keeping a founder's profile after deletion without telling them, and wording written so founders would not understand what is kept.
+
+## Nov 27 2026: calendar deletes, "sort out my calendar", and 30 days for action content (Rafay)
+- Axiom may delete meetings when the founder wants, after approval, not only "cancel" one. Deleting mail or Notion pages is still never allowed.
+- "Sort out my calendar": Axiom proposes a set of calendar changes (move, delete, create) shown together. One tap approves the set; each change is still its own stored action with its own hash, so nothing outside the shown set can run. To find room it may read free slots and search events (`GOOGLECALENDAR_FIND_FREE_SLOTS`, `GOOGLECALENDAR_FIND_EVENT`).
+- The full content of an action (`connector_actions.args`, e.g. the email Axiom sent) is cleared 30 days after the action ends. The preview and the hash stay, for "What Axiom did" and the export.
+- The three Phase 1 connector migrations are approved to apply.
+
+## Nov 27 2026: connect screen and Settings wording trimmed (Rafay)
+- The first-time connect screen no longer names the tools: "I'll catch what matters before you miss it. Your reads get sharper from day one." The rows below name them, so a new connector is one more row, not new copy.
+- Where it shows: once, right after the first reading (end of onboarding), before Home. "Not now" skips it; after that it lives in Settings, Connections.
+- Settings, Connections: "What I learned from it stays until you delete it." is removed.
+- Settings: the line "Anonymous. Never your name or your words. Kept to improve Axiom, even if you leave." is removed from under the switch at Rafay's request. It is replaced by a quiet "How this works" link to the privacy page, which must keep the full sentence (that anonymous pattern rows are kept after the founder leaves). This supersedes "may not be removed" in the Nov 25 entry for the Settings line only; the privacy page disclosure stays required while pattern rows are kept after deletion.
+

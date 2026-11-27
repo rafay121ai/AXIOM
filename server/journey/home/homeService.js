@@ -10,6 +10,8 @@ import { validTimeZone } from '../move/schedule.js'
 import { CARE_COPY } from '../../care/copy.js'
 import { saveOwnRow } from '../../push/settings.js'
 import { lowerFirst } from '../lowerFirst.js'
+import { loadWorld } from '../../connectors/worldContext.js'
+import { markShown, signalHomeOn, signalItem } from '../../connectors/signalHome.js'
 import { pickGreeting } from './greeting.js'
 import { founderFirstName } from './name.js'
 import { ITEM_LABELS } from './wording.js'
@@ -28,7 +30,7 @@ const one = async (query) => {
 const plain = (s) => String(s ?? '').trim().replace(/[.!\s]+$/, '')
 const label = (template, title) => template.replace('{title}', lowerFirst(plain(title)))
 
-export function createHome({ supabase, care, callStructured, clock, log = () => {} }) {
+export function createHome({ supabase, care, callStructured, clock, log = () => {}, env = process.env }) {
   const moves = createMoves({ supabase, callStructured, clock, log })
   const iso = () => new Date(clock.now()).toISOString()
 
@@ -87,6 +89,19 @@ export function createHome({ supabase, care, callStructured, clock, log = () => 
         stays: keepAll,
         target: { stage: unfinished.stage, situation_id: unfinished.id },
       })
+    }
+
+    // What the connected tools found comes after the founder's own unfinished work: signals fill only the slots left (the 2-item cap).
+    // Behind SIGNAL_HOME (the app can open a signal item): with it off there are no signal items and nothing is marked shown.
+    const world = signalHomeOn(env) ? await loadWorld(supabase, userId, { now: nowMs, env }) : []
+    toDo.push(...world.map((f) => signalItem(f, { keepAll })))
+    const shown = toDo.slice(0, MAX_ITEMS).filter((i) => i.kind === 'signal').map((i) => i.target.signal_id)
+    if (shown.length > 0) {
+      try {
+        await markShown(supabase, userId, shown, nowMs)
+      } catch (err) {
+        log('signals not marked shown', err)
+      }
     }
 
     const greeting = pickGreeting({

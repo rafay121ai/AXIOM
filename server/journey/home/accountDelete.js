@@ -22,7 +22,8 @@ export class DeletionError extends Error {}
 const missing = (error) => error.status === 404 || /not found/i.test(error.message ?? '')
 const fail = (step, error) => new DeletionError(`${step} failed, code ${error.code ?? error.status ?? 'none'}`)
 
-export function createFounderDeletion({ supabase }) {
+// revokeConnections(userId) -> 'toolkit ca_id' of each connected account Composio could not revoke (Phase 2 connectors); null when connectors are off.
+export function createFounderDeletion({ supabase, revokeConnections = null }) {
   async function dataFunction(userId) {
     if (typeof supabase.rpc !== 'function') throw new DeletionError('data function missing')
     const { error } = await supabase.rpc('delete_account', { p_user_id: userId })
@@ -46,8 +47,21 @@ export function createFounderDeletion({ supabase }) {
     throw fail('sign-in removal', last)
   }
 
+  // Before the data function, so Composio's tokens never outlive the founder. A Composio failure never
+  // blocks the deletion: it is logged (toolkit names only; the founder's data is going) so Rafay can clear it by hand.
+  async function revoke(userId) {
+    if (!revokeConnections) return
+    try {
+      const failed = await revokeConnections(userId)
+      if (failed.length) console.error(`[Account] Composio did not revoke (connected account ids): ${failed.join(', ')}; deletion continues, clear them in the Composio dashboard`)
+    } catch (err) {
+      console.error(`[Account] Composio revoke failed (${err?.code ?? err?.status ?? 'none'}); deletion continues, clear it in the Composio dashboard`)
+    }
+  }
+
   async function deleteFounder(userId) {
     await ban(userId)
+    await revoke(userId)
     await dataFunction(userId)
     await removeSignIn(userId)
   }

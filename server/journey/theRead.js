@@ -5,6 +5,7 @@ import { checkFirstReading, looseUnit, pairsOf, saidProblem, unquoteUnknown } fr
 import { checkHook, threadKinds } from './hooks.js'
 import { stripFiller } from './filler.js'
 import { earlierLines } from './memory/brief.js'
+import { worldBlock, worldTexts } from '../connectors/worldContext.js'
 import { conflictProblem, earlierSources, findConflict, namesBothAndAsks } from './memory/conflicts.js'
 import { overCap } from './memory/extractBeliefs.js'
 import { READ_SCHEMA, readMessages } from './prompts/read.js'
@@ -45,7 +46,8 @@ const clean = (data) => {
 // body, and must be a real hook. A Read with nothing of theirs from this
 // situation read as an old chat for a new idea (live, Nov 9).
 // fallback: our own plain Read, whose approved wording quotes the founder in the closing question (Rafay, Nov 3); a model Read may not.
-export function checkRead({ read, answerTexts, earlierTexts = [], conflict = null, fallback = false }) {
+// worldTexts: facts from connected tools, a source of numbers, dates and units only, never of "you said" or a quote.
+export function checkRead({ read, answerTexts, earlierTexts = [], worldTexts = [], conflict = null, fallback = false }) {
   const problems = []
   if (read.body.length < 40) problems.push('body is too short')
   if (threadKinds(`${read.headline} ${read.body}`, answerTexts).length === 0) {
@@ -56,14 +58,14 @@ export function checkRead({ read, answerTexts, earlierTexts = [], conflict = nul
   const own = checkFirstReading({
     reading: { headline: read.headline, ...(fallback ? { body: `${read.body} ${read.closing_question}` } : { body: read.body, closing_question: read.closing_question }), underlines: [] },
     answerTexts,
-    earlierTexts,
+    earlierTexts: [...earlierTexts, ...worldTexts],
   })
   problems.push(...own.problems)
   // Only what they said: no "You said ..." they did not say, no number with a word they never put after it.
   const all = `${read.headline} ${read.body} ${read.closing_question}`
   const said = saidProblem(all, [...answerTexts, ...earlierTexts])
   if (said) problems.push(said)
-  const loose = looseUnit(all, pairsOf([...answerTexts, ...earlierTexts, ...(conflict ? [conflict.nowText] : [])]))
+  const loose = looseUnit(all, pairsOf([...answerTexts, ...earlierTexts, ...worldTexts, ...(conflict ? [conflict.nowText] : [])]))
   if (loose) problems.push(`a number with a word they never put after it: ${loose.number} ${loose.unit}. Say the number the way they said it`)
   problems.push(...checkHook({ text: read.closing_question, sources: answerTexts }).problems)
   return { ok: problems.length === 0, problems }
@@ -143,11 +145,12 @@ export async function unsupportedClaims({ read, conversation, brief, situationId
 // in the fallback. Returns { read, source }.
 // Built from this situation; the brief and track record feed it as background, the conversation wins, and only the first
 // reading uses the sign-up answers directly (Rafay, Nov 9). trackRecord: how their recent moves went.
-export async function createRead({ conversation, deps, situationId, style, trackRecord = '', brief = '', firstReading = null, grounding = null }) {
+export async function createRead({ conversation, deps, situationId, style, trackRecord = '', brief = '', world = [], firstReading = null, grounding = null }) {
   const founderTexts = conversation.filter((t) => t.role === 'founder').map((t) => t.text)
   const earlier = earlierLines(brief)
   const conflict = findConflict({ transcript: conversation, earlier })
   const earlierTexts = earlierSources({ transcript: conversation, earlier })
+  const factTexts = worldTexts(world) // a fact from a signal is not invented
   let problems = null
   let grounded = false // the check runs once: a rewrite that only fixes its objection ships unchecked, and the last attempt is never turned down by it
   let claims = []
@@ -162,14 +165,14 @@ export async function createRead({ conversation, deps, situationId, style, track
         maxCompletionTokens: 1200,
         userId: deps.userId,
         usageContext: { step: 'read', kind: 'read', situation_id: situationId },
-        messages: readMessages({ conversation, style, trackRecord, brief, firstReading, conflict }, problems, previous),
+        messages: readMessages({ conversation, style, trackRecord, brief, world, firstReading, conflict }, problems, previous),
       })
       const read = unquoted(clean(data), founderTexts)
-      const verdict = checkRead({ read, answerTexts: founderTexts, earlierTexts, conflict })
+      const verdict = checkRead({ read, answerTexts: founderTexts, earlierTexts, worldTexts: factTexts, conflict })
       if (verdict.ok) {
         if (grounding && !grounded) {
           grounded = true
-          claims = await unsupportedClaims({ read, conversation, brief, situationId, grounding, deps })
+          claims = await unsupportedClaims({ read, conversation, brief: [brief, worldBlock(world)].filter(Boolean).join('\n'), situationId, grounding, deps })
           if (claims.length > 0 && attempt < READ_ATTEMPTS) {
             problems = claims.map((c) => `it claims something they did not say (${c}): say only what they said or what follows from their numbers`)
             continue

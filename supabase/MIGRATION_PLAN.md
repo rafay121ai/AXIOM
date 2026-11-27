@@ -346,3 +346,36 @@ Written after a read-only check of live main on Nov 22: the live `moves_checklis
 Why: commit dde7d85 (Nov 19) made the move carry one first step, but the CHECK still required 2 to 4, so every new move failed on insert (500 on POST /api/learn/:id/move). Reproduced live in the simulator on Nov 22. The server code is already deployed; applying this is what unblocks moves. Needs Rafay's explicit approval.
 
 Status Nov 22 2026: Rafay approved applying. Re-checked live first (check unchanged, version not recorded), then ran the file's statements and recorded version 20261122000001 in supabase_migrations.schema_migrations in one transaction. Verified read-only afterwards: moves_checklist_check allows 1 to 4 and is NOT VALID; the other moves checks are unchanged. A move then saved and committed live from the simulator.
+
+## Connectors (Nov 25 2026): APPLIED to live main Nov 27 2026, now in supabase/migrations/
+Applied after a dry run on live inside a transaction that was then undone: all three files, then the rollback, restored delete_account byte for byte (md5 e845cf48...) and removed the tables and history rows. Verified after the apply: 5 tables, RLS on all, no anon or authenticated access, delete_account covers them and only service_role can run it, versions 20261125000001-3 recorded.
+
+Written after a read-only check of live main on Nov 25 2026: none of the five tables exist; `notification_log` holds 0 rows; the CHECKs below are as listed in file 2; `delete_account` md5 `e845cf4819f27f848cbc7ff7e8ff5237`, EXECUTE only for postgres and service_role. Plan: tasks/connectors-plan.md (Phase 1, "Acting on approval"); decision: tasks/decisions.md, Nov 25.
+
+- `20261125000001_connectors_tables.sql`: five new server-only tables, RLS on, no policies, no client grants, cascade from auth.users. No existing table changes.
+  - `connector_accounts`: one connection per founder and tool, with the scopes granted. Composio's account id only; no tokens. Disconnect deletes the row.
+  - `watch_sources`: newsletters and senders the founder chose to watch.
+  - `connector_jobs`: the work queue, idempotent on (user, toolkit, external id). The external id is the webhook id, or the item id plus its updated time, so an edited meeting is queued again. It holds ids, never content.
+  - `signals`: what Axiom found worth telling. A hash of the source item, extracted facts, no raw body.
+  - `connector_actions`: work Axiom prepared. The write tool is a closed CHECK list of 7 slugs, tied to its toolkit. A row cannot be approved, done or failed without `approved_at`. A sha256 `content_hash` ties the approval to the exact args.
+- `20261125000002_connectors_checks.sql`: widened CHECKs, NOT VALID, 5 second lock timeout. Every earlier value stays allowed.
+  - `notification_log.kind` gains `signal`. `notification_log.slot` gains `signal_1` to `signal_4` and `extreme_1`, `extreme_2`.
+  - The existing one-per-slot unique index is unchanged and now also enforces the signal cap: a fifth signal in a day fails exactly as a second morning push does today.
+  - Before any signal row is written, `server/push/policy.js` must count only morning and evening against the 2-a-day scheduled cap (Phase 7).
+  - `founder_beliefs.source`, `memory_evidence.source_kind` and `memory_runs.source_kind` gain `connector`.
+  - `model_usage_logs.call_type` gains `signal` and `connector`.
+- `20261125000003_account_deletion_connectors.sql`: `delete_account` is the live function, checked identical on Nov 25, plus five deletes for the new tables. It removes founder data. A guard at the top refuses to run if the live function has changed since.
+
+Rollback: `supabase/rollback/20261125_rollback.sql`, run by hand after the server code is rolled back. It also removes the three versions from the migration history.
+
+Reviewed by migration-checker on Nov 25. All three blockers fixed: the rollback now clears the history, file 1 has a lock timeout, and the calendar-cancel wording matches the decision. Its suggestions are in the files or in the server notes below.
+
+Server work these tables need (not SQL):
+- account deletion revokes the founder's Composio connections before `delete_account` (`server/journey/home/accountDelete.js`)
+- the account export includes the connector tables (`accountExport.js`)
+- connector memory evidence keeps a signal id that may no longer exist after disconnect, so the memory screen and the export must not expect it
+
+Apply order: 1, 2, 3, then record the three versions, all BEFORE any server code that uses them is deployed (Render deploys from main). Each needs Rafay's explicit approval. Before applying, migration-checker must pass, the rollback must be tested on a Supabase branch (not live), and the live state must be re-checked against the facts above.
+
+Open, for Rafay:
+- **How long `connector_actions.args` is kept after an action is done.** Decided Nov 27 (Rafay): `args` is cleared to `{}` 30 days after the action ends (done, failed, rejected or expired); `preview` and `content_hash` stay.

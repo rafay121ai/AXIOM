@@ -102,9 +102,10 @@ export function createMemoryStore({ supabase, clock = { now: () => Date.now() },
     },
 
     activeWorld: (userId) => active('founder_world', userId, 'last_mentioned_at'),
-    upsertWorld: ({ userId, name, kind, role = null }) => bump('founder_world', userId, 'name', String(name ?? '').trim().slice(0, 80),
+    // connector: a name seen in a connected tool is not a mention by the founder, so a repeat leaves the count and date alone.
+    upsertWorld: ({ userId, name, kind, role = null, connector = false }) => bump('founder_world', userId, 'name', String(name ?? '').trim().slice(0, 80),
       { kind, role, mention_count: 1, last_mentioned_at: iso(), status: 'active' },
-      (w) => ({ mention_count: w.mention_count + 1, last_mentioned_at: iso(), ...(role && !w.role ? { role } : {}) })),
+      (w) => ({ ...(connector ? {} : { mention_count: w.mention_count + 1, last_mentioned_at: iso() }), ...(role && !w.role ? { role } : {}) })),
 
     activeVocabulary: (userId) => active('founder_vocabulary', userId),
     upsertVocabulary: ({ userId, term, meaning, confidence }) => bump('founder_vocabulary', userId, 'term', String(term ?? '').trim().slice(0, 60),

@@ -25,6 +25,7 @@ import { duePushes, NUDGE_GOAL_DAYS, NUDGE_THREAD_MAX_QUIET_MS, NUDGE_THREAD_QUI
 import { composePush } from './compose.js'
 import { reminderSettingsOf } from './settings.js'
 import { createPushTokens } from './tokens.js'
+import { runSignalPushes } from './signalPush.js'
 
 export const TICK_MS = 60 * 1000
 // Rows per query page. Must stay at or below PostgREST's max rows (1000 on
@@ -37,7 +38,7 @@ const defaultLog = (what, detail) => console.error(`[Push] ${what}`, detail?.mes
 // The founder's first name for the push text: the same rule as the greeting.
 export const createNameLookup = (supabase) => (userId) => founderFirstName(supabase, userId)
 
-export function createPushScheduler({ supabase, sender, clock, isCareOpen, nameOf = createNameLookup(supabase), log = defaultLog, pageSize = PAGE_SIZE }) {
+export function createPushScheduler({ supabase, sender, clock, isCareOpen, nameOf = createNameLookup(supabase), log = defaultLog, pageSize = PAGE_SIZE, signalPush = false }) {
   if (typeof isCareOpen !== 'function') throw new Error('isCareOpen is required: pushes pause while care is open')
   const tokens = createPushTokens({ supabase, clock })
   const iso = (ms) => new Date(ms).toISOString()
@@ -254,6 +255,14 @@ export function createPushScheduler({ supabase, sender, clock, isCareOpen, nameO
         await forFounder({ userId, now, ...rows, summary })
       } catch (err) {
         log('founder skipped', err)
+      }
+    }
+    // Signals have their own places in the day. Off unless SIGNAL_PUSH=on and CONNECTORS=on (index.js).
+    if (signalPush) {
+      try {
+        await runSignalPushes({ supabase, tokens, now, iso, everyRow, one, deleting, careOpen, loadLog, claim, deliver, nameOf, clock, log, summary })
+      } catch (err) {
+        log('signal pushes failed', err)
       }
     }
     return summary

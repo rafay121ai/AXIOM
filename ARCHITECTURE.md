@@ -258,7 +258,7 @@ Knowledge project.
 | founder_lesson_log | Author lessons already shown | id, user_id, source_key (unique per founder), slot (1 or 2) |
 | user_settings      | Settings | user_id, share_auto (default false), morning_on, evening_on, lock_screen (full, short, hidden), quiet_start, quiet_end, mentor_style (calm, direct, hard), keep_items, last_greeting |
 | push_tokens        | Devices | id, user_id, token (unique), platform (ios, android), timezone |
-| notification_log   | The push cap and dedupe | id, user_id, kind (morning, quiet_check, evening, reminder, nudge), slot (morning, evening), local_day, status (sending, sent, failed), attempts, dedupe_key. Unique per founder, day and slot: at most 2 a day. |
+| notification_log   | The push cap and dedupe | id, user_id, kind (morning, quiet_check, evening, reminder, nudge, signal), slot (morning, evening, signal_1 to signal_4, extreme_1, extreme_2), local_day, status (sending, sent, failed), attempts, dedupe_key. Unique per founder, day and slot: at most 2 scheduled a day (morning, evening), plus up to 4 signal pushes and 2 extreme. |
 | care_events        | Private | id, user_id, level (unclear, clear), scope_id, created_at, resolved_at. No message text. |
 | account_requests   | Export and delete requests | id, user_id, kind (export, delete), status, delete_after |
 | founder_beliefs    | What Axiom learned: business facts, patterns, preferences (server only, memory layer, applied to live Nov 10 2026) | id, user_id, belief (3 to 240), kind (fact, pattern, preference), confidence 0 to 1, status (active, superseded), superseded_by, source (signup, conversation, report) |
@@ -420,7 +420,7 @@ loaded.
 - Citation validation and quote verification.
 - Swap limit of 1. Max 2 active moves.
 - At most 2 underlined phrases; at most one picture; reply length cap.
-- Push cap of 2 a day (one per slot, enforced by a unique index).
+- Push cap: 2 scheduled a day (morning, evening) plus up to 4 signal pushes and 2 extreme (one per slot, enforced by a unique index).
 - Daily cap of 10 new situations per founder (test accounts skip it).
 
 ### Cost
@@ -473,31 +473,67 @@ loaded.
 
 ---
 
-## Connectors and signals (planned, NOT BUILT; full plan: `tasks/connectors-plan.md`)
-- Composio holds the OAuth tokens. We store only its connected-account id. Read
-  only: an allowlist of Composio action names, anything else throws.
-- Composio sends one signed webhook per event to `POST /connectors/webhook`
-  (Standard Webhooks headers: id, timestamp, signature; 300 s replay window; the
-  webhook id is the idempotency key). The route verifies, inserts a job, returns.
-- A Postgres job queue (`FOR UPDATE SKIP LOCKED`) runs: filter (code) -> extract
-  (one model call, JSON only, no tools, content is untrusted) -> verify (code
-  checks every name, number and date against the source) -> score -> push, home
-  item or drop.
-- Gmail and Calendar are polling triggers (minimum 2 minutes on Composio-managed
-  auth); Notion is push. Delivery is near, not real-time.
-- New tables (not applied): `connector_accounts`, `watch_sources`,
-  `connector_jobs`, `signals`; `founder_beliefs.source` gains `connector`;
-  `model_usage_logs.call_type` gains `signal` and `connector`. Server only, RLS
-  on, no client policies. A fresh live dump comes before any migration.
-- Signal pushes: kind `signal`, 4 a day per founder (separate from the two
-  scheduled slots), cap checked atomically in the database. Extreme events skip
-  the cap, at most 2 a day. New env: `COMPOSIO_API_KEY`, `COMPOSIO_WEBHOOK_SECRET`,
-  `CONNECTORS`, `SIGNAL_PUSH`, `MODEL_SIGNAL` (all off or unset by default).
+## Connectors and signals (built Nov 27 behind flags, off by default; full plan: `tasks/connectors-plan.md`)
+- Composio holds the OAuth tokens. We store only its connected-account id. An
+  allowlist of Composio action names; anything else throws. Read tools run freely;
+  write tools (send, reply, calendar create/move/cancel, Notion create/add to) run
+  only with a stored founder approval for that exact content, single use and not
+  expired, checked in code before Composio is called. No delete tools except an
+  approved calendar delete (`GOOGLECALENDAR_DELETE_EVENT`). The `args` of a finished
+  action are cleared 30 days after it ends; the preview and hash stay. Every
+  action is logged and exported. Client: `server/connectors/composio.js`.
+- Routes (built, Nov 27; only with `CONNECTORS=on`, else 404; JWT): `GET /api/connectors`
+  (per toolkit `{ toolkit, connected, status }`, reconciled with Composio),
+  `POST /api/connectors/:toolkit/connect` (`{ url }`; refused during care or a pending
+  delete request), `DELETE /api/connectors/:toolkit` (revokes at Composio first, then
+  deletes that toolkit's account row and signals, and watch sources for Gmail; beliefs,
+  world and evidence are kept). Account deletion revokes the Composio connections before
+  `delete_account`; a Composio failure is logged and never stops the deletion. The export
+  includes `connector_accounts`, `watch_sources`, `signals` and `connector_actions`
+  (not `connector_jobs`; no queue table is exported). `server/connectors/connectorService.js`.
+- Fetching (built, Nov 27; `server/connectors/ingest.js`, `worker.js`, `read.js`): Gmail, Google
+  Calendar and Notion are all **polled** (default every 5 minutes, `CONNECTORS_POLL_MS`); there
+  is no webhook. A bounded backfill runs on first connect, newest first. Each item becomes one
+  `connector_jobs` row (the queue, no content). The worker (`CONNECTORS_WORKER_MS`, default 30
+  seconds) claims a job with a conditional update (supabase-js has no `SKIP LOCKED`), fetches
+  the item fresh with read-only tools, runs the code-only filter (`filter.js`: sensitive deny
+  list, bulk mail, private or solo events), then calls the handler. Retries back off, then
+  dead-letter after 5 attempts; a circuit breaker pauses reading when Composio fails. Content
+  is never stored or logged.
+- Signals (built; `signal.js`): one model step `SIGNAL` (call type `signal`), no tools, item
+  text is untrusted data; the verifier checks every name, number and date in `what_happened`
+  against the source. Writes `signals` (lane, facts, impact, urgency, expires_at). A meeting
+  with a stranger in the next 48 hours becomes prep. A moved meeting or edited page is a new
+  signal and expires the old one. Signal spend has its own per-founder daily budget
+  (`CONNECTOR_DAILY_USD`, default 0.30, `budget.js`), not the founder's own $1 cap; over it a
+  job is requeued for the founder's next local day, or dropped if it would be stale.
+- Use (built; `worldContext.js`, `signalHome.js`): `loadWorld` gives the Read, Read talk,
+  Situation follow-up and Learn up to 5 facts as data in a user message (never instructions);
+  their numbers and dates count as sources, never as something the founder said. Empty when
+  CONNECTORS is off, there is no active connection, or care is open. Home shows signals as
+  left-off items behind `SIGNAL_HOME=on` (default off until the app can open one); a tap
+  (`POST /api/home/signals/:id/open`) claims the signal, opens a situation that starts with
+  Axiom's line (same 10-a-day cap, counts as one follow-up) and links it. Opening is also what
+  lets a signal that names a person or company become a `founder_world` row, source
+  `connector`, through the memory layer (the sentence as receipt, never sensitive text, a
+  corrected name is never re-learned, a repeat does not raise the mention count).
+- Signal pushes (built; `server/push/signalPush.js`, behind `SIGNAL_PUSH=on` and `CONNECTORS=on`):
+  kind `signal`, slots `signal_1` to `signal_4`, and `extreme_1`, `extreme_2` for an extreme
+  event, on top of the morning and evening slots. The unique `(user_id, local_day, slot)` index
+  is the cap. The lock-screen line never carries mail text.
+- Tables (applied): `connector_accounts`, `watch_sources`, `connector_jobs`, `signals`,
+  `connector_actions`; `founder_beliefs.source` and the evidence source kinds gain `connector`;
+  `model_usage_logs.call_type` gains `signal` and `connector`. Server only, RLS on, no client
+  policies. Done and dropped jobs are deleted after 7 days (calendar jobs after 21, so an
+  unchanged event within the 14-day poll window is not fetched again).
+- Env: `COMPOSIO_API_KEY`, `CONNECTORS`, `SIGNAL_PUSH`, `SIGNAL_HOME`, `CONNECTOR_DAILY_USD`,
+  `CONNECTORS_POLL_MS`, `CONNECTORS_WORKER_MS`, `MODEL_SIGNAL` (all off or unset by default).
 
 ## Scheduling and Notifications (current, off until EXPO_PUSH=on)
 - **Push** (Expo push to iOS and Android) from `server/push/`. The morning move
-  and the evening check-in. **At most 2 a day** per founder, one per slot,
-  recorded in `notification_log`. If nothing is due, nothing is sent. The
+  and the evening check-in. **At most 2 scheduled a day** per founder, one per slot,
+  recorded in `notification_log`; signal pushes (behind `SIGNAL_PUSH`) add up to 4 a day
+  (`signal_1` to `signal_4`) and 2 extreme (`extreme_1`, `extreme_2`). If nothing is due, nothing is sent. The
   "quiet for 3 days" check replaces the morning one. When neither wants the
   morning, a **nudge** from memory may take it: the sign-up goal date exactly a
   week away, or an open thread untouched for 7 to 21 days whose situation is
@@ -556,6 +592,11 @@ Names only; values live in Render (`render.yaml`) and a local `.env`.
 - `EXPO_PUSH`: `on` starts the push scheduler (off today).
 - `EXPO_ACCESS_TOKEN`: Expo push sender token.
 - `ACCOUNT_DELETE`: `on` makes account deletion real (off today).
+- `CONNECTORS`: `on` mounts the connector routes, starts polling, the queue worker and the daily clearing, and so starts model spend on the signal step (off today). `COMPOSIO_API_KEY` is read by the Composio SDK.
+- `SIGNAL_PUSH`: `on` (with `CONNECTORS`) sends signal pushes (off today).
+- `SIGNAL_HOME`: `on` shows signal items on home and lets a tap open one (off until the app can open them).
+- `CONNECTOR_DAILY_USD`: per-founder daily budget for signal model calls (default 0.30).
+- `CONNECTORS_POLL_MS`, `CONNECTORS_WORKER_MS`: poll and worker intervals (defaults 300000 and 30000).
 - `PRIVACY_URL`, `TERMS_URL`: links shown in Settings.
 
 ---

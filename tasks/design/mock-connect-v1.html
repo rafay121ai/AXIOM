@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Axiom: Connect (mock v1)</title>
+<style>
+  /* Tokens copied from mock-onboarding-v2.html / memory.html. Nothing new. */
+  :root {
+    --ink-rgb: 234,236,238;
+    --hl-rgb: 205,178,126; --hl2-rgb: 168,142,94;
+    --blur: 42px; --tint: .1; --edge: .2; --bg: #050505;
+    --serif: ui-serif, "New York", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --sans: -apple-system, "SF Pro Text", "Inter", system-ui, "Segoe UI", sans-serif;
+    --ink: rgb(var(--ink-rgb)); --hl: linear-gradient(90deg, rgb(var(--hl-rgb)), rgb(var(--hl2-rgb)));
+    --ease: cubic-bezier(.2,.8,.2,1);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: #101011; color: #b9b8b3; font-family: var(--sans); padding: 28px 20px; }
+  button { font: inherit; color: inherit; }
+  .wrap { max-width: 980px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 56px; justify-content: center; align-items: flex-start; }
+
+  /* dev panel (not part of the app) */
+  .side { width: 340px; font-size: 13.5px; line-height: 1.55; }
+  .side h1 { font-family: var(--serif); font-weight: 500; font-size: 24px; margin: 0 0 6px; color: #ecebe6; }
+  .side h3 { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #8e8d88; margin: 22px 0 10px; font-weight: 500; }
+  .jump { display: flex; flex-wrap: wrap; gap: 6px; }
+  .jump button { font-size: 12px; color: #cfcdc6; background: transparent; border: 1px solid #2c2c2e; border-radius: 99px; padding: 6px 11px; cursor: pointer; }
+  .jump button:hover { border-color: #8a8984; } .jump button.on { background: #242426; border-color: #8a8984; color: #f2f1ec; }
+  .why { border: 1px solid #2a2a2c; border-radius: 14px; padding: 13px 15px; background: #121213; }
+  .why p { margin: 6px 0 0; color: #a9a8a2; } .why b { color: #e4e1d8; font-weight: 500; }
+  .new { color: #d9c08f; }
+
+  /* phone */
+  .phone { width: 390px; height: 840px; order: -1; position: relative; border-radius: 52px; border: 1px solid #2a2a2c; overflow: hidden; background: var(--bg); color: var(--ink); flex: none; box-shadow: 0 40px 100px rgba(0,0,0,.55); }
+  .notch { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 112px; height: 28px; border-radius: 99px; background: #000; z-index: 30; }
+  .glass { background: rgba(var(--ink-rgb), var(--tint)); -webkit-backdrop-filter: blur(var(--blur)) saturate(140%); backdrop-filter: blur(var(--blur)) saturate(140%); border: 1px solid rgba(var(--ink-rgb), var(--edge)); }
+  .view { position: absolute; inset: 0; z-index: 1; display: none; flex-direction: column; overflow: hidden; }
+  .view.on { display: flex; animation: in .5s cubic-bezier(.2,.7,.2,1) both; }
+  @keyframes in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes fade { from { opacity: 0; filter: blur(6px); transform: translateY(4px); } to { opacity: 1; filter: blur(0); transform: none; } }
+  @keyframes draw { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  :focus-visible { outline: 1px solid rgba(var(--hl-rgb), .8); outline-offset: 3px; border-radius: 6px; }
+
+  .wash { position: absolute; inset: 0; pointer-events: none; background:
+      radial-gradient(130% 58% at 50% 108%, rgba(205,178,126,.24), rgba(205,178,126,0) 66%),
+      radial-gradient(100% 40% at 50% -8%, rgba(205,178,126,.09), rgba(205,178,126,0) 72%),
+      linear-gradient(180deg, rgba(168,142,94,.05), rgba(0,0,0,0) 50%); }
+
+  /* ---------- connect screen ---------- */
+  .cbody { position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; padding: 92px 26px 34px; }
+  .emb { width: 34px; height: 34px; margin-bottom: 26px; animation: fade 1s var(--ease) .1s both; }
+  .emb svg { width: 100%; height: 100%; display: block; }
+  .lead { font-family: var(--serif); font-size: 27px; line-height: 1.28; color: #f4f4f2; margin: 0; animation: fade 1s var(--ease) .25s both; }
+  .lead2 { font-family: var(--serif); font-size: 18.5px; line-height: 1.5; color: rgba(var(--ink-rgb), .72); margin: 14px 0 0; animation: fade 1s var(--ease) .55s both; }
+
+  .tools { list-style: none; margin: 40px 0 0; padding: 0; }
+  .tool { position: relative; display: flex; align-items: center; gap: 14px; min-height: 60px; animation: fade 1s var(--ease) var(--d) both; }
+  .tool::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px; background: rgba(var(--ink-rgb), .14); transform-origin: left; animation: draw .9s var(--ease) var(--d) both; }
+  .tools .tool:last-child::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: rgba(var(--ink-rgb), .14); transform-origin: left; animation: draw .9s var(--ease) calc(var(--d) + .1s) both; }
+  .ic { width: 20px; height: 20px; flex: none; fill: none; stroke: rgba(var(--ink-rgb), .7); stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; transition: stroke .4s; }
+  .tool.done .ic { stroke: rgba(var(--hl-rgb), .95); }
+  .tn { flex: 1; font-size: 16px; color: rgba(var(--ink-rgb), .92); }
+  .tn small { display: block; font-size: 12.5px; color: rgba(var(--ink-rgb), .45); margin-top: 2px; }
+  .act { background: none; border: 0; min-height: 44px; padding: 0 0 0 10px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+  .act span { font-size: 14.5px; color: rgba(var(--ink-rgb), .82); border-bottom: 1px solid rgba(var(--hl-rgb), .55); padding: 2px 0; transition: color .2s, border-color .2s; }
+  .act:hover span { color: #fff; border-bottom-color: rgba(var(--hl-rgb), 1); }
+  .act.wait span { border-bottom-color: transparent; color: rgba(var(--ink-rgb), .45); }
+  .act.wait span::after { content: ""; display: block; height: 1px; margin-top: 2px; background: linear-gradient(90deg, rgba(var(--hl-rgb),0), rgba(var(--hl-rgb),.9), rgba(var(--hl-rgb),0)); background-size: 200% 100%; animation: shim 1.2s linear infinite; }
+  @keyframes shim { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+  .ok { display: none; align-items: center; gap: 7px; font-size: 14.5px; color: rgba(var(--ink-rgb), .6); min-height: 44px; }
+  .ok svg { width: 15px; height: 15px; fill: none; stroke: rgb(var(--hl-rgb)); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .ok svg path { stroke-dasharray: 20; stroke-dashoffset: 20; animation: tick .5s var(--ease) .05s forwards; }
+  @keyframes tick { to { stroke-dashoffset: 0; } }
+  .tool.done .act { display: none; } .tool.done .ok { display: flex; }
+
+  .learn { display: flex; align-items: center; gap: 14px; margin-top: 30px; animation: fade 1s var(--ease) 1.25s both; }
+  .learn p { flex: 1; margin: 0; font-size: 14.5px; line-height: 1.45; color: rgba(var(--ink-rgb), .82); }
+  .sw { width: 38px; height: 22px; border-radius: 11px; border: 1px solid rgba(var(--ink-rgb), .35); background: none; padding: 0; cursor: pointer; flex: none; position: relative; transition: background .25s, border-color .25s; }
+  .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: rgba(var(--ink-rgb), .7); transition: transform .3s var(--ease), background .25s; }
+  .sw[aria-checked="true"] { background: var(--hl); border-color: transparent; }
+  .sw[aria-checked="true"]::after { transform: translateX(17px); background: #1a1508; }
+
+  .grow { flex: 1; }
+  .foot { display: flex; justify-content: center; animation: fade 1s var(--ease) 1.4s both; }
+  .cont { display: none; width: 100%; height: 52px; border-radius: 16px; border: 0; cursor: pointer; background: var(--hl); color: #1a1508; font-size: 16px; font-weight: 500; letter-spacing: .1px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.35), inset 0 -2px 0 rgba(0,0,0,.18), 0 10px 26px rgba(168,142,94,.22); }
+  .ta { background: none; border: 0; min-height: 44px; padding: 0 8px; cursor: pointer; display: flex; align-items: center; }
+  .ta span { font-size: 14px; color: rgba(var(--ink-rgb), .5); border-bottom: 1px solid transparent; padding: 2px 0; transition: color .2s, border-color .2s; }
+  .ta:hover span { color: rgba(var(--ink-rgb), .9); border-bottom-color: rgba(var(--ink-rgb), .4); }
+  .any .cont { display: block; animation: fade .6s var(--ease) both; } .any .later { display: none; }
+
+  /* ---------- the hand-off sheet (Google opens in a browser sheet) ---------- */
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; height: 74%; z-index: 20; border-radius: 26px 26px 0 0; background: #f6f6f4; color: #222; transform: translateY(102%); transition: transform .45s var(--ease); display: flex; flex-direction: column; }
+  .sheet.up { transform: none; }
+  .sheet .bar { height: 46px; border-bottom: 1px solid #e3e3e0; display: flex; align-items: center; justify-content: center; font-size: 12.5px; color: #666; }
+  .sheet .gbody { padding: 34px 28px; font-family: Roboto, Arial, sans-serif; }
+  .sheet h4 { font-weight: 400; font-size: 22px; margin: 18px 0 8px; color: #1f1f1f; } .sheet p { font-size: 14px; color: #444; margin: 0 0 22px; }
+  .sheet .gbtn { float: right; background: #1a73e8; color: #fff; border: 0; border-radius: 18px; padding: 9px 22px; cursor: pointer; font-size: 14px; }
+  .sheet .gl { width: 30px; height: 30px; border-radius: 50%; background: conic-gradient(#4285f4 0 25%, #34a853 0 50%, #fbbc05 0 75%, #ea4335 0); }
+  .shade { position: absolute; inset: 0; z-index: 15; background: rgba(0,0,0,.45); opacity: 0; pointer-events: none; transition: opacity .3s; } .shade.on { opacity: 1; }
+
+  /* ---------- settings: Connections ---------- */
+  .sthead { position: relative; z-index: 2; background: linear-gradient(#050505 72%, rgba(5,5,5,0)); display: flex; align-items: center; justify-content: space-between; padding: 56px 18px 10px; }
+  .sthead span.t { font-family: var(--serif); font-size: 20px; color: #f4f4f2; }
+  .stback { background: none; border: 0; width: 44px; height: 44px; border-radius: 50%; color: rgba(var(--ink-rgb), .85); font-size: 28px; line-height: 1; cursor: pointer; padding-bottom: 4px; }
+  .sbody { position: relative; z-index: 1; flex: 1; overflow-y: auto; padding: 4px 24px 40px; scrollbar-width: none; } .sbody::-webkit-scrollbar { display: none; }
+  .slab { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: rgba(var(--ink-rgb), .45); margin: 18px 0 6px; }
+  .srow { border-top: 1px solid rgba(var(--ink-rgb), .14); }
+  .srow:last-of-type { border-bottom: 1px solid rgba(var(--ink-rgb), .14); }
+  .srm { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 56px; padding: 12px 0; background: none; border: 0; text-align: left; cursor: pointer; color: rgba(var(--ink-rgb), .92); }
+  .srm .tn { font-size: 16px; }
+  .st { font-size: 13px; color: rgba(var(--ink-rgb), .5); display: flex; align-items: center; gap: 6px; }
+  .st i { width: 6px; height: 6px; border-radius: 50%; background: rgb(var(--hl-rgb)); box-shadow: 0 0 0 4px rgba(var(--hl-rgb), .16); }
+  .st.off i { background: none; box-shadow: none; border: 1px solid rgba(var(--ink-rgb), .45); }
+  .chev { color: rgba(var(--ink-rgb), .35); font-size: 19px; transition: transform .35s var(--ease), color .2s; }
+  .srow.open .chev { transform: rotate(90deg); color: rgba(var(--hl-rgb), .9); }
+  .rc { display: grid; grid-template-rows: 0fr; visibility: hidden; transition: grid-template-rows .45s var(--ease), visibility 0s linear .45s; }
+  .srow.open .rc { grid-template-rows: 1fr; visibility: visible; transition-delay: 0s; }
+  .rci { min-height: 0; overflow: hidden; position: relative; }
+  .rci::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px; background: linear-gradient(90deg, rgba(var(--hl-rgb), .7), rgba(var(--hl-rgb), 0)); transform: scaleX(0); transform-origin: left; transition: transform .6s var(--ease); }
+  .srow.open .rci::before { transform: scaleX(1); transition-delay: .1s; }
+  .rcb { padding: 12px 0 8px; opacity: 0; transition: opacity .35s; } .srow.open .rcb { opacity: 1; transition-delay: .25s; }
+  .rcb p { margin: 0 0 4px; font-size: 13.5px; line-height: 1.5; color: rgba(var(--ink-rgb), .6); }
+  .rca { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-left: -8px; }
+  .lrow { display: flex; align-items: flex-start; gap: 14px; padding: 16px 0 4px; }
+  .lrow p { flex: 1; margin: 0; font-size: 15px; line-height: 1.45; color: rgba(var(--ink-rgb), .9); }
+  .lrow small { display: block; margin-top: 6px; font-size: 12.5px; line-height: 1.5; color: rgba(var(--ink-rgb), .5); }
+  .lrow .sw { margin-top: 2px; }
+  .how { margin: 2px 0 0 -8px; } .how span { font-size: 12.5px; }
+  .toast { position: absolute; left: 50%; bottom: 34px; z-index: 40; transform: translate(-50%, 10px); opacity: 0; pointer-events: none; padding: 12px 18px; border-radius: 16px; font-size: 14px; color: rgba(var(--ink-rgb), .92); white-space: nowrap; transition: opacity .3s, transform .3s var(--ease); }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  .howbody p { font-size: 15px; line-height: 1.55; color: rgba(var(--ink-rgb), .78); margin: 0 0 14px; }
+  .howbody p.hl { font-family: var(--serif); font-size: 19px; line-height: 1.45; color: #f4f4f2; margin-top: 10px; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } .ok svg path { stroke-dashoffset: 0; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="side">
+    <h1>Connect</h1>
+    <div class="jump" id="jump">
+      <button data-v="connect" class="on">Connect (first time)</button>
+      <button data-v="settings">Settings: Connections</button>
+      <button data-v="reconnect">Needs reconnect</button>
+    </div>
+    <h3>Where it shows</h3>
+    <div class="why"><b>Once, right after the first reading, before Home.</b><p>One screen, one job. Tap Connect, Google (or Notion) opens in a sheet, you come back and the row turns to a gold tick. Not now skips it; it lives in Settings after that. The lines name no tool, so a new connector is just one more row.</p></div>
+    <h3>Words</h3>
+    <div class="why"><b>Approved (Nov 25):</b><p>"I'll catch what matters before you miss it. Your reads get sharper from day one." (Nov 27: the tool names are dropped from the line)<br>"Learn how I work. Make every read sharper." (off by default)<br>Settings: under the switch, a quiet "How this works" link to the privacy page (Nov 27: replaces the disclosure line)</p>
+      <p><b class="new">New, waiting for your OK:</b> Connect, Connected, Reconnect, Not now, Continue, Disconnect, How this works, "Delete what Axiom learned from Gmail", "Gmail needs you to sign in again.", the row hints (Mail from people, Your meetings, Pages you choose).</p></div>
+    <h3>Design notes</h3>
+    <div class="why"><p>Rows are plain lines, no boxes. Icons are thin line drawings in writing colour (no brand logos, they would bring other colours in); the icon turns gold when connected. Connect is a text action with a gold hairline. Continue appears only once something is connected. Wash, no grid (this is not a journey screen). The switch is the app's existing one.</p></div>
+  </div>
+
+  <div class="phone" id="phone">
+    <div class="notch"></div>
+
+    <!-- 1. Connect, first time -->
+    <section class="view on" id="v-connect" aria-label="Connect">
+      <div class="wash"></div>
+      <div class="cbody" id="cbody">
+        <div class="emb"><svg viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="gl"><stop offset="0" stop-color="rgb(205,178,126)"/><stop offset="1" stop-color="rgb(168,142,94)"/></linearGradient></defs><g fill="none" stroke="url(#gl)" stroke-width="3.5"><path d="M 8,84 H 28 C 28,55 35,36 50,26 C 55,23 54,18 50,11 C 45,22 40,27 31,33 C 18,43 13,60 13,84"/><path d="M 92,84 H 72 C 72,55 65,36 50,26 C 55,23 54,18 50,11 C 55,22 60,27 69,33 C 82,43 87,60 87,84"/></g></svg></div>
+        <p class="lead">I'll catch what matters before you miss it.</p>
+        <p class="lead2">Your reads get sharper from day one.</p>
+
+        <ul class="tools">
+          <li class="tool" style="--d:.8s" data-t="Gmail">
+            <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3.5 7l8.5 6 8.5-6"/></svg>
+            <div class="tn">Gmail<small>Mail from people</small></div>
+            <button class="act"><span>Connect</span></button>
+            <div class="ok"><svg viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5"/></svg>Connected</div>
+          </li>
+          <li class="tool" style="--d:.92s" data-t="Calendar">
+            <svg class="ic" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/></svg>
+            <div class="tn">Calendar<small>Your meetings</small></div>
+            <button class="act"><span>Connect</span></button>
+            <div class="ok"><svg viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5"/></svg>Connected</div>
+          </li>
+          <li class="tool" style="--d:1.04s" data-t="Notion">
+            <svg class="ic" viewBox="0 0 24 24"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14.5 3.5V8H19M9 12h7M9 15.5h5"/></svg>
+            <div class="tn">Notion<small>Pages you choose</small></div>
+            <button class="act"><span>Connect</span></button>
+            <div class="ok"><svg viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5"/></svg>Connected</div>
+          </li>
+        </ul>
+
+        <div class="learn">
+          <p>Learn how I work. Make every read sharper.</p>
+          <button class="sw" role="switch" aria-checked="false" aria-label="Learn how I work. Make every read sharper."></button>
+        </div>
+
+        <div class="grow"></div>
+        <div class="foot">
+          <button class="cont">Continue</button>
+          <button class="ta later"><span>Not now</span></button>
+        </div>
+      </div>
+      <div class="shade" id="shade"></div>
+      <div class="sheet" id="sheet" aria-hidden="true">
+        <div class="bar">accounts.google.com</div>
+        <div class="gbody"><div class="gl"></div><h4 id="gtitle">Choose what Axiom can see</h4><p>Stand-in for Google's own sign-in. It will say Axiom once our Google app is verified.</p><button class="gbtn" id="gok">Continue</button></div>
+      </div>
+    </section>
+
+    <!-- 2. Settings: Connections -->
+    <section class="view" id="v-settings" aria-label="Settings, Connections">
+      <div class="wash" style="opacity:.6"></div>
+      <div class="sthead"><button class="stback" aria-label="Back">‹</button><span class="t">Settings</span><span style="width:44px"></span></div>
+      <div class="sbody">
+        <div class="slab">Connections</div>
+        <div class="srow open" id="r-gmail">
+          <button class="srm"><svg class="ic" viewBox="0 0 24 24" style="stroke:rgba(205,178,126,.95)"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3.5 7l8.5 6 8.5-6"/></svg><span class="tn" style="flex:1">Gmail</span><span class="st"><i></i>Connected</span><span class="chev">›</span></button>
+          <div class="rc"><div class="rci"><div class="rcb">
+            
+            <div class="rca"><button class="ta" data-toast="Gmail disconnected"><span>Disconnect</span></button><button class="ta" data-toast="Deleted what I learned from Gmail"><span>Delete what Axiom learned from Gmail</span></button></div>
+          </div></div></div>
+        </div>
+        <div class="srow">
+          <button class="srm"><svg class="ic" viewBox="0 0 24 24" style="stroke:rgba(205,178,126,.95)"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/></svg><span class="tn" style="flex:1">Calendar</span><span class="st"><i></i>Connected</span><span class="chev">›</span></button>
+          <div class="rc"><div class="rci"><div class="rcb"><div class="rca"><button class="ta" data-toast="Calendar disconnected"><span>Disconnect</span></button><button class="ta" data-toast="Deleted what I learned from Calendar"><span>Delete what Axiom learned from Calendar</span></button></div></div></div></div>
+        </div>
+        <div class="srow">
+          <div class="srm" style="cursor:default"><svg class="ic" viewBox="0 0 24 24"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14.5 3.5V8H19M9 12h7M9 15.5h5"/></svg><span class="tn" style="flex:1">Notion</span><button class="act" data-toast="Opening Notion"><span>Connect</span></button></div>
+        </div>
+        <div class="lrow">
+          <p>Learn how I work. Make every read sharper.<button class="how ta"><span>How this works</span></button></p>
+          <button class="sw" role="switch" aria-checked="true" aria-label="Learn how I work. Make every read sharper."></button>
+        </div>
+      </div>
+      <div class="toast glass" id="toast1"></div>
+    </section>
+
+    <!-- 3. Needs reconnect (Settings) -->
+    <section class="view" id="v-reconnect" aria-label="Needs reconnect">
+      <div class="wash" style="opacity:.6"></div>
+      <div class="sthead"><button class="stback" aria-label="Back">‹</button><span class="t">Settings</span><span style="width:44px"></span></div>
+      <div class="sbody">
+        <div class="slab">Connections</div>
+        <div class="srow">
+          <div class="srm" style="cursor:default"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3.5 7l8.5 6 8.5-6"/></svg><span class="tn" style="flex:1">Gmail<small>Gmail needs you to sign in again.</small></span><button class="act" data-toast="Opening Google"><span>Reconnect</span></button></div>
+        </div>
+        <div class="srow">
+          <button class="srm"><svg class="ic" viewBox="0 0 24 24" style="stroke:rgba(205,178,126,.95)"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/></svg><span class="tn" style="flex:1">Calendar</span><span class="st"><i></i>Connected</span><span class="chev">›</span></button>
+          <div class="rc"><div class="rci"><div class="rcb"></div></div></div>
+        </div>
+        <div class="srow">
+          <button class="srm"><svg class="ic" viewBox="0 0 24 24" style="stroke:rgba(205,178,126,.95)"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14.5 3.5V8H19M9 12h7M9 15.5h5"/></svg><span class="tn" style="flex:1">Notion</span><span class="st"><i></i>Connected</span><span class="chev">›</span></button>
+          <div class="rc"><div class="rci"><div class="rcb"></div></div></div>
+        </div>
+        <div class="lrow">
+          <p>Learn how I work. Make every read sharper.<button class="how ta"><span>How this works</span></button></p>
+          <button class="sw" role="switch" aria-checked="false" aria-label="Learn how I work. Make every read sharper."></button>
+        </div>
+      </div>
+      <div class="toast glass" id="toast2"></div>
+    </section>
+
+    <!-- 4. How this works: the "Learn how I work" part of the privacy page -->
+    <section class="view" id="v-how" aria-label="How this works">
+      <div class="wash" style="opacity:.5"></div>
+      <div class="sthead"><button class="stback" id="howback" aria-label="Back">‹</button><span class="t">How this works</span><span style="width:44px"></span></div>
+      <div class="sbody howbody">
+        <p class="hl">Off by default. If you turn it on, Axiom also saves anonymous patterns about how founders work, like a stage and how fast decisions get made.</p>
+        <p>They carry no name, no email, no account and none of your words, so they can't be traced back to you.</p>
+        <p>Because of that they are kept to improve Axiom even after you leave, and can't be removed one by one. Turning the switch off stops new ones.</p>
+        <button class="ta" style="margin-left:-8px"><span>Read the full privacy page</span></button>
+      </div>
+    </section>
+  </div>
+</div>
+<script>
+  const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  // views
+  $$('#jump button').forEach(b => b.onclick = () => {
+    $$('#jump button').forEach(x => x.classList.toggle('on', x === b));
+    $$('.view').forEach(v => v.classList.toggle('on', v.id === 'v-' + b.dataset.v));
+  });
+  // switches
+  $$('.sw').forEach(s => s.onclick = () => s.setAttribute('aria-checked', s.getAttribute('aria-checked') !== 'true'));
+  // connect flow: tap Connect -> sheet -> back -> gold tick
+  let pending = null;
+  const sheet = $('#sheet'), shade = $('#shade');
+  $$('#v-connect .act').forEach(a => a.onclick = () => {
+    pending = a.closest('.tool'); a.classList.add('wait');
+    $('#gtitle').textContent = pending.dataset.t === 'Notion' ? 'Choose the pages Axiom can see' : 'Choose what Axiom can see';
+    $('.bar', sheet).textContent = pending.dataset.t === 'Notion' ? 'notion.so' : 'accounts.google.com';
+    setTimeout(() => { sheet.classList.add('up'); shade.classList.add('on'); }, 350);
+  });
+  const back = () => { sheet.classList.remove('up'); shade.classList.remove('on');
+    if (pending) { const p = pending; setTimeout(() => { p.classList.add('done'); $('#cbody').classList.add('any'); }, 380); pending = null; } };
+  $('#gok').onclick = back; shade.onclick = () => { if (pending) $('.act', pending).classList.remove('wait'); pending = null; sheet.classList.remove('up'); shade.classList.remove('on'); };
+  // settings rows open/close; text actions show a quiet confirmation
+  $$('.srow > button.srm').forEach(b => b.onclick = () => b.parentElement.classList.toggle('open'));
+  $$('[data-toast]').forEach(b => b.onclick = (e) => { e.stopPropagation(); const t = b.closest('.view').querySelector('.toast'); t.textContent = b.dataset.toast; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 1800); });
+  // "How this works" opens the privacy part; back returns to where you were
+  let from = null;
+  const show = (v) => $$('.view').forEach(x => x.classList.toggle('on', x === v));
+  $$('.how').forEach(b => b.onclick = () => { from = b.closest('.view'); show($('#v-how')); });
+  $('#howback').onclick = () => show(from || $('#v-settings'));
+</script>
+</body>
+</html>

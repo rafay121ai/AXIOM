@@ -14,7 +14,7 @@ import { scheduleMemory } from './memory/extractBeliefs.js'
 import { createMessageLearner, createThreadOpener } from './memory/learnMessage.js'
 import { seedFromSignup } from './memory/signupSeed.js'
 
-export function mountJourneyRoutes(app, { supabase, knowledgeSupabase = null, embed = null, care, cap, callStructured, clock, lessonCites = false, learnMessages = true, readGrounding = true, links = {}, deleteOn = false, noDailyLimit = () => false }) {
+export function mountJourneyRoutes(app, { supabase, knowledgeSupabase = null, embed = null, care, cap, callStructured, clock, lessonCites = false, learnMessages = true, readGrounding = true, links = {}, deleteOn = false, env = process.env, noDailyLimit = () => false }) {
   const limiter = (max) => rateLimit({
     windowMs: 60 * 1000,
     max,
@@ -32,12 +32,12 @@ export function mountJourneyRoutes(app, { supabase, knowledgeSupabase = null, em
     : () => {}
   const openThread = learnMessages ? createThreadOpener({ supabase, clock, log: (what, detail) => console.error(`[Memory] ${what}`, detail?.message || '') }) : () => {}
 
-  mountSituationRoutes(app, { supabase, care, cap, stored, callStructured, clock, learn, openThread, readGrounding: readGrounding ? { isCapped: cap.isCapped } : null, noDailyLimit })
-  mountLearnRoutes(app, { supabase, knowledgeSupabase, embed, care, cap, stored, callStructured, clock, learn, lessonCites })
+  mountSituationRoutes(app, { supabase, care, cap, stored, callStructured, clock, learn, openThread, readGrounding: readGrounding ? { isCapped: cap.isCapped } : null, noDailyLimit, env })
+  mountLearnRoutes(app, { supabase, knowledgeSupabase, embed, care, cap, stored, callStructured, clock, learn, lessonCites, env })
   mountMoveRoutes(app, { supabase, care, cap, stored, callStructured, clock, learn })
   mountReportRoutes(app, { supabase, care, callStructured, clock, isCapped: cap.isCapped })
   mountSharingRoutes(app, { supabase, clock })
-  mountHomeRoutes(app, { supabase, care, callStructured, clock, links, deleteOn })
+  mountHomeRoutes(app, { supabase, care, callStructured, clock, links, deleteOn, env })
 
   app.get('/api/signup', limiter(60), signup.get)
   app.put('/api/signup/answers/:key', limiter(60), care.careGate(signupFreeText), signup.put)
