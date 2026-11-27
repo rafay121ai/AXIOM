@@ -1,7 +1,8 @@
 // Code-only filter, before any model sees an item (connectors-plan Phase 4). Returns { keep, reason, injection? }.
 // Item shapes (normalised by worker.js):
 //   gmail { labels[], from, subject, body, bulk }, googlecalendar { summary, description, visibility, attendees[{email,self}] },
-//   notion { title }.
+//   notion { title, body (the page text) }.
+// textUnavailable: true when the text could not be read; it is dropped as sensitive_unknown.
 // ctx: { repliedTo: founder sent something in this thread, meetingPeople: Set of lowercase emails on upcoming meetings }.
 const DROP_LABELS = ['SPAM', 'CATEGORY_PROMOTIONS', 'CATEGORY_SOCIAL', 'CATEGORY_UPDATES', 'CATEGORY_FORUMS']
 const NO_REPLY = /(^|[<\s"])(no[-_.]?reply|do[-_.]?not[-_.]?reply|donotreply|mailer-daemon|notifications?)@/i
@@ -19,10 +20,13 @@ const SENSITIVE_WORDS = [
 const SENSITIVE_DOMAINS = /@([\w-]+\.)*(chase|bankofamerica|wellsfargo|citi|hsbc|barclays|capitalone|americanexpress|amex|paypal|irs\.gov|hmrc\.gov\.uk|mychart|kaiserpermanente|accounts\.google)\./i
 const INJECTION = /(ignore|disregard|forget)\s+(all\s+|any\s+|your\s+|the\s+|previous\s+|prior\s+)*(rules|instructions|guidelines|prompt)|system prompt|you are now\b|new instructions:/i
 
-const text = (item) => [item.subject, item.summary, item.title, item.description, item.body].filter(Boolean).join('\n').slice(0, 4000)
+// Scanned whole. Past this size we cannot vouch for it, so it is dropped (fail closed).
+export const MAX_SCAN = 200000
+const text = (item) => [item.subject, item.summary, item.title, item.description, item.body].filter(Boolean).join('\n')
 const emailOf = (s) => (String(s ?? '').match(/[^\s<>"']+@[^\s<>"']+/)?.[0] ?? '').toLowerCase()
 
 function sensitive(item) {
+  if (item.textUnavailable || text(item).length > MAX_SCAN) return 'sensitive_unknown'
   if (SENSITIVE_DOMAINS.test(String(item.from ?? ''))) return 'sensitive_sender'
   const t = text(item)
   return SENSITIVE_WORDS.some((rx) => rx.test(t)) ? 'sensitive_text' : null

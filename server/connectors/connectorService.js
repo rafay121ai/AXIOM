@@ -11,6 +11,7 @@ export const COPY = {
 }
 const DAY = 24 * 60 * 60 * 1000
 export const ACTION_KEEP_MS = 30 * DAY
+export const JOB_KEEP_MS = 7 * DAY
 const ENDED = ['done', 'failed', 'rejected', 'expired']
 
 const ok = (r) => { if (r.error) throw r.error; return r.data }
@@ -74,12 +75,15 @@ export function createConnectorService({ supabase, connectors, care, pendingDele
 }
 
 // Decision Nov 27: the content of an action is cleared 30 days after it ends; preview and hash stay.
+// Also deletes done and dropped connector_jobs after 7 days.
 // Ended = done, failed, rejected or expired; the end is done_at, else updated_at.
 export async function clearActionContent({ supabase, clock }) {
   const cutoff = new Date(clock.now() - ACTION_KEEP_MS).toISOString()
   const base = () => supabase.from('connector_actions').update({ args: {} }).in('status', ENDED).neq('args', '{}')
   const withDone = ok(await base().lt('done_at', cutoff).select('id'))
   const without = ok(await base().is('done_at', null).lt('updated_at', cutoff).select('id'))
+  // Finished queue rows hold no content and are only history: a week is enough.
+  ok(await supabase.from('connector_jobs').delete().in('status', ['done', 'dropped']).lt('updated_at', new Date(clock.now() - JOB_KEEP_MS).toISOString()).select('id'))
   return withDone.length + without.length
 }
 

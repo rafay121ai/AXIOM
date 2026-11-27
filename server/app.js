@@ -26,6 +26,7 @@ export function createApp({
   clock = systemClock,
   env = {},
   connectors = null, // the Composio client (server/connectors/composio.js); tests pass a fake
+  ingestion = undefined, // connector polling and backfill, shared with the timers (index.js); default: its own
 } = {}) {
   const app = express()
   // Render sits behind exactly one proxy hop; trust only that hop for req.ip.
@@ -187,7 +188,7 @@ export function createApp({
     links: { privacy: env.PRIVACY_URL?.trim() || null, terms: env.TERMS_URL?.trim() || null },
   })
   if (connectorsOn) {
-    mountConnectorRoutes(app, { supabase: supabaseAdmin, connectors, care, clock, pendingDeletion: createAccount({ supabase: supabaseAdmin, clock, deleteOn: env.ACCOUNT_DELETE === 'on' }).pending })
+    mountConnectorRoutes(app, { supabase: supabaseAdmin, connectors, care, clock, pendingDeletion: createAccount({ supabase: supabaseAdmin, clock, deleteOn: env.ACCOUNT_DELETE === 'on' }).pending, ingestion })
   }
   mountPushRoutes(app, { supabase: supabaseAdmin, clock })
   mountReviewRoutes(app, { supabase: supabaseAdmin, callStructured: callStructuredForApp, clock, env, requireAuth })

@@ -12,6 +12,7 @@ export const WORKER_MS = 30 * 1000
 export const BACKFILL = { gmailDays: 30, gmailMax: 200, calendarDaysBack: 30, calendarDaysAhead: 14, calendarMax: 250, notionMax: 50 }
 export const POLL_CAP = { gmail: 100, googlecalendar: 250, notion: 50 }
 const PAGE = 100
+const MAX_PAGES = 5 // list calls per account per poll or backfill
 const ok = (r) => { if (r.error) throw r.error; return r.data }
 
 // One list call per page; returns [{ id, updated }] up to `cap`. The list content is discarded.
@@ -20,7 +21,9 @@ async function listItems(read, userId, toolkit, { sinceMs, nowMs, backfill }) {
   const cap = backfill ? { gmail: BACKFILL.gmailMax, googlecalendar: BACKFILL.calendarMax, notion: BACKFILL.notionMax }[toolkit] : POLL_CAP[toolkit]
   const out = []
   let token
+  let pages = 0
   do {
+    pages += 1
     let d
     if (toolkit === 'gmail') {
       d = await read(userId, 'GMAIL_FETCH_EMAILS', { query: `after:${Math.floor(sinceMs / 1000)}`, max_results: Math.min(PAGE, cap - out.length), page_token: token, include_payload: false })
@@ -33,16 +36,19 @@ async function listItems(read, userId, toolkit, { sinceMs, nowMs, backfill }) {
       token = d.nextPageToken
     } else {
       d = await read(userId, 'NOTION_SEARCH_NOTION_PAGE', { filter_property: 'object', filter_value: 'page', timestamp: 'last_edited_time', direction: 'descending', page_size: Math.min(PAGE, cap - out.length), start_cursor: token })
-      out.push(...(d.results ?? d.pages ?? []).filter((p) => backfill || Date.parse(p.last_edited_time) > sinceMs).map((p) => ({ id: p.id, updated: p.last_edited_time ?? '' })))
-      token = d.has_more === false ? undefined : d.next_cursor
+      const results = d.results ?? d.pages ?? []
+      // Newest first: the first page older than the last sync ends the poll.
+      const stop = !backfill && results.some((p) => !(Date.parse(p.last_edited_time) > sinceMs))
+      out.push(...results.filter((p) => backfill || Date.parse(p.last_edited_time) > sinceMs).map((p) => ({ id: p.id, updated: p.last_edited_time ?? '' })))
+      token = stop || d.has_more === false ? undefined : d.next_cursor
     }
-  } while (token && out.length < cap)
+  } while (token && out.length < cap && pages < MAX_PAGES)
   return out.filter((i) => i.id).slice(0, cap)
 }
 
-export function createIngestion({ supabase, connectors, clock, breaker = createBreaker({ clock }), handleItem = defaultHandleItem, log = (what, info) => console.error(`[Connectors] ${what}`, info ?? '') }) {
+export function createIngestion({ supabase, connectors, clock, breaker = createBreaker({ clock }), handleItem = defaultHandleItem, blocked = async () => false, log = (what, info) => console.error(`[Connectors] ${what}`, info ?? '') }) {
   const read = createReader({ connectors, breaker })
-  const worker = createWorker({ supabase, read, breaker, clock, handleItem, log })
+  const worker = createWorker({ supabase, read, breaker, clock, handleItem, blocked, log })
   const iso = (ms = clock.now()) => new Date(ms).toISOString()
 
   async function enqueue(userId, toolkit, items, kind) {
@@ -54,6 +60,8 @@ export function createIngestion({ supabase, connectors, clock, breaker = createB
 
   // Backfill or poll one account. Per-founder errors never stop the others.
   async function sync(account, backfill) {
+    // A deletion request or an open care event: nothing is read. If we cannot tell, wait.
+    if (await blocked(account.user_id).catch(() => true)) return
     const nowMs = clock.now()
     const sinceMs = backfill ? nowMs - BACKFILL.gmailDays * DAY : Date.parse(account.last_sync_at)
     try {
@@ -64,7 +72,8 @@ export function createIngestion({ supabase, connectors, clock, breaker = createB
       log('sync failed', `${account.toolkit} ${code}`)
       if (code === 'paused') return
       const patch = code === 'auth' ? { status: 'needs_reconnect', last_error_code: code } : { last_error_code: code }
-      ok(await supabase.from('connector_accounts').update({ ...patch, updated_at: iso() }).eq('id', account.id).select('id'))
+      // A database error here must not stop the other founders.
+      try { ok(await supabase.from('connector_accounts').update({ ...patch, updated_at: iso() }).eq('id', account.id).select('id')) } catch { log('sync status not saved', account.toolkit) }
     }
   }
 
@@ -87,9 +96,8 @@ export function createIngestion({ supabase, connectors, clock, breaker = createB
   return { poll, backfill, sync, worker, breaker }
 }
 
-// Started by index.js only when CONNECTORS=on. A run still going makes the next one wait.
-export function startConnectorIngestion({ pollMs = Number(process.env.CONNECTORS_POLL_MS) || POLL_MS, workerMs = Number(process.env.CONNECTORS_WORKER_MS) || WORKER_MS, ...deps }) {
-  const ingestion = createIngestion(deps)
+// Started by index.js only when CONNECTORS=on, with the one ingestion the routes also use (one breaker). A run still going makes the next one wait.
+export function startConnectorIngestion({ pollMs = Number(process.env.CONNECTORS_POLL_MS) || POLL_MS, workerMs = Number(process.env.CONNECTORS_WORKER_MS) || WORKER_MS, ingestion }) {
   const loop = (fn, what) => {
     let running = false
     return async () => {

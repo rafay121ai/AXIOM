@@ -229,3 +229,150 @@ test('filter: a meeting person is kept, a sensitive one is not; only label drops
   assert.equal(filterItem('gmail', { ...person, labels: ['INBOX'], from: 'x <noreply@a.example>' }).reason, 'no_reply')
   assert.equal(filterItem('notion', { title: 'Password reset notes' }).keep, false)
 })
+
+// ---- S1 audit fixes ----
+const queued = (id, ext, o = {}) => ({ id, user_id: U, toolkit: 'gmail', external_id: ext, kind: 'poll', status: 'queued', attempts: 0, run_after: new Date(NOW).toISOString(), ...o })
+const b64 = (t) => Buffer.from(t).toString('base64url')
+
+test('notion poll stops at the first page older than the last sync and caps the pages', async () => {
+  let calls = 0
+  const s = setup({ tables: { connector_accounts: [account({ toolkit: 'notion' })] }, script: { NOTION_SEARCH_NOTION_PAGE: () => {
+    calls += 1
+    return { results: [{ id: `new${calls}`, last_edited_time: '2026-11-27T11:55:00.000Z' }, { id: `old${calls}`, last_edited_time: '2026-11-01T00:00:00.000Z' }], has_more: true, next_cursor: 'c' } } } })
+  await s.ing.poll()
+  assert.equal(calls, 1)
+  assert.deepEqual(jobs(s).map((j) => j.external_id), ['new1|2026-11-27T11:55:00.000Z'])
+  calls = 0
+  const s2 = setup({ tables: { connector_accounts: [account({ toolkit: 'notion' })] }, script: { NOTION_SEARCH_NOTION_PAGE: () => { calls += 1; return { results: [{ id: `n${calls}`, last_edited_time: '2026-11-27T11:55:00.000Z' }], has_more: true, next_cursor: 'c' } } } })
+  await s2.ing.poll()
+  assert.ok(calls <= 5)
+})
+
+test('a hung Composio call times out, counts for the breaker, and frees the run', async () => {
+  const { createReader } = await import('./read.js')
+  const breaker = createBreaker({ clock: createFakeClock(NOW), threshold: 1 })
+  const read = createReader({ connectors: { run: () => new Promise(() => {}) }, breaker, timeoutMs: 20 })
+  await assert.rejects(read(U, 'GMAIL_FETCH_EMAILS', {}), { code: 'composio' })
+  assert.equal(breaker.isOpen(), true)
+})
+
+test('a job that keeps hanging is requeued as stale and still dead-letters (attempt counted at claim)', async () => {
+  const s = setup({ tables: { connector_jobs: [queued('j1', 'm1|1')] } })
+  for (let i = 1; i <= MAX_ATTEMPTS; i += 1) {
+    s.clock.advance(STALE_LOCK_MS + 1000)
+    await s.ing.worker.requeueStale()
+    const claimed = await s.ing.worker.claim()
+    assert.equal(claimed.length, 1, `claim ${i}`)
+    assert.equal(claimed[0].attempts, i)
+  }
+  s.clock.advance(STALE_LOCK_MS + 1000)
+  await s.ing.worker.requeueStale()
+  assert.equal(jobs(s)[0].status, 'failed')
+})
+
+test('a late finish of a requeued job cannot overwrite the newer run', async () => {
+  const gate = {}
+  const s = setup({ tables: { connector_accounts: [account()], connector_jobs: [queued('j1', 'm1|1')] }, script: { GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID: () => ({ labelIds: ['CATEGORY_PROMOTIONS'], sender: 'x@y.example', subject: 's', messageText: 'b' }) } })
+  const w = createWorker({ supabase: s.supabase, breaker: s.ing.breaker, clock: s.clock, log: () => {},
+    read: async () => { await new Promise((r) => { gate.release = r }); return { labelIds: [], sender: 'a@b.example', subject: 's', messageText: 'hello' } } })
+  const first = w.run()
+  await new Promise((r) => setTimeout(r, 10))
+  s.clock.advance(STALE_LOCK_MS + 1000)
+  await s.ing.worker.requeueStale() // the first run is presumed dead
+  const second = (await s.ing.worker.claim())[0]
+  assert.equal(second.attempts, 2)
+  gate.release()
+  await first // the late finish
+  assert.equal(jobs(s)[0].status, 'running')
+  assert.equal(jobs(s)[0].locked_at, second.locked_at)
+})
+
+test('sensitive text is found in payload.parts, past 4000 characters, and in Notion bodies; unreadable text fails closed', async () => {
+  const run = async (toolkit, ext, script) => {
+    const s = setup({ tables: { connector_accounts: [account({ toolkit })], connector_jobs: [queued('j1', ext, { toolkit })] }, script })
+    await s.ing.worker.run()
+    return { j: jobs(s)[0], s }
+  }
+  const labels = { labelIds: [], sender: 'Dana <dana@brightloop.example>', subject: 'Hi' }
+  const parts = { ...labels, payload: { mimeType: 'multipart/alternative', parts: [{ mimeType: 'text/html', body: { data: b64('<p>your <b>one-time code</b> is 123456</p>') } }] } }
+  assert.equal((await run('gmail', 'm|1', { GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID: () => parts })).j.last_error_code, 'sensitive_text')
+  const late = { ...labels, messageText: `${'hello there. '.repeat(500)} please send your passport copy` }
+  assert.equal((await run('gmail', 'm|1', { GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID: () => late })).j.last_error_code, 'sensitive_text')
+  const unreadable = { ...labels, payload: { parts: [{ mimeType: 'application/pdf', body: { size: 900 } }] } }
+  assert.equal((await run('gmail', 'm|1', { GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID: () => unreadable })).j.last_error_code, 'sensitive_unknown')
+  const huge = { ...labels, messageText: 'x '.repeat(150000) }
+  assert.equal((await run('gmail', 'm|1', { GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID: () => huge })).j.last_error_code, 'sensitive_unknown')
+  const notion = (md) => ({ NOTION_RETRIEVE_PAGE: () => ({ title: 'Plans' }), NOTION_GET_PAGE_MARKDOWN: () => md })
+  assert.equal((await run('notion', 'p1|1', notion({ markdown: 'Notes from the clinic about my prescription' }))).j.last_error_code, 'sensitive_text')
+  assert.equal((await run('notion', 'p1|1', notion({}))).j.last_error_code, 'sensitive_unknown')
+  const ok1 = await run('notion', 'p1|1', notion({ markdown: 'Goals for Q1' }))
+  assert.equal(ok1.j.status, 'done')
+})
+
+test('a deleted item is dropped as item_gone, never retried, and does not feed the breaker', async () => {
+  const s = setup({ tables: { connector_accounts: [account()], connector_jobs: [queued('j1', 'm1|1')] }, script: { GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID: () => { throw Object.assign(new Error('Requested entity was not found'), { status: 404 }) } } })
+  for (let i = 0; i < 8; i += 1) { s.clock.advance(1); await s.ing.worker.run() }
+  assert.equal(jobs(s)[0].status, 'dropped')
+  assert.equal(jobs(s)[0].last_error_code, 'item_gone')
+  assert.equal(jobs(s)[0].attempts, 1)
+  assert.equal(s.ing.breaker.isOpen(), false)
+})
+
+test('calendar fetch uses the read-only get tool, so a busy calendar is never "gone"', async () => {
+  const { READ_ONLY } = await import('./composio.js')
+  assert.ok(READ_ONLY.has('GOOGLECALENDAR_EVENTS_GET'))
+  const s = setup({ tables: { connector_accounts: [account({ toolkit: 'googlecalendar' })], connector_jobs: [queued('j1', 'ev99|2026-11-27T10:00:00Z', { toolkit: 'googlecalendar' })] }, script: {
+    GOOGLECALENDAR_EVENTS_GET: ({ event_id }) => ({ id: event_id, summary: 'Review', attendees: [{ self: true }, { email: 'd@e.example' }] }) } })
+  await s.ing.worker.run()
+  assert.equal(jobs(s)[0].status, 'done')
+  assert.deepEqual(s.connectors.calls.map((c) => c.slug), ['GOOGLECALENDAR_EVENTS_GET'])
+})
+
+test('founders with a deletion request or an open care event are skipped by poll and worker', async () => {
+  const blocked = async (id) => id === 'u-blocked'
+  const supabase = db({ connector_accounts: [account({ user_id: 'u-blocked' }), account({ user_id: 'u-ok', id: 'a2' })], connector_jobs: [queued('j1', 'm1|1', { user_id: 'u-blocked' })] })
+  const clock = createFakeClock(NOW)
+  const connectors = fakeConnectors({ GMAIL_FETCH_EMAILS: () => ({ messages: msgs(1) }), GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID: () => ({}) })
+  const ing = createIngestion({ supabase, connectors, clock, blocked, log: () => {} })
+  await ing.poll()
+  assert.deepEqual(supabase.rows('connector_jobs').map((j) => j.user_id).sort(), ['u-blocked', 'u-ok']) // the seeded one, plus u-ok's new one
+  await supabase.from('connector_jobs').update({ status: 'queued', attempts: 0 }).is('status', null).select('id') // the fake has no column defaults
+  await ing.worker.run()
+  const mine = supabase.rows('connector_jobs').find((j) => j.id === 'j1')
+  assert.equal(mine.status, 'queued')
+  assert.equal(mine.attempts, 0)
+  assert.equal(connectors.calls.filter((c) => c.slug === 'GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID').length, 1) // u-ok's only
+})
+
+test('a database error while saving a failure does not stop the other founders', async () => {
+  const s = setup({ tables: { connector_accounts: [account({ id: 'a1', user_id: 'u1' }), account({ id: 'a2', user_id: 'u2' })] }, script: { GMAIL_FETCH_EMAILS: ({ query }) => ({ messages: msgs(1) }) } })
+  const real = s.supabase.from
+  // The first founder's enqueue fails, and then saving that failure fails too.
+  s.supabase.from = (t) => {
+    if (t === 'connector_jobs' && !s.supabase.rows('connector_jobs').length && !s.failed) { s.failed = true; return { insert: () => Promise.resolve({ error: { code: '57014' } }) } }
+    if (t === 'connector_accounts' && s.failed && !s.saveFailed) { s.saveFailed = true; return { update: () => ({ eq: () => ({ select: () => Promise.resolve({ data: null, error: { code: 'XX000' } }) }) }) } }
+    return real(t)
+  }
+  await s.ing.poll()
+  assert.equal(jobs(s).length, 1) // the second founder was still polled
+})
+
+test('the worker does not call handleItem when the tool was disconnected meanwhile', async () => {
+  const s = setup({ tables: { connector_accounts: [account()], connector_jobs: [queued('j1', 'm1|1')] }, script: { GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID: () => {
+    s.supabase.rows('connector_accounts') // read while "disconnecting"
+    return { labelIds: [], sender: 'Dana <dana@brightloop.example>', subject: 'Hi', messageText: 'hello' } } } })
+  const real = s.connectors.run
+  s.connectors.run = async (...a) => { const out = await real(...a); await s.supabase.from('connector_accounts').update({ status: 'needs_reconnect' }).eq('user_id', U).select('id'); return out }
+  await s.ing.worker.run()
+  assert.equal(s.handled.length, 0)
+  assert.equal(jobs(s)[0].status, 'dropped')
+})
+
+test('the daily clearing deletes done and dropped jobs after 7 days, not queued ones', async () => {
+  const { clearActionContent, JOB_KEEP_MS } = await import('./connectorService.js')
+  const old = new Date(NOW - JOB_KEEP_MS - 1000).toISOString()
+  const fresh = new Date(NOW - 1000).toISOString()
+  const supabase = db({ connector_jobs: [queued('a', 'a', { status: 'done', updated_at: old }), queued('b', 'b', { status: 'dropped', updated_at: old }), queued('c', 'c', { status: 'done', updated_at: fresh }), queued('d', 'd', { updated_at: old }), queued('e', 'e', { status: 'failed', updated_at: old })] })
+  await clearActionContent({ supabase, clock: createFakeClock(NOW) })
+  assert.deepEqual(supabase.rows('connector_jobs').map((j) => j.id).sort(), ['c', 'd', 'e'])
+})

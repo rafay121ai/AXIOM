@@ -5,9 +5,8 @@ import { HttpError } from '../journey/situations.js'
 import { createConnectorService } from './connectorService.js'
 import { createIngestion } from './ingest.js'
 
-export function mountConnectorRoutes(app, { supabase, connectors, care, pendingDeletion, clock }) {
-  const { backfill } = createIngestion({ supabase, connectors, clock })
-  const service = createConnectorService({ supabase, connectors, care, pendingDeletion, clock, onFirstActive: backfill })
+export function mountConnectorRoutes(app, { supabase, connectors, care, pendingDeletion, clock, ingestion = createIngestion({ supabase, connectors, clock }) }) {
+  const service = createConnectorService({ supabase, connectors, care, pendingDeletion, clock, onFirstActive: ingestion.backfill })
   const limiter = (max) => rateLimit({
     windowMs: 60 * 1000,
     max,
