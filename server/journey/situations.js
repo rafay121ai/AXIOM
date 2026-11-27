@@ -281,6 +281,27 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     }
   }
 
+  // A situation that opens with Axiom's own line (a tapped signal): the same daily cap as create(), and the line, which asks
+  // one question, counts as a follow-up so the founder still gets at most MAX_FOLLOW_UPS questions before the Read.
+  async function beginWithAxiomLine({ userId, line }) {
+    if ((await newToday(userId)) >= MAX_NEW_SITUATIONS_PER_DAY) {
+      throw new HttpError(429, {
+        error: 'daily_limit',
+        message: `You have started ${MAX_NEW_SITUATIONS_PER_DAY} situations today. That is the limit for one day. Pick one of the open ones.`,
+        open: await openList(userId),
+      })
+    }
+    const situation = await startSituation(userId, null)
+    try {
+      await one(supabase.from('situations').update({ follow_up_count: 1 }).eq('id', situation.id).select('id'))
+      await one(supabase.from('situation_turns').insert({ situation_id: situation.id, role: 'axiom', text: line, filler: false, result: null, created_at: iso() }).select('id'))
+      return situation
+    } catch (err) {
+      await supabase.from('situations').delete().eq('id', situation.id)
+      throw err
+    }
+  }
+
   async function turn({ userId, situationId, text, clientTurnId }) {
     const situation = await ownSituation(userId, situationId)
     const prior = await one(supabase.from('situation_turns').select('id').eq('situation_id', situation.id).eq('client_turn_id', clientTurnId).maybeSingle())
@@ -410,8 +431,8 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     const lines = earlierLines(brief)
     const conflict = findConflict({ transcript, earlier: lines })
     const world = await loadWorld(supabase, userId, { now: clock.now() })
-    const earlier = [...earlierSources({ transcript, earlier: lines }), ...worldTexts(world)]
-    const ownPairs = pairsOf([...sources, ...earlier, ...(conflict ? [conflict.nowText] : [])])
+    const earlier = earlierSources({ transcript, earlier: lines })
+    const ownPairs = pairsOf([...sources, ...earlier, ...worldTexts(world), ...(conflict ? [conflict.nowText] : [])])
     let problems = null
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       try {
@@ -445,5 +466,5 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     return null
   }
 
-  return { create, turn, list, get, read, answerRead }
+  return { create, beginWithAxiomLine, turn, list, get, read, answerRead }
 }

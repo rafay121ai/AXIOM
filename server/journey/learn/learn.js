@@ -145,9 +145,9 @@ export function createLearn({ supabase, knowledgeSupabase = null, embed = null, 
     const earlier = earlierLines(brief)
     const conflict = findConflict({ transcript, earlier })
     const world = await loadWorld(supabase, userId, { now: clock.now() })
-    const earlierTexts = [...earlierSources({ transcript, earlier }), ...worldTexts(world)]
+    const earlierTexts = earlierSources({ transcript, earlier })
     const reply = await composeReply({
-      mode, step, evidence, founderTexts: ctx.founderTexts, earlierTexts, usageContext, conflict,
+      mode, step, evidence, founderTexts: ctx.founderTexts, earlierTexts, worldTexts: worldTexts(world), usageContext, conflict,
       context: { ...ctx.prompt, ...(tapped ? { tapped } : {}), style: await styleOf(supabase, userId), brief, world },
       deps: { callStructured, userId, log },
     })

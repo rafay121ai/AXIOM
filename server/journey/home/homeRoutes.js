@@ -6,7 +6,7 @@ import rateLimit from 'express-rate-limit'
 import { bodyFields } from '../../care/middleware.js'
 import { isUuid } from '../../writeValidation.js'
 import { validTimeZone } from '../move/schedule.js'
-import { HttpError, TEXT_MAX } from '../situations.js'
+import { HttpError, TEXT_MAX, createSituations } from '../situations.js'
 import { openSignal } from '../../connectors/signalHome.js'
 import { createHome } from './homeService.js'
 import { SEARCH_MAX, createHistory } from './historyService.js'
@@ -25,6 +25,7 @@ export function mountHomeRoutes(app, { supabase, care, callStructured, clock, li
     legacyHeaders: false,
   })
   const log = (what, detail) => console.error(`[Home] ${what}`, detail?.message || detail?.problems || '')
+  const situations = createSituations({ supabase, callStructured, clock, log })
   const home = createHome({ supabase, care, callStructured, clock, log })
   const history = createHistory({ supabase, clock })
   const account = createAccount({ supabase, clock, deleteOn, log })
@@ -56,7 +57,7 @@ export function mountHomeRoutes(app, { supabase, care, callStructured, clock, li
   app.post('/api/home/signals/:id/open', limiter(20), care.careHold,
     handle((req) => {
       if (!isUuid(req.params.id)) throw new HttpError(404, { error: 'Not found' })
-      return openSignal({ supabase, userId: req.user.id, signalId: req.params.id, clock })
+      return openSignal({ supabase, userId: req.user.id, signalId: req.params.id, clock, beginSituation: situations.beginWithAxiomLine })
     }))
 
   // The answer to "How are you doing today?". It has been read by the care gate

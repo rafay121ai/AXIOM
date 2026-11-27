@@ -108,7 +108,7 @@ export function checkFact(fact, founderTexts) {
 // data: the model's output. Returns { reply, problems }. `reply` is the
 // cleaned version (every hard rule applied), used when the retry fails too.
 // earlierTexts: the lines under "Earlier they said:"; their numbers and units may be used, never quoted (the reply holds no quotes).
-export function checkReply({ data, mode, evidence, founderTexts, earlierTexts = [], asked = null, conflict = null }) {
+export function checkReply({ data, mode, evidence, founderTexts, earlierTexts = [], worldTexts = [], asked = null, conflict = null }) {
   const problems = []
   const handles = new Map(evidence.map((e) => [e.handle, e]))
   const citations = (data.citations ?? []).map((c) => ({ handle: c.handle, ...(c.quote?.trim() ? { quote: c.quote } : {}) }))
@@ -137,9 +137,9 @@ export function checkReply({ data, mode, evidence, founderTexts, earlierTexts = 
   // Another passage from a cited author or work is not "uncited": two passages from one book are common.
   const uncited = evidence.filter((e) => !sources.some((s) => s.handle === e.handle || sameText(s.author) === sameText(e.author) || sameText(s.book) === sameText(e.source_title)))
   const passageNumbers = new Set(evidence.filter((e) => sources.some((s) => s.handle === e.handle)).flatMap((e) => digitsIn(e.text)))
-  const ownNumbers = new Set([...founderTexts, ...earlierTexts].map(withDigits).flatMap(digitsIn)) // "three" counts as 3 (live, Nov 23)
+  const ownNumbers = new Set([...founderTexts, ...earlierTexts, ...worldTexts].map(withDigits).flatMap(digitsIn)) // "three" counts as 3 (live, Nov 23)
   // A number keeps the unit the founder gave it: a bare "16" never becomes "16 hours" or "16 time" (live, Nov 19).
-  const ownPairs = pairsOf([...founderTexts, ...earlierTexts, ...(conflict ? [conflict.nowText] : []), ...evidence.filter((e) => sources.some((s) => s.handle === e.handle)).map((e) => e.text)])
+  const ownPairs = pairsOf([...founderTexts, ...earlierTexts, ...worldTexts, ...(conflict ? [conflict.nowText] : []), ...evidence.filter((e) => sources.some((s) => s.handle === e.handle)).map((e) => e.text)])
   const kept = []
   for (const sentence of sentencesOf(text)) {
     if (namesSource(sentence, uncited)) { problems.push('names an author or book it did not cite'); continue }
@@ -226,7 +226,7 @@ function plainReply(mode) {
 // founderTexts: every string the founder wrote or chose (sign-up, situation,
 // Read answer, Learn replies). deps: { callStructured, userId, log }.
 // Throws only when no usable reply exists after two attempts.
-export async function composeReply({ mode, step, context, evidence, founderTexts, earlierTexts = [], conflict = null, usageContext, deps }) {
+export async function composeReply({ mode, step, context, evidence, founderTexts, earlierTexts = [], worldTexts = [], conflict = null, usageContext, deps }) {
   // Author and title are shown so the lesson can name who taught it (Rafay, Nov 2); the server still checks every name.
   const shown = evidence.map((e) => ({ handle: e.handle, author: e.author, title: e.source_title, text: e.text, ...(e.lesson ? { lesson: { idea: e.lesson.principle, when: e.lesson.applies_when, text: e.lesson.paragraphs.join(' ') } } : {}) }))
   const asked = mode === 'lesson' ? null : (context.learn ?? []).filter((t) => t.role === 'founder').at(-1)?.text ?? null
@@ -258,7 +258,7 @@ export async function composeReply({ mode, step, context, evidence, founderTexts
       if (done) return done
       throw err
     }
-    const verdict = checkReply({ data, mode, evidence, founderTexts, earlierTexts, asked, conflict })
+    const verdict = checkReply({ data, mode, evidence, founderTexts, earlierTexts, worldTexts, asked, conflict })
     if (verdict.problems.length === 0) return verdict.reply
     last = verdict
     problems = verdict.problems

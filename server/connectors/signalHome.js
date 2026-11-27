@@ -21,8 +21,11 @@ const brief = (text, max) => {
   return t.length <= max ? t : `${t.slice(0, max).replace(/\s+\S*$/, '')}...`
 }
 
-export const signalItem = (f) => ({
-  kind: 'signal', label: brief(f.what_happened, LABEL_MAX), title: null, stays: false, target: { stage: 'signal', signal_id: f.id },
+// "Dr Hamid: Dr Hamid wrote ..." would say the name twice, so the source is put in front only when the sentence does not already name it.
+const named = (f) => (!f.source_name || f.what_happened.toLowerCase().includes(f.source_name.toLowerCase()) ? f.what_happened : `${f.source_name}: ${f.what_happened}`)
+
+export const signalItem = (f, { keepAll = false } = {}) => ({
+  kind: 'signal', label: brief(named(f), LABEL_MAX), title: null, stays: keepAll, target: { stage: 'signal', signal_id: f.id },
 })
 
 // The signals the founder was just shown become 'shown' (only new or pushed ones move).
@@ -32,24 +35,39 @@ export async function markShown(supabase, userId, ids, nowMs) {
     .eq('user_id', userId).in('id', ids).in('status', ['new', 'pushed']).select('id'))
 }
 
-// Tap on a signal item: a situation with one Axiom line (the signal, then the ask), linked, signal 'acted'. Never a founder turn.
-export async function openSignal({ supabase, userId, signalId, clock, env = process.env }) {
+const LIVE = ['new', 'pushed', 'shown']
+const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+
+// Tap on a signal item: a situation that starts with Axiom's line (source, the signal, then the ask), linked, signal 'acted'. Never a founder turn.
+// The signal is claimed first by a conditional update, so two quick taps make one situation: the loser waits for the winner's link.
+// beginSituation({ userId, line }): the situations service (same daily cap, cleans up after itself).
+export async function openSignal({ supabase, userId, signalId, beginSituation, clock, env = process.env }) {
   const gone = () => new HttpError(404, { error: 'Not found' })
   if (!connectorsOn(env) || await careOpen(supabase, userId)) throw gone()
-  const signal = ok(await supabase.from('signals').select('id, facts, status, situation_id').eq('user_id', userId).eq('id', signalId).limit(1))[0]
-  if (!signal) throw gone()
-  if (signal.situation_id && signal.status === 'acted') return { situation_id: signal.situation_id, stage: 'situation' }
-  if (!['new', 'pushed', 'shown'].includes(signal.status) || !signal.facts?.what_happened) throw gone()
-  const at = new Date(clock.now()).toISOString()
-  const created = await supabase.from('situations').insert({
-    user_id: userId, title: null, status: 'open', follow_up_count: 0, created_at: at, last_activity_at: at,
-  }).select().single()
-  if (created.error) throw created.error
-  const situationId = created.data.id
-  ok(await supabase.from('situation_turns').insert({ situation_id: situationId, role: 'axiom', text: `${signal.facts.what_happened} ${SIGNAL_ASK}`, filler: false, result: null, created_at: at }).select('id'))
-  ok(await supabase.from('signals').update({ status: 'acted', situation_id: situationId, updated_at: at })
-    .eq('user_id', userId).eq('id', signal.id).in('status', ['new', 'pushed', 'shown']).select('id'))
-  return { situation_id: situationId, stage: 'situation' }
+  const find = async () => ok(await supabase.from('signals').select('id, facts, status, situation_id').eq('user_id', userId).eq('id', signalId).limit(1))[0]
+  const signal = await find()
+  if (!signal || !signal.facts?.what_happened) throw gone()
+  const result = (id) => ({ situation_id: id, stage: 'situation' })
+  if (signal.situation_id) return result(signal.situation_id)
+  const claimed = ok(await supabase.from('signals').update({ status: 'acted' }).eq('user_id', userId).eq('id', signalId).in('status', LIVE).is('situation_id', null).select('id'))
+  if (claimed.length === 0) {
+    for (let i = 0; i < 20; i += 1) {
+      const now = await find()
+      if (now?.situation_id) return result(now.situation_id)
+      if (!now || !LIVE.includes(now.status) && now.status !== 'acted') throw gone()
+      await wait(50)
+    }
+    throw new HttpError(409, { error: 'This is still being opened. Try again in a moment.', code: 'turn_busy' })
+  }
+  try {
+    const situation = await beginSituation({ userId, line: `${named({ ...signal.facts })} ${SIGNAL_ASK}` })
+    ok(await supabase.from('signals').update({ situation_id: situation.id, updated_at: new Date(clock.now()).toISOString() }).eq('user_id', userId).eq('id', signalId).select('id'))
+    return result(situation.id)
+  } catch (err) {
+    // The situation cleans up after itself; the signal goes back to what it was, so the founder can try again.
+    await supabase.from('signals').update({ status: signal.status }).eq('user_id', userId).eq('id', signalId).eq('status', 'acted').is('situation_id', null)
+    throw err
+  }
 }
 
 // A signal that names a person or company becomes a founder_world row through the memory layer (source 'connector'), with the

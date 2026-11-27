@@ -230,7 +230,7 @@ export async function applyExtraction({ store, userId, data, mode, founderTexts,
     if (!name || !snippet || !['person', 'company', 'product', 'channel'].includes(w.kind) || !typedBy(name, founderTexts) || corrected('founder_world', name)) continue
     const role = w.role ? textOf('role', w.role, founderTexts) : null // a bad role is dropped, the person stays
     ops.push(async () => {
-      const row = await store.upsertWorld({ userId, name, kind: w.kind, role })
+      const row = await store.upsertWorld({ userId, name, kind: w.kind, role, connector: beliefSource === 'connector' })
       if (!row) return
       done.world += 1
       await proof('founder_world', row.id, snippet)

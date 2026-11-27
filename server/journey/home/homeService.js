@@ -79,9 +79,6 @@ export function createHome({ supabase, care, callStructured, clock, log = () => 
       ...dueMoves.map((m) => ({ kind: 'report', label: ITEM_LABELS.report, title: m.title, stays: keepAll || pushOff, target: { stage: 'report', situation_id: m.situation_id, move_id: m.id } })),
       ...waiting.map((m) => ({ kind: 'move', label: label(todayOf(m), m.title), title: m.title, stays: keepAll, target: { stage: 'move', situation_id: m.situation_id, move_id: m.id } })),
     ]
-    // What the connected tools found: after moves, before the unfinished situation (the same 2-item cap applies).
-    const world = await loadWorld(supabase, userId, { now: nowMs })
-    toDo.push(...world.map(signalItem))
     const covered = new Set(open.map((m) => m.situation_id))
     const unfinished = rows.find((r) => r.status === 'open' && r.stage && !covered.has(r.id))
     if (unfinished) {
@@ -94,6 +91,9 @@ export function createHome({ supabase, care, callStructured, clock, log = () => 
       })
     }
 
+    // What the connected tools found comes after the founder's own unfinished work: signals fill only the slots left (the 2-item cap).
+    const world = await loadWorld(supabase, userId, { now: nowMs })
+    toDo.push(...world.map((f) => signalItem(f, { keepAll })))
     const shown = toDo.slice(0, MAX_ITEMS).filter((i) => i.kind === 'signal').map((i) => i.target.signal_id)
     if (shown.length > 0) {
       try {
