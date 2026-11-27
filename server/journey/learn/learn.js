@@ -45,7 +45,7 @@ export function turnView(row) {
   }
 }
 
-export function createLearn({ supabase, knowledgeSupabase = null, embed = null, callStructured, clock, log = () => {}, lessonCites = false, learn = () => {} }) {
+export function createLearn({ supabase, knowledgeSupabase = null, embed = null, callStructured, clock, log = () => {}, lessonCites = false, learn = () => {}, env = process.env }) {
   const sharing = createSharing({ supabase, clock })
   const founderLessons = createFounderLessons({ supabase, sharing, clock })
   const iso = () => new Date(clock.now()).toISOString()
@@ -144,7 +144,7 @@ export function createLearn({ supabase, knowledgeSupabase = null, embed = null, 
     const transcript = transcriptOf(ctx.prompt)
     const earlier = earlierLines(brief)
     const conflict = findConflict({ transcript, earlier })
-    const world = await loadWorld(supabase, userId, { now: clock.now() })
+    const world = await loadWorld(supabase, userId, { now: clock.now(), env })
     const earlierTexts = earlierSources({ transcript, earlier })
     const reply = await composeReply({
       mode, step, evidence, founderTexts: ctx.founderTexts, earlierTexts, worldTexts: worldTexts(world), usageContext, conflict,

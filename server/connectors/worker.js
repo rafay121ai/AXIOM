@@ -94,7 +94,7 @@ export function createWorker({ supabase, read, breaker, clock, blocked = async (
       // Conditional on status and attempts: a second worker's update matches no row. The attempt is counted now, so a job
       // that hangs or crashes and is requeued as stale still reaches the dead letter.
       const rows = ok(await supabase.from('connector_jobs').update({ status: 'running', locked_at: iso(), attempts: attempts + 1, updated_at: iso() })
-        .eq('id', id).eq('status', 'queued').eq('attempts', attempts).lte('run_after', iso()).select('id, user_id, toolkit, external_id, attempts, locked_at'))
+        .eq('id', id).eq('status', 'queued').eq('attempts', attempts).lte('run_after', iso()).select('id, user_id, toolkit, external_id, attempts, locked_at, created_at'))
       if (rows[0]) claimed.push(rows[0])
     }
     return claimed
@@ -116,10 +116,14 @@ export function createWorker({ supabase, read, breaker, clock, blocked = async (
       if (!result.keep) return finish(job, { status: 'dropped', last_error_code: result.reason })
       // The founder may have disconnected while we read: check again right before anything is written.
       if ((await accountOf(job))?.status !== 'active') return finish(job, { status: 'dropped', last_error_code: 'no_active_account' })
-      await handleItem(job.user_id, job.toolkit, result.injection ? { ...item, injection: true } : item, { repliedTo: result.repliedTo === true })
+      await handleItem(job.user_id, job.toolkit, result.injection ? { ...item, injection: true } : item, { repliedTo: result.repliedTo === true, createdAt: Date.parse(job.created_at) || null })
       if (account.last_error_code) ok(await supabase.from('connector_accounts').update({ last_error_code: null, updated_at: iso() }).eq('id', account.id).select('id'))
       return finish(job, { status: 'done', last_error_code: null })
     } catch (err) {
+      // The founder's connector budget for the day is spent: wait for the day it resets, or drop an item that would be stale by then.
+      if (err.code === 'over_budget') {
+        return err.retryAt ? finish(job, { status: 'queued', attempts: attempts - 1, run_after: iso(err.retryAt), last_error_code: 'over_budget' }) : finish(job, { status: 'dropped', last_error_code: 'over_budget' })
+      }
       const code = ['auth', 'paused', 'composio', 'gone'].includes(err.code) ? err.code : 'handler_error'
       log('job failed', `${job.id} ${job.toolkit} ${code}`)
       if (code === 'gone') return finish(job, { status: 'dropped', last_error_code: 'item_gone' })

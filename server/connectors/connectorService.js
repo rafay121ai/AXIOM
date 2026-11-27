@@ -13,6 +13,7 @@ export const COPY = {
 const DAY = 24 * 60 * 60 * 1000
 export const ACTION_KEEP_MS = 30 * DAY
 export const JOB_KEEP_MS = 7 * DAY
+const CALENDAR_JOB_KEEP_MS = 21 * 24 * 60 * 60 * 1000
 const ENDED = ['done', 'failed', 'rejected', 'expired']
 
 const ok = (r) => { if (r.error) throw r.error; return r.data }
@@ -85,7 +86,11 @@ export async function clearActionContent({ supabase, clock }) {
   const without = ok(await base().is('done_at', null).lt('updated_at', cutoff).select('id'))
   await expireSignals({ supabase, clock })
   // Finished queue rows hold no content and are only history: a week is enough.
-  ok(await supabase.from('connector_jobs').delete().in('status', ['done', 'dropped']).lt('updated_at', new Date(clock.now() - JOB_KEEP_MS).toISOString()).select('id'))
+  // Calendar polls list every event in the next 14 days each time, and the finished job is what stops an unchanged event being fetched
+  // again, so calendar jobs are kept past that window (21 days) instead of a week.
+  const old = (ms) => new Date(clock.now() - ms).toISOString()
+  ok(await supabase.from('connector_jobs').delete().in('status', ['done', 'dropped']).neq('toolkit', 'googlecalendar').lt('updated_at', old(JOB_KEEP_MS)).select('id'))
+  ok(await supabase.from('connector_jobs').delete().in('status', ['done', 'dropped']).eq('toolkit', 'googlecalendar').lt('updated_at', old(CALENDAR_JOB_KEEP_MS)).select('id'))
   return withDone.length + without.length
 }
 

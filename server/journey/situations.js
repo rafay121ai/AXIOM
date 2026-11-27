@@ -58,7 +58,7 @@ const ownWordsProblems = (text, founderTexts, sources, ownPairs) => {
 
 // learn: remembers one founder message in the background (memory/learnMessage.js); openThread: stores the situation's one open thread once its Read exists; both no-ops until wired.
 // readGrounding: { isCapped } checks each Read for claims the founder never made (theRead.js); null is off.
-export function createSituations({ supabase, callStructured, clock, log = () => {}, learn = () => {}, openThread = () => {}, readGrounding = null }) {
+export function createSituations({ supabase, callStructured, clock, log = () => {}, learn = () => {}, openThread = () => {}, readGrounding = null, env = process.env }) {
   const iso = () => new Date(clock.now()).toISOString()
   const one = async (query) => {
     const { data, error } = await query
@@ -127,7 +127,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     const conversation = turns.filter((t) => !t.filler).map((t) => ({ role: t.role, text: t.text }))
     const sources = founderTextsOf(turns)
     const brief = await loadBrief(supabase, userId, sources.join('\n'))
-    const world = await loadWorld(supabase, userId, { now: clock.now() })
+    const world = await loadWorld(supabase, userId, { now: clock.now(), env })
     const conflict = findConflict({ transcript: conversation, earlier: earlierLines(brief) }) // notice only: a follow-up question is not forced to name it
     let problems = null
     let styleOnly = null // a question whose only problem is style (no thread): asked rather than skipped (Rafay, Nov 23)
@@ -357,7 +357,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
       style: await styleOf(supabase, userId),
       trackRecord: await loadTrackRecord(supabase, userId, log),
       brief: await loadBrief(supabase, userId, founderTextsOf(turns).join('\n')),
-      world: await loadWorld(supabase, userId, { now: clock.now() }),
+      world: await loadWorld(supabase, userId, { now: clock.now(), env }),
       firstReading: await firstReadingOf(userId),
       deps: { callStructured, userId, log },
       grounding: readGrounding,
@@ -430,7 +430,7 @@ export function createSituations({ supabase, callStructured, clock, log = () => 
     const transcript = [...situationTalk, { role: 'axiom', text: row.closing_question }, ...talk]
     const lines = earlierLines(brief)
     const conflict = findConflict({ transcript, earlier: lines })
-    const world = await loadWorld(supabase, userId, { now: clock.now() })
+    const world = await loadWorld(supabase, userId, { now: clock.now(), env })
     const earlier = earlierSources({ transcript, earlier: lines })
     const ownPairs = pairsOf([...sources, ...earlier, ...worldTexts(world), ...(conflict ? [conflict.nowText] : [])])
     let problems = null

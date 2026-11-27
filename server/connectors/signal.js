@@ -11,6 +11,7 @@ import { createMemoryStore } from '../journey/memory/memoryStore.js'
 const HOUR = 3600000
 export const MAX_HOURS = 168
 export const MEETING_WINDOW_MS = 48 * HOUR
+const STALE_MS = 72 * HOUR
 const MAX_TEXT = 4000
 const LABEL = { gmail: 'Gmail', googlecalendar: 'Google Calendar', notion: 'Notion' }
 
@@ -123,14 +124,18 @@ export function verify(out, { source, removed = [], founderText = '', phrases = 
 const ok = (r) => { if (r.error) throw r.error; return r.data }
 
 // handler(userId, toolkit, item) for the worker (handleItem.js is the default no-op).
-// blocked(userId): care open or deletion pending. isCapped(userId): over the daily cost cap (the item is skipped; it would only wait).
-export function createSignalHandler({ supabase, callStructured, clock, blocked = async () => false, isCapped = async () => false, loadBrief = defaultLoadBrief, log = (what, info) => console.error(`[Signal] ${what}`, info ?? '') }) {
-  async function handleItem(userId, toolkit, item, { repliedTo = false } = {}) {
+// blocked(userId): care open or deletion pending. isCapped(userId): over the founder's own daily cost cap (the item is skipped; it would only wait).
+// overBudget(userId): null, or { retryAt } when this founder's connector budget for the day is spent: the job is requeued for then, or dropped when it would be stale.
+export function createSignalHandler({ supabase, callStructured, clock, blocked = async () => false, isCapped = async () => false, overBudget = async () => null, loadBrief = defaultLoadBrief, log = (what, info) => console.error(`[Signal] ${what}`, info ?? '') }) {
+  async function handleItem(userId, toolkit, item, { repliedTo = false, createdAt = null } = {}) {
     const skip = (reason) => { log('no signal', `${toolkit} ${reason}`); return null }
     if (await blocked(userId).catch(() => true)) return skip('founder_paused')
     const accounts = ok(await supabase.from('connector_accounts').select('status').eq('user_id', userId).eq('toolkit', toolkit))
     if (accounts[0]?.status !== 'active') return skip('no_active_account')
-    const hash = createHash('sha256').update(`${toolkit}|${item.id}`).digest('hex')
+    // A moved meeting or an edited page is a new signal (the old one for the same item is expired once the new one is written).
+    const itemKey = createHash('sha256').update(`${toolkit}|${item.id}`).digest('hex')
+    const changed = toolkit === 'googlecalendar' ? item.updated : toolkit === 'notion' ? item.last_edited_time : null
+    const hash = changed ? createHash('sha256').update(`${toolkit}|${item.id}|${changed}`).digest('hex') : itemKey
     if (ok(await supabase.from('signals').select('id').eq('user_id', userId).eq('external_ref_hash', hash)).length) return skip('already_have_it')
 
     const now = clock.now()
@@ -146,6 +151,13 @@ export function createSignalHandler({ supabase, callStructured, clock, blocked =
       lane = 'time'; expiresMs = Number.isFinite(end) ? end : start
     }
     if (await isCapped(userId).catch(() => false)) return skip('over_daily_cap')
+    const budget = await overBudget(userId).catch(() => null)
+    if (budget) {
+      // Stale by the time the budget resets: a meeting that will have started, or an item that will be over 3 days old.
+      const stale = (toolkit === 'googlecalendar' && Date.parse(startOf(item)) <= budget.retryAt) || (createdAt && budget.retryAt - createdAt > STALE_MS)
+      log('over budget', `${toolkit} ${stale ? 'dropped' : 'requeued'}`)
+      throw Object.assign(new Error('over_budget'), { code: 'over_budget', retryAt: stale ? null : budget.retryAt })
+    }
 
     const situations = ok(await supabase.from('situations').select('id, title').eq('user_id', userId).eq('status', 'open').limit(10)).filter((s) => s.title)
     const brief = await loadBrief(supabase, userId, situations.map((s) => s.title).join(' '), now)
@@ -179,7 +191,7 @@ export function createSignalHandler({ supabase, callStructured, clock, blocked =
     if (item.injection) urgency = Math.min(urgency, 1)
     // A stranger who is not replying to the founder cannot interrupt them: a calendar meeting inside 48h is the one exception.
     if (toolkit === 'gmail' && !repliedTo && !world.some((n) => n && wordRx(n).test(norm(nameOf(item.from))))) urgency = Math.min(urgency, 1)
-    const facts = { what_happened: out.what_happened, source_name: out.source_name }
+    const facts = { what_happened: out.what_happened, source_name: out.source_name, ...(changed ? { item_key: itemKey } : {}) }
     // Google adds invites by itself: only a meeting the founder accepted or organized can interrupt them.
     const accepted = toolkit === 'googlecalendar' && (item.organizer?.self === true || (item.attendees ?? []).some((a) => a.self && a.responseStatus === 'accepted'))
     if (toolkit === 'googlecalendar' && !accepted) urgency = Math.min(urgency, 1)
@@ -199,7 +211,13 @@ export function createSignalHandler({ supabase, callStructured, clock, blocked =
     if (ok(await supabase.from('connector_accounts').select('status').eq('user_id', userId).eq('toolkit', toolkit))[0]?.status !== 'active') return skip('no_active_account')
     const { error } = await supabase.from('signals').insert(row)
     if (error && error.code !== '23505') throw error // 23505: already have it
-    return error ? null : row
+    if (error) return null
+    if (changed) { // the signal this one replaces
+      const older = ok(await supabase.from('signals').select('id, facts, external_ref_hash').eq('user_id', userId).eq('toolkit', toolkit).in('status', ['new', 'pushed', 'shown']))
+        .filter((s) => s.facts?.item_key === itemKey && s.external_ref_hash !== hash).map((s) => s.id)
+      if (older.length) ok(await supabase.from('signals').update({ status: 'expired', updated_at: new Date(clock.now()).toISOString() }).eq('user_id', userId).in('id', older).select('id'))
+    }
+    return row
   }
   return handleItem
 }

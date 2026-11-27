@@ -10,6 +10,7 @@ import { createConnectors } from './connectors/composio.js'
 import { startActionClearing } from './connectors/connectorService.js'
 import { createIngestion, startConnectorIngestion } from './connectors/ingest.js'
 import { createSignalHandler } from './connectors/signal.js'
+import { createBudget } from './connectors/budget.js'
 import { createNameLookup, startPushScheduler } from './push/scheduler.js'
 
 dotenv.config({ path: resolve(dirname(fileURLToPath(import.meta.url)), '../.env') })
@@ -51,7 +52,7 @@ const pendingDeletion = supabase && createAccount({ supabase, clock: systemClock
 const blocked = async (id) => (await app.locals.isCareOpen(id)) || (await pendingDeletion(id))
 // The signal step needs the app's capped model call, so it is built on first use.
 let signalHandler = (...args) => {
-  signalHandler = createSignalHandler({ supabase, callStructured: app.locals.callStructured, clock: systemClock, blocked, isCapped: app.locals.isOverCap })
+  signalHandler = createSignalHandler({ supabase, callStructured: app.locals.callStructured, clock: systemClock, blocked, isCapped: app.locals.isOverCap, overBudget: createBudget({ supabase, clock: systemClock, limitUsd: Number(env.CONNECTOR_DAILY_USD) > 0 ? Number(env.CONNECTOR_DAILY_USD) : undefined }) })
   return signalHandler(...args)
 }
 const ingestion = connectorsOn && connectors && supabase

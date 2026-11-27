@@ -12,7 +12,7 @@ import { createRecentContext } from '../care/recentContext.js'
 import { isUuid } from '../writeValidation.js'
 import { createSituations, HttpError, TEXT_MAX } from './situations.js'
 
-export function mountSituationRoutes(app, { supabase, care, cap, stored, callStructured, clock, learn, openThread, readGrounding = null, noDailyLimit = () => false }) {
+export function mountSituationRoutes(app, { supabase, care, cap, stored, callStructured, clock, learn, openThread, readGrounding = null, noDailyLimit = () => false, env = process.env }) {
   const limiter = (max) => rateLimit({
     windowMs: 60 * 1000,
     max,
@@ -22,7 +22,7 @@ export function mountSituationRoutes(app, { supabase, care, cap, stored, callStr
     legacyHeaders: false,
   })
   const log = (what, detail) => console.error(`[Situations] ${what}`, detail?.message || detail?.problems || '')
-  const service = createSituations({ supabase, callStructured, clock, log, learn, openThread, readGrounding })
+  const service = createSituations({ supabase, callStructured, clock, log, learn, openThread, readGrounding, env })
   const earlier = createRecentContext({ supabase, log }).forSituation
 
   // Wraps a handler: 503 without a database, HttpError as its own status.

@@ -9,6 +9,8 @@ import { careOpen, connectorsOn } from './worldContext.js'
 // Founder-facing wording, awaiting Rafay (tasks/wording_to_approve.md section H).
 export const SIGNAL_ASK = 'What do you want to do about it?'
 const LABEL_MAX = 90
+// Signal items on home (and the tap that opens one) are off until the app can open them: SIGNAL_HOME=on.
+export const signalHomeOn = (env = process.env) => connectorsOn(env) && env.SIGNAL_HOME === 'on'
 const TOOLS = new Set(['gmail', 'google calendar', 'googlecalendar', 'notion'])
 const COMPANY = /\b(inc|llc|ltd|limited|corp|co|company|labs|capital|ventures|group|bank|studio|agency)\b\.?/i
 
@@ -43,8 +45,8 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 // beginSituation({ userId, line }): the situations service (same daily cap, cleans up after itself).
 export async function openSignal({ supabase, userId, signalId, beginSituation, clock, env = process.env }) {
   const gone = () => new HttpError(404, { error: 'Not found' })
-  if (!connectorsOn(env) || await careOpen(supabase, userId)) throw gone()
-  const find = async () => ok(await supabase.from('signals').select('id, facts, status, situation_id').eq('user_id', userId).eq('id', signalId).limit(1))[0]
+  if (!signalHomeOn(env) || await careOpen(supabase, userId)) throw gone()
+  const find = async () => ok(await supabase.from('signals').select('id, lane, facts, status, situation_id').eq('user_id', userId).eq('id', signalId).limit(1))[0]
   const signal = await find()
   if (!signal || !signal.facts?.what_happened) throw gone()
   const result = (id) => ({ situation_id: id, stage: 'situation' })
@@ -62,6 +64,8 @@ export async function openSignal({ supabase, userId, signalId, beginSituation, c
   try {
     const situation = await beginSituation({ userId, line: `${named({ ...signal.facts })} ${SIGNAL_ASK}` })
     ok(await supabase.from('signals').update({ situation_id: situation.id, updated_at: new Date(clock.now()).toISOString() }).eq('user_id', userId).eq('id', signalId).select('id'))
+    // The founder acted on it: now it may become a world fact (memory is written by this action, never by loading home).
+    await learnFromSignals({ supabase, userId, facts: [{ id: signal.id, lane: signal.lane, what_happened: signal.facts.what_happened, source_name: signal.facts.source_name ?? '' }], clock })
     return result(situation.id)
   } catch (err) {
     // The situation cleans up after itself; the signal goes back to what it was, so the founder can try again.

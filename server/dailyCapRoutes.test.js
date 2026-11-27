@@ -145,7 +145,6 @@ test('a failed cost lookup fails open', async () => {
 // Every /api/ route the server exposes is called by the app or listed here, so an old route cannot return unseen.
 const NOT_CALLED_BY_APP = new Set([
   'GET /api/review/outcomes', 'POST /api/review/outcomes/:x/draft', 'POST /api/review/outcomes/:x', // reviewer tool, not a founder action
-  'POST /api/home/signals/:x/open', // the signal item is not in the app yet (mock waits for Rafay)
   'GET /api/situations/open', 'GET /api/learn/:x', 'GET /api/moves/active', 'GET /api/reports/:x', // journey reads the app does not call yet
   'GET /api/settings/sharing', 'PUT /api/settings/sharing', 'GET /api/settings/reminders', 'PUT /api/settings/reminders', // reached through /api/settings
 ])

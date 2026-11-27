@@ -52,8 +52,11 @@ export function createIngestion({ supabase, connectors, clock, breaker = createB
   const iso = (ms = clock.now()) => new Date(ms).toISOString()
 
   async function enqueue(userId, toolkit, items, kind) {
-    for (const { id, updated } of items) {
-      const { error } = await supabase.from('connector_jobs').insert({ user_id: userId, toolkit, external_id: `${id}|${updated}`.slice(0, 300), kind, run_after: iso() })
+    // A backfill is queued newest first (run_after steps by a millisecond), so a spent budget goes to recent items.
+    const stamp = (u) => (Number.isFinite(Date.parse(u)) ? Date.parse(u) : Number(u) || 0)
+    const ordered = kind === 'backfill' ? [...items].sort((a, b) => stamp(b.updated) - stamp(a.updated)) : items
+    for (const [i, { id, updated }] of ordered.entries()) {
+      const { error } = await supabase.from('connector_jobs').insert({ user_id: userId, toolkit, external_id: `${id}|${updated}`.slice(0, 300), kind, run_after: iso(clock.now() + (kind === 'backfill' ? i : 0)) })
       if (error && error.code !== '23505') throw error
     }
   }

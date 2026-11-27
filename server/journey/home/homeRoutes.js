@@ -15,7 +15,7 @@ import { createAccountExport } from './accountExport.js'
 import { createMemoryScreen } from '../memory/memoryScreen.js'
 import { cleanSettings, createSettings } from './settingsService.js'
 
-export function mountHomeRoutes(app, { supabase, care, callStructured, clock, links = {}, deleteOn = false }) {
+export function mountHomeRoutes(app, { supabase, care, callStructured, clock, links = {}, deleteOn = false, env = process.env }) {
   const limiter = (max) => rateLimit({
     windowMs: 60 * 1000,
     max,
@@ -26,7 +26,7 @@ export function mountHomeRoutes(app, { supabase, care, callStructured, clock, li
   })
   const log = (what, detail) => console.error(`[Home] ${what}`, detail?.message || detail?.problems || '')
   const situations = createSituations({ supabase, callStructured, clock, log })
-  const home = createHome({ supabase, care, callStructured, clock, log })
+  const home = createHome({ supabase, care, callStructured, clock, log, env })
   const history = createHistory({ supabase, clock })
   const account = createAccount({ supabase, clock, deleteOn, log })
   const settings = createSettings({ supabase, clock, links, pendingDeletion: account.pending })
@@ -57,7 +57,7 @@ export function mountHomeRoutes(app, { supabase, care, callStructured, clock, li
   app.post('/api/home/signals/:id/open', limiter(20), care.careHold,
     handle((req) => {
       if (!isUuid(req.params.id)) throw new HttpError(404, { error: 'Not found' })
-      return openSignal({ supabase, userId: req.user.id, signalId: req.params.id, clock, beginSituation: situations.beginWithAxiomLine })
+      return openSignal({ supabase, userId: req.user.id, signalId: req.params.id, clock, beginSituation: situations.beginWithAxiomLine, env })
     }))
 
   // The answer to "How are you doing today?". It has been read by the care gate
