@@ -2,6 +2,7 @@
 // clearing of action content. Tables are server only; all access is the service-role client.
 import { TOOLKITS } from './composio.js'
 import { HttpError } from '../journey/situations.js'
+import { expireSignals } from './signal.js'
 
 export const COPY = {
   care: 'Connecting can wait. Come back to it when things feel steadier.',
@@ -83,6 +84,7 @@ export async function clearActionContent({ supabase, clock }) {
   const withDone = ok(await base().lt('done_at', cutoff).select('id'))
   const without = ok(await base().is('done_at', null).lt('updated_at', cutoff).select('id'))
   // Finished queue rows hold no content and are only history: a week is enough.
+  await expireSignals({ supabase, clock })
   ok(await supabase.from('connector_jobs').delete().in('status', ['done', 'dropped']).lt('updated_at', new Date(clock.now() - JOB_KEEP_MS).toISOString()).select('id'))
   return withDone.length + without.length
 }

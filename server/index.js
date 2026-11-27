@@ -9,6 +9,7 @@ import { createAccount, startDeletionLoop } from './journey/home/accountService.
 import { createConnectors } from './connectors/composio.js'
 import { startActionClearing } from './connectors/connectorService.js'
 import { createIngestion, startConnectorIngestion } from './connectors/ingest.js'
+import { createSignalHandler } from './connectors/signal.js'
 import { createNameLookup, startPushScheduler } from './push/scheduler.js'
 
 dotenv.config({ path: resolve(dirname(fileURLToPath(import.meta.url)), '../.env') })
@@ -47,8 +48,14 @@ const connectorsOn = env.CONNECTORS === 'on'
 // One ingestion (one circuit breaker) for the timers and for the backfill the routes start. It skips founders with a
 // deletion request or an open care event; `app` is read at call time, after it exists.
 const pendingDeletion = supabase && createAccount({ supabase, clock: systemClock, deleteOn: env.ACCOUNT_DELETE === 'on' }).pending
+const blocked = async (id) => (await app.locals.isCareOpen(id)) || (await pendingDeletion(id))
+// The signal step needs the app's capped model call, so it is built on first use.
+let signalHandler = (...args) => {
+  signalHandler = createSignalHandler({ supabase, callStructured: app.locals.callStructured, clock: systemClock, blocked, isCapped: app.locals.isOverCap })
+  return signalHandler(...args)
+}
 const ingestion = connectorsOn && connectors && supabase
-  ? createIngestion({ supabase, connectors, clock: systemClock, blocked: async (id) => (await app.locals.isCareOpen(id)) || (await pendingDeletion(id)) })
+  ? createIngestion({ supabase, connectors, clock: systemClock, blocked, handleItem: (...args) => signalHandler(...args) })
   : undefined
 const app = createApp({ supabase, knowledgeSupabase, openai, env, connectors: connectorsOn ? connectors : null, ingestion })
 

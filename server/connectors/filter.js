@@ -18,7 +18,7 @@ const SENSITIVE_WORDS = [
   /\b(security alert|new sign-?in|suspicious (activity|sign)|unusual (activity|sign)|was this you)\b/i,
 ]
 const SENSITIVE_DOMAINS = /@([\w-]+\.)*(chase|bankofamerica|wellsfargo|citi|hsbc|barclays|capitalone|americanexpress|amex|paypal|irs\.gov|hmrc\.gov\.uk|mychart|kaiserpermanente|accounts\.google)\./i
-const INJECTION = /(ignore|disregard|forget)\s+(all\s+|any\s+|your\s+|the\s+|previous\s+|prior\s+)*(rules|instructions|guidelines|prompt)|system prompt|you are now\b|new instructions:/i
+export const INJECTION = /(ignore|disregard|forget)\s+(all\s+|any\s+|your\s+|the\s+|previous\s+|prior\s+)*(rules|instructions|guidelines|prompt)|system prompt|you are now\b|new instructions:/i
 
 // Scanned whole. Past this size we cannot vouch for it, so it is dropped (fail closed).
 export const MAX_SCAN = 200000

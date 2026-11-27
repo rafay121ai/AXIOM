@@ -53,6 +53,9 @@ export function createApp({
   })
   // Read by the push scheduler: no pushes while a care event is open.
   app.locals.isCareOpen = care.isCareOpen
+  // Read by the connector signal step (index.js): a model call that obeys the daily cap and logs its cost.
+  app.locals.callStructured = callStructuredForApp
+  app.locals.isOverCap = isOverCap
 
 
   const allowedOrigins = new Set([
