@@ -36,8 +36,10 @@ function setup({ replies = [good()], tables = {}, capped = false, blocked = fals
 }
 const mail = FIXTURES.cofounder.item
 
+const DANA = { founder_world: [{ id: 'w0', user_id: U, name: 'Dana Okafor', kind: 'person', status: 'active', last_mentioned_at: '2026-11-01T00:00:00Z' }] }
+
 test('a kept email becomes one signal; the cost row says signal; no raw text is stored', async () => {
-  const s = setup()
+  const s = setup({ tables: DANA })
   await s.handle(U, 'gmail', mail)
   const [row] = s.signals()
   assert.equal(row.status, 'new'); assert.equal(row.urgency, 2); assert.equal(row.situation_id, SIT); assert.equal(row.lane, 'people')
@@ -166,4 +168,49 @@ test('the daily clearing expires signals past their time and nothing else', asyn
   const s = setup({ tables: { signals: [sig('a', 'new', '2026-11-27T11:00:00Z'), sig('b', 'new', '2026-11-27T13:00:00Z'), sig('c', 'acted', '2026-11-27T11:00:00Z'), sig('d', 'new', null)] } })
   await clearActionContent({ supabase: s.supabase, clock: s.clock })
   assert.deepEqual(s.signals().map((r) => r.status), ['expired', 'new', 'acted', 'new'])
+})
+
+const bad = (o) => async () => { const s = setup({ replies: [good(o), good(o)] }); await s.handle(U, 'gmail', mail); return s }
+
+test('a name at the start of a sentence must be in the source', async () => {
+  const s = await bad({ what_happened: 'Priya asked to move the call to Thursday.' })()
+  assert.equal(s.signals().length, 0)
+})
+
+test('impact may not name someone, or say what they do, from outside the item and the notes', async () => {
+  for (const impact of ['Priya Shah is a partner at Northfield, so the Marlow pilot matters.', 'The Marlow pilot matters because Dana Okafor works at Brightloop.', 'The Marlow pilot is open, and Northfield backed the round.']) {
+    assert.equal((await bad({ impact })()).signals().length, 0, impact)
+  }
+})
+
+test('links and email addresses are refused', async () => {
+  for (const o of [{ what_happened: 'Dana Okafor sent the deck at https://deck.example/x.' }, { impact: 'The Marlow pilot: write to dana@brightloop.example.' }]) assert.equal((await bad(o)()).signals().length, 0)
+})
+
+test('impact must match a stored fact, not a shared long word', async () => {
+  const s = setup({ replies: [good({ impact: 'This call matters, customers want answers.', urgency: 3 })], tables: DANA })
+  await s.handle(U, 'gmail', mail)
+  assert.equal(s.signals()[0].urgency, 0)
+})
+
+test('a stranger who is not replying cannot go above urgency 1; a reply can', async () => {
+  const stranger = setup({ replies: [good({ urgency: 3 })] })
+  await stranger.handle(U, 'gmail', mail)
+  assert.equal(stranger.signals()[0].urgency, 1)
+  const reply = setup({ replies: [good({ urgency: 3 })] })
+  await reply.handle(U, 'gmail', { ...mail, subject: 'Re: Pilot call moved to Thursday' })
+  assert.equal(reply.signals()[0].urgency, 3)
+})
+
+test('a world name that only sits inside a longer word does not make a person known', async () => {
+  const tables = { connector_accounts: [{ id: 'a2', user_id: U, toolkit: 'googlecalendar', status: 'active' }], founder_world: [{ id: 'w1', user_id: U, name: 'Sam', kind: 'person', status: 'active', last_mentioned_at: '2026-11-01T00:00:00Z' }] }
+  const s = setup({ replies: [prep()], tables })
+  await s.handle(U, 'googlecalendar', meeting({ attendees: [{ email: 'me@x.example', self: true }, { email: 's@harbor.example', displayName: 'Samantha Ortega' }] }))
+  assert.equal(s.openai.calls.length, 1)
+})
+
+test('the model call has a timeout', async () => {
+  const s = setup()
+  await s.handle(U, 'gmail', mail)
+  assert.ok(s.openai.calls[0].options?.signal)
 })

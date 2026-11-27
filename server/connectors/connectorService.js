@@ -83,8 +83,8 @@ export async function clearActionContent({ supabase, clock }) {
   const base = () => supabase.from('connector_actions').update({ args: {} }).in('status', ENDED).neq('args', '{}')
   const withDone = ok(await base().lt('done_at', cutoff).select('id'))
   const without = ok(await base().is('done_at', null).lt('updated_at', cutoff).select('id'))
-  // Finished queue rows hold no content and are only history: a week is enough.
   await expireSignals({ supabase, clock })
+  // Finished queue rows hold no content and are only history: a week is enough.
   ok(await supabase.from('connector_jobs').delete().in('status', ['done', 'dropped']).lt('updated_at', new Date(clock.now() - JOB_KEEP_MS).toISOString()).select('id'))
   return withDone.length + without.length
 }

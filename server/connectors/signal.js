@@ -77,32 +77,46 @@ export function sourceOf(toolkit, item) {
   return { text, removed }
 }
 
-const keepWords = (t) => new Set((norm(t).match(/\p{L}{5,}/gu) ?? []))
-const GENERIC = new Set(['about', 'their', 'there', 'which', 'would', 'could', 'should', 'these', 'those', 'where', 'while', 'being', 'doing', 'today', 'founder'])
+const GENERIC_STARTS = new Set(('the a an i we you they she he it this that these those your their his her our its can will please and but so if when as is are was has have do does did no not for to in on at with from by there here what who how why also now today tomorrow next then after before one two new yes').split(' '))
 const numbersOf = (t) => [...withDigits(t).matchAll(/\d[\d,]*(?:\.\d+)?/g)].map((m) => m[0].replace(/,/g, '').replace(/\.$/, ''))
 const runs = (t, n) => { const w = norm(t).replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean); return new Set(w.slice(0, Math.max(0, w.length - n + 1)).map((_, i) => w.slice(i, i + n).join(' '))) }
+// Capitalised tokens that are not plain sentence-start words: names, organisations, weekdays, months. "Dana's" is Dana.
+// looseStart (impact, free prose): a lone capitalised word that opens a sentence is not tested, since it may be any common word.
+const properNames = (t, looseStart = false) => [...String(t).matchAll(/\p{Lu}[\p{L}'’-]*(?=(\s+\p{Lu})?)/gu)]
+  .filter((m) => !(looseStart && /(^|[.!?]\s+)$/.test(t.slice(0, m.index)) && !m[1]))
+  .map((m) => m[0].replace(/['’]s$/i, '')).filter((w) => !GENERIC_STARTS.has(w.toLowerCase()))
+const LINK = /https?:\/\/|www\.|\S+@\S+\.\S+|\b[\w-]+\.(com|io|co|org|net|ai|app|dev)\b/i
+// A claim about who someone is or what they did. Allowed only if the item or the founder's own notes say the same words.
+const ROLE = /\b(?:is|was|are|were)\s+(?:a|an|the)\s+[\p{L}-]+\s+(?:at|of|for)\s+\p{L}+|\b(?:works?|worked)\s+(?:at|for)\s+\p{L}+|\bfounded\b[^.]{0,30}|\bbacked\s+by\s+\p{L}+|\b(?:ceo|cto|cfo|partner|investor|founder)\s+(?:of|at)\s+\p{L}+/giu
 
-// Returns { problems, linked }. problems stop the signal (after one retry); linked is false when the impact ties to nothing about the founder.
-// shortcut: a name that opens a sentence is not checked as a name (it cannot be told from a common word), only numbers and dates are, upgrade with a name list.
-export function verify(out, { source, removed = [], founderWords, founderNumbers }) {
+// What counts as the founder's stored facts: one phrase per entry (names, two-word terms from notes and open situations, their proper nouns).
+export function factPhrases({ brief, titles, worldNames }) {
+  const lines = [...String(brief).split('\n').filter((l) => l.startsWith('- ')).map((l) => l.slice(2)), ...titles]
+  const bigrams = lines.flatMap((l) => { const w = norm(l).match(/\p{L}{3,}/gu) ?? []; return w.slice(1).map((x, i) => `${w[i]} ${x}`) })
+  return [...new Set([...worldNames.map(norm), ...bigrams, ...lines.flatMap(properNames).filter((w) => w.length >= 3).map(norm)])]
+}
+
+// Returns { problems, linked }. problems stop the signal (after one retry); linked is false when the impact ties to no stored fact about the founder.
+// founderText: the brief, situation titles and world names, which may source a name in impact (never in what_happened).
+export function verify(out, { source, removed = [], founderText = '', phrases = [], founderNumbers }) {
   const problems = []
   const src = norm(source)
+  const known = norm(`${source}\n${founderText}`)
   const srcNums = new Set(numbersOf(source))
   const what = out.what_happened
-  const sentenceStart = /(^|[.!?]\s+)$/
-  for (const m of what.matchAll(/\p{Lu}[\p{L}'’-]*/gu)) {
-    const first = sentenceStart.test(what.slice(0, m.index))
-    if ((!first || [...WEEKDAYS, ...MONTHS].includes(m[0])) && !wordRx(norm(m[0])).test(src)) problems.push(`"${m[0]}" is not in the item`)
-  }
+  for (const w of properNames(what)) if (!wordRx(norm(w)).test(src)) problems.push(`"${w}" is not in the item`)
+  for (const w of properNames(out.impact, true)) if (!wordRx(norm(w)).test(known)) problems.push(`"${w}" in impact is not in the item or the founder's notes`)
+  for (const m of out.impact.match(ROLE) ?? []) if (!known.includes(norm(m))) problems.push(`impact says "${m}", which neither the item nor the notes say`)
   for (const n of numbersOf(what)) if (!srcNums.has(n)) problems.push(`the number ${n} is not in the item`)
   if (!wordRx(norm(out.source_name)).test(src)) problems.push('source_name is not in the item')
   for (const [field, text] of [['what_happened', what], ['impact', out.impact]]) {
     const t = norm(text)
     if (BANNED_PHRASES.some((p) => wordRx(p).test(t)) || TEASER.test(t)) problems.push(`${field} uses a forbidden phrase or a teaser`)
+    if (LINK.test(text)) problems.push(`${field} has a link or an email address`)
   }
   for (const n of numbersOf(out.impact)) if (!srcNums.has(n) && !founderNumbers.has(n)) problems.push(`the number ${n} in impact is from nowhere`)
   for (const r of removed) for (const run of runs(r, 4)) if ([what, out.impact].some((t) => runs(t, 4).has(run))) { problems.push('it repeats an instruction found in the item'); break }
-  const linked = [...keepWords(out.impact)].some((w) => founderWords.has(w) && !GENERIC.has(w))
+  const linked = phrases.some((p) => wordRx(p).test(norm(out.impact)))
   return { problems, linked }
 }
 
@@ -120,13 +134,14 @@ export function createSignalHandler({ supabase, callStructured, clock, blocked =
     if (ok(await supabase.from('signals').select('id').eq('user_id', userId).eq('external_ref_hash', hash)).length) return skip('already_have_it')
 
     const now = clock.now()
+    const worldNames = (await createMemoryStore({ supabase }).activeWorld(userId)).map((w) => w.name).filter(Boolean)
+    const world = worldNames.map(norm)
     let lane = null // forced for a meeting
     let expiresMs = now + MAX_HOURS * HOUR
     if (toolkit === 'googlecalendar') {
       const start = Date.parse(startOf(item)); const end = Date.parse(endOf(item) || startOf(item))
       if (!(start > now && start <= now + MEETING_WINDOW_MS)) return skip('not_in_48h')
-      const world = (await createMemoryStore({ supabase }).activeWorld(userId)).map((w) => norm(w.name))
-      const known = (a) => world.some((n) => n && [a.displayName, a.email?.split('@')[0]].some((x) => x && norm(x).includes(n)))
+      const known = (a) => world.some((n) => n && [a.displayName, a.email?.split('@')[0]].some((x) => x && wordRx(n).test(norm(x))))
       if (!people(item).some((a) => !known(a))) return skip('known_people')
       lane = 'time'; expiresMs = Number.isFinite(end) ? end : start
     }
@@ -134,8 +149,9 @@ export function createSignalHandler({ supabase, callStructured, clock, blocked =
 
     const situations = ok(await supabase.from('situations').select('id, title').eq('user_id', userId).eq('status', 'open').limit(10)).filter((s) => s.title)
     const brief = await loadBrief(supabase, userId, situations.map((s) => s.title).join(' '), now)
-    const founderText = [brief, ...situations.map((s) => s.title)].join('\n')
-    const founderWords = keepWords(founderText)
+    const titles = situations.map((s) => s.title)
+    const founderText = [brief, ...titles, ...worldNames].join('\n')
+    const phrases = factPhrases({ brief, titles, worldNames })
     const founderNumbers = new Set(numbersOf(founderText))
     const { text: source, removed } = sourceOf(toolkit, item)
     const messages = [
@@ -146,14 +162,14 @@ export function createSignalHandler({ supabase, callStructured, clock, blocked =
     for (let attempt = 1; attempt <= 2 && !out; attempt += 1) {
       let data
       try {
-        ({ data } = await callStructured({ step: 'signal', schema: SIGNAL_SCHEMA, schemaName: 'signal', maxCompletionTokens: 600, userId, usageContext: { step: 'signal', kind: toolkit }, messages: attempt === 1 ? messages : [...messages, { role: 'assistant', content: JSON.stringify(draft) }, { role: 'user', content: `Change only what broke: ${problems.slice(0, 5).join('; ')}. Keep the rest.` }] }))
+        ({ data } = await callStructured({ step: 'signal', schema: SIGNAL_SCHEMA, schemaName: 'signal', maxCompletionTokens: 600, timeoutMs: 30000, userId, usageContext: { step: 'signal', kind: toolkit }, messages: attempt === 1 ? messages : [...messages, { role: 'assistant', content: JSON.stringify(draft) }, { role: 'user', content: `Change only what broke: ${problems.slice(0, 5).join('; ')}. Keep the rest.` }] }))
       } catch (err) {
         if (err?.name === 'StructuredOutputError') return skip('bad_model_output')
         throw err // a model outage: the worker retries the job with backoff
       }
       if (!data.worth_telling) return skip('not_worth_telling')
       draft = data
-      const v = verify(data, { source, removed, founderWords, founderNumbers })
+      const v = verify(data, { source, removed, founderText, phrases, founderNumbers })
       problems = v.problems
       if (!problems.length) { out = data; linked = v.linked }
     }
@@ -161,6 +177,8 @@ export function createSignalHandler({ supabase, callStructured, clock, blocked =
 
     let urgency = linked ? out.urgency : 0 // impact tied to nothing about the founder: a home item only
     if (item.injection) urgency = Math.min(urgency, 1)
+    // A stranger who is not replying to the founder cannot interrupt them: a calendar meeting inside 48h is the one exception.
+    if (toolkit === 'gmail' && !/^\s*(re|aw):/i.test(item.subject ?? '') && !world.some((n) => n && wordRx(n).test(norm(nameOf(item.from))))) urgency = Math.min(urgency, 1)
     const facts = { what_happened: out.what_happened, source_name: out.source_name }
     if (toolkit === 'googlecalendar') {
       facts.meeting_start = startOf(item)
