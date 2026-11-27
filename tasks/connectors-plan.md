@@ -88,17 +88,17 @@ Raw email bodies are never stored. Only extracted facts and a verbatim snippet o
 
 ### Phase 3. Ingestion and queue
 - [ ] `POST /connectors/webhook`: verify signature and timestamp (replay window), body size limit, constant-time compare, answer 200 fast, insert the job, return. No work in the request.
-- [ ] Worker with Postgres `FOR UPDATE SKIP LOCKED`, retries with backoff, max attempts, dead-letter status. No new infrastructure (no Redis).
-- [ ] Safety net: a scheduled poll per active founder for missed events (reuse the push scheduler pattern in `server/push/scheduler.js`).
-- [ ] One-time bounded backfill at connect: last 30 days of Gmail headers and subjects from people, Calendar 14 days ahead and 30 behind, selected Notion pages. A hard limit on messages and on model spend per connect.
+- [x] (built Nov 27 as a conditional-update claim, no SKIP LOCKED in supabase-js) Worker with Postgres `FOR UPDATE SKIP LOCKED`, retries with backoff, max attempts, dead-letter status. No new infrastructure (no Redis).
+- [x] Safety net: a scheduled poll per active founder for missed events (reuse the push scheduler pattern in `server/push/scheduler.js`).
+- [x] (hard caps on calls; no model spend yet) One-time bounded backfill at connect: last 30 days of Gmail headers and subjects from people, Calendar 14 days ahead and 30 behind, selected Notion pages. A hard limit on messages and on model spend per connect.
 - [ ] Per-founder rate limit and a global circuit breaker: if Composio errors repeatedly, stop calling it and retry later. Failures never touch founder data.
 - [ ] Tests: duplicate webhook does nothing twice, bad signature rejected, replayed old timestamp rejected, worker crash mid-job is retried once and not double-counted.
 
 ### Phase 4. Filter (code only, no model)
 - [ ] Drop before any model sees it: Gmail categories promotions, social, spam, updates unless the sender is watched; `List-Unsubscribe` bulk mail unless watched; no-reply senders unless watched; calendar events marked private or with no attendees.
-- [ ] Sensitive deny list: medical, legal, bank and card, tax, ID, password-reset and one-time-code mail never reaches a model or storage. Unknown means drop.
+- [x] Sensitive deny list: medical, legal, bank and card, tax, ID, password-reset and one-time-code mail never reaches a model or storage. Unknown means drop.
 - [ ] Always keep: confirmed co-founder, people on an upcoming meeting, a reply to something the founder sent.
-- [ ] Tests: a fixtures folder of real-shaped emails (promo, receipt, newsletter, co-founder, medical, injection attempt) with the expected keep or drop.
+- [x] Tests: a fixtures folder of real-shaped emails (promo, receipt, newsletter, co-founder, medical, injection attempt) with the expected keep or drop.
 
 ### Phase 5. Passive profile (learns without asking)
 - [ ] Reuse the memory layer (`extractBeliefs.js`, `beliefRules.js`, `memoryStore.js`, `memory_evidence`): add `connector` as a source and a connector extraction prompt in `server/journey/memory/prompts/`.

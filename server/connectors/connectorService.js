@@ -15,7 +15,7 @@ const ENDED = ['done', 'failed', 'rejected', 'expired']
 
 const ok = (r) => { if (r.error) throw r.error; return r.data }
 
-export function createConnectorService({ supabase, connectors, care, pendingDeletion, clock }) {
+export function createConnectorService({ supabase, connectors, care, pendingDeletion, clock, onFirstActive = () => {} }) {
   const iso = () => new Date(clock.now()).toISOString()
   const check = (toolkit) => { if (!TOOLKITS.includes(toolkit)) throw new HttpError(404, { error: COPY.unknown }) }
 
@@ -32,6 +32,8 @@ export function createConnectorService({ supabase, connectors, care, pendingDele
         status = 'active'
         if (row?.status !== 'active' || row.composio_account_id !== accountId) {
           ok(await supabase.from('connector_accounts').upsert({ user_id: userId, toolkit, composio_account_id: accountId, status, last_error_code: null, updated_at: iso() }, { onConflict: 'user_id,toolkit' }).select('id'))
+          // The first time a tool is active: a bounded backfill, in the background. The poller covers a failure.
+          if (!row) Promise.resolve(onFirstActive(userId, toolkit)).catch((err) => console.error('[Connectors] backfill failed', err?.code ?? ''))
         }
       } else if (row) {
         status = 'needs_reconnect'

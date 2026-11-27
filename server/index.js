@@ -8,6 +8,7 @@ import { createExpoSender } from './push/expoSender.js'
 import { createAccount, startDeletionLoop } from './journey/home/accountService.js'
 import { createConnectors } from './connectors/composio.js'
 import { startActionClearing } from './connectors/connectorService.js'
+import { startConnectorIngestion } from './connectors/ingest.js'
 import { createNameLookup, startPushScheduler } from './push/scheduler.js'
 
 dotenv.config({ path: resolve(dirname(fileURLToPath(import.meta.url)), '../.env') })
@@ -61,7 +62,8 @@ if (env.EXPO_PUSH === 'on' && supabase) {
 
 if (connectorsOn && connectors && supabase) {
   startActionClearing({ supabase, clock: systemClock })
-  console.log('[Axiom API] Connectors on; action content is cleared daily after 30 days')
+  startConnectorIngestion({ supabase, connectors, clock: systemClock })
+  console.log('[Axiom API] Connectors on; connectors are polled and queued; action content is cleared daily after 30 days')
 } else {
   console.log('[Axiom API] Connectors off (CONNECTORS is not on)')
 }
