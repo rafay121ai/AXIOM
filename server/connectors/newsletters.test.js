@@ -18,12 +18,12 @@ const ENV = { FRONTEND_URL: 'https://app.example.com', CONNECTORS: 'on' }
 const mail = (i, sender, labelIds = ['INBOX', 'CATEGORY_PROMOTIONS'], subject = 'SUBJECT-SECRET-9921') => ({ messageId: `m${i}`, sender, subject, labelIds, messageTimestamp: String(NOW - i * HOUR) })
 const many = (n, sender, labelIds) => Array.from({ length: n }, (_, i) => mail(`${sender}${i}`, sender, labelIds))
 
-function setup({ messages = [], tables = {}, gmail = true } = {}) {
+function setup({ messages = [], tables = {}, gmail = true, more = false } = {}) {
   const calls = []
   const composio = {
     create: async (userId) => ({
       toolkits: async () => ({ items: gmail ? [{ slug: 'gmail', connection: { isActive: true, connectedAccount: { id: 'ca1' } } }] : [] }),
-      execute: async (slug, args) => { calls.push({ slug, args }); return { successful: true, data: { data: { messages: typeof messages === 'function' ? messages(args) : messages } } } },
+      execute: async (slug, args) => { calls.push({ slug, args }); return { successful: true, data: { data: { messages: typeof messages === 'function' ? messages(args) : messages, ...(more ? { nextPageToken: 'next' } : {}) } } } },
     }),
     connectedAccounts: {},
   }
@@ -272,4 +272,65 @@ test('sameStory: shared names and numbers, not the newsletter\'s own name', () =
   assert.equal(sameStory('Texas passed a payroll rule from 1 March 2027.', 'Texas will start a payroll rule on 1 March 2027.'), true)
   assert.equal(sameStory('Texas passed a payroll rule from 1 March 2027.', 'Ohio banned tips on 9 June 2028.'), false)
   assert.equal(sameStory('The Weekly Founder says Texas fell.', 'The Weekly Founder says Ohio rose.', 'The Weekly Founder', 'The Weekly Founder'), false)
+})
+
+// --- shaped like a real inbox (Nov 28 scan: apps, bots and retail at the top) ---
+
+const P = ['INBOX', 'CATEGORY_PROMOTIONS']
+const U = ['INBOX', 'CATEGORY_UPDATES']
+const run = (n, sender, labels, { unread = 0, subject = 'Issue' } = {}) => Array.from({ length: n }, (_, i) => ({ messageId: `${sender}-${i}`, sender, subject, labelIds: i < unread ? [...labels, 'UNREAD'] : labels, messageTimestamp: String(NOW - (i + 1) * 20 * HOUR) }))
+const INBOX = [
+  ...run(30, 'Slack <notifications@slack.com>', U), ...run(25, 'Slack <feedback@slack.com>', U), ...run(20, 'Slack <no-reply@slack.com>', U),
+  ...run(28, 'vercel[bot] <notifications@github.com>', U), ...run(15, 'Vercel <team@vercel.com>', U),
+  ...run(12, 'McKinsey & Company <publishing@email.mckinsey.example>', P, { unread: 2 }),
+  ...run(22, 'UNIQLO <info@news.uniqlo.example>', P, { unread: 19 }),
+  ...run(9, 'Quantum Zeitgeist Newsletter <hello@quantumzeitgeist.example>', P, { unread: 1 }),
+  ...run(4, 'Seth Godin <seth@seths.example>', P), ...run(2, 'Seth Godin <hello@seths.example>', P),
+  ...run(5, 'Lenny\'s Newsletter <lenny@substack.com>', P), ...run(4, 'Stratechery <ben@stratechery.example>', P, { unread: 3 }),
+  ...run(10, 'Hostly <hello@hostly.example>', U, { subject: 'Your receipt from Hostly' }),
+  ...run(6, 'Dana <dana@brightloop.example>', U),
+  ...run(3, 'Figma <team@figma.com>', U), ...run(5, 'Acme Billing <billing@acme.example>', U),
+]
+
+test('groupSenders on a real-shaped inbox: apps, bots and receipts out, same name one row, newsletters above retail', () => {
+  const ranked = [...groupSenders(INBOX, 30)].sort((a, b) => b[1].score - a[1].score)
+  const names = ranked.map(([, s]) => s.name)
+  assert.ok(!names.some((n) => /slack|vercel|bot|figma|hostly|billing/i.test(n)), names.join())
+  assert.equal(names.filter((n) => n === 'Seth Godin').length, 1)
+  assert.equal(ranked.find(([, s]) => s.name === 'Seth Godin')[0], 'seth@seths.example') // the address with the most mail
+  assert.equal(ranked.find(([, s]) => s.name === 'Seth Godin')[1].per_week, 1)
+  assert.ok(names.indexOf('UNIQLO') > names.indexOf('Quantum Zeitgeist Newsletter'))
+  assert.ok(names.indexOf('UNIQLO') > names.indexOf("Lenny's Newsletter"))
+  console.log('top:', names.slice(0, 8).join(' | '), `(${INBOX.length} messages, ${ranked.length} rows)`)
+})
+
+const fullPage = () => Array.from({ length: 100 }, (_, i) => ({ messageId: `m${i}`, sender: 'Weekly Brief <hi@brief.example>', labelIds: ['INBOX', 'CATEGORY_PROMOTIONS'], messageTimestamp: String(NOW - (i % 5 + 1) * 24 * HOUR) }))
+
+test('the query leaves out apps and social; the scan stops at 5 pages and rates use the days actually covered', async () => {
+  const t = await setup({ messages: fullPage, more: true })
+  try {
+    const res = await t.call('GET')
+    assert.equal(t.calls.length, 5)
+    assert.match(t.calls[0].args.query, /-category:social/)
+    assert.match(t.calls[0].args.query, /-from:\(.*noreply.*slack\.com/)
+    assert.equal(res.body.newsletters[0].per_week, 700) // 500 mails over the 5 days seen, not over 30 (which would say 117)
+  } finally { await t.close() }
+})
+
+test('two GETs at once share one scan; a failed scan is held 10 minutes; a login failure is not held', async () => {
+  const t = await setup({ messages: many(3, 'A <a@x.example>') })
+  try {
+    const [a, b] = await Promise.all([t.call('GET'), t.call('GET')])
+    assert.deepEqual([a.status, b.status, t.calls.length, t.base.rows('watch_sources').length], [200, 200, 1, 1])
+  } finally { await t.close() }
+  const bad = await setup({ messages: () => { throw new Error('boom') } })
+  try {
+    assert.equal((await bad.call('GET')).status, 500)
+    const spent = bad.calls.length
+    assert.equal((await bad.call('GET')).status, 500)
+    assert.equal(bad.calls.length, spent) // held: no new Composio call
+    bad.clock.advance(11 * 60 * 1000)
+    await bad.call('GET')
+    assert.ok(bad.calls.length > spent)
+  } finally { await bad.close() }
 })

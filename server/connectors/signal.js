@@ -51,7 +51,7 @@ export const SIGNAL_PROMPT = [
 
 // Appended to the prompt for a newsletter the founder chose to watch (lane world).
 export const NEWSLETTER_PROMPT = [
-  'This item is a newsletter the founder chose to watch. It is long and mostly about other people. Say only what in it touches THIS founder\'s business: their market, customers, competitors, rules, prices or goals, as written in the founder brief, the world list or the open situations.',
+  'This item is a newsletter the founder chose to watch. It is long and mostly about other people. Say only what in it touches THIS founder\'s business: their market, customers, competitors, rules, prices or goals, as written in the founder brief or the open situations.',
   'If nothing in it touches them, worth_telling is false. That is most issues. Never summarise the newsletter.',
   'lane is world. what_happened: the one fact in it that touches them, with names and numbers exactly as written in the item. impact and push_line: how it affects THIS founder, in their words, never what the newsletter says in general.',
 ].join('\n')
