@@ -1,7 +1,8 @@
+import { useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
-import type { Connectors } from '../api/types';
+import type { Connectors, Newsletter } from '../api/types';
 import { ConnectAction, ToolIcon } from '../components/ToolIcon';
 import { Fade } from '../components/Fade';
 import { GoldButton } from '../components/GoldButton';
@@ -10,17 +11,33 @@ import { Switch } from '../components/Switch';
 import { TextAction } from '../components/TextAction';
 import { Wash } from '../components/Wash';
 import { copy } from '../copy';
-import { anyConnected, type ConnectorsApi, TOOLKITS } from '../connect/flow';
+import type { KeyValueStore } from '../api/outbox';
+import { anyConnected, type ConnectorsApi, newsletterGate, TOOLKITS } from '../connect/flow';
 import { useConnectors } from '../connect/useConnectors';
 import { fonts, gold, ink, space } from '../theme';
+import { NewsletterPicker } from './NewsletterPicker';
 
-type Props = { api: ConnectorsApi; first: Connectors; onDone: () => void };
+type Props = { api: ConnectorsApi; first: Connectors; store: KeyValueStore; onDone: () => void };
 
 // Shown once, right after the first reading. One job: connect a tool, or not now. Continue replaces Not now once one is connected.
-export function ConnectScreen({ api, first, onDone }: Props) {
+export function ConnectScreen({ api, first, store, onDone }: Props) {
   const insets = useSafeAreaInsets();
   const { data, waiting, line, connect, setLearn } = useConnectors(api, first);
   const rows = data ?? first;
+  // null: the connect screen. 'looking': counting newsletters. A list: the picker.
+  const [picking, setPicking] = useState<'looking' | Newsletter[] | null>(null);
+  const gmailOn = rows.connectors.find((c) => c.toolkit === 'gmail')?.status === 'active';
+  const wasOn = useRef(gmailOn);
+  const live = useRef(true);
+  useEffect(() => () => { live.current = false; }, []);
+  // The first time Gmail turns active here, offer the newsletters; an empty or failed lookup goes quietly back.
+  useEffect(() => {
+    if (!gmailOn || wasOn.current) { wasOn.current = gmailOn; return; }
+    wasOn.current = true;
+    setPicking('looking');
+    void newsletterGate(api, store).then((list) => live.current && setPicking(list));
+  }, [gmailOn, api, store]);
+  if (picking) return <NewsletterPicker api={api} list={picking === 'looking' ? null : picking} onDone={() => setPicking(null)} />;
   return (
     <View style={styles.screen}>
       <Wash />

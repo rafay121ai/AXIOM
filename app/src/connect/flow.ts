@@ -1,9 +1,9 @@
 import type { KeyValueStore } from '../api/outbox';
 import { HttpError } from '../api/queue';
-import type { AxiomApi, Connectors, Toolkit } from '../api/types';
+import type { AxiomApi, Connectors, Newsletter, Toolkit } from '../api/types';
 import { copy, failureLine } from '../copy';
 
-export type ConnectorsApi = Pick<AxiomApi, 'getConnectors' | 'connectConnector' | 'disconnectConnector' | 'forgetConnector' | 'setLearnHowIWork'>;
+export type ConnectorsApi = Pick<AxiomApi, 'getConnectors' | 'connectConnector' | 'disconnectConnector' | 'forgetConnector' | 'setLearnHowIWork' | 'getNewsletters' | 'setNewsletters'>;
 
 export const TOOLKITS: Toolkit[] = ['gmail', 'googlecalendar', 'notion'];
 export const toolName = (t: Toolkit) => copy.connect.tools[t].name;
@@ -15,7 +15,8 @@ export const anyConnected = (c: Connectors | null) => !!c?.connectors.some((x) =
 
 // One founder sees the connect screen once, right after the first reading. Sign-out clears the flag so the next founder on this phone is not skipped.
 const SHOWN = 'connect_shown';
-export const clearShown = (store: KeyValueStore) => store.removeItem(SHOWN);
+const PICKED = 'newsletters_shown';
+export const clearShown = async (store: KeyValueStore) => { await store.removeItem(SHOWN); await store.removeItem(PICKED); };
 
 /** The connectors to show on the connect screen, or null when it must be skipped: switched off (404), already shown, or the server could not be reached in a few seconds. Marks it shown. */
 export async function connectGate(api: Pick<AxiomApi, 'getConnectors'>, store: KeyValueStore, timeoutMs = 4000): Promise<Connectors | null> {
@@ -33,4 +34,15 @@ export async function connectTool(api: ConnectorsApi, toolkit: Toolkit, open: (u
   const { url } = await api.connectConnector(toolkit);
   await open(url);
   return api.getConnectors();
+}
+
+export const newsletterSub = (n: Newsletter) => `${copy.newsletters.perWeek.replace('{n}', String(n.per_week))} · ${copy.newsletters.opens[n.opens]}`;
+
+/** The newsletters to offer right after Gmail first connects, or null to skip silently: already offered on this device, none found, or the lookup failed. Marked offered only when there is a list to show. */
+export async function newsletterGate(api: Pick<AxiomApi, 'getNewsletters'>, store: KeyValueStore): Promise<Newsletter[] | null> {
+  if (await store.getItem(PICKED)) return null;
+  const list = await api.getNewsletters().catch(() => null);
+  if (!list?.length) return null;
+  await store.setItem(PICKED, '1');
+  return list;
 }

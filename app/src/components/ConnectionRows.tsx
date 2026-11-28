@@ -9,10 +9,10 @@ import { Switch } from './Switch';
 import { TextAction } from './TextAction';
 import { ConnectAction, ToolIcon } from './ToolIcon';
 
-type Props = { api: ConnectorsApi; cx: ReturnType<typeof useConnectors>; onHow: () => void };
+type Props = { api: ConnectorsApi; cx: ReturnType<typeof useConnectors>; onHow: () => void; /** Set only when the server has a newsletter list to show. */ onNewsletters?: () => void };
 
 // Settings, Connections: one plain line per tool. A connected one opens to Disconnect and Delete what Axiom learned.
-export function ConnectionRows({ api, cx, onHow }: Props) {
+export function ConnectionRows({ api, cx, onHow, onNewsletters }: Props) {
   const [open, setOpen] = useState<Toolkit | null>(null);
   const { data, waiting, line, attempt, connect, setLearn, refresh } = cx;
   if (!data) return null;
@@ -45,6 +45,7 @@ export function ConnectionRows({ api, cx, onHow }: Props) {
             )}
             {isOpen && status === 'active' && (
               <View style={styles.actions}>
+                {toolkit === 'gmail' && onNewsletters && <TextAction label={copy.newsletters.action} size={14} onPress={onNewsletters} />}
                 {toolkit === 'notion' && <TextAction label={copy.connect.choosePages} size={14} onPress={() => void connect(toolkit)} />}
                 <TextAction label={copy.connect.disconnect} size={14} onPress={() => { setOpen(null); void attempt(async () => { await api.disconnectConnector(toolkit); await refresh(); }, say('disconnected', toolkit)); }} />
                 <TextAction label={copy.connect.forget.replace('{tool}', name)} size={14} onPress={() => void attempt(async () => { await api.forgetConnector(toolkit); }, say('forgotten', toolkit))} />

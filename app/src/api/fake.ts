@@ -1,5 +1,5 @@
 import { HttpError } from './queue';
-import type { AccountExport, AccountRequest, AxiomApi, Commitment, Connectors, ConsentResult, DueReport, FirstReading, HistoryPage, HistoryRow, Home, HomeItem, FounderLessons, LearnReply, LearnTurn, MemoryItem, MoveView, Outcome, Question, Read, ReadAnswerResult, ReportResult, Screened, Settings, SituationReply, SituationView, Story, StoryReply, SwapResult } from './types';
+import type { AccountExport, AccountRequest, AxiomApi, Commitment, Connectors, ConsentResult, DueReport, FirstReading, HistoryPage, HistoryRow, Home, HomeItem, FounderLessons, LearnReply, LearnTurn, MemoryItem, MoveView, Newsletter, Outcome, Question, Read, ReadAnswerResult, ReportResult, Screened, Settings, SituationReply, SituationView, Story, StoryReply, SwapResult } from './types';
 
 // Fixture questions: the same 14, in the same order and words, as server/journey/questions.js.
 const QUESTIONS: Question[] = [
@@ -315,6 +315,10 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
   let settings = FAKE_SETTINGS;
   // Fixture connectors: connecting is instant, and the link is a placeholder.
   let tools: Connectors = { connectors: (['gmail', 'googlecalendar', 'notion'] as const).map((toolkit) => ({ toolkit, connected: false, status: 'not_connected' as const })), learn_how_i_work: false };
+  let letters: Newsletter[] = [
+    ["Lenny's Newsletter", 1, 'most'], ['The Information', 5, 'most'], ['TechCrunch Daily', 7, 'rarely'], ['Not Boring', 1, 'most'],
+    ['Stratechery', 4, 'some'], ['Y Combinator', 1, 'most'], ['Product Hunt Daily', 7, 'rarely'], ['Morning Brew', 6, 'rarely'],
+  ].map(([name, per_week, opens], i) => ({ id: `nl${i}`, name, per_week, opens, watching: false }) as Newsletter);
   const setTool = (toolkit: string, connected: boolean) => { tools = { ...tools, connectors: tools.connectors.map((c) => (c.toolkit === toolkit ? { ...c, connected, status: connected ? 'active' : 'not_connected' } : c)) }; };
   const wait = () => (latencyMs > 0 ? new Promise<void>((r) => setTimeout(r, latencyMs)) : undefined);
   const screen = async (): Promise<Screened> => (sim === 'clear' ? CLEAR : sim === 'unclear' ? UNCLEAR : {});
@@ -546,6 +550,13 @@ export function createFakeApi(sim: CareSim = 'none', latencyMs = 0, reportDue = 
     },
     async getConnectors() {
       return tools;
+    },
+    async getNewsletters() {
+      return letters;
+    },
+    async setNewsletters(watching) {
+      letters = letters.map((n) => ({ ...n, watching: watching.includes(n.id) }));
+      return letters;
     },
     async connectConnector(toolkit) {
       setTool(toolkit, true);

@@ -367,7 +367,7 @@ export default function App() {
               if (first) goTo({ name: 'connect', first });
               else beginSituation(false);
             }} />}
-            {stage.name === 'connect' && <ConnectScreen api={api} first={stage.first} onDone={() => beginSituation(false)} />}
+            {stage.name === 'connect' && <ConnectScreen api={api} first={stage.first} store={AsyncStorage} onDone={() => beginSituation(false)} />}
           </Animated.View>
         </View>
       </View>

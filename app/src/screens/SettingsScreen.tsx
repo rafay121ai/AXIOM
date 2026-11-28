@@ -14,6 +14,8 @@ import { WordChoice } from '../components/WordChoice';
 import { copy, failureLine } from '../copy';
 import type { ConnectorsApi } from '../connect/flow';
 import { useConnectors } from '../connect/useConnectors';
+import { useNewsletters } from '../connect/useNewsletters';
+import { NewslettersPage } from './NewslettersPage';
 import { clockTime } from '../move/format';
 import { colors, fonts, ink } from '../theme';
 
@@ -65,6 +67,9 @@ function Row({ title, sub, value, chevron, danger, onPress, right, first }: RowP
 // Settings: groups divided by thin lines with plain labels. Every change is saved at once; if it does not save, it goes back.
 export function SettingsScreen({ load, save, requestExport, requestDelete, cancelDelete, onEditAnswers, connectors, onHow, onSignOut, onBack }: Props) {
   const cx = useConnectors(connectors);
+  const gmailOn = cx.data?.connectors.find((c) => c.toolkit === 'gmail')?.status === 'active';
+  const letters = useNewsletters(connectors, !!gmailOn);
+  const [lettersOpen, setLettersOpen] = useState(false);
   const [s, setS] = useState<Settings | null>(null);
   const [failure, setFailure] = useState<{ text: string; canRetry: boolean } | null>(null);
   const [timeOpen, setTimeOpen] = useState(false);
@@ -153,6 +158,7 @@ export function SettingsScreen({ load, save, requestExport, requestDelete, cance
     { value: 'calm', label: copy.settings.calm }, { value: 'direct', label: copy.settings.direct }, { value: 'hard', label: copy.settings.hard },
   ];
 
+  if (lettersOpen && letters.list) return <NewslettersPage list={letters.list} line={letters.line} onToggle={(id) => void letters.toggle(id)} onBack={() => setLettersOpen(false)} />;
   return (
     <View style={styles.screen}>
       <Wash />
@@ -219,7 +225,7 @@ export function SettingsScreen({ load, save, requestExport, requestDelete, cance
 
             {cx.data && (
               <Section label={copy.connect.section}>
-                <ConnectionRows api={connectors} cx={cx} onHow={() => onHow(s.links.privacy)} />
+                <ConnectionRows api={connectors} cx={cx} onHow={() => onHow(s.links.privacy)} onNewsletters={letters.list ? () => setLettersOpen(true) : undefined} />
               </Section>
             )}
 

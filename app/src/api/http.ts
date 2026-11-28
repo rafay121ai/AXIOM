@@ -1,7 +1,7 @@
 import type { Auth } from './auth';
 import { createOutbox, type KeyValueStore, memoryStore } from './outbox';
 import { createSaveQueue, HttpError } from './queue';
-import type { AccountExport, AccountRequest, AxiomApi, Commitment, Connectors, ConsentResult, ConsentState, DueReport, FirstReading, HistoryPage, HistoryRow, Home, LearnReply, LoadingQuote, MemoryItem, MoveView, Read, ReadAnswerResult, ReportResult, Screened, Settings, Signup, SituationReply, SituationView, StoryReply, SwapResult } from './types';
+import type { AccountExport, AccountRequest, AxiomApi, Commitment, Connectors, ConsentResult, ConsentState, DueReport, FirstReading, HistoryPage, HistoryRow, Home, LearnReply, LoadingQuote, MemoryItem, MoveView, Newsletter, Read, ReadAnswerResult, ReportResult, Screened, Settings, Signup, SituationReply, SituationView, StoryReply, SwapResult } from './types';
 
 const CODE_NAME = /^[a-z]+(_[a-z]+)*$/;
 
@@ -130,6 +130,17 @@ export function createHttpApi({ baseUrl, auth, fetch: doFetch = globalThis.fetch
     },
     forgetConnector: (toolkit) => request<{ forgotten: number }>('POST', `/api/connectors/${toolkit}/forget`),
     setLearnHowIWork: (on) => request<{ learn_how_i_work: boolean }>('PUT', '/api/connectors/learn', { on }),
+    async getNewsletters() {
+      try {
+        return (await request<{ newsletters: Newsletter[] }>('GET', '/api/connectors/gmail/newsletters')).newsletters;
+      } catch (e) {
+        if (e instanceof HttpError && e.status === 404) return null;
+        throw e;
+      }
+    },
+    async setNewsletters(watching) {
+      return (await request<{ newsletters: Newsletter[] }>('PUT', '/api/connectors/gmail/newsletters', { watching })).newsletters;
+    },
     requestExport: () => request<AccountExport>('POST', '/api/account/export'),
     requestDelete: () => request<AccountRequest>('DELETE', '/api/account', { confirm: 'DELETE' }),
     cancelDelete: () => request<AccountRequest>('DELETE', '/api/account', { cancel: true }),
