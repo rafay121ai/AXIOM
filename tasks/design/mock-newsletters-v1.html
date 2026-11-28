@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Axiom: Newsletters (mock v1)</title>
+<style>
+  /* Tokens copied from mock-connect-v1.html (approved Nov 27). Nothing new. */
+  :root {
+    --ink-rgb: 234,236,238; --hl-rgb: 205,178,126; --hl2-rgb: 168,142,94; --bg: #050505;
+    --serif: ui-serif, "New York", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --sans: -apple-system, "SF Pro Text", "Inter", system-ui, "Segoe UI", sans-serif;
+    --ink: rgb(var(--ink-rgb)); --hl: linear-gradient(90deg, rgb(var(--hl-rgb)), rgb(var(--hl2-rgb)));
+    --ease: cubic-bezier(.2,.8,.2,1);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: #101011; color: #b9b8b3; font-family: var(--sans); padding: 28px 20px; }
+  button { font: inherit; color: inherit; }
+  .wrap { max-width: 980px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 56px; justify-content: center; align-items: flex-start; }
+  .side { width: 340px; font-size: 13.5px; line-height: 1.55; }
+  .side h1 { font-family: var(--serif); font-weight: 500; font-size: 24px; margin: 0 0 6px; color: #ecebe6; }
+  .side h3 { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #8e8d88; margin: 22px 0 10px; font-weight: 500; }
+  .jump { display: flex; flex-wrap: wrap; gap: 6px; }
+  .jump button { font-size: 12px; color: #cfcdc6; background: transparent; border: 1px solid #2c2c2e; border-radius: 99px; padding: 6px 11px; cursor: pointer; }
+  .jump button.on { background: #242426; border-color: #8a8984; color: #f2f1ec; }
+  .why { border: 1px solid #2a2a2c; border-radius: 14px; padding: 13px 15px; background: #121213; }
+  .why p { margin: 6px 0 0; color: #a9a8a2; } .why b { color: #e4e1d8; font-weight: 500; } .new { color: #d9c08f; }
+
+  .phone { width: 390px; height: 840px; order: -1; position: relative; border-radius: 52px; border: 1px solid #2a2a2c; overflow: hidden; background: var(--bg); color: var(--ink); flex: none; box-shadow: 0 40px 100px rgba(0,0,0,.55); }
+  .notch { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 112px; height: 28px; border-radius: 99px; background: #000; z-index: 30; }
+  .view { position: absolute; inset: 0; z-index: 1; display: none; flex-direction: column; overflow: hidden; }
+  .view.on { display: flex; animation: in .5s cubic-bezier(.2,.7,.2,1) both; }
+  @keyframes in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  @keyframes draw { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  .wash { position: absolute; inset: 0; pointer-events: none; background:
+      radial-gradient(130% 58% at 50% 108%, rgba(205,178,126,.24), rgba(205,178,126,0) 66%),
+      radial-gradient(100% 40% at 50% -8%, rgba(205,178,126,.09), rgba(205,178,126,0) 72%); }
+
+  .cbody { position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; padding: 92px 26px 34px; min-height: 0; }
+  .lead { font-family: var(--serif); font-size: 27px; line-height: 1.28; color: #f4f4f2; margin: 0; animation: fade 1s var(--ease) .15s both; }
+  .lead2 { font-family: var(--serif); font-size: 18.5px; line-height: 1.5; color: rgba(var(--ink-rgb), .72); margin: 14px 0 0; animation: fade 1s var(--ease) .4s both; }
+  .list { list-style: none; margin: 28px 0 0; padding: 0; overflow-y: auto; flex: 1; scrollbar-width: none; } .list::-webkit-scrollbar { display: none; }
+  .nl { position: relative; display: flex; align-items: center; gap: 14px; min-height: 60px; padding: 8px 0; cursor: pointer; animation: fade 1s var(--ease) var(--d) both; }
+  .nl::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px; background: rgba(var(--ink-rgb), .14); transform-origin: left; animation: draw .9s var(--ease) var(--d) both; }
+  .nl:last-child::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: rgba(var(--ink-rgb), .14); }
+  .tn { flex: 1; font-size: 16px; color: rgba(var(--ink-rgb), .92); }
+  .tn small { display: block; font-size: 12.5px; color: rgba(var(--ink-rgb), .45); margin-top: 2px; }
+  .mark { width: 26px; height: 26px; border-radius: 50%; border: 1px solid rgba(var(--ink-rgb), .35); display: grid; place-items: center; flex: none; transition: background .25s, border-color .25s; }
+  .mark svg { width: 13px; height: 13px; fill: none; stroke: #1a1508; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: 0; transition: opacity .2s; }
+  .nl[aria-checked="true"] .mark { background: var(--hl); border-color: transparent; } .nl[aria-checked="true"] .mark svg { opacity: 1; }
+  .foot { display: flex; flex-direction: column; align-items: center; gap: 4px; padding-top: 18px; animation: fade 1s var(--ease) .9s both; }
+  .cont { width: 100%; height: 52px; border-radius: 16px; border: 0; cursor: pointer; background: var(--hl); color: #1a1508; font-size: 16px; font-weight: 500;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.35), inset 0 -2px 0 rgba(0,0,0,.18), 0 10px 26px rgba(168,142,94,.22); }
+  .cont[disabled] { background: none; border: 1px solid rgba(var(--ink-rgb), .2); color: rgba(var(--ink-rgb), .35); box-shadow: none; cursor: default; }
+  .ta { background: none; border: 0; min-height: 44px; padding: 0 8px; cursor: pointer; display: flex; align-items: center; }
+  .ta span { font-size: 14px; color: rgba(var(--ink-rgb), .5); border-bottom: 1px solid transparent; padding: 2px 0; }
+  .ta:hover span { color: rgba(var(--ink-rgb), .9); border-bottom-color: rgba(var(--ink-rgb), .4); }
+
+  /* waiting: the existing loading hint pattern (logo drawing + two faint lines) */
+  .wait { position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; padding: 0 40px 80px; text-align: center; }
+  .wait p { font-family: var(--serif); font-size: 21px; line-height: 1.45; color: rgba(var(--ink-rgb), .85); margin: 0; }
+  .lines { width: 160px; display: grid; gap: 9px; }
+  .lines i { height: 2px; border-radius: 2px; background: linear-gradient(90deg, rgba(var(--hl-rgb),0), rgba(var(--hl-rgb),.6), rgba(var(--hl-rgb),0)); background-size: 200% 100%; animation: shim 1.6s linear infinite; }
+  .lines i:last-child { width: 70%; justify-self: center; animation-delay: .3s; }
+  @keyframes shim { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+  .emb { width: 34px; height: 34px; } .emb svg { width: 100%; height: 100%; }
+
+  /* settings */
+  .sthead { position: relative; z-index: 2; display: flex; align-items: center; justify-content: space-between; padding: 56px 18px 10px; }
+  .sthead span.t { font-family: var(--serif); font-size: 20px; color: #f4f4f2; }
+  .stback { background: none; border: 0; width: 44px; height: 44px; color: rgba(var(--ink-rgb), .85); font-size: 28px; cursor: pointer; }
+  .sbody { position: relative; z-index: 1; flex: 1; overflow-y: auto; padding: 4px 24px 40px; }
+  .slab { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: rgba(var(--ink-rgb), .45); margin: 18px 0 6px; }
+  .note { font-size: 13px; line-height: 1.5; color: rgba(var(--ink-rgb), .5); margin: 6px 0 0; }
+  .samplemark { position: absolute; top: 60px; right: 22px; z-index: 5; font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: rgba(var(--hl-rgb), .95); }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="side">
+    <h1>Newsletters</h1>
+    <div class="jump" id="jump">
+      <button data-v="wait" class="on">1. Right after Gmail connects</button>
+      <button data-v="pick">2. Pick</button>
+      <button data-v="settings">3. Settings: Gmail</button>
+    </div>
+    <h3>When it shows</h3>
+    <div class="why"><b>Once, right after Gmail connects</b><p>On the connect screen, when the founder comes back from Google with Gmail connected, Axiom spends a few seconds counting the newsletters in the last 30 days, then shows this one screen. Only if it found at least one. "Not now" skips it. After that it lives in Settings, Connections, Gmail, Newsletters.</p></div>
+    <h3>How it works</h3>
+    <div class="why"><p>Up to 8 newsletters, ranked by how often they arrive and how many the founder actually opens (Gmail's unread mark). Nothing is ticked for them: the founder picks. Only the ticked ones are read. When one says something that touches the founder's business, they get a signal about how it affects them, not a summary of the newsletter. The same story in two newsletters is one signal. Untick any time.</p></div>
+    <h3>Words</h3>
+    <div class="why"><p><b class="new">New, waiting for your OK:</b> "Which of these do you actually read?", "I'll read only the ones you tick, and tell you when one touches your business.", "about 3 a week", "you open most", "you rarely open", "Watch these", "Not now", "Looking through your newsletters", "Newsletters", "I read only these. Tap one to stop."</p></div>
+  </div>
+
+  <div class="phone">
+    <div class="notch"></div>
+    <span class="samplemark">Sample</span>
+
+    <section class="view on" id="v-wait">
+      <div class="wash"></div>
+      <div class="wait">
+        <div class="emb"><svg viewBox="0 0 100 100"><defs><linearGradient id="gl"><stop offset="0" stop-color="rgb(205,178,126)"/><stop offset="1" stop-color="rgb(168,142,94)"/></linearGradient></defs><g fill="none" stroke="url(#gl)" stroke-width="3.5"><path d="M 8,84 H 28 C 28,55 35,36 50,26 C 55,23 54,18 50,11 C 45,22 40,27 31,33 C 18,43 13,60 13,84"/><path d="M 92,84 H 72 C 72,55 65,36 50,26 C 55,23 54,18 50,11 C 55,22 60,27 69,33 C 82,43 87,60 87,84"/></g></svg></div>
+        <p>Looking through your newsletters</p>
+        <div class="lines"><i></i><i></i></div>
+      </div>
+    </section>
+
+    <section class="view" id="v-pick">
+      <div class="wash"></div>
+      <div class="cbody">
+        <p class="lead">Which of these do you actually read?</p>
+        <p class="lead2">I'll read only the ones you tick, and tell you when one touches your business.</p>
+        <ul class="list" id="list"></ul>
+        <div class="foot">
+          <button class="cont" id="watch" disabled>Watch these</button>
+          <button class="ta"><span>Not now</span></button>
+        </div>
+      </div>
+    </section>
+
+    <section class="view" id="v-settings">
+      <div class="wash" style="opacity:.6"></div>
+      <div class="sthead"><button class="stback" aria-label="Back">‹</button><span class="t">Newsletters</span><span style="width:44px"></span></div>
+      <div class="sbody">
+        <p class="note">I read only these. Tap one to stop.</p>
+        <div class="slab">Watching</div>
+        <ul class="list" id="list2" style="margin-top:0"></ul>
+      </div>
+    </section>
+  </div>
+</div>
+<script>
+  const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
+  const NL = [
+    ['Lenny\'s Newsletter', 'about 1 a week · you open most'], ['The Information', 'about 5 a week · you open most'],
+    ['TechCrunch Daily', 'about 7 a week · you rarely open'], ['Not Boring', 'about 1 a week · you open most'],
+    ['Stratechery', 'about 4 a week · you open some'], ['Y Combinator', 'about 1 a week · you open most'],
+    ['Product Hunt Daily', 'about 7 a week · you rarely open'], ['Morning Brew', 'about 6 a week · you rarely open'],
+  ];
+  const tick = '<svg viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5"/></svg>';
+  $('#list').innerHTML = NL.map(([n, s], i) => `<li class="nl" role="checkbox" aria-checked="false" tabindex="0" style="--d:${.6 + i * .08}s"><div class="tn">${n}<small>${s}</small></div><span class="mark">${tick}</span></li>`).join('');
+  $('#list2').innerHTML = [NL[0], NL[1], NL[3]].map(([n, s], i) => `<li class="nl" role="checkbox" aria-checked="true" tabindex="0" style="--d:${.2 + i * .08}s"><div class="tn">${n}<small>${s}</small></div><span class="mark">${tick}</span></li>`).join('');
+  const sync = () => { $('#watch').disabled = !$$('#list .nl[aria-checked="true"]').length; };
+  $$('.nl').forEach(r => r.onclick = () => { r.setAttribute('aria-checked', r.getAttribute('aria-checked') !== 'true'); sync(); });
+  const show = (v) => { $$('.view').forEach(x => x.classList.toggle('on', x.id === 'v-' + v)); $$('#jump button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); };
+  $$('#jump button').forEach(b => b.onclick = () => show(b.dataset.v));
+  setTimeout(() => { if ($('#v-wait').classList.contains('on')) show('pick'); }, 2600);
+</script>
+</body>
+</html>

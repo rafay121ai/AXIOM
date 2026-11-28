@@ -49,7 +49,7 @@ async function fetchItem(read, userId, toolkit, jobExternalId) {
   return { id, ...page, title, body: typeof markdown === 'string' ? markdown : '', textUnavailable: typeof markdown !== 'string' }
 }
 
-export function createWorker({ supabase, read, breaker, clock, blocked = async () => false, handleItem = defaultHandleItem, log = (what, info) => console.error(`[Connectors] ${what}`, info ?? '') }) {
+export function createWorker({ supabase, read, breaker, clock, blocked = async () => false, learnPeople = async () => 0, handleItem = defaultHandleItem, log = (what, info) => console.error(`[Connectors] ${what}`, info ?? '') }) {
   const iso = (ms = clock.now()) => new Date(ms).toISOString()
   const meetingCache = new Map()
 
@@ -116,6 +116,7 @@ export function createWorker({ supabase, read, breaker, clock, blocked = async (
       if (!result.keep) return finish(job, { status: 'dropped', last_error_code: result.reason })
       // The founder may have disconnected while we read: check again right before anything is written.
       if ((await accountOf(job))?.status !== 'active') return finish(job, { status: 'dropped', last_error_code: 'no_active_account' })
+      if (job.toolkit === 'googlecalendar') await learnPeople(job.user_id, item) // past meetings teach who the founder meets; never fails the job
       await handleItem(job.user_id, job.toolkit, result.injection ? { ...item, injection: true } : item, { repliedTo: result.repliedTo === true, createdAt: Date.parse(job.created_at) || null })
       if (account.last_error_code) ok(await supabase.from('connector_accounts').update({ last_error_code: null, updated_at: iso() }).eq('id', account.id).select('id'))
       return finish(job, { status: 'done', last_error_code: null })

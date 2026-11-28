@@ -4,6 +4,7 @@
 import { norm, wordRx } from '../ownWords.js'
 import { STOP } from '../hooks.js'
 import { createMemoryStore } from './memoryStore.js'
+import { rhythmLines } from './rhythm.js'
 import { TRAIT_MIN_OBSERVATIONS, TRAIT_MIN_SITUATIONS, cleanStoredText, isUsable, properNouns } from './beliefRules.js'
 
 export const BRIEF_MAX_CHARS = 900
@@ -17,6 +18,7 @@ const SECTIONS = [
   ['world', 'People and things in this conversation:'],
   ['vocab', 'Their shorthand:'],
   ['threads', 'Open threads:'],
+  ['rhythm', 'Regular meetings:'],
 ]
 const words = (s) => s.replace(/_/g, ' ')
 const byConfidence = (a, b) => b.confidence - a.confidence
@@ -79,7 +81,7 @@ export function earlierLines(brief) {
 }
 
 // Each list is the founder's rows. evidenceCounts: { [itemId]: { rows, sources } } for traits.
-export function buildBriefText({ beliefs = [], traits = [], world = [], vocabulary = [], threads = [], evidenceCounts = {}, currentText = '', nowMs = Date.now() }) {
+export function buildBriefText({ beliefs = [], traits = [], world = [], vocabulary = [], threads = [], evidenceCounts = {}, meetings = [], currentText = '', nowMs = Date.now() }) {
   const active = (list) => list.filter((r) => r.status === 'active')
   const usable = isUsable
   // Sign-up self-report traits are used from day one at confidence >= 0.4 (day-one personalisation, decisions.md Nov 9);
@@ -107,6 +109,7 @@ export function buildBriefText({ beliefs = [], traits = [], world = [], vocabula
     ...workLines.map((text) => ['work', text]),
     ...facts.map((text) => ['facts', text]),
     ...active(world).filter((w) => said(w.name)).map((w) => ['world', `${w.name} (${w.kind}${w.role ? `, ${w.role}` : ''})`]),
+    ...Object.values(rhythmLines(world, meetings, nowMs)).map((text) => ['rhythm', text]),
     ...active(vocabulary).filter((v) => said(v.term)).map((v) => ['vocab', `${v.term}: ${v.meaning}`]),
     ...threads.filter((t) => t.status === 'open' && recent(t) && fresh(t.title) && !pastTheConversation(cleanStoredText(t.title), currentText))
       .sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at))).slice(0, 2).map((t) => ['threads', t.title]),
@@ -132,11 +135,12 @@ export async function loadBrief(supabase, userId, currentText = '', nowMs = Date
 }
 
 async function briefFor(store, userId, currentText, nowMs) {
-  const [beliefs, traits, world, vocabulary, threads, evidenceCounts] = await Promise.all([
+  const [beliefs, traits, world, vocabulary, threads, evidenceCounts, meetings] = await Promise.all([
     store.activeBeliefs(userId), store.activeTraits(userId), store.activeWorld(userId),
     store.activeVocabulary(userId), store.openThreads(userId), store.evidenceCounts(userId, 'founder_traits'),
+    store.meetingEvidence(userId).catch(() => []),
   ])
-  return buildBriefText({ beliefs, traits, world, vocabulary, threads, evidenceCounts, currentText, nowMs })
+  return buildBriefText({ beliefs, traits, world, vocabulary, threads, evidenceCounts, meetings, currentText, nowMs })
 }
 
 // conflict: from findConflict (conflicts.js) when the founder's new message changes a number they gave before, else null.
