@@ -706,7 +706,7 @@ approves (decided Nov 25 2026).
 - **Pushes:** signals get their own 4 a day on top of the morning and evening
   ones. An extreme event may skip the cap, at most 2 a day, still respecting
   quiet hours unless the event is dated within 3 hours. Lock screen defaults to
-  Short (lock-screen wording awaiting Rafay: `tasks/wording_to_approve.md` section I). Pushes stop during care and delete requests, as before.
+  Short. On Full the push carries one sentence that links the news to the founder's own situation (their runway, goal or deal) plus a short next step, never a restatement of the email; Short keeps a generic line, Hidden is just "Axiom" (`tasks/wording_to_approve.md` section I; built behind flags). Pushes stop during care and delete requests, as before.
 - **Acts only after approval.** Axiom shows exactly what it will send or change;
   the founder can edit it and taps to approve; only then does Axiom do it and say
   what it did. Allowed: send an email or reply, create, move or cancel a calendar

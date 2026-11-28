@@ -525,7 +525,7 @@ loaded.
 - Signal pushes (built; `server/push/signalPush.js`, behind `SIGNAL_PUSH=on` and `CONNECTORS=on`):
   kind `signal`, slots `signal_1` to `signal_4`, and `extreme_1`, `extreme_2` for an extreme
   event, on top of the morning and evening slots. The unique `(user_id, local_day, slot)` index
-  is the cap. The lock-screen line never carries mail text.
+  is the cap. The SIGNAL step also writes `push_line` (urgency 2 or 3 only): one sentence tying the news to a stored fact about the founder, verified like `impact` plus a must-link test, else null; stored as `signals.facts.push_line`. On lock screen `full` the body is the push_line (if it passes `voiceProblems`), `short` the generic line, `hidden` "Axiom". No raw mail text is stored or logged.
 - Tables (applied): `connector_accounts`, `watch_sources`, `connector_jobs`, `signals`,
   `connector_actions`; `founder_beliefs.source` and the evidence source kinds gain `connector`;
   `model_usage_logs.call_type` gains `signal` and `connector`. Server only, RLS on, no client

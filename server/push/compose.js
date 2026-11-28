@@ -61,10 +61,13 @@ export const PUSH_WORDING = Object.freeze({
 
 // Signal pushes (S4). Email content on a lock screen is a leak, so the body never carries the
 // signal text: it says what kind of thing it is, and a meeting says when. The point is one tap away.
-// Only 'hidden' changes it. Awaiting Rafay (tasks/wording_to_approve.md, section I).
+// 'full' carries the signal's push_line (model-written, verified in signal.js: it ties the news to the founder's own
+// situation) when it has one and it passes the voice check. 'short' keeps the generic line; 'hidden' is "Axiom".
+// Rafay, Nov 28 (tasks/decisions.md; wording section I).
 export function composeSignalPush({ item, name = null, lockScreen = DEFAULT_LOCK_SCREEN, now }) {
   let body = HIDDEN_BODY
-  if (lockScreen !== 'hidden') {
+  if (lockScreen === 'full' && item.pushLine && voiceProblems(item.pushLine).length === 0) body = item.pushLine
+  else if (lockScreen !== 'hidden') {
     const mins = Math.round((item.meetingStart - now) / 60000)
     const when = mins >= 120 ? `in ${Math.floor(mins / 60)} hours` : `in ${mins} minutes`
     const rest = item.toolkit === 'googlecalendar' && mins >= 1 ? `a meeting starts ${when}.`

@@ -934,8 +934,8 @@ test('signal push: off unless asked for', async () => {
   assert.equal(s.sender.sent.length, 0)
 })
 
-test('signal push: the lock screen is short by default and even when the setting is full; hidden is just Axiom; no content in the body or the log', async () => {
-  for (const [lock, expected] of [[undefined, 'Rafay, an email that needs you today has come in.'], ['full', 'Rafay, an email that needs you today has come in.'], ['hidden', HIDDEN_BODY]]) {
+test('signal push: short is the generic line, hidden is Axiom, full without a push_line is the generic line; no content in the log', async () => {
+  for (const [lock, expected] of [[undefined, 'Rafay, an email that needs you today has come in.'], ['short', 'Rafay, an email that needs you today has come in.'], ['full', 'Rafay, an email that needs you today has come in.'], ['hidden', HIDDEN_BODY]]) {
     const s = signalSetup({ signals: [signal(1)], settings: lock ? [{ user_id: USER.id, lock_screen: lock }] : [] })
     await s.scheduler.tick()
     assert.equal(s.sender.sent[0].body, expected)
@@ -945,6 +945,21 @@ test('signal push: the lock screen is short by default and even when the setting
   const m = signalSetup({ signals: [meeting(1, 90)] })
   await m.scheduler.tick()
   assert.equal(m.sender.sent[0].body, 'Rafay, a meeting starts in 90 minutes.')
+})
+
+test('signal push: full uses the push_line; short and hidden never do; a banned phrase falls back to the generic line', async () => {
+  const LINE = 'We had 3 months of burn rate left and Dana Lee just emailed you back with an offer, let\'s plan it out.'
+  const run = async (lock, push_line, sig = signal(1)) => {
+    const s = signalSetup({ signals: [{ ...sig, facts: { ...sig.facts, push_line } }], settings: [{ user_id: USER.id, lock_screen: lock }] })
+    await s.scheduler.tick()
+    return s.sender.sent[0].body
+  }
+  assert.equal(await run('full', LINE), LINE)
+  assert.equal(await run('short', LINE), 'Rafay, an email that needs you today has come in.')
+  assert.equal(await run('hidden', LINE), HIDDEN_BODY)
+  assert.equal(await run('full', 'Absolutely, Dana Lee replied about your pilot.'), 'Rafay, an email that needs you today has come in.')
+  const call = 'Your pilot call with Dana is in 90 minutes; you wanted the price agreed by Friday.'
+  assert.equal(await run('full', call, meeting(1, 90)), call)
 })
 
 test('signal push: unknown is never resent; a refused send is retried at most 3 times; a signal pushed once is not pushed again', async () => {

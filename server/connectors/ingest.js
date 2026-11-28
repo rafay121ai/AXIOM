@@ -9,7 +9,7 @@ const DAY = 86400000
 export const POLL_MS = 5 * 60 * 1000
 export const WORKER_MS = 30 * 1000
 // Hard caps per connect (a call past Composio's allowance costs real money).
-export const BACKFILL = { gmailDays: 30, gmailMax: 200, calendarDaysBack: 30, calendarDaysAhead: 14, calendarMax: 250, notionMax: 50 }
+export const BACKFILL = { gmailDays: 30, gmailMax: 50, calendarDaysBack: 30, calendarDaysAhead: 14, calendarMax: 250, notionMax: 50 }
 export const POLL_CAP = { gmail: 100, googlecalendar: 250, notion: 50 }
 const PAGE = 100
 const MAX_PAGES = 5 // list calls per account per poll or backfill

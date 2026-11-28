@@ -70,7 +70,7 @@ export async function runSignalPushes({ supabase, tokens, now, iso, everyRow, on
         const extreme = signal.urgency === 3 && isExtreme(signal, await contextOf(), now)
         const item = {
           key: `signal:${signal.id}`, signalId: signal.id, toolkit: signal.toolkit, situationId: signal.situation_id,
-          createdAt: Date.parse(signal.created_at), expiresAt: Date.parse(signal.expires_at), extreme,
+          createdAt: Date.parse(signal.created_at), expiresAt: Date.parse(signal.expires_at), extreme, pushLine: signal.facts.push_line ?? null,
           meetingStart: signal.toolkit === 'googlecalendar' ? Date.parse(signal.facts.meeting_start) : null,
         }
         let row = null
@@ -91,7 +91,6 @@ export async function runSignalPushes({ supabase, tokens, now, iso, everyRow, on
         if (name === undefined) {
           try { name = await nameOf(userId) } catch (err) { log('name lookup failed', err); name = null }
         }
-        // 'full' still gets the short line: email content on a lock screen is a leak.
         const message = composeSignalPush({ item, name, lockScreen: settings.lock_screen, now })
         const { delivered, unknown, error } = await deliver(userId, devices, message)
         const outcome = delivered > 0 ? 'sent' : unknown ? 'unknown' : 'failed'
