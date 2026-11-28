@@ -282,7 +282,7 @@ test('settings: defaults (share automatically off), and every change goes throug
     assert.equal(got.body.privacy.share_automatically, false)
     assert.deepEqual(got.body.deletion, { would_remove: DELETION_PLAN.would_remove, shared_outcomes: DELETION_PLAN.shared_outcomes })
     assert.deepEqual([got.body.mentor_style, got.body.keep_items], ['direct', false])
-    assert.deepEqual([got.body.reminders.lock_screen, got.body.reminders.morning_on, got.body.reminders.evening_on], ['short', true, true])
+    assert.deepEqual([got.body.reminders.lock_screen, got.body.reminders.morning_on, got.body.reminders.evening_on], ['full', true, true])
     assert.equal(rows('user_settings').length, 0) // reading writes nothing
 
     const patched = await call('PUT', '/api/settings', {

@@ -251,8 +251,8 @@ test('a founder walks the whole journey', async (t) => {
         ['evening', '2026-10-27', 'evening'],
       ])
       assert.deepEqual(sender.sent.map((m) => m.to), [PUSH_TOKEN, PUSH_TOKEN])
-      // Lock screen is Short by default: the name, nothing about the move.
-      assert.deepEqual(sender.sent.map((m) => m.body), ['Morning, Amina. Your move for today is waiting.', 'Amina, how did it go?'])
+      // Lock screen is Full by default (Nov 28): the name and the move.
+      assert.deepEqual(sender.sent.map((m) => m.body), ['Morning, Amina. Today: ask both clinics that asked for pricing for a call.', 'Amina, how did the two clinics go?'])
       // Still waiting for the report: more ticks that day send nothing.
       await tickAt('2026-10-27T15:10:00.000Z')
       assert.equal(sender.sent.length, 2)

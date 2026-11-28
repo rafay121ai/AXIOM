@@ -239,7 +239,7 @@ const FAKE_SETTINGS: Settings = {
     building: 'A scheduling tool for dental clinics',
   },
   links: { privacy: 'https://example.com/privacy', terms: 'https://example.com/terms' },
-  reminders: { checkin_time: '20:00', morning_on: true, evening_on: true, lock_screen: 'short', quiet_hours: { start: '22:00', end: '06:00' }, push_registered: true },
+  reminders: { checkin_time: '20:00', morning_on: true, evening_on: true, lock_screen: 'full', quiet_hours: { start: '22:00', end: '06:00' }, push_registered: true },
   mentor_style: 'direct',
   keep_items: false,
   privacy: { share_automatically: false, text: SHARE_TEXT.off },

@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react';
-import { Animated, Easing, StyleSheet, useWindowDimensions } from 'react-native';
+import { Animated, Easing, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Svg, { Circle, Defs, Line, LinearGradient, Stop } from 'react-native-svg';
 import { useReduceMotion } from './useReduceMotion';
 
 const CELL = 32;
+const Layer = Platform.OS === 'web' ? View : Animated.View; // the web drift is a CSS animation, which needs a plain View (Animated.View flattens the style)
 const DOT_EVERY = 4; // a point at every 4th crossing along each diagonal; r - c is unchanged by the one-cell drift, so the snap back is invisible
 const DRIFT_MS = 60000; // one cell, then it loops without a seam
 const DRAW_EASE = Easing.bezier(0.3, 0.6, 0.2, 1);
@@ -33,12 +34,14 @@ export function Construction({ draw = false }: { draw?: boolean }) {
   const { width: W, height: H } = useWindowDimensions();
   const drift = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    if (reduce) return;
+    if (reduce || Platform.OS === 'web') return;
     const loop = Animated.loop(Animated.timing(drift, { toValue: CELL, duration: DRIFT_MS, easing: Easing.linear, useNativeDriver: true }));
     loop.start();
     return () => { loop.stop(); drift.setValue(0); };
   }, [reduce, drift]);
 
+  // On the web the drift is a CSS animation, so the browser's compositor moves the layer and the page's JavaScript stays idle.
+  const move = Platform.OS !== 'web' ? { transform: [{ translateX: drift }, { translateY: drift }] } : reduce ? undefined : styles.webDrift;
   const cols = Math.ceil(W / CELL) + 2, rows = Math.ceil(H / CELL) + 2; // one spare cell on the top and left, so the drift never shows an edge
   const w = cols * CELL, h = rows * CELL;
   const defs = (
@@ -57,7 +60,7 @@ export function Construction({ draw = false }: { draw?: boolean }) {
     <Circle key={`d${r}-${c}`} cx={c * CELL} cy={r * CELL} r={1.2} fill="url(#fade)" fillOpacity={0.09} />
   )));
   return (
-    <Animated.View pointerEvents="none" style={[styles.layer, { width: w, height: h, transform: [{ translateX: drift }, { translateY: drift }] }]}>
+    <Layer pointerEvents="none" style={[styles.layer, { width: w, height: h }, move]}>
       <Animated.View style={{ position: 'absolute', width: w, height: reveal.interpolate({ inputRange: [0, 1], outputRange: [0, h] }), overflow: 'hidden' }}>
         <Svg width={w} height={h}>{defs}{vertical}</Svg>
       </Animated.View>
@@ -67,8 +70,15 @@ export function Construction({ draw = false }: { draw?: boolean }) {
       <Animated.View style={{ position: 'absolute', opacity: points }}>
         <Svg width={w} height={h}>{defs}{dots}</Svg>
       </Animated.View>
-    </Animated.View>
+    </Layer>
   );
 }
 
-const styles = StyleSheet.create({ layer: { position: 'absolute', left: -CELL, top: -CELL } });
+const styles = StyleSheet.create({
+  layer: { position: 'absolute', left: -CELL, top: -CELL },
+  // react-native-web turns animationKeyframes into a CSS animation only inside StyleSheet.create: the browser's compositor moves the layer, the page's JavaScript stays idle.
+  webDrift: {
+    animationKeyframes: { from: { transform: 'translate(0px, 0px)' }, to: { transform: `translate(${CELL}px, ${CELL}px)` } },
+    animationDuration: `${DRIFT_MS}ms`, animationTimingFunction: 'linear', animationIterationCount: 'infinite', willChange: 'transform',
+  } as object,
+});
