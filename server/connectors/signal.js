@@ -125,7 +125,8 @@ export function verify(out, { source, removed = [], founderText = '', phrases = 
   return { problems, linked }
 }
 
-// push_line: the lock-screen line. The same rules as impact, and it must tie to a stored fact about the founder.
+// push_line: the lock-screen line. The same rules as impact, and it must tie to a fact from the brief or an open situation
+// title (phrases come without world names: a known name alone is just a Gmail alert).
 // Returns the trimmed line, or null (never a reason to drop the signal).
 export function verifyPushLine(line, { source, founderText, phrases, founderNumbers }) {
   const text = typeof line === 'string' ? line.replace(/\s+/g, ' ').trim() : ''
@@ -215,7 +216,7 @@ export function createSignalHandler({ supabase, callStructured, clock, blocked =
     const accepted = toolkit === 'googlecalendar' && (item.organizer?.self === true || (item.attendees ?? []).some((a) => a.self && a.responseStatus === 'accepted'))
     if (toolkit === 'googlecalendar' && !accepted) urgency = Math.min(urgency, 1)
     if (accepted) facts.accepted = true
-    const pushLine = urgency >= 2 ? verifyPushLine(out.push_line, { source, founderText, phrases, founderNumbers }) : null
+    const pushLine = urgency >= 2 ? verifyPushLine(out.push_line, { source, founderText, phrases: factPhrases({ brief, titles, worldNames: [] }), founderNumbers }) : null
     if (pushLine) facts.push_line = pushLine
     if (toolkit === 'gmail' && repliedTo) facts.replied_thread = true
     if (toolkit === 'googlecalendar') {

@@ -253,3 +253,12 @@ test('a push_line with an invented number or name is null; so is a banned phrase
 test('only urgency 2 or 3 gets a push_line', async () => {
   assert.equal((await pushed({ push_line: LINE, urgency: 1 })).facts.push_line, undefined)
 })
+
+test('a world name alone is not a link for push_line; a brief fact is', async () => {
+  const a = await pushed({ push_line: 'Dana Okafor replied, let\'s plan it out.' })
+  assert.equal(a.facts.push_line, undefined)
+  const s = setup({ replies: [good({ push_line: 'You have 3 months of burn rate left and Dana Okafor replied with an offer, let\'s plan it out.' })], tables: DANA })
+  const b = createSignalHandler({ supabase: s.supabase, clock: s.clock, log: () => {}, loadBrief: async () => 'What I know:\n- has 3 months of burn rate left', callStructured: (args) => callStructured({ openai: s.openai, logModelUsage: createUsageLogger({ supabase: s.supabase }).logModelUsage, clock: s.clock, ...args }) })
+  await b(U, 'gmail', mail)
+  assert.equal(s.signals()[0].facts.push_line, 'You have 3 months of burn rate left and Dana Okafor replied with an offer, let\'s plan it out.')
+})
