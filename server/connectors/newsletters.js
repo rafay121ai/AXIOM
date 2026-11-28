@@ -27,7 +27,7 @@ export const CACHE_MS = 6 * 60 * 60 * 1000
 const ok = (r) => { if (r.error) throw r.error; return r.data }
 
 const nameOf = (sender, address) => {
-  const name = String(sender ?? '').replace(/<[^>]*>/g, '').replace(/["']/g, '').trim()
+  const name = String(sender ?? '').replace(/<[^>]*>/g, '').replace(/\\?"/g, '').replace(/\\/g, '').trim() // drop the (escaped) quotes Gmail wraps names in; apostrophes stay (Lenny's)
   return (name && !name.includes('@') ? name : address.split('@')[1]).slice(0, 120)
 }
 const timeOf = (m) => { const t = Number(m.messageTimestamp); return Number.isFinite(t) && t > 0 ? t : Date.parse(m.messageTimestamp) }

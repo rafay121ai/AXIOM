@@ -334,3 +334,12 @@ test('two GETs at once share one scan; a failed scan is held 10 minutes; a login
     assert.ok(bad.calls.length > spent)
   } finally { await bad.close() }
 })
+
+test('names: the quotes Gmail wraps names in (and escaped ones) go, apostrophes stay', async () => {
+  const { groupSenders } = await import('./newsletters.js')
+  const g = groupSenders([
+    { sender: '"Timothy Snyder from \\"Thinking about...\\"" <timothysnyder@substack.com>', labelIds: [] },
+    { sender: "Lenny's Newsletter <lenny@substack.com>", labelIds: [] },
+  ])
+  assert.deepEqual([...g.values()].map((r) => r.name).sort(), ["Lenny's Newsletter", 'Timothy Snyder from Thinking about...'])
+})
