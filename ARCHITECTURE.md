@@ -496,6 +496,26 @@ loaded.
   `delete_account`; a Composio failure is logged and never stops the deletion. The export
   includes `connector_accounts`, `watch_sources`, `signals` and `connector_actions`
   (not `connector_jobs`; no queue table is exported). `server/connectors/connectorService.js`.
+- Newsletters (built Nov 28, server only; `server/connectors/newsletters.js`; same flags, JWT, rate limit 20 a minute, care and
+  delete refusals as connect): `GET /api/connectors/gmail/newsletters` ->
+  `{ newsletters: [{ id, name, per_week, opens, watching }] }`. `id` is the sender address, lowercased (the `watch_sources`
+  identifier). `per_week` is arrivals in the last 30 days / 30 x 7, rounded, at least 1. `opens` is `most` (60% or more read, no
+  UNREAD label), `some` (20 to 60%) or `rarely`. Up to 8 ranked by frequency x open rate (`rank_score`), plus watched ones outside
+  the top 8. Gmail not connected: 409 `{ error: 'not_connected', line }`. `PUT` with `{ watching: [id, ...] }` (a list of at most 20 ids
+  this founder has a row for, else 400) sets those `watching`, and any that were watching and are not listed `muted`; same response.
+  The scan lists newsletter-like mail with `GMAIL_FETCH_EMAILS` (`include_payload: false`, 100 a page, 5 pages; the query leaves out
+  social mail, no-reply senders and the SaaS notification domains in `NOTIFICATION_DOMAINS`; if the cap is hit, `per_week` is over
+  the days actually covered), groups it by sender, drops apps, bots and receipts, merges senders with the same display name (the
+  row id is the address with the most mail; the schema holds one address, so the others are not watched), boosts newsletter
+  platforms and "newsletter/weekly/digest" names and ranks retail promotions lower,
+  fetches no message and stores no content. Top senders are written as `suggested` rows (a `watching` or `muted` row is never
+  touched). The scan is cached in memory per founder for 6 hours (expired entries are evicted, at most 500; concurrent requests share one scan; a failed scan is held 10 minutes, a login failure is not) (`per_week` and `opens` have no column); a restart means one new
+  scan. In the worker, mail from a watching sender is kept past the bulk, promotions, updates, unsubscribe and no-reply rules
+  (the sensitive deny list still applies) and handed to the signal step as a newsletter: lane `world`, the first 6000 characters
+  of text, prompt asks only for what touches this founder's business, the impact must link to the brief or an open situation (a
+  stored world name alone is not enough), urgency at most 1 (a newsletter never pushes), and a signal whose proper nouns and
+  numbers overlap a world signal of the last 3 days (2 or more shared, at least half of the smaller set, newsletter's own name
+  ignored: `sameStory` in `signal.js`) is skipped. Cost counts in the connector budget as before.
 - Fetching (built, Nov 27; `server/connectors/ingest.js`, `worker.js`, `read.js`): Gmail, Google
   Calendar and Notion are all **polled** (default every 5 minutes, `CONNECTORS_POLL_MS`); there
   is no webhook. A bounded backfill runs on first connect, newest first. Each item becomes one

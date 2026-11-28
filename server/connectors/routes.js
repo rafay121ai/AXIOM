@@ -4,9 +4,15 @@ import rateLimit from 'express-rate-limit'
 import { HttpError } from '../journey/situations.js'
 import { createConnectorService } from './connectorService.js'
 import { createIngestion } from './ingest.js'
+import { createReader } from './read.js'
+import { createNewsletters } from './newsletters.js'
 
 export function mountConnectorRoutes(app, { supabase, connectors, care, pendingDeletion, clock, ingestion = createIngestion({ supabase, connectors, clock }) }) {
   const service = createConnectorService({ supabase, connectors, care, pendingDeletion, clock, onFirstActive: ingestion.backfill })
+  const newsletters = createNewsletters({
+    supabase, clock, refuseIfBlocked: service.refuseIfBlocked, isConnected: (userId) => connectors.isConnected(userId, 'gmail'),
+    read: createReader({ connectors, breaker: ingestion.breaker }),
+  })
   const limiter = (max) => rateLimit({
     windowMs: 60 * 1000,
     max,
@@ -27,6 +33,8 @@ export function mountConnectorRoutes(app, { supabase, connectors, care, pendingD
   }
 
   app.get('/api/connectors', limiter(60), handle((req) => service.list(req.user.id)))
+  app.get('/api/connectors/gmail/newsletters', limiter(20), handle((req) => newsletters.list(req.user.id)))
+  app.put('/api/connectors/gmail/newsletters', limiter(20), handle((req) => newsletters.setWatching(req.user.id, req.body?.watching)))
   app.post('/api/connectors/:toolkit/connect', limiter(20), handle((req) => service.connect(req.user.id, req.params.toolkit)))
   app.put('/api/connectors/learn', limiter(20), handle((req) => service.setLearn(req.user.id, req.body?.on)))
   app.post('/api/connectors/:toolkit/forget', limiter(20), handle((req) => service.forget(req.user.id, req.params.toolkit)))

@@ -63,10 +63,14 @@ export function createWorker({ supabase, read, breaker, clock, blocked = async (
     return people
   }
 
+  // The newsletters the founder watches (one query per Gmail job, so a change in Settings counts at once).
+  const watchedSet = async (userId) => new Set(ok(await supabase.from('watch_sources').select('identifier').eq('user_id', userId).eq('kind', 'newsletter').eq('status', 'watching')).map((w) => w.identifier.toLowerCase()))
+
   async function filterFor(userId, toolkit, item) {
-    let result = filterItem(toolkit, item)
+    const watched = toolkit === 'gmail' ? await watchedSet(userId) : undefined
+    let result = filterItem(toolkit, item, { watched })
     if (overridable(toolkit, result)) {
-      const ctx = { meetingPeople: await meetingPeople(userId).catch(() => new Set()) }
+      const ctx = { watched, meetingPeople: await meetingPeople(userId).catch(() => new Set()) }
       if (item.threadId && /^\s*(re|aw|fwd?):/i.test(item.subject)) {
         const t = await read(userId, 'GMAIL_FETCH_MESSAGE_BY_THREAD_ID', { thread_id: item.threadId })
         ctx.repliedTo = (t.messages ?? []).some((m) => (m.labelIds ?? []).includes('SENT'))
@@ -117,7 +121,7 @@ export function createWorker({ supabase, read, breaker, clock, blocked = async (
       // The founder may have disconnected while we read: check again right before anything is written.
       if ((await accountOf(job))?.status !== 'active') return finish(job, { status: 'dropped', last_error_code: 'no_active_account' })
       if (job.toolkit === 'googlecalendar') await learnPeople(job.user_id, item) // past meetings teach who the founder meets; never fails the job
-      await handleItem(job.user_id, job.toolkit, result.injection ? { ...item, injection: true } : item, { repliedTo: result.repliedTo === true, createdAt: Date.parse(job.created_at) || null })
+      await handleItem(job.user_id, job.toolkit, result.injection ? { ...item, injection: true } : item, { repliedTo: result.repliedTo === true, newsletter: result.reason === 'watched_newsletter', createdAt: Date.parse(job.created_at) || null })
       if (account.last_error_code) ok(await supabase.from('connector_accounts').update({ last_error_code: null, updated_at: iso() }).eq('id', account.id).select('id'))
       return finish(job, { status: 'done', last_error_code: null })
     } catch (err) {

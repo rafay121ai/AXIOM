@@ -157,6 +157,19 @@ export const copy = {
       notion: { name: 'Notion', hint: 'Pages you choose' },
     },
   },
+  // mock-newsletters-v1.html, word for word (approved Nov 28).
+  newsletters: {
+    looking: 'Looking through your newsletters',
+    lead: 'Which of these do you actually read?',
+    lead2: "I'll read only the ones you tick, and tell you when one touches your business.",
+    watch: 'Watch these',
+    notNow: 'Not now',
+    action: 'Newsletters',
+    note: 'I read only these. Tap one to stop.',
+    watching: 'Watching',
+    perWeek: 'about {n} a week',
+    opens: { most: 'you open most', some: 'you open some', rarely: 'you rarely open' },
+  },
   // mock-onboarding-v2.html, screen 11 (Settings) and mock-states-v1.html section 4, word for word.
   settings: {
     title: 'Settings',

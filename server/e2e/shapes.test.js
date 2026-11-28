@@ -282,6 +282,7 @@ test('every call in the app\'s http client has a contract here', () => {
   const covered = new Set(Object.keys(CONTRACT).map((k) => k.replace(/\(.*\)$/, '')))
   covered.add('registerPushToken').add('removePushToken') // http.ts ignores the answer
   for (const m of ['getConnectors', 'connectConnector', 'disconnectConnector', 'forgetConnector', 'setLearnHowIWork']) covered.add(m) // behind CONNECTORS, off in this walk; checked in connectors/connectorRoutes.test.js
+  for (const m of ['getNewsletters', 'setNewsletters']) covered.add(m) // same; the answer shape is checked in connectors/newsletters.test.js
   covered.add('openSignal') // behind CONNECTORS and SIGNAL_HOME, off in this walk; its answer is checked in connectors/world.test.js
   const missing = methods.filter((m) => !local.has(m) && !covered.has(m))
   assert.ok(methods.length >= 30, `read ${methods.length} methods from http.ts`)

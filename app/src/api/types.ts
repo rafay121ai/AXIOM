@@ -343,6 +343,8 @@ export type Toolkit = 'gmail' | 'googlecalendar' | 'notion';
 export type ConnectorStatus = 'active' | 'needs_reconnect' | 'not_connected';
 export type Connectors = { connectors: { toolkit: Toolkit; connected: boolean; status: ConnectorStatus }[]; learn_how_i_work: boolean };
 
+export type Newsletter = { id: string; name: string; per_week: number; opens: 'most' | 'some' | 'rarely'; watching: boolean };
+
 export interface AxiomApi {
   /** Starts Google sign-in. Resolves when the founder is signed in. */
   signInWithGoogle(): Promise<void>;
@@ -430,6 +432,10 @@ export interface AxiomApi {
   /** Deletes what Axiom learned from one tool. */
   forgetConnector(toolkit: Toolkit): Promise<{ forgotten: number }>;
   setLearnHowIWork(on: boolean): Promise<{ learn_how_i_work: boolean }>;
+  /** The newsletters found in Gmail, with the ones being watched. Null when connectors are switched off (404). Throws a refusal (409) with its line when Gmail is not connected. */
+  getNewsletters(): Promise<Newsletter[] | null>;
+  /** Replaces the watched set; returns the list as it now stands. */
+  setNewsletters(watching: string[]): Promise<Newsletter[]>;
   /** Everything Axiom holds, as the server's data file. */
   requestExport(): Promise<AccountExport>;
   /** Asks to delete everything; sends the confirmation word. The server starts a grace period (or only records it while deletion is off). */

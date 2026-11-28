@@ -130,6 +130,12 @@ Raw email bodies are never stored. Only extracted facts and a verbatim snippet o
 - [x] A push that is not sent in time (the item went stale) expires and becomes a home item instead.
 - [x] Tests: 5th signal in a day is held, extreme skips only itself, quiet hours hold, care pause holds, failed send retried at most 3 times.
 
+### Newsletter picker and World lane (server, Nov 28, decision "newsletter picker approved")
+- [x] `GET/PUT /api/connectors/gmail/newsletters`: headers-only scan of the last 30 days (`GMAIL_FETCH_EMAILS`, no payload, at most 3 pages), grouped by sender address, top 8 ranked by frequency and open rate into `watch_sources` (kind newsletter, `suggested`, `rank_score`); founder's `watching`/`muted` rows are never overwritten. Scan cached in memory 6 hours.
+- [x] Filter keeps mail from a watched sender past the bulk, promotions, updates, unsubscribe and no-reply rules; the sensitive deny list still applies.
+- [x] Signal step for a watched newsletter: lane world, first 6000 characters, only what touches the founder's brief or open situations, urgency capped at 1 (no push), same verifier, link to the brief or a situation is required, same story within 3 days is skipped.
+- [ ] App: picker screen and Settings, Connections, Gmail, Newsletters (app builder, against the contract in ARCHITECTURE.md).
+
 ### Phase 8. App (Expo)
 - [ ] Mock first (flag-first): Connections screen in Settings (connect, see what Axiom read, switch off per source, disconnect), the one-time newsletter picker after Gmail connects (top candidates ranked by how often they arrive and how often the founder opens or replies), signal item on the home screen, signal card that opens into Learn and Move. Uses DESIGN.md only. Rafay approves the mock.
 - [ ] All writes through the Express API. No Composio or Google call from the app. The app opens Composio's connect link in the system browser.
@@ -156,7 +162,7 @@ Raw email bodies are never stored. Only extracted facts and a verbatim snippet o
 ## Recommended build order for the first usable slice
 1. Phases 0 to 3 (decisions, schema, connection, queue).
 2. Calendar plus Gmail, People and Time lanes, meeting prep, push. (The most useful and the least noisy.)
-3. Newsletter picker and the World lane.
+3. Newsletter picker and the World lane. (Server built Nov 28; app screens pending.)
 4. Notion.
 5. Passive profile on top of the memory screen.
 

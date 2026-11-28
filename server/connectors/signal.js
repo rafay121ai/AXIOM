@@ -13,6 +13,8 @@ export const MAX_HOURS = 168
 export const MEETING_WINDOW_MS = 48 * HOUR
 const STALE_MS = 72 * HOUR
 const MAX_TEXT = 4000
+export const NEWSLETTER_TEXT = 6000
+export const DUPLICATE_DAYS = 3
 const LABEL = { gmail: 'Gmail', googlecalendar: 'Google Calendar', notion: 'Notion' }
 
 export const SIGNAL_SCHEMA = Object.freeze({
@@ -47,7 +49,16 @@ export const SIGNAL_PROMPT = [
   'Voice: direct, plain words, short sentences, the founder\'s own words and numbers. Never use: "great question", "certainly", "I understand", "that\'s interesting", "absolutely", "of course", "I\'d be happy to", "great". No teasers, no flattery, never assume gender.',
 ].join('\n')
 
-const stem = (s) => String(s ?? '').slice(0, MAX_TEXT)
+// Appended to the prompt for a newsletter the founder chose to watch (lane world).
+export const NEWSLETTER_PROMPT = [
+  'This item is a newsletter the founder chose to watch. It is long and mostly about other people. Say only what in it touches THIS founder\'s business: their market, customers, competitors, rules, prices or goals, as written in the founder brief or the open situations.',
+  'If nothing in it touches them, worth_telling is false. That is most issues. Never summarise the newsletter.',
+  'lane is world. what_happened: the one fact in it that touches them, with names and numbers exactly as written in the item. impact and push_line: how it affects THIS founder, in their words, never what the newsletter says in general.',
+].join('\n')
+
+const stem = (s, max = MAX_TEXT) => String(s ?? '').slice(0, max)
+// A newsletter is long and full of layout space: squeeze it, then keep the first part.
+const newsletterStem = (s) => stem(String(s ?? '').replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n\n').trim(), NEWSLETTER_TEXT)
 const sentences = (t) => String(t ?? '').split(/(?<=[.!?\n])\s+/)
 // The sentences that look like instructions to the model never reach it, so it cannot repeat them.
 function withoutInjection(t) {
@@ -69,9 +80,9 @@ const endOf = (e) => e.end?.dateTime ?? e.end?.date ?? ''
 const people = (e) => (e.attendees ?? []).filter((a) => !a.self)
 
 // What the model is shown, and what the verifier checks against: one string. Returns { text, removed }.
-export function sourceOf(toolkit, item) {
+export function sourceOf(toolkit, item, { newsletter = false } = {}) {
   let lines
-  if (toolkit === 'gmail') lines = [`From: ${nameOf(item.from)}`, `Subject: ${item.subject ?? ''}`, '', stem(item.body)]
+  if (toolkit === 'gmail') lines = [`From: ${nameOf(item.from)}`, `Subject: ${item.subject ?? ''}`, '', newsletter ? newsletterStem(item.body) : stem(item.body)]
   else if (toolkit === 'googlecalendar') {
     lines = [`Meeting: ${item.summary ?? ''}`, `When: ${whenText(startOf(item))}`, `With: ${people(item).map((a) => a.displayName || a.email).join(', ')}`, '', stem(item.description)]
   } else lines = [`Page: ${item.title ?? ''}`, '', stem(item.body)]
@@ -143,11 +154,24 @@ export function verifyPushLine(line, { source, founderText, phrases, founderNumb
 
 const ok = (r) => { if (r.error) throw r.error; return r.data }
 
+// The same story in two newsletters is one signal. Key tokens of a what_happened: its proper nouns and numbers, minus the words of the
+// newsletter's own name (every issue of one newsletter shares those). Two are the same story when they share at least 2 tokens and at
+// least half of the smaller set. shortcut: a plain overlap, so a rewording with other names slips through; upgrade only if seen live.
+const storyTokens = (what, sourceName) => {
+  const own = new Set(norm(sourceName).split(/\s+/))
+  return new Set([...properNames(what).map(norm).filter((w) => !own.has(w)), ...numbersOf(what)])
+}
+export function sameStory(a, b, sourceA = '', sourceB = '') {
+  const x = storyTokens(a, sourceA); const y = storyTokens(b, sourceB)
+  const shared = [...x].filter((t) => y.has(t)).length
+  return shared >= 2 && shared >= Math.min(x.size, y.size) / 2
+}
+
 // handler(userId, toolkit, item) for the worker (handleItem.js is the default no-op).
 // blocked(userId): care open or deletion pending. isCapped(userId): over the founder's own daily cost cap (the item is skipped; it would only wait).
 // overBudget(userId): null, or { retryAt } when this founder's connector budget for the day is spent: the job is requeued for then, or dropped when it would be stale.
 export function createSignalHandler({ supabase, callStructured, clock, blocked = async () => false, isCapped = async () => false, overBudget = async () => null, loadBrief = defaultLoadBrief, log = (what, info) => console.error(`[Signal] ${what}`, info ?? '') }) {
-  async function handleItem(userId, toolkit, item, { repliedTo = false, createdAt = null } = {}) {
+  async function handleItem(userId, toolkit, item, { repliedTo = false, newsletter = false, createdAt = null } = {}) {
     const skip = (reason) => { log('no signal', `${toolkit} ${reason}`); return null }
     if (await blocked(userId).catch(() => true)) return skip('founder_paused')
     const accounts = ok(await supabase.from('connector_accounts').select('status').eq('user_id', userId).eq('toolkit', toolkit))
@@ -161,7 +185,7 @@ export function createSignalHandler({ supabase, callStructured, clock, blocked =
     const now = clock.now()
     const worldNames = (await createMemoryStore({ supabase }).activeWorld(userId)).map((w) => w.name).filter(Boolean)
     const world = worldNames.map(norm)
-    let lane = null // forced for a meeting
+    let lane = newsletter ? 'world' : null // forced for a meeting or a watched newsletter
     let expiresMs = now + MAX_HOURS * HOUR
     if (toolkit === 'googlecalendar') {
       const start = Date.parse(startOf(item)); const end = Date.parse(endOf(item) || startOf(item))
@@ -183,11 +207,12 @@ export function createSignalHandler({ supabase, callStructured, clock, blocked =
     const brief = await loadBrief(supabase, userId, situations.map((s) => s.title).join(' '), now)
     const titles = situations.map((s) => s.title)
     const founderText = [brief, ...titles, ...worldNames].join('\n')
-    const phrases = factPhrases({ brief, titles, worldNames })
+    // A world signal must link to the brief or an open situation, not to a stored name alone.
+    const phrases = factPhrases({ brief, titles, worldNames: newsletter ? [] : worldNames })
     const founderNumbers = new Set(numbersOf(founderText))
-    const { text: source, removed } = sourceOf(toolkit, item)
+    const { text: source, removed } = sourceOf(toolkit, item, { newsletter })
     const messages = [
-      { role: 'system', content: SIGNAL_PROMPT },
+      { role: 'system', content: newsletter ? `${SIGNAL_PROMPT}\n${NEWSLETTER_PROMPT}` : SIGNAL_PROMPT },
       { role: 'user', content: JSON.stringify({ now: new Date(now).toISOString(), founder_brief: brief, open_situations: situations, forced_lane: lane, untrusted_item_text: source }) },
     ]
     let out = null; let linked = false; let problems = []; let draft = null
@@ -207,8 +232,9 @@ export function createSignalHandler({ supabase, callStructured, clock, blocked =
     }
     if (!out) return skip(`verify_failed ${problems.length}`)
 
+    if (newsletter && !linked) return skip('not_linked')
     let urgency = linked ? out.urgency : 0 // impact tied to nothing about the founder: a home item only
-    if (item.injection) urgency = Math.min(urgency, 1)
+    if (item.injection || newsletter) urgency = Math.min(urgency, 1) // a newsletter never interrupts
     // A stranger who is not replying to the founder cannot interrupt them: a calendar meeting inside 48h is the one exception.
     if (toolkit === 'gmail' && !repliedTo && !world.some((n) => n && wordRx(n).test(norm(nameOf(item.from))))) urgency = Math.min(urgency, 1)
     const facts = { what_happened: out.what_happened, source_name: out.source_name, ...(changed ? { item_key: itemKey } : {}) }
@@ -222,6 +248,11 @@ export function createSignalHandler({ supabase, callStructured, clock, blocked =
     if (toolkit === 'googlecalendar') {
       facts.meeting_start = startOf(item)
       facts.attendees = people(item).map((a) => a.displayName).filter((n) => n && wordRx(norm(n)).test(norm(source)))
+    }
+    if (newsletter) {
+      const since = new Date(now - DUPLICATE_DAYS * 24 * HOUR).toISOString()
+      const recent = ok(await supabase.from('signals').select('facts').eq('user_id', userId).eq('lane', 'world').gte('created_at', since))
+      if (recent.some((r) => sameStory(out.what_happened, r.facts?.what_happened, out.source_name, r.facts?.source_name))) return skip('duplicate_story')
     }
     const row = {
       user_id: userId, lane: lane ?? out.lane, toolkit, external_ref_hash: hash, facts, impact: out.impact, urgency, status: 'new',
