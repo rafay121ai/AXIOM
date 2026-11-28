@@ -13,7 +13,7 @@ const U = '11111111-1111-4111-8111-111111111111'
 const SIT = '22222222-2222-4222-8222-222222222222'
 const BRIEF = 'What I know:\n- runs the Marlow pilot with twelve customers'
 const good = (o = {}) => JSON.stringify({
-  worth_telling: true, lane: 'people', source_name: 'Dana Okafor', urgency: 2, related_situation_id: SIT, expires_in_hours: 48,
+  worth_telling: true, push_line: null, lane: 'people', source_name: 'Dana Okafor', urgency: 2, related_situation_id: SIT, expires_in_hours: 48,
   what_happened: 'Dana Okafor asks you to take the Thursday call with the Marlow pilot and will send the deck tonight.',
   impact: 'The Marlow pilot is your open situation, and this call is its next step.', ...o,
 })
@@ -228,4 +228,37 @@ test('a calendar invite the founder did not accept is capped at urgency 1; accep
   const yes = await run({ attendees: self('accepted') })
   assert.equal(yes.urgency, 3); assert.equal(yes.facts.accepted, true)
   assert.equal((await run({ attendees: self('needsAction'), organizer: { self: true } })).facts.accepted, true)
+})
+
+// push_line: the lock-screen line (Nov 28). Brief says "twelve customers" and the Marlow pilot; the situation is Marlow pilot pricing.
+const LINE = 'Your Marlow pilot has twelve customers and Dana Okafor just replied, let\'s plan it out.'
+const pushed = async (o) => { const s = setup({ replies: [good(o)], tables: DANA }); await s.handle(U, 'gmail', mail); return s.signals()[0] }
+
+test('a push_line tied to the founder is verified and stored; no email text with it', async () => {
+  const row = await pushed({ push_line: LINE })
+  assert.equal(row.facts.push_line, LINE)
+  assert.ok(!JSON.stringify(row).includes(mail.body))
+})
+
+test('a push_line that restates the sender and subject with no founder fact is null', async () => {
+  assert.equal((await pushed({ push_line: 'New email from Okafor: Re: term sheet' })).facts.push_line, undefined)
+})
+
+test('a push_line with an invented number or name is null; so is a banned phrase or a link', async () => {
+  for (const push_line of ['The Marlow pilot has 40 customers, let\'s plan it out.', 'The Marlow pilot: Priya Nair wrote back, let\'s plan it out.', 'Absolutely, the Marlow pilot moved.', 'The Marlow pilot is at dana.com now.']) {
+    assert.equal((await pushed({ push_line })).facts.push_line, undefined, push_line)
+  }
+})
+
+test('only urgency 2 or 3 gets a push_line', async () => {
+  assert.equal((await pushed({ push_line: LINE, urgency: 1 })).facts.push_line, undefined)
+})
+
+test('a world name alone is not a link for push_line; a brief fact is', async () => {
+  const a = await pushed({ push_line: 'Dana Okafor replied, let\'s plan it out.' })
+  assert.equal(a.facts.push_line, undefined)
+  const s = setup({ replies: [good({ push_line: 'You have 3 months of burn rate left and Dana Okafor replied with an offer, let\'s plan it out.' })], tables: DANA })
+  const b = createSignalHandler({ supabase: s.supabase, clock: s.clock, log: () => {}, loadBrief: async () => 'What I know:\n- has 3 months of burn rate left', callStructured: (args) => callStructured({ openai: s.openai, logModelUsage: createUsageLogger({ supabase: s.supabase }).logModelUsage, clock: s.clock, ...args }) })
+  await b(U, 'gmail', mail)
+  assert.equal(s.signals()[0].facts.push_line, 'You have 3 months of burn rate left and Dana Okafor replied with an offer, let\'s plan it out.')
 })

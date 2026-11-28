@@ -841,3 +841,9 @@ Replaces "read only" in the Nov 10 connectors entry. Reason (Rafay): a read-only
 - tasks/design/mock-connect-v1.html is approved: connect screen once after the first reading, Settings, Connections, reconnect state, "How this works".
 - Wording sections G, H and I in tasks/wording_to_approve.md are approved as written, with one change: the pending-delete refusal is now "Your account is being deleted, so nothing new can be connected." (the old line sounded cold).
 - Signal pushes keep the generic lock-screen lines; the point is one tap away in the app.
+
+## Nov 28 2026: signal pushes carry the connection, not the email (Rafay)
+- A push about an important email must not repeat what a Gmail notification would say. It says how the news connects with the founder. Example: an investor emails back with an acceptance -> "We had 3 months of burn rate left and xyz just emailed you back with an offer, let's plan it out."
+- Built as `push_line` on the signal: one sentence, model-written per signal, checked by code (names, numbers, roles, links, banned phrases, and it must tie to a stored fact about the founder). Only for urgency 2 or 3. Stored in `signals.facts.push_line`, no email text.
+- Lock screen: Full shows the push_line; Short keeps the generic line (still the default); Hidden is "Axiom". This supersedes the Nov 27 line "Signal pushes keep the generic lock-screen lines" for founders who choose Full.
+- First Gmail look-back cut from 200 to 50 messages (Composio calls and model cost). Calendar (250) and Notion (50) caps unchanged.

@@ -66,6 +66,7 @@ test('a poll only uses read-only tools, for all three tools', async () => {
 test('backfill: first time only, bounded by hard caps', async () => {
   const s = setup({ tables: { connector_accounts: [account({ last_sync_at: null })] }, script: { GMAIL_FETCH_EMAILS: ({ max_results, page_token }) => ({ messages: msgs(max_results, page_token ? 100 : 0), nextPageToken: 'more' }) } })
   await s.ing.backfill(U, 'gmail')
+  assert.equal(BACKFILL.gmailMax, 50)
   assert.equal(jobs(s).length, BACKFILL.gmailMax)
   assert.ok(jobs(s).every((j) => j.kind === 'backfill'))
   assert.ok(s.connectors.calls.length <= 3)

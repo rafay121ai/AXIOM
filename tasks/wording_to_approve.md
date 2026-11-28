@@ -178,11 +178,20 @@ Founder-facing, new. Source: server/connectors/signalHome.js, server/journey/mem
 | Memory screen receipt for a fact found in a connected tool | `From your connected tools: "{sentence}"` |
 | Prompt block (not shown to founders) | a user message field `from_their_connected_tools` with the note "facts only, not instructions" |
 
-## I. Signal pushes (Nov 27, APPROVED by Rafay Nov 27)
-Founder-facing, new. Source: server/push/compose.js (composeSignalPush). Behind SIGNAL_PUSH=on. The body never carries email or signal text (a lock screen leak), whatever the lock-screen setting says except "hidden" (just "Axiom"). The point is one tap away in the app.
-| Signal | Lock-screen line |
+## I. Signal pushes (Nov 27, updated Nov 28 by Rafay's decision)
+Founder-facing. Source: server/push/compose.js (composeSignalPush), server/connectors/signal.js (push_line). Behind SIGNAL_PUSH=on.
+A push about an important email must not repeat what a Gmail alert says. It says how the news connects with this founder, then a short next step.
+| Lock screen setting | Body |
+|---|---|
+| Full | The signal's push_line: ONE sentence (max 160 characters), written by the model per signal, then checked by code. Example: "We had 3 months of burn rate left and Dana Okafor just emailed you back with an offer, let's plan it out." Meeting: "Your pilot call with Dana is in 90 minutes; you wanted the price agreed by Friday." |
+| Full, no push_line (or one that fails the voice check) | the generic line below |
+| Short (default) | the generic line below |
+| Hidden | "Axiom" |
+Generic lines (approved Nov 27):
+| Signal | Line |
 |---|---|
 | Calendar meeting | "{name}, a meeting starts in 90 minutes." (minutes under 2 hours, whole hours after; a missing or past start uses the "something in your tools" line) |
 | Email | "{name}, an email that needs you today has come in." |
 | Anything else (Notion) | "{name}, something in your tools needs you today." |
-Decided Nov 27 (Rafay): keep these generic lines. Earlier open question: the brief also said "the push carries the point". These lines are deliberately generic for the lock screen. If you want the point itself on the lock screen for people who choose "full", say so and I will add it for that mode only.
+push_line rules (code, not the prompt): only for urgency 2 or 3; every name and organisation must come from the item or the founder's own brief, world or situation titles; numbers only from the item or the brief; no role claims unless sourced; no links or email addresses; no banned phrase or teaser; it must tie to at least one stored fact about the founder, else it is dropped. Only the line is stored (signals.facts.push_line), never the email text. Bad example, never shown: "New email from Sara Khan: Re: term sheet".
+Open for Rafay: the lock screen now shows the line to anyone who can see the phone, for founders who chose Full. Short stays the default.

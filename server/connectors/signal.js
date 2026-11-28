@@ -18,7 +18,7 @@ const LABEL = { gmail: 'Gmail', googlecalendar: 'Google Calendar', notion: 'Noti
 export const SIGNAL_SCHEMA = Object.freeze({
   type: 'object',
   additionalProperties: false,
-  required: ['worth_telling', 'lane', 'what_happened', 'source_name', 'impact', 'urgency', 'related_situation_id', 'expires_in_hours'],
+  required: ['worth_telling', 'lane', 'what_happened', 'source_name', 'impact', 'urgency', 'related_situation_id', 'expires_in_hours', 'push_line'],
   properties: {
     worth_telling: { type: 'boolean' },
     lane: { type: 'string', enum: ['people', 'time', 'world'] },
@@ -28,6 +28,7 @@ export const SIGNAL_SCHEMA = Object.freeze({
     urgency: { type: 'integer', minimum: 0, maximum: 3 },
     related_situation_id: { type: ['string', 'null'] },
     expires_in_hours: { type: 'integer', minimum: 1, maximum: MAX_HOURS },
+    push_line: { type: ['string', 'null'], maxLength: 200 },
   },
 })
 
@@ -41,6 +42,8 @@ export const SIGNAL_PROMPT = [
   'impact: your read of why it matters to THIS founder, tied to something in the founder brief or an open situation (use their words). This is your read, not news. For a meeting with a person the founder does not know, say what the item says they want, and say plainly if the item does not say who they are. Never use outside knowledge about a person.',
   'urgency: 0 home item only, 1 worth a mention today, 2 time-sensitive, 3 needs them in the next hours.',
   'related_situation_id: the id of one open situation it concerns, else null. expires_in_hours: how long it stays useful.',
+  'push_line: only when urgency is 2 or 3, else null. ONE sentence of at most 150 characters for the lock screen: what happened, linked to this founder\'s own situation (their runway, goal, deal or open situation, in their words and numbers), then a short next step. It must say what happened and why it matters to them, and must not just restate the sender or subject like a Gmail alert. Same rules as impact: names, organisations and numbers only from the item or the founder brief; no links or email addresses; no claims about who someone is unless the item or brief says so.',
+  'Good push_line: "We had 3 months of burn rate left and Dana Okafor just emailed you back with an offer, let\'s plan it out." Bad push_line: "New email from Sara Khan: Re: term sheet".',
   'Voice: direct, plain words, short sentences, the founder\'s own words and numbers. Never use: "great question", "certainly", "I understand", "that\'s interesting", "absolutely", "of course", "I\'d be happy to", "great". No teasers, no flattery, never assume gender.',
 ].join('\n')
 
@@ -86,6 +89,7 @@ const runs = (t, n) => { const w = norm(t).replace(/[^\p{L}\p{N}\s]/gu, ' ').spl
 const properNames = (t, looseStart = false) => [...String(t).matchAll(/\p{Lu}[\p{L}'’-]*(?=(\s+\p{Lu})?)/gu)]
   .filter((m) => !(looseStart && /(^|[.!?]\s+)$/.test(t.slice(0, m.index)) && !m[1]))
   .map((m) => m[0].replace(/['’]s$/i, '')).filter((w) => !GENERIC_STARTS.has(w.toLowerCase()))
+export const PUSH_LINE_MAX = 160
 const LINK = /https?:\/\/|www\.|\S+@\S+\.\S+|\b[\w-]+\.(com|io|co|org|net|ai|app|dev)\b/i
 // A claim about who someone is or what they did. Allowed only if the item or the founder's own notes say the same words.
 const ROLE = /\b(?:is|was|are|were)\s+(?:a|an|the)\s+[\p{L}-]+\s+(?:at|of|for)\s+\p{L}+|\b(?:works?|worked)\s+(?:at|for)\s+\p{L}+|\bfounded\b[^.]{0,30}|\bbacked\s+by\s+\p{L}+|\b(?:ceo|cto|cfo|partner|investor|founder)\s+(?:of|at)\s+\p{L}+/giu
@@ -119,6 +123,22 @@ export function verify(out, { source, removed = [], founderText = '', phrases = 
   for (const r of removed) for (const run of runs(r, 4)) if ([what, out.impact].some((t) => runs(t, 4).has(run))) { problems.push('it repeats an instruction found in the item'); break }
   const linked = phrases.some((p) => wordRx(p).test(norm(out.impact)))
   return { problems, linked }
+}
+
+// push_line: the lock-screen line. The same rules as impact, and it must tie to a fact from the brief or an open situation
+// title (phrases come without world names: a known name alone is just a Gmail alert).
+// Returns the trimmed line, or null (never a reason to drop the signal).
+export function verifyPushLine(line, { source, founderText, phrases, founderNumbers }) {
+  const text = typeof line === 'string' ? line.replace(/\s+/g, ' ').trim() : ''
+  if (!text || text.length > PUSH_LINE_MAX || LINK.test(text)) return null
+  const known = norm(`${source}\n${founderText}`)
+  const t = norm(text)
+  const srcNums = new Set(numbersOf(source))
+  if (BANNED_PHRASES.some((p) => wordRx(p).test(t)) || TEASER.test(t)) return null
+  if (properNames(text, true).some((w) => !wordRx(norm(w)).test(known))) return null
+  if ((text.match(ROLE) ?? []).some((m) => !known.includes(norm(m)))) return null
+  if (numbersOf(text).some((n) => !srcNums.has(n) && !founderNumbers.has(n))) return null
+  return phrases.some((p) => wordRx(p).test(t)) ? text : null
 }
 
 const ok = (r) => { if (r.error) throw r.error; return r.data }
@@ -196,6 +216,8 @@ export function createSignalHandler({ supabase, callStructured, clock, blocked =
     const accepted = toolkit === 'googlecalendar' && (item.organizer?.self === true || (item.attendees ?? []).some((a) => a.self && a.responseStatus === 'accepted'))
     if (toolkit === 'googlecalendar' && !accepted) urgency = Math.min(urgency, 1)
     if (accepted) facts.accepted = true
+    const pushLine = urgency >= 2 ? verifyPushLine(out.push_line, { source, founderText, phrases: factPhrases({ brief, titles, worldNames: [] }), founderNumbers }) : null
+    if (pushLine) facts.push_line = pushLine
     if (toolkit === 'gmail' && repliedTo) facts.replied_thread = true
     if (toolkit === 'googlecalendar') {
       facts.meeting_start = startOf(item)
