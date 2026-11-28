@@ -122,8 +122,13 @@ export function createMemoryStore({ supabase, clock = { now: () => Date.now() },
       if (rows.length === 0) return []
       return ok(await supabase.from('memory_evidence').insert(rows.map((r) => ({
         user_id: r.userId, item_table: r.itemTable, item_id: r.itemId, source_kind: r.sourceKind,
-        source_id: r.sourceId ?? null, source_key: r.sourceKey ?? null, snippet: String(r.snippet).slice(0, 200), created_at: iso(),
+        source_id: r.sourceId ?? null, source_key: r.sourceKey ?? null, snippet: String(r.snippet).slice(0, 200), created_at: r.at ?? iso(),
       }))).select())
+    },
+    // Receipts for the people the founder meets: { item_id, snippet, created_at } (the meeting's start), newest first.
+    async meetingEvidence(userId) {
+      return ok(await supabase.from('memory_evidence').select('item_id, snippet, created_at').eq('user_id', userId).eq('item_table', 'founder_world')
+        .eq('source_kind', 'connector').eq('source_key', 'googlecalendar').order('created_at', { ascending: false }).limit(EVIDENCE_READ_LIMIT))
     },
     // True when any receipt already comes from this source: a per-message pass is not run twice for the same message.
     async hasEvidenceFrom(userId, sourceId) {

@@ -1,6 +1,7 @@
 // "What Axiom thinks": the founder's active memory in plain second person, and the
 // "this is wrong" control. Reads and the retire step only; no model, and nothing
 // internal (confidence, user_id, sources) leaves here. Code-made wording, no model text.
+import { rhythmLines } from './rhythm.js'
 import { HttpError } from '../situations.js'
 import { IN_THEIR_WORDS, cleanStoredText, isUsable } from './beliefRules.js'
 import { createMemoryStore } from './memoryStore.js'
@@ -110,6 +111,7 @@ export function createMemoryScreen({ supabase, clock }) {
       store.activeBeliefs(userId), store.activeTraits(userId), store.activeWorld(userId), store.activeVocabulary(userId), store.openThreads(userId),
       Promise.all(TABLES.map((t) => store.latestEvidence(userId, t))),
     ])
+    const rhythm = rhythmLines(world, await store.meetingEvidence(userId).catch(() => []), clock.now())
     const evidence = Object.fromEntries(TABLES.map((t, i) => [t, proof[i]]))
     const receiptOf = await receiptsFor(userId, evidence)
     // at: newest receipt, else when the row was made; only for sorting.
@@ -122,7 +124,7 @@ export function createMemoryScreen({ supabase, clock }) {
       beliefs.filter((b) => b.kind !== 'fact' && usable(b)).map((b) => item('founder_beliefs', b, 'work', toSecondPerson(b.belief))).sort(newest).slice(0, GROUP_MAX),
       beliefs.filter((b) => b.kind === 'fact' && usable(b)).map((b) => item('founder_beliefs', b, 'business', toSecondPerson(b.belief))).sort(newest).slice(0, GROUP_MAX),
       [ // people first, then shorthand; each capped on its own (12 + 12) so shorthand is never hidden by a long people list
-        ...world.map((w) => item('founder_world', w, 'people', `${w.role ? `${w.name}: ${cleanStoredText(w.role).replace(/\.$/, '')}.` : `${w.name}.`}${w.mention_count > 1 ? ` You have mentioned ${w.name} ${w.mention_count} times.` : ''}`)).sort(newest).slice(0, GROUP_MAX),
+        ...world.map((w) => item('founder_world', w, 'people', `${rhythm[w.id] ?? (w.role ? `${w.name}: ${cleanStoredText(w.role).replace(/\.$/, '')}.` : `${w.name}.`)}${w.mention_count > 1 ? ` You have mentioned ${w.name} ${w.mention_count} times.` : ''}`)).sort(newest).slice(0, GROUP_MAX),
         ...vocabulary.map((v) => item('founder_vocabulary', v, 'people', `"${v.term}" means ${cleanStoredText(v.meaning).replace(/\.$/, '')}.`)).sort(newest).slice(0, GROUP_MAX),
       ],
       threads.map((t) => item('founder_threads', t, 'open', toSecondPerson(t.title))).sort(newest).slice(0, GROUP_MAX),

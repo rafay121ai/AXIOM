@@ -46,9 +46,9 @@ async function listItems(read, userId, toolkit, { sinceMs, nowMs, backfill }) {
   return out.filter((i) => i.id).slice(0, cap)
 }
 
-export function createIngestion({ supabase, connectors, clock, breaker = createBreaker({ clock }), handleItem = defaultHandleItem, blocked = async () => false, log = (what, info) => console.error(`[Connectors] ${what}`, info ?? '') }) {
+export function createIngestion({ supabase, connectors, clock, breaker = createBreaker({ clock }), handleItem = defaultHandleItem, learnPeople, blocked = async () => false, log = (what, info) => console.error(`[Connectors] ${what}`, info ?? '') }) {
   const read = createReader({ connectors, breaker })
-  const worker = createWorker({ supabase, read, breaker, clock, handleItem, blocked, log })
+  const worker = createWorker({ supabase, read, breaker, clock, handleItem, learnPeople, blocked, log })
   const iso = (ms = clock.now()) => new Date(ms).toISOString()
 
   async function enqueue(userId, toolkit, items, kind) {

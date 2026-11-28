@@ -10,6 +10,7 @@ import { createConnectors } from './connectors/composio.js'
 import { startActionClearing } from './connectors/connectorService.js'
 import { createIngestion, startConnectorIngestion } from './connectors/ingest.js'
 import { createSignalHandler } from './connectors/signal.js'
+import { createMeetingLearner } from './connectors/meetingPeople.js'
 import { createBudget } from './connectors/budget.js'
 import { createNameLookup, startPushScheduler } from './push/scheduler.js'
 
@@ -56,7 +57,7 @@ let signalHandler = (...args) => {
   return signalHandler(...args)
 }
 const ingestion = connectorsOn && connectors && supabase
-  ? createIngestion({ supabase, connectors, clock: systemClock, blocked, handleItem: (...args) => signalHandler(...args) })
+  ? createIngestion({ supabase, connectors, clock: systemClock, blocked, handleItem: (...args) => signalHandler(...args), learnPeople: createMeetingLearner({ supabase, clock: systemClock, log: (what, info) => console.error(`[Connectors] ${what}`, info ?? '') }) })
   : undefined
 const app = createApp({ supabase, knowledgeSupabase, openai, env, connectors: connectorsOn ? connectors : null, ingestion })
 

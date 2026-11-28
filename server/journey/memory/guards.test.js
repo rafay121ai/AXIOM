@@ -24,6 +24,6 @@ test('every memory file that calls a model references the daily cost cap', () =>
 const WRITES = /\.(insertBelief|upsertTrait|upsertWorld|upsertVocabulary|insertThread)\(/
 test('only the memory passes write memory text, and each cleans it with cleanStoredText', () => {
   const writers = src.filter(([f, s]) => WRITES.test(s) && !f.endsWith('memoryStore.js')).map(([f]) => f).sort()
-  assert.deepEqual(writers, ['journey/memory/extractBeliefs.js', 'journey/memory/signupSeed.js', 'journey/memory/situationThread.js'])
+  assert.deepEqual(writers, ['connectors/meetingPeople.js', 'journey/memory/extractBeliefs.js', 'journey/memory/signupSeed.js', 'journey/memory/situationThread.js'])
   for (const [f, s] of src) if (writers.includes(f)) assert.match(s, /cleanStoredText|checkBeliefText/, `${f} stores text without cleanStoredText`) // checkBeliefText returns the cleaned text
 })
