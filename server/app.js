@@ -157,6 +157,12 @@ export function createApp({
   app.use('/api/loading-hint', requireAuth)
   const connectorsOn = env.CONNECTORS === 'on' && connectors
   if (connectorsOn) app.use('/api/connectors', requireAuth)
+  // CONNECTORS_USERS (comma-separated user ids): while set, only these founders see connectors; everyone else gets the
+  // same 404 as when connectors are off, so the app hides them. For the first real runs before testers (Rafay, Nov 28).
+  const connectorUsers = String(env.CONNECTORS_USERS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
+  if (connectorsOn && connectorUsers.length) {
+    app.use('/api/connectors', (req, res, next) => connectorUsers.includes(String(req.user?.id).toLowerCase()) ? next() : res.status(404).json({ error: 'not_found' }))
+  }
 
   // ─── Routes ───────────────────────────────────────────────────────────────────
 
