@@ -847,3 +847,7 @@ Replaces "read only" in the Nov 10 connectors entry. Reason (Rafay): a read-only
 - Built as `push_line` on the signal: one sentence, model-written per signal, checked by code (names, numbers, roles, links, banned phrases, and it must tie to a stored fact about the founder). Only for urgency 2 or 3. Stored in `signals.facts.push_line`, no email text.
 - Lock screen: Full shows the push_line; Short keeps the generic line (still the default); Hidden is "Axiom". This supersedes the Nov 27 line "Signal pushes keep the generic lock-screen lines" for founders who choose Full.
 - First Gmail look-back cut from 200 to 50 messages (Composio calls and model cost). Calendar (250) and Notion (50) caps unchanged.
+
+## Nov 28 2026: newsletter picker approved (Rafay)
+- tasks/design/mock-newsletters-v1.html is approved with its wording: once, right after Gmail connects (after a short "Looking through your newsletters"), up to 8 newsletters ranked by how often they arrive and how many the founder opens; nothing pre-ticked; "Watch these" / "Not now"; then Settings, Connections, Gmail, Newsletters.
+- Only watched newsletters are read. A watched newsletter becomes a signal only when something in it touches the founder's business, said as how it affects them, never a summary. The same story in two newsletters is one signal.
