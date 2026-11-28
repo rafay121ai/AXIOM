@@ -124,7 +124,7 @@ export function createConnectorService({ supabase, connectors, care, pendingDele
     return { toolkit, connected: false, status: 'not_connected' }
   }
 
-  return { list, connect, disconnect, setLearn, forget }
+  return { list, connect, disconnect, setLearn, forget, refuseIfBlocked }
 }
 
 // Decision Nov 27: the content of an action is cleared 30 days after it ends; preview and hash stay.

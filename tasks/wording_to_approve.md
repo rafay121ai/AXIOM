@@ -168,6 +168,9 @@ Founder-facing, new, not in any mock or the voice guide. Source: server/connecto
 | Connect refused during a pending account delete | "Your account is being deleted, so nothing new can be connected." (changed Nov 27: the old line sounded cold) |
 | Unknown connector | "That is not something I can connect." |
 | Disconnect failed at Composio | "I could not disconnect that just now. Nothing was removed. Try again." |
+| Newsletter list or choice asked for while Gmail is not connected (409 `not_connected`; also shown if Google refuses the login) | "Gmail is not connected. Connect it first." (new Nov 28, server/connectors/newsletters.js `COPY`) |
+| Newsletter list or choice during a care event, or a pending delete | the two lines above ("Connecting can wait..." and "Your account is being deleted...") |
+| A newsletter id that is not on the founder's list (400 `unknown_newsletter`) | "That newsletter is not on your list." (not normally seen: the app only sends ids it was given) |
 
 ## H. Connectors in use (Nov 27, APPROVED by Rafay Nov 27)
 Founder-facing, new. Source: server/connectors/signalHome.js, server/journey/memory/memoryScreen.js.

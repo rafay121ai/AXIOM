@@ -3,7 +3,8 @@
 //   gmail { labels[], from, subject, body, bulk }, googlecalendar { summary, description, visibility, attendees[{email,self}] },
 //   notion { title, body (the page text) }.
 // textUnavailable: true when the text could not be read; it is dropped as sensitive_unknown.
-// ctx: { repliedTo: founder sent something in this thread, meetingPeople: Set of lowercase emails on upcoming meetings }.
+// ctx: { repliedTo: founder sent something in this thread, meetingPeople: Set of lowercase emails on upcoming meetings,
+//   watched: Set of lowercase sender addresses of newsletters the founder chose to watch }.
 const DROP_LABELS = ['SPAM', 'CATEGORY_PROMOTIONS', 'CATEGORY_SOCIAL', 'CATEGORY_UPDATES', 'CATEGORY_FORUMS']
 const NO_REPLY = /(^|[<\s"])(no[-_.]?reply|do[-_.]?not[-_.]?reply|donotreply|mailer-daemon|notifications?)@/i
 // Unknown sensitive = drop, so these are deliberately broad.
@@ -25,7 +26,7 @@ export const MAX_SCAN = 200000
 const text = (item) => [item.subject, item.summary, item.title, item.description, item.body].filter(Boolean).join('\n')
 const emailOf = (s) => (String(s ?? '').match(/[^\s<>"']+@[^\s<>"']+/)?.[0] ?? '').toLowerCase()
 
-function sensitive(item) {
+export function sensitive(item) {
   if (item.textUnavailable || text(item).length > MAX_SCAN) return 'sensitive_unknown'
   if (SENSITIVE_DOMAINS.test(String(item.from ?? ''))) return 'sensitive_sender'
   const t = text(item)
@@ -39,6 +40,8 @@ export function filterItem(toolkit, item, ctx = {}) {
   if (toolkit === 'gmail') {
     if (ctx.repliedTo) return keep('reply_to_founder')
     if (ctx.meetingPeople?.has(emailOf(item.from))) return keep('meeting_person')
+    // A watched newsletter is kept past the bulk rules (still behind the sensitive deny list above).
+    if (ctx.watched?.has(emailOf(item.from))) return keep('watched_newsletter')
     const label = (item.labels ?? []).find((l) => DROP_LABELS.includes(l))
     if (label) return { keep: false, reason: `label_${label.toLowerCase()}` }
     if (item.bulk) return { keep: false, reason: 'bulk' }
