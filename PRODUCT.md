@@ -513,7 +513,7 @@ plan before it is built.
   told Axiom: their goal date a week away, or an open thread quiet for a week
   (never one already reported). At most one nudge every 3 days. Quiet hours.
 - The name appears inside most pushes. Each one names something real.
-- Lock screen shows Short by default (founder choice).
+- Lock screen shows Full by default (Rafay, Nov 28); the founder can choose Short or Hidden.
 - Pushes stop completely while the care screen is up.
 - Permission is asked once, after the founder commits to a move, with one
   plain question.
@@ -706,7 +706,7 @@ approves (decided Nov 25 2026).
 - **Pushes:** signals get their own 4 a day on top of the morning and evening
   ones. An extreme event may skip the cap, at most 2 a day, still respecting
   quiet hours unless the event is dated within 3 hours. Lock screen defaults to
-  Short. On Full the push carries one sentence that links the news to the founder's own situation (their runway, goal or deal) plus a short next step, never a restatement of the email; Short keeps a generic line, Hidden is just "Axiom" (`tasks/wording_to_approve.md` section I; built behind flags). Pushes stop during care and delete requests, as before.
+  Full. On Full the push carries one sentence that links the news to the founder's own situation (their runway, goal or deal) plus a short next step, never a restatement of the email; Short keeps a generic line, Hidden is just "Axiom" (`tasks/wording_to_approve.md` section I; built behind flags). Pushes stop during care and delete requests, as before.
 - **Acts only after approval.** Axiom shows exactly what it will send or change;
   the founder can edit it and taps to approve; only then does Axiom do it and say
   what it did. Allowed: send an email or reply, create, move or cancel a calendar

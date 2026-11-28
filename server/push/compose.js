@@ -3,7 +3,7 @@
 // title). No model call. Lines marked (mock) are approved words; (new) lines
 // wait for Rafay's approval.
 //
-// Lock-screen modes (Settings > Reminders, default Short):
+// Lock-screen modes (Settings > Reminders, default Full):
 // - full: names the move or the subject;
 // - short: the founder's name and a generic line, nothing about the move;
 // - hidden: just "Axiom".
@@ -14,7 +14,7 @@ import { BANNED_PHRASES, TEASER, norm, wordRx } from '../journey/ownWords.js'
 import { NUDGE_GOAL_DAYS } from './due.js'
 
 export const LOCK_SCREEN_MODES = Object.freeze(['full', 'short', 'hidden'])
-export const DEFAULT_LOCK_SCREEN = 'short'
+export const DEFAULT_LOCK_SCREEN = 'full' // Rafay, Nov 28: founders see the connected line unless they choose short or hidden
 export const HIDDEN_BODY = 'Axiom'
 export const MAX_BODY = 160
 
