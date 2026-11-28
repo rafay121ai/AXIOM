@@ -353,3 +353,12 @@ test('before the migration: GET says learn_how_i_work false, PUT /learn is 503 w
     assert.deepEqual([put.status, put.body.error], [503, 'learn_unavailable'])
   } finally { await t.close() }
 })
+
+test('CONNECTORS_USERS: only listed founders reach the routes; everyone else gets the off 404', async () => {
+  const t = await setup({ env: { ...ENV, CONNECTORS_USERS: ` ${A.id.toUpperCase()} ` } })
+  try {
+    assert.equal((await t.call('GET', '/api/connectors', 'tokA')).status, 200)
+    for (const [m, p] of [['GET', '/api/connectors'], ['POST', '/api/connectors/gmail/connect'], ['PUT', '/api/connectors/learn'], ['DELETE', '/api/connectors/gmail']]) assert.equal((await t.call(m, p, 'tokB')).status, 404, p)
+    assert.equal((await t.call('GET', '/api/connectors', 'nope')).status, 401)
+  } finally { await t.close() }
+})

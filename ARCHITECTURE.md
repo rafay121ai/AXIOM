@@ -602,6 +602,7 @@ Names only; values live in Render (`render.yaml`) and a local `.env`.
 - `SIGNAL_HOME`: `on` shows signal items on home and lets a tap open one (off until the app can open them).
 - `CONNECTOR_DAILY_USD`: per-founder daily budget for signal model calls (default 0.30).
 - `CONNECTORS_POLL_MS`, `CONNECTORS_WORKER_MS`: poll and worker intervals (defaults 300000 and 30000).
+- `CONNECTORS_USERS`: comma-separated user ids. While set, only these founders reach `/api/connectors`; everyone else gets the same 404 as when connectors are off (first real runs before testers). Unset = every founder.
 - `PRIVACY_URL`, `TERMS_URL`: links shown in Settings.
 
 ---

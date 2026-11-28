@@ -41,6 +41,9 @@ services:
       # Signal items on home: off until the app can open one (Rafay turns it on after the app is merged).
       - key: SIGNAL_HOME
         value: "off"
+      # While set, only these user ids see connectors (comma-separated); set in the dashboard. Unset = every founder.
+      - key: CONNECTORS_USERS
+        sync: false
       # Connector polling and worker intervals (ms) and each founder's daily signal budget (USD).
       - key: CONNECTORS_POLL_MS
         value: "300000"
