@@ -384,3 +384,6 @@ Open, for Rafay:
 - `20261127000002_learn_how_i_work.sql`: `user_settings.learn_how_i_work boolean not null default false` (off for everyone; 6 rows at the time, none on) and `consent_log_action_check` widened NOT VALID with `learn_on`, `learn_off`.
 - Applied with Rafay's yes after a dry run in an undone transaction; version recorded. Must be live before CONNECTORS=on (GET /api/connectors reads the column).
 - Rollback: `supabase/rollback/20261127_learn_how_i_work_rollback.sql`.
+
+## Lock screen default (Nov 28 2026): DRAFT in supabase/pending/, NOT APPLIED (needs Rafay's yes)
+- `20261128000001_lock_screen_default_full.sql`: `user_settings.lock_screen` default 'short' -> 'full' (Rafay). Only the default; the 7 existing rows keep 'short'. Rollback in the file header.

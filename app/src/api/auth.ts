@@ -20,7 +20,9 @@ export function createAuth(client: SupabaseClient, phone?: Deps): Auth {
   return {
     async signInWithGoogle() {
       if (phone) return signInOnPhone(client.auth, phone);
-      const { error } = await client.auth.signInWithOAuth({ provider: 'google' });
+      // Come back to the site the founder started on; without this Supabase falls back to its Site URL (the old, paused web app).
+      const redirectTo = typeof window !== 'undefined' ? window.location.origin : undefined;
+      const { error } = await client.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } });
       if (error) throw error;
     },
     async signOut() {

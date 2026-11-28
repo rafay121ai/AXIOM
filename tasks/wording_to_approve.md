@@ -186,9 +186,9 @@ Founder-facing. Source: server/push/compose.js (composeSignalPush), server/conne
 A push about an important email must not repeat what a Gmail alert says. It says how the news connects with this founder, then a short next step.
 | Lock screen setting | Body |
 |---|---|
-| Full | The signal's push_line: ONE sentence (max 160 characters), written by the model per signal, then checked by code. Example: "We had 3 months of burn rate left and Dana Okafor just emailed you back with an offer, let's plan it out." Meeting: "Your pilot call with Dana is in 90 minutes; you wanted the price agreed by Friday." |
+| Full (default, Nov 28) | The signal's push_line: ONE sentence (max 160 characters), written by the model per signal, then checked by code. Example: "We had 3 months of burn rate left and Dana Okafor just emailed you back with an offer, let's plan it out." Meeting: "Your pilot call with Dana is in 90 minutes; you wanted the price agreed by Friday." |
 | Full, no push_line (or one that fails the voice check) | the generic line below |
-| Short (default) | the generic line below |
+| Short | the generic line below |
 | Hidden | "Axiom" |
 Generic lines (approved Nov 27):
 | Signal | Line |
@@ -197,4 +197,4 @@ Generic lines (approved Nov 27):
 | Email | "{name}, an email that needs you today has come in." |
 | Anything else (Notion) | "{name}, something in your tools needs you today." |
 push_line rules (code, not the prompt): only for urgency 2 or 3; every name and organisation must come from the item or the founder's own brief, world or situation titles; numbers only from the item or the brief; no role claims unless sourced; no links or email addresses; no banned phrase or teaser; it must tie to at least one stored fact about the founder, else it is dropped. Only the line is stored (signals.facts.push_line), never the email text. Bad example, never shown: "New email from Sara Khan: Re: term sheet".
-Open for Rafay: the lock screen now shows the line to anyone who can see the phone, for founders who chose Full. Short stays the default.
+Open for Rafay: the lock screen now shows the line to anyone who can see the phone, for founders who chose Full. Full is now the default (Rafay, Nov 28).

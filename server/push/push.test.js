@@ -203,9 +203,9 @@ test('compose: the approved push, the name inside, and the three lock-screen mod
   assert.equal(composePush({ kind: 'evening', item: ITEMS.evening, name: 'Rafay', lockScreen: 'full' }).body, 'Rafay, how did the two clinics go?')
   assert.equal(composePush({ kind: 'evening', item: ITEMS.evening, name: 'Rafay', lockScreen: 'short' }).body, 'Rafay, how did it go?')
   assert.equal(composePush({ kind: 'evening', item: ITEMS.evening, name: 'Rafay', lockScreen: 'hidden' }).body, HIDDEN_BODY)
-  // Short is the default, and an unknown mode falls back to it.
-  assert.equal(composePush({ kind: 'evening', item: ITEMS.evening, name: 'Rafay' }).body, 'Rafay, how did it go?')
-  assert.equal(composePush({ kind: 'evening', item: ITEMS.evening, name: 'Rafay', lockScreen: 'loud' }).body, 'Rafay, how did it go?')
+  // Full is the default (Nov 28), and an unknown mode falls back to it.
+  assert.equal(composePush({ kind: 'evening', item: ITEMS.evening, name: 'Rafay' }).body, 'Rafay, how did the two clinics go?')
+  assert.equal(composePush({ kind: 'evening', item: ITEMS.evening, name: 'Rafay', lockScreen: 'loud' }).body, 'Rafay, how did the two clinics go?')
   assert.equal(composePush({ kind: 'morning', item: ITEMS.morning, name: 'Rafay', lockScreen: 'full' }).body,
     'Morning, Rafay. Today: ask both clinics that asked for pricing for a call.')
   assert.equal(composePush({ kind: 'quiet_check', item: ITEMS.quiet_check, name: 'Rafay', lockScreen: 'full' }).body,
@@ -260,7 +260,7 @@ test('scheduler: morning and evening, then nothing more that day, however often 
   }
   assert.deepEqual(s.sender.sent.map((m) => m.data.kind), ['morning', 'evening'])
   assert.equal(s.sender.sent[0].to, TOKEN)
-  assert.equal(s.sender.sent[1].body, 'Rafay, how did it go?') // Short by default
+  assert.equal(s.sender.sent[1].body, 'Rafay, how did the two clinics go?') // Full by default
   assert.deepEqual(s.log().map((r) => [r.kind, r.status, r.local_day]), [['morning', 'sent', '2026-10-26'], ['evening', 'sent', '2026-10-26']])
 })
 
@@ -397,7 +397,7 @@ test('scheduler: the push uses the same first name as the greeting (saved name f
   s.base.auth.admin = { getUserById: async () => ({ data: { user: { user_metadata: { given_name: 'Sam' } } }, error: null }) }
   const scheduler = createPushScheduler({ supabase: s.base, sender: s.sender, clock: s.clock, isCareOpen: async () => false, log: () => {} })
   await scheduler.tick()
-  assert.equal(s.sender.sent[0].body, 'Samira, how did it go?')
+  assert.equal(s.sender.sent[0].body, 'Samira, how did the two clinics go?')
   assert.equal(await founderFirstName(s.base, OTHER.id), 'Sam') // no saved name: the sign-in name
 })
 
@@ -583,7 +583,7 @@ test('reminder settings: defaults, partial updates, validation', async () => {
     assert.equal((await callAnon('GET', '/api/settings/reminders')).status, 401)
     const first = await call('GET', '/api/settings/reminders')
     assert.deepEqual(first.body, {
-      checkin_time: '20:00', morning_on: true, evening_on: true, lock_screen: 'short',
+      checkin_time: '20:00', morning_on: true, evening_on: true, lock_screen: 'full',
       quiet_hours: { start: '22:00', end: '06:00' }, timezone: null, push_registered: false,
     })
 
@@ -706,8 +706,8 @@ test('compose: the approved nudge lines, in the founder\'s own words, open home'
   assert.equal(full(goal, null).body, '7 days to 20 paying clinics. Where are you?')
   assert.equal(full({ nudge: 'thread', text: 'Get Shifa Clinic to sign' }).body, 'Rafay, where are you with "Get Shifa Clinic to sign"?')
   assert.equal(full({ nudge: 'thread', text: 'Decide on "Plan B" pricing.' }).body, 'Rafay, where are you with "Decide on Plan B pricing"?')
-  assert.equal(composePush({ kind: 'nudge', item: goal, name: 'Rafay' }).body, 'Rafay, your goal date is a week away.')
-  assert.equal(composePush({ kind: 'nudge', item: ITEMS.nudge, name: 'Rafay' }).body, 'Rafay, one of your open questions has gone quiet.')
+  assert.equal(composePush({ kind: 'nudge', item: goal, name: 'Rafay', lockScreen: 'short' }).body, 'Rafay, your goal date is a week away.')
+  assert.equal(composePush({ kind: 'nudge', item: ITEMS.nudge, name: 'Rafay', lockScreen: 'short' }).body, 'Rafay, one of your open questions has gone quiet.')
   assert.deepEqual(full(goal).data, { kind: 'nudge', open: 'home' })
   // A stored goal holding a banned phrase falls back to the short line.
   assert.equal(full({ nudge: 'goal', text: 'a great launch' }).body, 'Rafay, your goal date is a week away.')

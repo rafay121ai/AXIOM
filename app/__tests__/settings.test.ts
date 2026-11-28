@@ -41,7 +41,7 @@ describe('the fake settings', () => {
     expect(s.privacy).toMatchObject({ share_automatically: false });
     expect(s.privacy.text).toMatch(/^Off\. After each check-in I ask/);
     expect(s.mentor_style).toBe('direct');
-    expect(s.reminders.lock_screen).toBe('short');
+    expect(s.reminders.lock_screen).toBe('full');
   });
 
   it('save one change at a time and return the whole page', async () => {
