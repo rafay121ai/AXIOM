@@ -158,7 +158,7 @@ export function SettingsScreen({ load, save, requestExport, requestDelete, cance
     { value: 'calm', label: copy.settings.calm }, { value: 'direct', label: copy.settings.direct }, { value: 'hard', label: copy.settings.hard },
   ];
 
-  if (lettersOpen && letters.list) return <NewslettersPage list={letters.list} line={letters.line} onToggle={(id) => void letters.toggle(id)} onBack={() => setLettersOpen(false)} />;
+  if (lettersOpen && (letters.list || letters.line)) return <NewslettersPage list={letters.list ?? []} line={letters.line} onToggle={(id) => void letters.toggle(id)} onBack={() => setLettersOpen(false)} />;
   return (
     <View style={styles.screen}>
       <Wash />
@@ -225,7 +225,7 @@ export function SettingsScreen({ load, save, requestExport, requestDelete, cance
 
             {cx.data && (
               <Section label={copy.connect.section}>
-                <ConnectionRows api={connectors} cx={cx} onHow={() => onHow(s.links.privacy)} onNewsletters={letters.list ? () => setLettersOpen(true) : undefined} />
+                <ConnectionRows api={connectors} cx={cx} onHow={() => onHow(s.links.privacy)} onNewsletters={letters.list?.length || letters.line ? () => setLettersOpen(true) : undefined} />
               </Section>
             )}
 

@@ -46,3 +46,20 @@ export async function newsletterGate(api: Pick<AxiomApi, 'getNewsletters'>, stor
   await store.setItem(PICKED, '1');
   return list;
 }
+
+/** Saves the watched set one request after another. Only the answer to the newest tap is reported, so an older answer can never overwrite a newer state; if that one fails, `onFailed` gets the list the server last confirmed. */
+export function newsletterSaver(api: Pick<AxiomApi, 'setNewsletters'>, first: Newsletter[], on: { onSaved: (l: Newsletter[]) => void; onFailed: (confirmed: Newsletter[], e: unknown) => void }) {
+  let confirmed = first, newest = 0, queue: Promise<unknown> = Promise.resolve();
+  return (ids: string[]) => {
+    const mine = ++newest;
+    queue = queue.then(async () => {
+      try {
+        confirmed = await api.setNewsletters(ids);
+        if (mine === newest) on.onSaved(confirmed);
+      } catch (e) {
+        if (mine === newest) on.onFailed(confirmed, e);
+      }
+    });
+    return queue;
+  };
+}

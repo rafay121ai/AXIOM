@@ -5,7 +5,7 @@ import { createFakeApi } from '../src/api/fake';
 import { createHttpApi } from '../src/api/http';
 import { memoryStore } from '../src/api/outbox';
 import { HttpError } from '../src/api/queue';
-import { clearShown, connectLine, newsletterGate, newsletterSub } from '../src/connect/flow';
+import { clearShown, connectLine, newsletterGate, newsletterSaver, newsletterSub } from '../src/connect/flow';
 
 const auth: Auth = { signInWithGoogle: async () => {}, signOut: async () => {}, isSignedIn: async () => true, getName: async () => undefined, getToken: async () => 'tok' };
 const res = (status: number, body: unknown = {}) => ({ ok: status < 400, status, json: async () => body }) as Response;
@@ -73,5 +73,30 @@ it('the screens are wired as the mock says', () => {
   expect(src('screens/ConnectScreen.tsx')).toMatch(/newsletterGate/);
   expect(src('components/NewsletterRows.tsx')).toMatch(/accessibilityRole="checkbox"/);
   expect(src('components/ConnectionRows.tsx')).toMatch(/toolkit === 'gmail' && onNewsletters/);
-  expect(src('screens/SettingsScreen.tsx')).toMatch(/onNewsletters=\{letters\.list \?/);
+  expect(src('screens/SettingsScreen.tsx')).toMatch(/onNewsletters=\{letters\.list\?\.length \|\| letters\.line \?/);
+});
+
+describe('saving taps', () => {
+  const L = (...w: boolean[]) => w.map((watching, i) => ({ id: `n${i}`, name: 'N', per_week: 1, opens: 'most' as const, watching }));
+  it('runs saves in order and reports only the newest answer', async () => {
+    const order: string[][] = [];
+    const api = { setNewsletters: async (ids: string[]) => { order.push(ids); return L(ids.includes('n0'), ids.includes('n1')); } };
+    const onSaved = jest.fn();
+    const save = newsletterSaver(api, L(false, false), { onSaved, onFailed: jest.fn() });
+    save(['n0']);
+    await save(['n0', 'n1']);
+    expect(order).toEqual([['n0'], ['n0', 'n1']]);
+    expect(onSaved).toHaveBeenCalledTimes(1);
+    expect(onSaved.mock.calls[0][0].map((n: any) => n.watching)).toEqual([true, true]);
+  });
+  it('a failed newest save hands back the last confirmed list and its refusal', async () => {
+    const refusal = new HttpError(409, 'care_open', 'Not now.');
+    let n = 0;
+    const api = { setNewsletters: async () => { if (n++) throw refusal; return L(true); } };
+    const onFailed = jest.fn();
+    const save = newsletterSaver(api, L(false), { onSaved: jest.fn(), onFailed });
+    await save(['n0']);
+    await save([]);
+    expect(onFailed).toHaveBeenCalledWith(L(true), refusal);
+  });
 });
