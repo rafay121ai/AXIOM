@@ -20,12 +20,12 @@ function fakeConnectors(script) {
   const calls = []
   return { calls, run: async (userId, slug, args) => { calls.push({ slug, args }); return { data: await script[slug](args) } } }
 }
-function setup({ tables, script = {}, logs = [] } = {}) {
+function setup({ tables, script = {}, logs = [], learnPeople } = {}) {
   const supabase = db(tables)
   const clock = createFakeClock(NOW)
   const connectors = fakeConnectors(script)
   const handled = []
-  const ing = createIngestion({ supabase, connectors, clock, handleItem: async (u, t, i) => handled.push({ t, i }), log: (what, info) => logs.push(`${what} ${info ?? ''}`) })
+  const ing = createIngestion({ supabase, connectors, clock, handleItem: async (u, t, i) => handled.push({ t, i }), learnPeople, log: (what, info) => logs.push(`${what} ${info ?? ''}`) })
   return { supabase, clock, connectors, ing, handled, logs }
 }
 const jobs = (s) => s.supabase.rows('connector_jobs')
@@ -376,4 +376,32 @@ test('the daily clearing deletes done and dropped jobs after 7 days, not queued 
   const supabase = db({ connector_jobs: [queued('a', 'a', { status: 'done', updated_at: old }), queued('b', 'b', { status: 'dropped', updated_at: old }), queued('c', 'c', { status: 'done', updated_at: fresh }), queued('d', 'd', { updated_at: old }), queued('e', 'e', { status: 'failed', updated_at: old })] })
   await clearActionContent({ supabase, clock: createFakeClock(NOW) })
   assert.deepEqual(supabase.rows('connector_jobs').map((j) => j.id).sort(), ['c', 'd', 'e'])
+})
+
+const past = (id) => ({ id, updated: '2026-11-20T10:00:00Z', summary: 'Rafay x Hannes', start: { dateTime: '2026-11-20T10:00:00Z' }, attendees: [{ self: true }, { displayName: 'Hannes' }] })
+
+test('the worker hands a kept calendar item to learnPeople, and not a mail', async () => {
+  const learned = []
+  const s = setup({ learnPeople: async (u, e) => learned.push(e.id), tables: { connector_accounts: [account({ toolkit: 'googlecalendar' }), account()], connector_jobs: [
+    { id: 'j1', user_id: U, toolkit: 'googlecalendar', external_id: 'ev1|1', kind: 'poll', status: 'queued', attempts: 0, run_after: new Date(NOW).toISOString() },
+    { id: 'j2', user_id: U, toolkit: 'gmail', external_id: 'm1|1', kind: 'poll', status: 'queued', attempts: 0, run_after: new Date(NOW).toISOString() }] },
+  script: { GOOGLECALENDAR_EVENTS_GET: () => past('ev1'), GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID: () => ({ labelIds: [], sender: 'a@b.example', subject: 'hi', messageText: 'hello' }) } })
+  await s.ing.worker.run()
+  assert.deepEqual(learned, ['ev1'])
+})
+
+test('past meetings pass: runs once per account, learns kept past events only, and not when receipts exist', async () => {
+  const learned = []
+  const events = [past('e1'), past('e2'), { ...past('e3'), visibility: 'private' }, { ...past('e4'), attendees: [{ self: true }] }]
+  const s = setup({ learnPeople: async (u, e) => learned.push(e.id), tables: { connector_accounts: [account({ toolkit: 'googlecalendar' })] }, script: { GOOGLECALENDAR_EVENTS_LIST: () => ({ items: events }) } })
+  await s.ing.poll()
+  assert.deepEqual(learned, ['e1', 'e2'])
+  const list = s.connectors.calls.find((c) => c.slug === 'GOOGLECALENDAR_EVENTS_LIST' && Date.parse(c.args.timeMax) === NOW)
+  assert.equal(Date.parse(list.args.timeMin), NOW - 30 * 86400000)
+  s.clock.advance(300000)
+  await s.ing.poll()
+  assert.deepEqual(learned, ['e1', 'e2'])
+  const have = setup({ learnPeople: async (u, e) => learned.push(e.id), tables: { connector_accounts: [account({ toolkit: 'googlecalendar' })], memory_evidence: [{ id: 'x', user_id: U, source_kind: 'connector', source_key: 'googlecalendar' }] }, script: { GOOGLECALENDAR_EVENTS_LIST: () => ({ items: events }) } })
+  await have.ing.poll()
+  assert.deepEqual(learned, ['e1', 'e2'])
 })

@@ -2,6 +2,7 @@
 // (external_id = item id | updated time); the job holds no content. The unique key makes repeats harmless (23505).
 // last_sync_at moves only after every enqueue succeeded.
 import { createBreaker, createReader } from './read.js'
+import { filterItem } from './filter.js'
 import { createWorker } from './worker.js'
 import { handleItem as defaultHandleItem } from './handleItem.js'
 
@@ -80,10 +81,36 @@ export function createIngestion({ supabase, connectors, clock, breaker = createB
     }
   }
 
+  // One-time past meetings pass: jobs for past events are long done, so nothing would fetch them again. An active calendar account with
+  // no meeting receipts yet gets the last 30 days listed (at most MAX_PAGES calls) and the kept past events go to learnPeople. No model.
+  // Once per process per account (a calendar with no meetings is not listed again until a restart); a failure tries again next poll.
+  const pastDone = new Set()
+  async function pastMeetings(account) {
+    if (!learnPeople || account.toolkit !== 'googlecalendar' || pastDone.has(account.id) || await blocked(account.user_id).catch(() => true)) return
+    try {
+      const have = ok(await supabase.from('memory_evidence').select('id').eq('user_id', account.user_id).eq('source_kind', 'connector').eq('source_key', 'googlecalendar').limit(1))
+      if (have.length === 0) {
+        const nowMs = clock.now()
+        let token
+        let pages = 0
+        do {
+          pages += 1
+          const d = await read(account.user_id, 'GOOGLECALENDAR_EVENTS_LIST', { calendarId: 'primary', timeMin: iso(nowMs - BACKFILL.calendarDaysBack * DAY), timeMax: iso(nowMs), singleEvents: true, maxResults: PAGE, pageToken: token })
+          for (const e of d.items ?? d.events ?? []) if (e.id && filterItem('googlecalendar', e).keep) await learnPeople(account.user_id, e)
+          token = d.nextPageToken
+        } while (token && pages < MAX_PAGES)
+      }
+      pastDone.add(account.id)
+    } catch (err) {
+      log('past meetings failed', `${err?.code ?? 'error'}`)
+    }
+  }
+
   // Called when a toolkit first becomes active; a failure is fine, the poller backfills any account never synced.
   async function backfill(userId, toolkit) {
     const [account] = ok(await supabase.from('connector_accounts').select('id, user_id, toolkit, last_sync_at').eq('user_id', userId).eq('toolkit', toolkit))
     if (account && !account.last_sync_at) await sync(account, true)
+    if (account) await pastMeetings(account)
   }
 
   async function poll() {
@@ -92,6 +119,7 @@ export function createIngestion({ supabase, connectors, clock, breaker = createB
     for (const account of accounts) {
       if (breaker.isOpen()) break
       await sync(account, !account.last_sync_at)
+      await pastMeetings(account)
     }
     return accounts.length
   }
